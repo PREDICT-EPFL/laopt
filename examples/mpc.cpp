@@ -47,37 +47,36 @@ struct Variable {
 
     static const size_t size = _size;
 
-    size_t offset;
-    const std::string name;
-    Vector x;
-    Variable(const std::string name)
-        : offset(-1), name(name)
-    {
-        x.Zero();
-    };
+    const size_t offset;
+    // const std::string name;
+    const Vector x;
+    // Variable(const std::string name)
+    //     : offset(-1), name(name)
+    // {
+    //     x.Zero();
+    // };
 
-    Variable(const std::string name, const int num) 
-        : name(name + to_string(num)), offset(-1)
-    {
-        x.Zero();
-    };
+    // Variable(const std::string name, const int num) 
+    //     : name(name + to_string(num)), offset(-1)
+    // {
+    //     x.Zero();
+    // };
 
     std::string to_string()
     {
         std::stringstream ss;
-        ss << name << " = [" << x.transpose() << "]" << " offset = " << offset;
+        // ss << name << " = [" << x.transpose() << "]" << " offset = " << offset;
+        ss << "[" << x.transpose() << "]" << " offset = " << offset;
         return ss.str();
     }
 
     friend std::ostream& operator<<( std::ostream& o, const Variable& var ) 
     {
-        // o << var.name << " = [" << var.x.transpose() << "]" << " offset = " << var.offset;
         o << var.to_string();
         return o;
     }
 
-    Vector& get_x()
-    {return x;}
+    Vector& get_x()   {return x;}
 
     void set_x(Ref<VectorXd> val) {
         x << val.segment(offset, size); // Copy and convert to dual variable
@@ -100,10 +99,27 @@ std::array<std::result_of_t<Ctor(size_t)>, N> MakeArray(Ctor&& ctor)
 
 // Create a static array of Variables
 template<size_t n, size_t N> 
-auto VariableArray(std::string name)
+auto VariableArray()//std::string name)
 { 
-    return MakeArray<N>([name](size_t index){return Variable<n>(name + to_string(index));});
+    // return MakeArray<N>([name](size_t index){return Variable<n>(name + to_string(index));});
+    return MakeArray<N>([](size_t index) { return Variable<n>(); });//name + to_string(index)); });
 }
+
+// template <size_t n, size_t N>
+// struct VariableArray : public std::array<Variable<n>, N>
+// {
+//     static constexpr size_t size = n * N;
+
+//     return MakeArray<N>([name](size_t index) 
+//     { return Variable<n>(name + to_string(index)); });
+
+//     // template <typename... As,
+//     //           typename std::enable_if<sizeof...(As) == N>::type * = nullptr>
+//     // constexpr foo(As &&... as)
+//     //     : std::array<Variable<n>, N>{{std::forward<As>(as)...}}
+//     // {
+//     // }
+// };
 
 // template <size_t n, size_t N>
 // struct foo : public std::array<Variable<n>, N>
@@ -386,124 +402,133 @@ struct NLP
     }
 };
 
-const int N = 10; // Horizon
+// Returns the total number of variables in the array
+template <size_t N>
+constexpr size_t count_vars(std::array<int, N> &X)
+{
+    return N;
+}
 
-auto X = VariableArray<2, N>("x");
-auto U = VariableArray<1, N - 1>("u");
+template <size_t n, size_t N>
+constexpr size_t count_vars(std::array<Variable<n>, N> &X)
+{
+    return n * N;
+}
 
-using namespace DoubleIntegrator;
-auto q = Constraint("test1", dynamics<dual>, X[1], X[0], U[0]);
+template <size_t n>
+constexpr size_t count_vars(Variable<n> &x)
+{
+    return n;
+}
 
-auto dynamic_constraints = ConstraintArray<N - 1>(
-    [](int i) {
-        return Constraint(string("dynamics_") + to_string(i),
-                          dynamics<dual>, X[i + 1], X[i], U[i]);
-    });
+template <size_t n>
+class Test
+{
+    Matrix<double, 3, 4> M;
+};
+
+template <size_t n, size_t N>
+constexpr size_t count_vars(std::array<Test<n>, N> &x)
+{
+    return n * N;
+}
+
+template <size_t n>
+constexpr size_t count_vars(Test<n> &x)
+{
+    return n;
+}
+
+template <typename... ArgTypes>
+constexpr size_t count_vars(ArgTypes... args)
+{
+    // using result_type = decltype(std::declval<Function>()(std::declval<Matrix<double, ArgTypes::size, 1>>()...));
+    return (count_vars(args) + ...);
+    // return 5;
+}
+
+
+template<size_t num_vars>
+struct NLP2
+{
+
+    NLP2()
+    {
+
+    };
+};
+
+
+
+// Xvar = make_tuple(2, N)
+// Uvar = make_tuple(1, N)
+// x0 = 4
+
+// Vars = make_tuple(make_tuple(Xvar), make_tuple(Uvar), make_tuple(4, 1))
+// constexpr num_vars = count_vars(Vars)
+
+// tie(X, U, x0) = make_vars(Vars) // Not constexpr
+
+const size_t N = 5; // Horizon
+
+// constexpr std::array<int, 5> Y = {1,2,3,4,5};
+
+// auto X = VariableArray<2, N>();
+// auto U = VariableArray<1, N - 1>();
+// auto x0 = Variable<5>();
+
+// constexpr std::array<Test<2>, 5> Z;
+
+// using namespace DoubleIntegrator;
+// auto q = Constraint("test1", dynamics<dual>, X[1], X[0], U[0]);
+
+// auto dynamic_constraints = ConstraintArray<N - 1>(
+//     [](int i) {
+//         return Constraint(string("dynamics_") + to_string(i),
+//                           dynamics<dual>, X[i + 1], X[i], U[i]);
+//     });
+
+
+// auto Vars = make_tuple(X, U, x0);
+
+// constexpr size_t num_vars = N * 2 + (N - 1) * 1;
+// const size_t num_ineq = 3 * N;
+// const size_t num_eq = 2 * N;
+// NLP<double, num_vars, num_ineq, num_eq> nlp;
+
+// constexpr size_t num_vars = count_vars(Z[0]);
+
+// constexpr size_t num_vars = count_vars(x0, X); //count_vars(X, x0, U);
+
+// NLP2<num_vars> nlp2();
 
 int main()
 {
 
-    // auto dynamic_constraints = ConstraintArray<N - 1>(
-    //     [&X, &U](int i) {
-    //         return Constraint(string("dynamics_") + to_string(i),
-    //                           dynamics<dual>, X[i + 1], X[i], U[i]);
-    //     });
+    // cout << "num_vars = " << num_vars << endl;
 
+    // // auto dynamic_constraints = ConstraintArray<N - 1>(
+    // //     [&X, &U](int i) {
+    // //         return Constraint(string("dynamics_") + to_string(i),
+    // //                           dynamics<dual>, X[i + 1], X[i], U[i]);
+    // //     });
+    // nlp.addVariable(X);
+    // nlp.addVariable(U);
 
-    // TODO: Pull these sizes out at compile-time from the var-list, and more to a helper
-    // constexpr size_t num_vars = NUM_VARS(X, U, x0);
-    constexpr size_t num_vars = N * 2 + (N - 1) * 1;
-    const size_t num_ineq = 3 * N;
-    const size_t num_eq = 2 * N;
-    NLP<double, num_vars, num_ineq, num_eq> nlp;
+    // // TODO: Pull these sizes out at compile-time from the var-list, and more to a helper
+    // // constexpr size_t num_vars = NUM_VARS(X, U, x0);
 
-    // cout << "Constraint = " << endl
-    //      << q << endl;
+    // // Controls the order of the variables
 
-    // Controls the order of the variables
-    nlp.addVariable(X);
-    nlp.addVariable(U);
-
-    nlp.addEquality(q);
-    nlp.addEquality(dynamic_constraints);
-
-    cout << nlp << endl;
-
-    // // nlp.x << 1,2,3,4,5,6,7,8,9,10,11,12,13,14;
-    // cout << nlp << endl;
-    // // cout << "nlp.Je = \n" << nlp.Je << endl;
-
-    const size_t NN = 1000000;
-    auto start = std::chrono::steady_clock::now();
-    for (int i = 0; i < NN; i++)
-        nlp.update();
-    auto end = std::chrono::steady_clock::now();
-    std::chrono::duration<double> elapsed_seconds = (end - start) / (double)NN;
-    std::cout << "elapsed time: " << elapsed_seconds.count() << "s\n";
+    // nlp.addEquality(dynamic_constraints);
 
     // cout << nlp << endl;
 
-    Matrix<double, 2, 5> J; 
-    Matrix<double, 2, 1> val;
-    start = std::chrono::steady_clock::now();
-    for (int i = 0; i < NN; i++)
-        testSpeed(dynamics<dual>, wrt(X[1].x, X[0].x, U[0].x), val, J);
-    end = std::chrono::steady_clock::now();
-    elapsed_seconds = (end - start) / (double)NN;
-    std::cout << "elapsed time: " << elapsed_seconds.count() << "s\n";
+    // nlp.x << 1,2,3,4,5,6,7,8,9,10,11,12,13,14;
 
-    cout << J << endl;
+    // nlp.update();
 
-    // cout << "nlp.Je = \n"
-    //      << nlp.Je << endl;
-
-    // X[3].x << 1,2;
-
-    // for (auto& con: dynamic_constraints)
-    // {
-    //     cout << "Constraint = " << con.eval().transpose() << endl;
-    // }
-
-    // MatrixXd J(2 * N + 10, 3 * N + 10);
-    // VectorXd val(3 * N + 10);
-
-    // J.setZero();
-    // val.setZero();
-
-    // for (auto& con: dynamic_constraints) con.update();
-
-    // auto mycon = Constraint("Test", dynamics<dual>, X[1], X[0], U[0]);
-    // auto t = hana::make_tuple(dynamic_constraints, mycon);
-
-    // for (int i=0; i<N-1; i++)
-    // {
-    //     for (int j=0; j<N-1; j++)
-    //         dynamic_constraints[i].fill_jacobian(
-    //             J.block(2 * i, X[j].offset, 2, 5), i * 2);
-    // }
-
-    // for (int i=0; i<N-2; i++)
-    // {
-    //     cout << dynamic_constraints[i];
-
-    //     // cout << "J.block(2 * i, 2 * i, 2, 5) = "
-    //     //      << J.block(2 * i, 2 * i, 2, 5).rows()
-    //     //      << ", "
-    //     //      << J.block(2 * i, 2 * i, 2, 5).cols()
-    //     //      << endl;
-
-    //     // cout << "dynamic_constraints[i].J = "
-    //     //      << dynamic_constraints[i].J.rows()
-    //     //      << ", "
-    //     //      << dynamic_constraints[i].J.cols()
-    //     //      << endl;
-    //     // J.block(2 * i, 2 * i, 2, 5) = dynamic_constraints[i].J;
-
-    //     dynamic_constraints[i].fill_jacobian(
-    //         J.block(2 * i, 2 * i, 2, 5), i * 2);
-    // }
-
-    // cout << "J = \n" << J << endl;
+    // cout << "nlp.J = " << endl << nlp.Je << endl;
 
     return 0;
 }

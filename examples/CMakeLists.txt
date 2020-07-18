@@ -7,6 +7,8 @@ include_directories(include /usr/local/include/ ${EIGEN3_INCLUDE_DIR})
 add_executable(mpc mpc.cpp)
 # target_link_libraries(mpc hana Eigen3::Eigen)
 
+add_executable(test test.cpp)
+
 # target_include_directories(mpc PUBLIC ${CMAKE_SOURCE_DIR} ${EIGEN3_INCLUDE_DIR})
     # target_link_libraries(robot_control_test mobile_robot Eigen3::Eigen)
 
