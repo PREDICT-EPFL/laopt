@@ -4,7 +4,7 @@ include_directories(include /usr/local/include/ ${EIGEN3_INCLUDE_DIR})
 
 # if(BUILD_EXAMPLES)
 
-add_executable(mpc mpc.cpp)
+# add_executable(mpc mpc.cpp)
 # target_link_libraries(mpc hana Eigen3::Eigen)
 
 add_executable(test test.cpp)
