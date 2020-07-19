@@ -23,5 +23,16 @@ namespace DoubleIntegrator
         StateType<T> eq;
         eq << xp[0] - (-sin(x[1]) + x[1]*x[0]), xp[1] - cos(x[0])*u[0];
         return eq;
-    }
+    };
+
+    // x == xss
+    template <typename T>
+    auto steadystate(StateType<T> x,
+                     StateType<T> xss)
+    {
+        StateType<T> eq;
+        eq = x - xss;
+        return eq;
+    };
+
 }; // namespace DoubleIntegrator

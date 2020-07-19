@@ -1,5 +1,10 @@
 import cog
 
+# TODOS
+# - assert no spaces in any names
+
+dualvar = lambda var: 'D' + str(var)
+
 class Variable:
     def __init__(self, name, offset, rows, cols):
         self.name = name
@@ -10,12 +15,20 @@ class Variable:
     def __getitem__(self, key):
         assert(type(key) == int)
 
-        return Variable(self.name + str(key), 
-            self.offset + key * self.rows,
-            self.rows, 1)
+        if self.cols == 1:
+            return self
+        else:
+            return Variable(self.name + str(key), 
+                self.offset + key * self.rows,
+                self.rows, 1)
 
-    def to_offset(self, name = "primal"):
+    def to_offset(self, name = ""):
+        # return f'VAR){self.offset},{self.rows})'
         return f'Base::{name}.template segment<{self.rows}>({self.offset})'
+
+    def __str__(self):
+        assert self.cols == 1, "Can only generate with vectors"
+        return self.name
 
     def __repr__(self):
         return f"{self.name}({self.rows}, {self.cols}, +{self.offset})"
@@ -23,10 +36,12 @@ class Variable:
 
 class Constraint:
     def __init__(self, 
+                name,      # Descriptor for short-name
                 func_name, # C++ function name
                 offset,    # Offset into g(x)
                 size_f,    # Number of outputs
                 vars):     # List of variables to be passed to the function
+        self.name = name
         self.func_name = func_name
         self.offset = offset
         self.size_f = size_f
@@ -37,17 +52,13 @@ class Constraint:
             assert var.cols == 1, "Can only pass a vector to functions - not a matrix"
         self.vars = vars
 
-    def gen_eval(self, 
-             name_assign): # Variable name to assign to
-        cog.out(f'Base::{name_assign}.template segment<{self.size_f}>({self.offset}) = ')
-        cog.outl(f'{self.func_name}<double>(')
-        for (i, var) in enumerate(self.vars):
-            cog.out(" " * 4 + var.to_offset("primal"))
-            if i < len(self.vars) - 1:
-                cog.out(",")
-            else:
-                cog.out(");")
-            cog.outl(" " * 2 + f'// {var.name}')
+    def to_offset(self, name_assign):
+        # Generate the descriptor for this Base::{name_assign}.template segment<{self.size_f}>({self.offset})
+        return f'Base::{name_assign}.template segment<{self.size_f}>({self.offset})'
+
+    def gen_eval(self, name_assign): # Variable name to assign to
+        cog.out(f'{self.name} = {self.func_name}<double>')
+        cog.outl('(' + ",".join(map(str, self.vars)) + ");")
 
     def __wrt(self, vars, var_name = "primal_d", pre_line = "", term_string = ","):
         # Create the structure
@@ -85,15 +96,18 @@ class Constraint:
         #                                    primal.segment<2>(3), 
         #                                    primal.segment<1>(4)))        
 
-
-        indent = " " * 4
+        # Add the defines
         for var in self.vars:
-           cog.out(f'Base::{name_assign}.template block<{self.size_f}, {var.rows}>')
-           cog.out(f'({self.offset}, {var.offset}) = ')
-           cog.outl(f'jacobian(')
-           cog.outl(indent + f'{self.func_name}<dual>,')
-           cog.outl(indent + "wrt(" + self.__wrt([var], "primal_d", indent, '),'))
-           cog.outl(indent + "at(" + self.__wrt(self.vars, "primal_d", indent, ');'))
+            cog.out(f'#define J_{self.name}_{var.name} ')
+            cog.out(f'Base::{name_assign}.template block<{self.size_f}, {var.rows}>')
+            cog.outl(f'({self.offset}, {var.offset})')
+
+        for var in self.vars:
+            cog.out(f'J_{self.name}_{var.name} = ')
+            cog.out(f'jacobian(')
+            cog.out(f'{self.func_name}<dual>, ')
+            cog.out("wrt(" + dualvar(var) + "), ")
+            cog.outl('at(' + ",".join(map(dualvar, self.vars)) + "));")
 
 
 class NLP:
@@ -113,19 +127,42 @@ class NLP:
         self.num_vars = self.num_vars + n * m
         return var
 
-    def add_equality(self, func_name, size_f, vars):
-        self.eq.append(Constraint(func_name, self.num_eq, size_f, vars))
+    def add_equality(self, name, func_name, size_f, vars):
+        self.eq.append(Constraint(name, func_name, self.num_eq, size_f, vars))
         self.num_eq = self.num_eq + size_f
 
-    def gen_eval_eq(self, name_assign):
+    def gen_eval_eq(self):
+        cog.outl('// Equality constraints')
         for con in self.eq:
-            con.gen_eval(name_assign)
+            cog.outl(f'#define {con.name} {con.to_offset("g_eq")}')
+
+        cog.outl()
+        for con in self.eq:
+            con.gen_eval("g_eq")
 
     def gen_eval_jacobian_eq(self, name_assign):
+        cog.outl('// Derivative variables')
+        for var in self.vars:
+            for col in range(var.cols):
+                v = var[col]
+                cog.outl(f'#define {dualvar(v)} {v.to_offset("primal_d")}')
+        cog.outl()
+
+        cog.outl('// Jacobian blocks')
+
         for con in self.eq:
             con.gen_jacobian(name_assign)
 
-    def traits(self): # Produce traits structure
+    def gen_traits(self): # Produce traits structure
         cog.outl(f'num_vars = {self.num_vars},') 
         cog.outl(f'num_eq   = {self.num_eq},')
         cog.outl(f'num_ineq = {self.num_ineq}')
+
+    def gen_variables(self):
+        # Produce short names macros for everything we're going to use
+        cog.outl('// Variables')
+        for var in self.vars:
+            for col in range(var.cols):
+                v = var[col]
+                cog.outl(f'#define {v.name} {v.to_offset("primal")}')
+        cog.outl()
