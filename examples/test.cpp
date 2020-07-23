@@ -26,10 +26,23 @@ nlp.add_equality("ss", "dynamics", 2, (xss, xss, uss))
 # Set X[N-1] = xss
 nlp.add_equality("ss_2", "steadystate", 2, (X[N-1], xss))
 
+# Unrolls the for-loop
+for i in range(N-1):
+    nlp.add_inequality("input_bnds", "input_constraints", 1, (U[i], ), (-1), (1))
+
+# Encodes the for-loop
+
+
 nlp.gen_variables();
 ]]]*/
 //[[[end]]]
 
+
+template<typename Scalar>
+struct Equation
+{
+
+}
 
 template<typename Scalar, typename Traits>
 struct MyNLP : public NLP< MyNLP<Scalar, Traits> >
@@ -55,7 +68,7 @@ struct MyNLP : public NLP< MyNLP<Scalar, Traits> >
     void eval_jacobians_impl()
     {
         /*[[[cog
-        nlp.gen_eval_jacobian_eq("J_eq")
+        nlp.gen_eval_jacobian("J_eq", "J_ineq")
         ]]]*/
         //[[[end]]]
     }
@@ -82,6 +95,7 @@ int main()
     cout << "myNLP.primal = " << myNLP.primal.transpose() << endl;
     cout << "myNLP.g_eq = " << myNLP.g_eq.transpose() << endl;
     cout << "myNLP.J_eq = \n" << myNLP.J_eq << endl;
+    cout << "myNLP.J_ineq = \n" << myNLP.J_ineq << endl;
 
     const auto samples = 100000;
     const auto begin = std::chrono::high_resolution_clock::now();

@@ -43,7 +43,7 @@ struct NLP< T<Scalar, Traits> >
     Eigen::Matrix<Scalar, num_ineq, num_vars> J_ineq;
     Eigen::Matrix<Scalar, num_ineq, 1> g_ineq;
 
-    int test = 4;
+    
 
     void eval()
     {

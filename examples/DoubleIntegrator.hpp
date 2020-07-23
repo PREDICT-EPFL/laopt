@@ -16,7 +16,7 @@ namespace DoubleIntegrator
     using InputType = Matrix<T, nu, 1>;
 
     template <typename T>
-    auto dynamics(StateType<T> xp,
+    inline StateType<T> dynamics(StateType<T> xp,
                   StateType<T> x,
                   InputType<T> u)
     {
@@ -27,12 +27,18 @@ namespace DoubleIntegrator
 
     // x == xss
     template <typename T>
-    auto steadystate(StateType<T> x,
+    inline StateType<T> steadystate(StateType<T> x,
                      StateType<T> xss)
     {
-        StateType<T> eq;
-        eq = x - xss;
-        return eq;
+        return x - xss;
+    };
+
+    template <typename T>
+    inline InputType<T> input_constraints(InputType<T> u)
+    {
+        return u;
     };
 
 }; // namespace DoubleIntegrator
+
+
