@@ -20,40 +20,80 @@ using namespace Eigen;
 #include <autodiff/forward/eigen.hpp>
 using namespace autodiff;
 
-template<typename T> struct NLP;
-
-template<template<typename, typename> class T, typename Scalar, typename Traits>
-struct NLP< T<Scalar, Traits> >
+template<typename Scalar, 
+         template<typename> typename _Eq_t, 
+         template<typename> typename _Ineq_t, 
+         template<typename> typename _Cost_t>
+struct NLP
 {
-    public:
-    using Derived = T<Scalar, Traits>;
+    using Eq_t = _Eq_t<Scalar>;
+    using Ineq_t = _Ineq_t<Scalar>;
+    using Cost_t = _Cost_t<Scalar>;
 
     enum {
-        num_vars =  Traits::num_vars,
-        num_eq   =  Traits::num_eq,
-        num_ineq =  Traits::num_ineq
+        nvars =  Eq_t::nvars,
+        num_eq   =  Eq_t::nfuncs,
+        num_ineq =  Ineq_t::nfuncs
     };
 
-    Eigen::Matrix<Scalar, num_vars, 1> primal;
-    Eigen::Matrix<dual, num_vars, 1> primal_d; // Dual variables for gradients
+    static_assert(Eq_t::nvars == Ineq_t::nvars, 
+            "Number of variables in equalities, inequalities and cost must match");
+    static_assert(Eq_t::nvars == Cost_t::nvars,
+            "Number of variables in equalities, inequalities and cost must match");
+    static_assert(Cost_t::nfuncs == 1,
+            "Cost function must be scalar");
 
-    Eigen::Matrix<Scalar, num_eq, num_vars> J_eq;
-    Eigen::Matrix<Scalar, num_eq, 1> g_eq;
+    Eigen::Matrix<Scalar, nvars, 1> primal;
+    Eigen::Matrix<dual, nvars, 1> primal_d; // Dual variables for gradients
 
-    Eigen::Matrix<Scalar, num_ineq, num_vars> J_ineq;
-    Eigen::Matrix<Scalar, num_ineq, 1> g_ineq;
-
-    
+    Eq_t eq;      // Vector function equalities
+    Ineq_t ineq;  // Vector function inequalities
+    Cost_t cost;  // Scalar function cost
 
     void eval()
     {
-        static_cast<Derived *>(this)->eval_impl();
+        eq.eval(primal);
+        ineq.eval(primal);
+        cost.eval(primal);
     }
 
     void eval_jacobians()
     {
         // Copy primal to dual variables
         primal_d = primal;
-        static_cast<Derived *>(this)->eval_jacobians_impl();
+
+        eq.eval_jacobian(primal_d);
+        ineq.eval_jacobian(primal_d);
+        cost.eval_jacobian(primal_d);
     }
 };
+
+// Template for a function type
+// We can add all sorts of static_asserts in NLP to 
+// confirm that the function types are the right structure
+// template<typename Scalar>
+// struct Function
+// {
+//     enum {
+//         nvars =  ***,
+//         nfuncs = ***
+//     };
+
+//     Eigen::Matrix<Scalar, nfuncs, nvars> J; // Jacobian of function
+//     Eigen::Matrix<Scalar, nfuncs, 1>     f; // Value of function
+
+//     void Function() {
+//         J.setZero();
+//         f.setZero();
+//     }
+
+//     void eval(Ref<Matrix<Scalar, nvars, 1>> x)
+//     {
+//         f(x) = ...
+//     }
+
+//     void eval_jacobian(Ref<Matrix<dual, nvars, 1>> x)
+//     {
+//         J(x) = ...
+//     }
+// }
