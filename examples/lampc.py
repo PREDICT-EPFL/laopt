@@ -4,12 +4,13 @@ import copy
 # TODOS
 # assert no spaces in any names
 # check that all the "functions" classes have the right member functions
-# pass in the "functions" classes to the constructor, so that parameters can be set
 # pass in matrix variables (for the cost function)
 # think on how to generalize to eigen AD
 # add hessian for cost
 # hook up the NLP to IPOPT 
 # create a QP version of the NLP and attach to QP solver
+# update RHS of equalities and inequalities
+# check that if a function is called with different variables, that the variable sizes match
 
 class Variable:
     def __init__(self, name, offset, rows, cols, col=0):
@@ -68,8 +69,10 @@ class NLP:
 
     def gen_variables(self):
         # Produce short names macros for everything we're going to use
-        cog.outl('#define SEG(size, offset) template segment<size>(offset)')
-        cog.outl('#define BLK(x_size, y_size, x_offset, y_offset) template block<x_size, y_size>(x_offset, y_offset)')
+        cog.outl('#define SEG(size, offset) template segment<size>(offset) // Segment of an Eigen vector')
+        cog.outl('#define BLK(x_size, y_size, x_offset, y_offset) template block<x_size, y_size>(x_offset, y_offset) // Block of an eigen matrix')
+        cog.outl("#define Vec(Scalar, size) Eigen::Matrix<Scalar, size, 1> // Eigen vector")
+        cog.outl("#define RVec(Scalar, size) Eigen::Ref<Eigen::Matrix<Scalar, size, 1>> // Reference to eigen vector")
         for var in self.vars:
             cog.outl(var.gen_define())
 
@@ -166,7 +169,7 @@ class Functions:
 
     def gen_eval(self, func_name = "f", var_name = "x"):
         # Evaluate the functions given the variable var_name into the vector func_name
-        cog.outl(f"void eval(Ref<Matrix<Scalar, nvars, 1>> {var_name})")
+        cog.outl(f"void eval(RVec(Scalar, nvars) {var_name})")
         cog.outl("{")
         offset = 0
         for func in self.functions:
@@ -186,7 +189,7 @@ class Functions:
     def gen_jacobian(self, jacobian_name = 'J', var_name = 'x'):
         # Evaluate the jacobian of the functions at the variable var_name 
         # into the vector jacobian_name
-        cog.outl(f"void eval_jacobian(Ref<Matrix<dual, nvars, 1>> {var_name})")
+        cog.outl(f"void eval_jacobian(RVec(dual, nvars) {var_name})")
         cog.outl("{")
 
         # Produce lambda functions for all the member functions that we want to pass
@@ -196,9 +199,9 @@ class Functions:
 
         cog.outl("\t// Lambda functions to capture object, so we can get pointers to member functions")
         for f in unique_funcs:
-            args = ",\n".join([f"\t\tRef<Eigen::Matrix<dual,{v.rows},1>> x{i}" for (i,v) in enumerate(f.vars)])
-            cog.outl(f"\tstatic const auto _{f.name} = [this](\n{args})")
-            args = ",".join([f"x{i}" for (i,v) in enumerate(f.vars)])
+            args = ", ".join([f"RVec(dual, {v.rows}) x{i}" for (i,v) in enumerate(f.vars)])
+            cog.outl(f"\tstatic const auto _{f.name} = [this]({args})")
+            args = ", ".join([f"x{i}" for (i,v) in enumerate(f.vars)])
             cog.outl(f"\t\t{{return this->{f.name}<dual>({args});}};")
         cog.outl()
 
@@ -225,3 +228,17 @@ class Functions:
             offset = offset + func.total_size
         cog.outl("}")
         cog.outl()
+
+    def gen_sig(self, name, varnames):
+        # Generates the function signature for the named function
+        f = next(f for f in self.functions if f.name == name)
+
+        cog.outl("template <typename T>")
+        cog.out(f"inline Vec(T, {f.size_output}) {name}")
+        args = (f"RVec(T, {v.rows}) {vname}" for (vname, v) in zip(varnames, f.vars))
+        cog.out(f"({', '.join(args)})")
+
+    # template <typename T>
+    # inline StateType<T> dynamics(Ref<StateType<T>> xp,
+    #                              Ref<StateType<T>> x,
+    #                              Ref<InputType<T>> u)

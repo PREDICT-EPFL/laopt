@@ -19,6 +19,14 @@ uss = nlp.var("uss", 1, 1)
 
 nlp.gen_variables();
 ]]]*/
+#define SEG(size, offset) template segment<size>(offset) // Segment of an Eigen vector
+#define BLK(x_size, y_size, x_offset, y_offset) template block<x_size, y_size>(x_offset, y_offset) // Block of an eigen matrix
+#define Vec(Scalar, size) Eigen::Matrix<Scalar, size, 1> // Eigen vector
+#define RVec(Scalar, size) Eigen::Ref<Eigen::Matrix<Scalar, size, 1>> // Reference to eigen vector
+#define _X(col) x.SEG(2, 0 + 2 * col)
+#define _U(col) x.SEG(1, 10 + 1 * col)
+#define _xss x.SEG(2, 14)
+#define _uss x.SEG(1, 16)
 //[[[end]]]
 
 
@@ -41,34 +49,28 @@ struct Equalities
     ]]]*/
     //[[[end]]]
 
-    enum {
-        nx = 2,
-        nu = 1
-    };
+    Vec(Scalar, 2) x0; // Initial state
 
-    template<typename T> using StateType = Matrix<T, nx, 1>;
-    template<typename T> using InputType = Matrix<T, nu, 1>;
-
-    StateType<Scalar> x0; // Initial state
-
+    /*[[[cog funcs.gen_sig("dynamics", ("xp", "x", "u")) ]]]*/
     template <typename T>
-    inline StateType<T> dynamics(Ref<StateType<T>> xp,
-                                 Ref<StateType<T>> x,
-                                 Ref<InputType<T>> u)
+    inline Vec(T, 2) dynamics(RVec(T, 2) xp, RVec(T, 2) x, RVec(T, 1) u)
+    //[[[end]]]
     {
-        return StateType<T> {xp[0] - (-sin(x[1]) + x[1]*x[0]), xp[1] - cos(x[0])*u[0]};
+        return Vec(T, 2) {xp[0] - (-sin(x[1]) + x[1]*x[0]), xp[1] - cos(x[0])*u[0]};
     };
  
+    /*[[[cog funcs.gen_sig("initial_state", ("x", )) ]]]*/
     template <typename T>
-    inline StateType<T> initial_state(Ref<StateType<T>> x)
+    inline Vec(T, 2) initial_state(RVec(T, 2) x)
+    //[[[end]]]
     {
         return x - x0;
     };
 
-    // x == xss
+    /*[[[cog funcs.gen_sig("equal", ("x", "xss")) ]]]*/ 
     template <typename T>
-    inline StateType<T> equal(Ref<StateType<T>> x,
-                              Ref<StateType<T>> xss)
+    inline Vec(T, 2) equal(RVec(T, 2) x, RVec(T, 2) xss)
+    //[[[end]]]
     {
         return x - xss;
     };
@@ -82,6 +84,53 @@ struct Equalities
     /*[[[cog
     funcs.gen()
     ]]]*/
+    enum {
+    	nfuncs = 14,
+    	nvars = 17
+    };
+
+    Eigen::Matrix<Scalar, nfuncs, nvars> J; // Jacobian of function
+    Eigen::Matrix<Scalar, nfuncs, 1>     f; // Value of function
+
+    void initialize() {
+    	J.setZero();
+    	f.setZero();
+    }
+
+    void eval(RVec(Scalar, nvars) x)
+    {
+    	for(int i=0; i<4; i++)
+    		f.SEG(2,0+i*2) = dynamics<Scalar>(_X((i+1)), _X(i), _U((i+1)));
+    	f.SEG(2,8) = initial_state<Scalar>(_X(0));
+    	f.SEG(2,10) = dynamics<Scalar>(_xss, _xss, _uss);
+    	f.SEG(2,12) = equal<Scalar>(_X(4), _xss);
+    }
+
+    void eval_jacobian(RVec(dual, nvars) x)
+    {
+    	// Lambda functions to capture object, so we can get pointers to member functions
+    	static const auto _dynamics = [this](RVec(dual, 2) x0, RVec(dual, 2) x1, RVec(dual, 1) x2)
+    		{return this->dynamics<dual>(x0, x1, x2);};
+    	static const auto _initial_state = [this](RVec(dual, 2) x0)
+    		{return this->initial_state<dual>(x0);};
+    	static const auto _equal = [this](RVec(dual, 2) x0, RVec(dual, 2) x1)
+    		{return this->equal<dual>(x0, x1);};
+
+    	// Compute Jacobians block-wise
+    	for(int i=0; i<4; i++)
+    	{
+    		J.BLK(2,2,0+i*2,((i+1)*2+0)) = jacobian(_dynamics, wrt(_X((i+1))), at(_X((i+1)),_X(i),_U((i+1))));
+    		J.BLK(2,2,0+i*2,(i*2+0)) = jacobian(_dynamics, wrt(_X(i)), at(_X((i+1)),_X(i),_U((i+1))));
+    		J.BLK(2,1,0+i*2,((i+1)*1+10)) = jacobian(_dynamics, wrt(_U((i+1))), at(_X((i+1)),_X(i),_U((i+1))));
+    	}
+    	J.BLK(2,2,8,0) = jacobian(_initial_state, wrt(_X(0)), at(_X(0)));
+    	J.BLK(2,2,10,14) = jacobian(_dynamics, wrt(_xss), at(_xss,_xss,_uss));
+    	J.BLK(2,2,10,14) = jacobian(_dynamics, wrt(_xss), at(_xss,_xss,_uss));
+    	J.BLK(2,1,10,16) = jacobian(_dynamics, wrt(_uss), at(_xss,_xss,_uss));
+    	J.BLK(2,2,12,8) = jacobian(_equal, wrt(_X(4)), at(_X(4),_xss));
+    	J.BLK(2,2,12,14) = jacobian(_equal, wrt(_xss), at(_X(4),_xss));
+    }
+
     //[[[end]]]
 };
 
@@ -91,19 +140,49 @@ struct Cost
     /*[[[cog
     funcs = Functions(nlp)
 
-    funcs.append("cost", 1, (X[1], U[0]))
+    funcs.append("cost", 1, (X, U))
     ]]]*/
     //[[[end]]]
 
     template<typename S>
     inline Matrix<S, 1, 1> cost(Ref<Matrix<S, 2, 1>> x, Ref<Matrix<S, 1, 1>> u)
     {
+
         return u;
     }
 
     /*[[[cog
     funcs.gen()
     ]]]*/
+    enum {
+    	nfuncs = 1,
+    	nvars = 17
+    };
+
+    Eigen::Matrix<Scalar, nfuncs, nvars> J; // Jacobian of function
+    Eigen::Matrix<Scalar, nfuncs, 1>     f; // Value of function
+
+    void initialize() {
+    	J.setZero();
+    	f.setZero();
+    }
+
+    void eval(RVec(Scalar, nvars) x)
+    {
+    	f.SEG(1,0) = cost<Scalar>(_X(0), _U(0));
+    }
+
+    void eval_jacobian(RVec(dual, nvars) x)
+    {
+    	// Lambda functions to capture object, so we can get pointers to member functions
+    	static const auto _cost = [this](RVec(dual, 2) x0, RVec(dual, 1) x1)
+    		{return this->cost<dual>(x0, x1);};
+
+    	// Compute Jacobians block-wise
+    	J.BLK(1,2,0,0) = jacobian(_cost, wrt(_X(0)), at(_X(0),_U(0)));
+    	J.BLK(1,1,0,10) = jacobian(_cost, wrt(_U(0)), at(_X(0),_U(0)));
+    }
+
     //[[[end]]]
 };
 
