@@ -2,9 +2,14 @@ import cog
 import copy
 
 # TODOS
-# - assert no spaces in any names
-
-# dualvar = lambda var: 'D' + str(var)
+# assert no spaces in any names
+# check that all the "functions" classes have the right member functions
+# pass in the "functions" classes to the constructor, so that parameters can be set
+# pass in matrix variables (for the cost function)
+# think on how to generalize to eigen AD
+# add hessian for cost
+# hook up the NLP to IPOPT 
+# create a QP version of the NLP and attach to QP solver
 
 class Variable:
     def __init__(self, name, offset, rows, cols, col=0):
@@ -68,52 +73,6 @@ class NLP:
         for var in self.vars:
             cog.outl(var.gen_define())
 
-    # def add_equality(self, name, func_name, size_f, vars):
-    #     self.eq.append(Constraint(name, func_name, self.num_eq, size_f, vars))
-    #     self.num_eq = self.num_eq + size_f
-
-    # def add_inequality(self, name, func_name, size_f, vars, lb, ub):
-    #     if size_f > 1:
-    #         assert len(lb) == len(ub), "len(lb) must equal len(ub)"
-    #         assert len(lb) == size_f, "len(lb) must equal size_f"
-    #     self.ineq.append(Constraint(name, func_name, self.num_ineq, size_f, vars, lb, ub))
-    #     self.num_ineq = self.num_ineq + size_f
-
-    # def gen_eval_eq(self):
-    #     cog.outl('// Equality constraints')
-    #     for con in self.eq:
-    #         cog.outl(f'#define {con.name} {con.to_offset("g_eq")}')
-
-    #     cog.outl()
-    #     for con in self.eq:
-    #         con.gen_eval("g_eq")
-
-    # def gen_eval_jacobian(self, eq_name, ineq_name):
-    #     cog.outl('// Derivative variables')
-    #     for var in self.vars:
-    #         for col in range(var.cols):
-    #             v = var[col]
-    #             cog.outl(f'#define {dualvar(v)} {v.to_offset("primal_d")}')
-    #     cog.outl()
-
-    #     cog.outl('// Equalities')
-    #     for con in self.eq:
-    #         con.gen_jacobian_defines(eq_name)
-    #     for con in self.eq:
-    #         con.gen_jacobian()
-
-    #     cog.out('\n')
-    #     cog.outl('// Inequalities')
-    #     for con in self.ineq:
-    #         con.gen_jacobian_defines(ineq_name)
-    #     for con in self.ineq:
-    #         con.gen_jacobian()
-
-    # def gen_traits(self): # Produce traits structure
-    #     cog.outl(f'num_vars = {self.num_vars},') 
-    #     cog.outl(f'num_eq   = {self.num_eq},')
-    #     cog.outl(f'num_ineq = {self.num_ineq}')
-
 
 class Index:
     def __init__(self, rng, op = 'i'):
@@ -171,10 +130,9 @@ class Function:
 
 
 class Functions:
-    def __init__(self, nlp, class_name):
+    def __init__(self, nlp):
         self.functions = []
         self.nlp = nlp
-        self.class_name = class_name
 
     def append(self, function_name, size_output, vars, index = None):
         # function_name - C++ function call
@@ -185,7 +143,7 @@ class Functions:
     def gen(self):
         self.gen_sizes()
 
-        cog.outl(f"{self.class_name}" + "() {")
+        cog.outl("void initialize() {")
         cog.outl("\tJ.setZero();")
         cog.outl("\tf.setZero();")
         cog.outl("}")
@@ -230,6 +188,21 @@ class Functions:
         # into the vector jacobian_name
         cog.outl(f"void eval_jacobian(Ref<Matrix<dual, nvars, 1>> {var_name})")
         cog.outl("{")
+
+        # Produce lambda functions for all the member functions that we want to pass
+        fnames = [f.name for f in self.functions]
+        indices = [fnames.index(x) for x in set(fnames)]
+        unique_funcs = [self.functions[i] for i in indices]
+
+        cog.outl("\t// Lambda functions to capture object, so we can get pointers to member functions")
+        for f in unique_funcs:
+            args = ",\n".join([f"\t\tRef<Eigen::Matrix<dual,{v.rows},1>> x{i}" for (i,v) in enumerate(f.vars)])
+            cog.outl(f"\tstatic const auto _{f.name} = [this](\n{args})")
+            args = ",".join([f"x{i}" for (i,v) in enumerate(f.vars)])
+            cog.outl(f"\t\t{{return this->{f.name}<dual>({args});}};")
+        cog.outl()
+
+        cog.outl("\t// Compute Jacobians block-wise")
         offset = 0
         for func in self.functions:
             pre = ""
@@ -244,7 +217,7 @@ class Functions:
                 cog.out(f"{pre}\t{jacobian_name}.")
                 cog.out(f"BLK({func.size_output},{var.rows},{offset_str},{var.offset}) = ")
                 cog.out(f"jacobian(")
-                cog.out(f"{func.name}<dual>, ")
+                cog.out(f"_{func.name}, ")
                 cog.out("wrt(" + str(var) + "), ")
                 cog.outl('at(' + ",".join(map(str, func.vars)) + "));")
             if func.index is not None:
@@ -252,49 +225,3 @@ class Functions:
             offset = offset + func.total_size
         cog.outl("}")
         cog.outl()
-
-
-# class Constraint:
-#     def __init__(self, 
-#                 name,      # Descriptor for short-name
-#                 func_name, # C++ function name
-#                 offset,    # Offset into g(x)
-#                 size_f,    # Number of outputs
-#                 vars,      # List of variables to be passed to the function
-#                 lb = None, # Bounds - used for inequalities only
-#                 ub = None):
-#         self.name = name
-#         self.func_name = func_name
-#         self.offset = offset
-#         self.size_f = size_f
-#         self.lb = lb
-#         self.ub = ub
-#         for var in vars:
-#             if var.cols > 1:
-#                 print("Error: Can only pass a vector to functions - not a matrix")
-#                 print(var)
-#             assert var.cols == 1, "Can only pass a vector to functions - not a matrix"
-#         self.vars = vars
-
-    # def to_offset(self, name_assign):
-    #     # Generate the descriptor for this 
-    #     # Base::{name_assign}.template segment<{self.size_f}>({self.offset})
-    #     return f'Base::{name_assign}.template segment<{self.size_f}>({self.offset})'
-
-    # def gen_eval(self, name_assign): # Variable name to assign to
-    #     cog.out(f'{self.name} = {self.func_name}<double>')
-    #     cog.outl('(' + ",".join(map(str, self.vars)) + ");")
-
-    # def gen_jacobian_defines(self, name_assign):
-    #     for var in self.vars:
-    #         cog.out(f'#define J_{self.name}_{var.name} ')
-    #         cog.out(f'Base::{name_assign}.template block<{self.size_f}, {var.rows}>')
-    #         cog.outl(f'({self.offset}, {var.offset})')
-
-    # def gen_jacobian(self):
-    #     for var in self.vars:
-    #         cog.out(f'J_{self.name}_{var.name} = ')
-    #         cog.out(f'jacobian(')
-    #         cog.out(f'{self.func_name}<dual>, ')
-    #         cog.out("wrt(" + dualvar(var) + "), ")
-    #         cog.outl('at(' + ",".join(map(dualvar, self.vars)) + "));")

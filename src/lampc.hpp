@@ -46,9 +46,13 @@ struct NLP
     Eigen::Matrix<Scalar, nvars, 1> primal;
     Eigen::Matrix<dual, nvars, 1> primal_d; // Dual variables for gradients
 
-    Eq_t eq;      // Vector function equalities
-    Ineq_t ineq;  // Vector function inequalities
-    Cost_t cost;  // Scalar function cost
+    Eq_t &eq;      // Vector function equalities
+    Ineq_t &ineq;  // Vector function inequalities
+    Cost_t &cost;  // Scalar function cost
+
+    NLP(Eq_t &eq, Ineq_t &ineq, Cost_t &cost)
+    : eq(eq), ineq(ineq), cost(cost)
+    {}
 
     void eval()
     {
