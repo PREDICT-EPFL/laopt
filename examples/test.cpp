@@ -186,6 +186,7 @@ struct Cost
     //[[[end]]]
 };
 
+
 using Scalar = double;
 Equalities<Scalar> eq;
 Equalities<Scalar> ineq;

@@ -2,15 +2,24 @@ import cog
 import copy
 
 # TODOS
+
+# Critical path
+# pass in matrix variables (for the cost function)
+# add hessian for cost
+# update RHS of equalities and inequalities
+# create a QP version of the NLP and attach to QP solver
+# hook up the NLP to IPOPT 
+# get and set the variables by name. Generate code for this where?
+
+# Nice to have
 # assert no spaces in any names
 # check that all the "functions" classes have the right member functions
-# pass in matrix variables (for the cost function)
 # think on how to generalize to eigen AD
-# add hessian for cost
-# hook up the NLP to IPOPT 
-# create a QP version of the NLP and attach to QP solver
-# update RHS of equalities and inequalities
 # check that if a function is called with different variables, that the variable sizes match
+# allow specification of variable bounds?
+# add a bunch of auto-generated constraints via python? (A*x <= b) type stuff?
+# change back to the CRTP format
+# allow for some of the jacobians to be specified manually and only generate the missing bits
 
 class Variable:
     def __init__(self, name, offset, rows, cols, col=0):
