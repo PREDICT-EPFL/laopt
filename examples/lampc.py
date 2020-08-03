@@ -10,6 +10,7 @@ import copy
 # create a QP version of the NLP and attach to QP solver
 # hook up the NLP to IPOPT 
 # get and set the variables by name. Generate code for this where?
+# change all defines to constexpr
 
 # Nice to have
 # assert no spaces in any names
@@ -22,8 +23,8 @@ import copy
 # allow for some of the jacobians to be specified manually and only generate the missing bits
 
 class Variable:
-    def __init__(self, name, offset, rows, cols, col=0):
-        self.name = '_' + name
+    def __init__(self, name, offset, rows, cols=1, col=0):
+        self.name = name
         self.rows = rows
         self.cols = cols
         self.offset = offset
@@ -49,11 +50,11 @@ class Variable:
         # return self.name
 
     def gen_define(self, var_name = "x"):
-        # Generate #define var(i) index_offset
+        # Generate var(i) const function
         if self.cols == 1:
-            return f'#define {self.name} {var_name}.SEG({self.rows}, {self.offset})'
+            return f"constexpr auto {self.name}() {{return Base::{var_name}.template segment<{self.rows}>({self.offset});}};"
         else:
-            return f'#define {self.name}(col) {var_name}.SEG({self.rows}, {self.offset} + {self.rows} * col)'
+            return f"constexpr auto {self.name}(int col) {{return Base::{var_name}.template segment<{self.rows}>({self.offset} + {self.rows} * col);}};"
 
     @property
     def offset(self):
@@ -69,22 +70,38 @@ class NLP:
         # List of vars and constraints
         self.vars = []
         self.num_vars = 0
+        self.constraints = Functions(self)
 
-    def var(self, name, n, m = 1):
+    def var(self, name, n, m = 1, lb=None, ub=None):
         var = Variable(name, self.num_vars, n, m)
         self.vars.append(var)
         self.num_vars = self.num_vars + n * m
         return var
 
-    def gen_variables(self):
-        # Produce short names macros for everything we're going to use
-        cog.outl('#define SEG(size, offset) template segment<size>(offset) // Segment of an Eigen vector')
-        cog.outl('#define BLK(x_size, y_size, x_offset, y_offset) template block<x_size, y_size>(x_offset, y_offset) // Block of an eigen matrix')
-        cog.outl("#define Vec(Scalar, size) Eigen::Matrix<Scalar, size, 1> // Eigen vector")
-        cog.outl("#define RVec(Scalar, size) Eigen::Ref<Eigen::Matrix<Scalar, size, 1>> // Reference to eigen vector")
+    def generate(self):
+        # Produce short names for everything we're going to use
+        cog.outl("using Base = NLP< MyNLP<Scalar, Traits> >;")
         for var in self.vars:
             cog.outl(var.gen_define())
 
+    def generate_traits(self, class_name = "MyTraits"):
+        # Produce a traits class with the required sizes
+        cog.outl(f"struct {class_name}")
+        cog.outl("{")
+        cog.outl("    enum {")
+        cog.outl(f"        num_vars = {self.num_vars},")
+        cog.outl(f"        num_eq = {self.constraints.get_num_functions()}")
+        cog.outl("    };")
+        cog.outl("};")
+
+    def gen_func(self, name, varnames):
+        self.constraints.gen_func(name, varnames)
+
+    def equality(self, function_name, size_output, vars, index = None):
+        self.constraints.append("equality", function_name, size_output, vars, index)
+
+    def inequality(self, function_name, size_output, vars, index=None, lb=None, ub=None):
+        self.constraints.append("inequality", function_name, size_output, vars, index)
 
 class Index:
     def __init__(self, rng, op = 'i'):
@@ -126,7 +143,8 @@ class Index:
 
 
 class Function:
-    def __init__(self, function_name, size_output, vars, index = None):
+    def __init__(self, function_type, function_name, size_output, vars, index = None):
+        self.function_type = function_type
         self.name = function_name
         self.size_output = size_output
         self.vars = vars
@@ -140,29 +158,84 @@ class Function:
             rng = self.index.rng
             return self.size_output * (rng.stop - rng.start)
 
+    def gen_sig(self, varnames):
+        # Generate function signature
+        cog.outl("template <typename T>")
+        cog.out(f"inline void {self.name}")
+        args = (f"RVEC(T, {v.rows}) {vname}" for (vname, v) in zip(varnames, self.vars))
+        cog.out(f"({', '.join(args)}, RVEC(T, {self.size_output}) out)")
+
+    # @staticmethod
+    # def gen_args(varnames, vars):
+
+    def gen_jacobian(self, varnames, nvars):
+        # Generate a set of functions returning the Jacobian wrt each vector var
+
+        # Function sig
+        func_name = f"inline void J_{self.name}("
+        pre = ",\n" + (" " * len(func_name))
+        J_args = pre.join(f"RVEC(Scalar, {self.size_output}, {v.rows}) J_{vname}" for (vname, v) in zip(varnames, self.vars))
+        args = pre.join(f"RVEC(Scalar, {v.rows}) {vname}" for (vname, v) in zip(varnames, self.vars))
+        cog.outl(f"{func_name}{args}{pre}RVEC(Scalar, {self.size_output}) val{pre}{J_args})")
+        cog.outl("{")
+
+        # Declare AD variables
+        num_inputs = sum(v.rows for v in self.vars)
+        cog.outl(f"\tusing input_t = Matrix<Scalar, {num_inputs}, 1>;")
+        cog.outl(f"\tusing ADScalar = AutoDiffScalar<input_t>;")
+        cog.outl(f"\tVEC(ADScalar, {num_inputs}) _x;")
+        cog.outl(f"\tVEC(ADScalar, {self.size_output}) _out;")
+
+        cog.outl("\t// Copy current value into dual variables")
+        seg_names = []
+        row = 0
+        for (vname, v) in zip(varnames, self.vars):
+            seg_names.append(f"_x.SEG({v.rows},{row})")
+            row = row + v.rows
+            cog.outl(f"\t{seg_names[-1]} = {vname};")
+
+        cog.outl("\t// Compute the Jacobian")
+        cog.outl("\tAD_seed(_x);")
+        cog.outl(f"\tthis->{self.name}<ADScalar>({', '.join(seg_names)}, _out);")
+        cog.outl("\tval = _out.value();")
+
+        cog.outl(f"\tfor(int i=0; i<{self.size_output}; i++) // Copy Jacobian into output variables")
+        cog.outl("\t{")
+        cog.outl("\t\tRef<input_t> deriv = _out[i].derivatives().transpose();")
+        row = 0
+        for (vname, v) in zip(varnames, self.vars):
+            cog.outl(f"\t\tJ_{vname}.row(i) = deriv.SEG({v.rows},{row});")
+            row = row + v.rows
+        cog.outl("\t}")
+
+
+        # args = ", ".join([v for v in varnames])
+        # for (vname, v) in zip(varnames, self.vars):
+        #     cog.outl(f"\tJ_{vname} = jacobian(_{self.name}, wrt({vname}), at({args}));")
+
+        cog.outl("};")
+        cog.outl()
+
 
 class Functions:
     def __init__(self, nlp):
         self.functions = []
         self.nlp = nlp
 
-    def append(self, function_name, size_output, vars, index = None):
+    def append(self, function_type, function_name, size_output, vars, index = None):
+        # function_type - "equality" or "inequality"
         # function_name - C++ function call
         # size_output - size of output
         # vars - list of vars to call with
-        self.functions.append(Function(function_name, size_output, vars, index))
+        self.functions.append(Function(function_type, function_name, size_output, vars, index))
 
-    def gen(self):
-        self.gen_sizes()
+    def __iter__(self):
+        return iter(self.functions)
 
-        cog.outl("void initialize() {")
-        cog.outl("\tJ.setZero();")
-        cog.outl("\tf.setZero();")
-        cog.outl("}")
-        cog.outl()
-
-        self.gen_eval()
-        self.gen_jacobian()
+    def get_num_functions(self):
+        if not self.functions:
+            return 0
+        return sum([func.total_size for func in self.functions])
 
     def gen_sizes(self):
         # Produce the nvars and nfuncs lines
@@ -238,16 +311,9 @@ class Functions:
         cog.outl("}")
         cog.outl()
 
-    def gen_sig(self, name, varnames):
+    def gen_func(self, name, varnames):
         # Generates the function signature for the named function
         f = next(f for f in self.functions if f.name == name)
 
-        cog.outl("template <typename T>")
-        cog.out(f"inline Vec(T, {f.size_output}) {name}")
-        args = (f"RVec(T, {v.rows}) {vname}" for (vname, v) in zip(varnames, f.vars))
-        cog.out(f"({', '.join(args)})")
-
-    # template <typename T>
-    # inline StateType<T> dynamics(Ref<StateType<T>> xp,
-    #                              Ref<StateType<T>> x,
-    #                              Ref<InputType<T>> u)
+        f.gen_jacobian(varnames, self.nlp.num_vars)
+        f.gen_sig(varnames)

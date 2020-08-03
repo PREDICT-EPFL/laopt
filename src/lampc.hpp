@@ -12,64 +12,120 @@ using namespace std;
 
 // Eigen includes
 #include <Eigen/Core>
+#include <Eigen/Dense>
 #include <Eigen/StdVector>
 using namespace Eigen;
 
-// autodiff include
-#include <autodiff/forward.hpp>
-#include <autodiff/forward/eigen.hpp>
-using namespace autodiff;
+#include "unsupported/Eigen/AutoDiff"
 
-template<typename Scalar, 
-         template<typename> typename _Eq_t, 
-         template<typename> typename _Ineq_t, 
-         template<typename> typename _Cost_t>
-struct NLP
+// autodiff include
+// #include <autodiff/forward.hpp>
+// #include <autodiff/forward/eigen.hpp>
+// using namespace autodiff;
+
+#define SEG(size, offset) template segment<size>(offset) // Segment of an Eigen vector
+#define BLK(x_size, y_size, x_offset, y_offset) template block<x_size, y_size>(x_offset, y_offset) // Block of an eigen matrix
+#define VEC(Scalar, size) Eigen::Matrix<Scalar, size, 1> // Eigen vector
+#define MAT(Scalar, rows, cols) Eigen::Matrix<Scalar, rows, cols> // Eigen matrix
+#define RVEC(Scalar, size) Eigen::Ref<Eigen::Matrix<Scalar, size, 1>> // Reference to eigen vector
+// #define RMAT(Scalar, rows, cols) Eigen::Ref<Eigen::Matrix<Scalar, rows, cols, Eigen::OuterStride<> >> // Reference to eigen matrix
+#define RMAT(Scalar, rows, cols) Eigen::Ref<Eigen::Matrix<Scalar, rows, cols >> // Reference to eigen matrix
+
+#define ADMatrix(Scalar, ninputs, noutputs) Eigen::Matrix<Eigen::AutoDiffScalar<Eigen::Matrix<Scalar, ninputs, 1>>, noutputs, 1> // AutoDiff type
+
+#define MatX Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>
+
+
+template <typename vec>
+void AD_seed(vec &x)
 {
-    using Eq_t = _Eq_t<Scalar>;
-    using Ineq_t = _Ineq_t<Scalar>;
-    using Cost_t = _Cost_t<Scalar>;
+    for (int i=0; i<x.rows(); i++) {
+        x[i].derivatives().coeffRef(i) = 1;
+    }
+}
+
+template <typename vec>
+void AD_clear(vec &x)
+{
+    for (int i=0; i<x.rows(); i++) {
+        x[i].derivatives().coeffRef(i) = 0;
+    }
+}
+
+
+
+
+template<typename T> struct NLP;
+
+/*
+    Represents a problem of the form
+
+    min f(x)
+    s.t.
+        xlb <= x <= xub
+        lb <= g(x) <= ub
+
+    lb, ub can be +- inf
+    if lb == ub, then this is an equality
+*/
+template<template<typename, typename> class T, typename Scalar, typename Traits>
+struct NLP< T<Scalar, Traits> >
+{
+    using Derived = T<Scalar, Traits>;
 
     enum {
-        nvars =  Eq_t::nvars,
-        num_eq   =  Eq_t::nfuncs,
-        num_ineq =  Ineq_t::nfuncs
+        num_vars =  Traits::num_vars,
+        num_eq   =  Traits::num_eq    // Number of equations
     };
 
-    static_assert(Eq_t::nvars == Ineq_t::nvars, 
-            "Number of variables in equalities, inequalities and cost must match");
-    static_assert(Eq_t::nvars == Cost_t::nvars,
-            "Number of variables in equalities, inequalities and cost must match");
-    static_assert(Cost_t::nfuncs == 1,
-            "Cost function must be scalar");
+    using jacobian_t = Eigen::Matrix<Scalar, num_eq, num_vars>;
+    using primal_t = Eigen::Matrix<Scalar, num_vars, 1>;
 
-    Eigen::Matrix<Scalar, nvars, 1> primal;
-    Eigen::Matrix<dual, nvars, 1> primal_d; // Dual variables for gradients
+    primal_t x;
+    // Eigen::Matrix<dual, num_vars, 1> x_d; // Dual variables for gradients
 
-    Eq_t &eq;      // Vector function equalities
-    Ineq_t &ineq;  // Vector function inequalities
-    Cost_t &cost;  // Scalar function cost
+    jacobian_t J; // Jacobian
+    Eigen::Matrix<Scalar, num_eq, 1> g;
+    Scalar f;
+    Eigen::Matrix<Scalar, 1, num_vars> gradf; // Gradient of f
 
-    NLP(Eq_t &eq, Ineq_t &ineq, Cost_t &cost)
-    : eq(eq), ineq(ineq), cost(cost)
-    {}
+    // Upper and lower bounds
+    Eigen::Matrix<Scalar, num_eq, 1> lb;
+    Eigen::Matrix<Scalar, num_eq, 1> ub;
+    Eigen::Matrix<Scalar, num_vars, 1> xlb;
+    Eigen::Matrix<Scalar, num_vars, 1> xub;
+
+    NLP()
+    {
+        x.setZero();
+        // x_d.setZero();
+
+        J.setZero();
+        g.setZero();
+        f = 0;
+        gradf.setZero();
+
+        lb.setZero();
+        ub.setZero();
+        xlb.setZero();
+        xub.setZero();
+    }
 
     void eval()
     {
-        eq.eval(primal);
-        ineq.eval(primal);
-        cost.eval(primal);
+
     }
 
     void eval_jacobians()
     {
-        // Copy primal to dual variables
-        primal_d = primal;
-
-        eq.eval_jacobian(primal_d);
-        ineq.eval_jacobian(primal_d);
-        cost.eval_jacobian(primal_d);
+        // Copy x to dual variables
+        // x_d = x;
     }
+
+    // Must be implemented:
+    // bnds(x) - sets [lb, ub, xlb, xub]
+    // g(x), f(x)
+    // Jg(x), gradf(x)
 };
 
 // Template for a function type
