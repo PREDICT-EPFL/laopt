@@ -7,92 +7,11 @@ using namespace std::placeholders;
 template <typename Scalar, typename Traits>
 struct MyNLP : public NLP< MyNLP<Scalar, Traits> >
 {
-    VEC(Scalar, 10) x0; // Initial state
-
-    MAT(Scalar, 10, 15) M;
-    VEC(Scalar, 12) v;
+    VEC(Scalar, 2) x0; // Initial state
 
     MyNLP()
     {
         x0.setZero();
-        M.setConstant(4.5);
-        v.setConstant(12.3);
-    }
-
-    // template <typename Derived>
-    // void testBlock(Eigen::MatrixBase<Derived>& m)
-    // {
-    //     cout << "CALLING THIS HELPER\n";
-    //     testBlock(m.BLK(Derived::RowsAtCompileTime,Derived::ColsAtCompileTime,0,0));}
-
-    // template <typename Derived>
-    // void testBlock(Eigen::MatrixBase<Derived>&& m)
-    // template <typename Scalar>
-    void testBlock(Ref<Matrix<Scalar, 3, 4>> m, const Ref<Matrix<Scalar, 3, 1>> v)
-    {
-        // static_assert(Derived::RowsAtCompileTime == 3 && Derived::ColsAtCompileTime == 4);
-        cout << "testBlock" << endl;
-        cout << "----- m -----\n";
-        cout << m << endl;
-        m(0,0) = 1;
-        m(1,0) = 2;
-        m(2,0) = 3;
-        cout << "----- m -----\n";
-        cout << m << endl;
-
-        cout << "RowsAtCompileTime = " << m.RowsAtCompileTime << endl;
-        cout << "ColsAtCompileTime = " << m.ColsAtCompileTime << endl;
-
-        cout << "m.InnerStrideAtCompileTime = " << m.InnerStrideAtCompileTime << endl;
-        cout << "m.innerStride = " << m.innerStride() << endl;
-        cout << "m.OuterStrideAtCompileTime = " << m.OuterStrideAtCompileTime << endl;
-        cout << "m.outerStride = " << m.outerStride() << endl;
-
-        cout << "v = " << v.transpose() << endl;
-        // m.transpose().setConstant(1.098);
-    }
-
-    void test()
-    {
-        cout << Base::x.transpose() << endl;
-        cout << "X(1) = " << X(1).transpose() << endl;
-        cout << "xss = " << xss().transpose() << endl;
-
-        // cout << x0.transpose() << endl;
-        // cout << "Should NOT call helper\n";
-        // testBlock(x0.SEG(3,4));
-        // cout << x0.transpose() << endl;
-
-        // cout << "Should call helper\n";
-        // testBlock(x0);
-        // cout << x0.transpose() << endl;
-        
-        cout << "============== M ============\n"; 
-        cout << M << endl;
-
-        auto q = M.BLK(3,4,4,5);
-        cout << "Should call helper\n";
-        testBlock(q, v.template segment<3>(2));
-        cout << M << endl;
-
-        cout << "Should NOT call helper\n";
-        testBlock(M.BLK(3,4,4,5), v.template segment<3>(5));
-        cout << M << endl;
-
-
-        cout << "========== J ==========\n";
-        cout << Base::J << endl;
-        cout << "=======================\n";
-        cout << "Calling Jacobian" << endl;
-        Base::x.setConstant(1.2);
-        // Base::x_d = Base::x;
-
-        eval_jacobian();
-
-        cout << "========== J ==========\n";
-        cout << Base::J << endl;
-        cout << "=======================\n";
-
     }
 
     /*[[[cog
@@ -114,38 +33,66 @@ struct MyNLP : public NLP< MyNLP<Scalar, Traits> >
     nlp.equality("dynamics", 2, (xss, xss, uss))
     nlp.equality("equal", 2, (X[N-1], xss))
     
-    i = Index(range(1, N))
-    nlp.inequality("out_bnd", 3, (X[i], U[i]), index=i, lb=0, ub="ub_func")
+    # i = Index(range(1, N))
+    # nlp.inequality("out_bnd", 3, (X[i], U[i]), index=i, lb=0, ub="ub_func")
 
     nlp.generate()
     ]]]*/
     using Base = NLP< MyNLP<Scalar, Traits> >;
-    constexpr auto X(int col) {return Base::x.template segment<2>(0 + 2 * col);};
-    constexpr auto U(int col) {return Base::x.template segment<1>(10 + 1 * col);};
-    constexpr auto xss() {return Base::x.template segment<2>(14);};
-    constexpr auto uss() {return Base::x.template segment<1>(16);};
+    using Base::x;
+    using Base::J;
+    using Base::g;
+    constexpr auto X(int col) {return x.SEG(2, 0 + 2 * col);};
+    constexpr auto U(int col) {return x.SEG(1, 10 + 1 * col);};
+    constexpr auto xss() {return x.SEG(2, 14);};
+    constexpr auto uss() {return x.SEG(1, 16);};
     //[[[end]]]
+
+    /*[[[cog 
+    nlp.constraints.gen_eval() 
+    nlp.constraints.gen_jacobian() 
+    ]]]*/
+    inline void eval()
+    {
+    	for(int i=0; i<4; i++)
+    		dynamics<Scalar>(X((i+1)), X(i), U((i+1)), g.SEG(2,0+i*2));
+    	initial_state<Scalar>(X(0), g.SEG(2,2));
+    	dynamics<Scalar>(xss(), xss(), uss(), g.SEG(2,4));
+    	equal<Scalar>(X(4), xss(), g.SEG(2,6));
+    }
 
     inline void eval_jacobian()
     {
-        J_dynamics(Base::x.SEG(2,0), Base::x.SEG(2,2), Base::x.SEG(1,4),
-            Base::g.SEG(2,0), 
-            Base::J.BLK(2,2,0,0), Base::J.BLK(2,2,0,2), Base::J.BLK(2,1,0,4));
+    	for(int i=0; i<4; i++)
+    		J_dynamics(x.SEG(2, ((i+1)*2+0)), x.SEG(2, (i*2+0)), x.SEG(1, ((i+1)*1+10)),
+    		           g.SEG(2, 0+i*2),
+    		           J.BLK(2,2,0+i*2,((i+1)*2+0)), J.BLK(2,2,0+i*2,(i*2+0)), J.BLK(2,1,0+i*2,((i+1)*1+10)));
+    	J_initial_state(x.SEG(2, 0),
+    	                g.SEG(2, 8),
+    	                J.BLK(2,2,8,0));
+    	J_dynamics(x.SEG(2, 14), x.SEG(2, 14), x.SEG(1, 16),
+    	           g.SEG(2, 10),
+    	           J.BLK(2,2,10,14), J.BLK(2,2,10,14), J.BLK(2,1,10,16));
+    	J_equal(x.SEG(2, 8), x.SEG(2, 14),
+    	        g.SEG(2, 12),
+    	        J.BLK(2,2,12,8), J.BLK(2,2,12,14));
     }
 
+    //[[[end]]]
+
     /*[[[cog nlp.gen_func("dynamics", ("xp", "x", "u")) ]]]*/
-    inline void J_dynamics(RVEC(Scalar, 2) xp,
-                           RVEC(Scalar, 2) x,
-                           RVEC(Scalar, 1) u,
-                           RVEC(Scalar, 2) val,
-                           RVEC(Scalar, 2, 2) J_xp,
-                           RVEC(Scalar, 2, 2) J_x,
-                           RVEC(Scalar, 2, 1) J_u)
+    inline void J_dynamics(const Ref<const Matrix<Scalar, 2, 1>> xp,
+                           const Ref<const Matrix<Scalar, 2, 1>> x,
+                           const Ref<const Matrix<Scalar, 1, 1>> u,
+                           Ref<Matrix<Scalar, 2, 1>> val,
+                           Ref<Matrix<Scalar, 2, 2>> J_xp,
+                           Ref<Matrix<Scalar, 2, 2>> J_x,
+                           Ref<Matrix<Scalar, 2, 1>> J_u)
     {
     	using input_t = Matrix<Scalar, 5, 1>;
     	using ADScalar = AutoDiffScalar<input_t>;
-    	VEC(ADScalar, 5) _x;
-    	VEC(ADScalar, 2) _out;
+    	Matrix<ADScalar, 5, 1> _x;
+    	Matrix<ADScalar, 2, 1> _out;
     	// Copy current value into dual variables
     	_x.SEG(2,0) = xp;
     	_x.SEG(2,2) = x;
@@ -153,10 +100,10 @@ struct MyNLP : public NLP< MyNLP<Scalar, Traits> >
     	// Compute the Jacobian
     	AD_seed(_x);
     	this->dynamics<ADScalar>(_x.SEG(2,0), _x.SEG(2,2), _x.SEG(1,4), _out);
-    	val = _out.value();
     	for(int i=0; i<2; i++) // Copy Jacobian into output variables
     	{
-    		Ref<input_t> deriv = _out[i].derivatives().transpose();
+    		val(i) = _out[i].value();
+    		Ref<input_t> deriv = _out[i].derivatives();
     		J_xp.row(i) = deriv.SEG(2,0);
     		J_x.row(i) = deriv.SEG(2,2);
     		J_u.row(i) = deriv.SEG(1,4);
@@ -164,11 +111,84 @@ struct MyNLP : public NLP< MyNLP<Scalar, Traits> >
     };
 
     template <typename T>
-    inline void dynamics(RVEC(T, 2) xp, RVEC(T, 2) x, RVEC(T, 1) u, RVEC(T, 2) out)
+    inline void dynamics_contiguous(const Ref<const Matrix<T, 5, 1>> _x,
+                                       Ref<Matrix<T, 2, 1>> out)
+    {dynamics<T>(_x.SEG(2,0), _x.SEG(2,2), _x.SEG(1,4), out);};
+
+    template <typename T, typename N>
+    inline void dynamics(const Ref<const Matrix<T, 2, 1>> xp,
+                         const Ref<const Matrix<T, 2, 1>> x,
+                         const Ref<const Matrix<T, 1, 1>> u,
+                         Ref<Matrix<T, 2, 1>> out)
     //[[[end]]]
     {
-        out(0) = xp(0) - (-sin(x(1)) + x(1)*x(0));
-        out(1) = xp(1) - cos(x(0))*u(0);
+        out(0) = x0(1) * xp(0) - (-sin(x(1)) + x(1)*x(0)) + x0(0);
+        out(1) = x0(0) * xp(1) - cos(x(0))*u(0) + x0(1);
+    };
+
+    /*[[[cog nlp.gen_func("equal", ("a", "b")) ]]]*/
+    inline void J_equal(const Ref<const Matrix<Scalar, 2, 1>> a,
+                        const Ref<const Matrix<Scalar, 2, 1>> b,
+                        Ref<Matrix<Scalar, 2, 1>> val,
+                        Ref<Matrix<Scalar, 2, 2>> J_a,
+                        Ref<Matrix<Scalar, 2, 2>> J_b)
+    {
+    	using input_t = Matrix<Scalar, 4, 1>;
+    	using ADScalar = AutoDiffScalar<input_t>;
+    	Matrix<ADScalar, 4, 1> _x;
+    	Matrix<ADScalar, 2, 1> _out;
+    	// Copy current value into dual variables
+    	_x.SEG(2,0) = a;
+    	_x.SEG(2,2) = b;
+    	// Compute the Jacobian
+    	AD_seed(_x);
+    	this->equal<ADScalar>(_x.SEG(2,0), _x.SEG(2,2), _out);
+    	for(int i=0; i<2; i++) // Copy Jacobian into output variables
+    	{
+    		val(i) = _out[i].value();
+    		Ref<input_t> deriv = _out[i].derivatives();
+    		J_a.row(i) = deriv.SEG(2,0);
+    		J_b.row(i) = deriv.SEG(2,2);
+    	}
+    };
+
+    template <typename T>
+    inline void equal(const Ref<const Matrix<T, 2, 1>> a,
+                      const Ref<const Matrix<T, 2, 1>> b,
+                      Ref<Matrix<T, 2, 1>> out)
+    //[[[end]]]
+    {
+        out = a - b;
+    };
+
+    /*[[[cog nlp.gen_func("initial_state", ("x")) ]]]*/
+    inline void J_initial_state(const Ref<const Matrix<Scalar, 2, 1>> x,
+                                Ref<Matrix<Scalar, 2, 1>> val,
+                                Ref<Matrix<Scalar, 2, 2>> J_x)
+    {
+    	using input_t = Matrix<Scalar, 2, 1>;
+    	using ADScalar = AutoDiffScalar<input_t>;
+    	Matrix<ADScalar, 2, 1> _x;
+    	Matrix<ADScalar, 2, 1> _out;
+    	// Copy current value into dual variables
+    	_x.SEG(2,0) = x;
+    	// Compute the Jacobian
+    	AD_seed(_x);
+    	this->initial_state<ADScalar>(_x.SEG(2,0), _out);
+    	for(int i=0; i<2; i++) // Copy Jacobian into output variables
+    	{
+    		val(i) = _out[i].value();
+    		Ref<input_t> deriv = _out[i].derivatives();
+    		J_x.row(i) = deriv.SEG(2,0);
+    	}
+    };
+
+    template <typename T>
+    inline void initial_state(const Ref<const Matrix<T, 2, 1>> x,
+                              Ref<Matrix<T, 2, 1>> out)
+    //[[[end]]]
+    {
+        out = x - x0;
     };
 };
 
@@ -180,184 +200,228 @@ struct MyTraits
 {
     enum {
         num_vars = 17,
-        num_eq = 26
+        num_eq = 14
     };
 };
 //[[[end]]]
 
 MyNLP<double, MyTraits> nlp;
 
+template<typename _Scalar, typename _param_t, int _NumOutputs, int... n>
+struct ADTraits_t
+{
+    using Scalar = _Scalar;
+    static constexpr int input_len()
+    {
+        int NumInputs = 0;
+        (void)initializer_list<int>{ (NumInputs += n, 0)... };
+        return NumInputs;
+    };
+
+    enum 
+    {
+        NumInputs = input_len(),
+        NumOutputs = _NumOutputs
+    };
+
+    using contiguous_input_t = Matrix<Scalar, NumInputs, 1>;
+    using ADScalar = AutoDiffScalar<contiguous_input_t>;
+
+    // Tuples of input and jacobian blocks
+    using TplInputs = tuple<const Ref<const Matrix<Scalar, n, 1>>...>;
+    using TplJacobians = tuple<Ref<Matrix<Scalar, NumOutputs, n>>...>;
+
+    using AD_input_t = tuple<Matrix<ADScalar, n, 1>...>;
+    static constexpr auto input_sizes = make_tuple(n...);
+    using AD_output_t = Matrix<ADScalar, NumOutputs, 1>;
+
+    using param_t = _param_t;
+};
+
+template<typename ADTraits, typename ADFunctor>
+struct Jacobian
+{
+    using ADScalar = typename ADTraits::ADScalar;
+    using param_t = typename ADTraits::param_t;
+    using Scalar = typename ADTraits::Scalar;
+    using AD_input_t = typename ADTraits::AD_input_t;
+    using AD_output_t = typename ADTraits::AD_output_t;
+    using contiguous_input_t = typename ADTraits::contiguous_input_t;
+
+    enum {
+        NumInputs = ADTraits::NumInputs,
+        NumOutputs = ADTraits::NumOutputs
+    };
+
+    using TplInputs = typename ADTraits::TplInputs;
+    using TplJacobians = typename ADTraits::TplJacobians;
+
+    param_t& _param;
+    ADFunctor f;
+    AD_input_t _x;    // Tuple of dual variables as inputs
+    AD_output_t _out; // Vector of dual variables as outputs
 
 
-// template<int nvars, int nout, typename Scalar, typename Functor>
-// void jacobian(const Functor f, 
-//               const Matrix<Scalar, nvars, 1> x, 
-//               Matrix<Scalar, nout, nvars>& J) // Accepts only block
-// {
-//     using ADScalar = Eigen::AutoDiffScalar<Matrix<double, nvars, 1>>;
-//     using MatX = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
+    Jacobian(param_t& param) : _param(param) {};
 
-//     // AD variables
-//     Matrix<ADScalar, nvars, 1> _x;
-//     Matrix<ADScalar, nout, 1> _out;
+    template<int... n>
+    void operator()(Ref<Matrix<Scalar,NumOutputs,1>> val, 
+                  const Ref<const Matrix<Scalar, n, 1>>... inputs,
+                  Ref<Matrix<Scalar, NumOutputs, n>>... J)
+    {
+        jacobian_impl(forward<decltype(val)>(val), 
+                      forward_as_tuple(inputs...), 
+                      forward_as_tuple(J...),
+                      std::make_index_sequence<sizeof...(n)>{});
+    }
 
-//     f(_x, _out);
+    template <typename vec>
+    constexpr int AD_Seed(vec &x, int offset)
+    {
+        for (int i=0; i<x.rows(); i++) {
+            x[i].derivatives().coeffRef(i + offset) = 1;
+        }
+        return offset + x.rows();
+    }
 
-//     for(int i=0; i<_out.rows(); i++)
+    template<std::size_t... Is>
+    void jacobian_impl(Ref<Matrix<Scalar,NumOutputs,1>> val, 
+                  TplInputs inputs,
+                  TplJacobians J,
+                  std::index_sequence<Is...> ind
+                  )
+    {
+        // Copy the current value of the inputs into the AD variable
+        // and set derivative equal to identity
+        int offset = 0;
+        (void)initializer_list<int>{ 
+            (
+                get<Is>(_x) = get<Is>(inputs),          // Copy inputs
+                offset = AD_Seed(get<Is>(_x), offset), // Set to unit vectors
+                0
+            )...
+        };
+
+        // Call our function
+        f(std::get<Is>(_x)..., _out, _param);
+
+        // Copy Jacobian into output variables
+        for(int i=0; i<NumOutputs; i++)
+        {
+            val(i) = _out[i].value();
+            Ref<contiguous_input_t> deriv = _out[i].derivatives();
+            
+            // Copy gradients to Jacobian matrices
+            offset = 0;
+            (void)initializer_list<int>{ 
+                (
+                    get<Is>(J).row(i) = deriv.template segment<get<Is>(ADTraits::input_sizes)>(offset), 
+                    offset += get<Is>(ADTraits::input_sizes),
+                    0
+                )... 
+            };
+        }
+    }
+
+//     void operator()(const Ref<const Matrix<Scalar, n, 1>>... inputs,
+//                     Ref<Matrix<Scalar,NumOutputs,1>> val)
 //     {
-//         Eigen::Ref<MatX> deriv = _out[i].derivatives().transpose();
-//         J.row(i) = deriv;
+//         f(inputs..., val);
 //     }
-// }
+};
+
+template<typename param_t, typename _Scalar>
+struct dynamics_t {
+    void operator()(
+        const Ref<const Matrix<_Scalar, 2, 1>> xp,
+        const Ref<const Matrix<_Scalar, 2, 1>> x,
+        const Ref<const Matrix<_Scalar, 1, 1>> u,
+        Ref<Matrix<_Scalar, 2, 1>> out,
+        param_t& param)
+    {
+        out(0) = param.x0(1) * xp(0) - (-sin(x(1)) + x(1)*x(0)) + param.x0(0);
+        out(1) = param.x0(0) * xp(1) - cos(x(0))*u(0) + param.x0(1) + 4.56*u(0);
+    }
+};
 
 
+template<template <typename, typename> typename name_t, typename param_t, int NumOutputs, int... NumInputs>
+// template<typename name_t, typename param_t, int NumOutputs, int... NumInputs>
+using Jacobian_t = 
+Jacobian<ADTraits_t<typename param_t::Scalar, param_t, NumOutputs, NumInputs...>, 
+         name_t<param_t, 
+                typename ADTraits_t<typename param_t::Scalar, param_t, NumOutputs, NumInputs...>::ADScalar>>;
 
-// template <short N_IN, short N_OUT>
-// struct VectorFunction {
-//     using InputType = Eigen::Matrix<double, N_IN, 1>;
-//     using ValueType = Eigen::Matrix<double, N_OUT, 1>;
-   
-//     // Vector function
-//     template <typename T>
-//     void operator()
-//     (
-//       const Eigen::Matrix<T, N_IN, 1>& vIn, 
-//       Eigen::Matrix<T, N_OUT, 1>* vOut
-//     ) const
+Jacobian_t<dynamics_t, decltype(nlp), 2, 2, 2, 1> J_dynamics(nlp);
+
+
+// template<template <typename, typename> class Functor, int NumOutputs, int... n>
+// struct JJacobian_t
+// {
+//     Functor<int, double> f1;
+//     Functor<double, int> f2;
+//     void eval()
 //     {
-//       vOut->operator()(0) = vIn(0);
-//       vOut->operator()(1) = 2*vIn(1) + 5*vIn(0);
-//       vOut->operator()(2) = 3*vIn(2);
+//         f1();
+//         f2();
 //     }
 // };
 
-// template <short N_IN, short N_OUT>
-// struct TestFunction {
-//     using InputType = Eigen::Matrix<double, N_IN, 1>;
-//     using ValueType = Eigen::Matrix<double, N_OUT, 1>;
-   
-//     // Vector function
-//     template <typename T>
-//     void operator()
-//     (
-//       const Eigen::Matrix<T, N_IN, 1>& vIn, 
-//       Eigen::Matrix<T, N_OUT, 1>* vOut
-//     ) const
+// template<typename A, typename B>
+// struct func_t
+// {
+//     void operator()()
 //     {
-//       vOut->operator()(0) = vIn(0);
-//       vOut->operator()(1) = 2*vIn(1) + 5*vIn(0);
-//       vOut->operator()(2) = 3*vIn(2);
+//         cout << "Here!" << endl;
 //     }
 // };
 
-
-// template <typename Scalar>
-// void testFunc(const VEC(Scalar, 2)& x, const VEC(Scalar, 3)& y, VEC(Scalar, 3)& out)
-// {
-//     out(0) = x(1) * y(2) + 3 * x(0);
-//     out(1) = 4 * y(1) + x(0) * 17;
-//     out(2) = x(0) * x(1) * y(0) * y(1) * y(2);
-// }
-
-
+// JJacobian_t<func_t, 2, 2, 2, 1> test_jac;
 
 int main()
 {
     cout << "Hello world\n";
-    nlp.test();
 
-//     {    
-//     Eigen::Matrix<double, 3, 1> vIn;
-//     Eigen::Matrix<double, 3, 1> vOut;
-//     Eigen::Matrix<double, 3, 3> mJacobian;
+    nlp.x.setRandom();
 
-//     Eigen::AutoDiffJacobian< VectorFunction<3, 3> > vectorFunAD;
+    Matrix<double, 2, 1> xp;
+    Matrix<double, 2, 1> x;
+    Matrix<double, 1, 1> u;
 
-//     for(int i=0; i<3; i++)
-//         vIn(i) = i;
+    Matrix<double, 2, 2> J_xp;
+    Matrix<double, 2, 2> J_x;
+    Matrix<double, 2, 1> J_u;
 
-//     vectorFunAD(vIn, &vOut, &mJacobian); // Voila! jacobian is in mJacobian.
+    Matrix<double, 2, 1> val;
 
-//     // vectorFunAD(x1, x2, x3, &vOut, &J_x1, &J_x2, &J_x3); // Voila! jacobian is in mJacobian.
+    // auto dynamics = Dynamics<decltype(nlp), 2, 2, 2, 1>(nlp);
+    // auto d = Jacobian<decltype(dynamics), decltype(nlp), 2, 2, 2, 1>(dynamics, nlp);
 
-//     cout << "vIn = " << vIn.transpose() << endl;
-//     cout << "vOut = " << vOut.transpose() << endl;
-//     cout << "mJacobian = \n" << mJacobian << endl;
-//     };
+    xp.setConstant(1);
+    x.setConstant(2);
+    u.setConstant(3);
+    nlp.x0.setConstant(4);
+    J_xp.setConstant(-1);
+    J_x.setConstant(-1);
+    J_u.setConstant(-1);
 
-//     {
-//     cout << "\n\n\n";
-//     Eigen::Matrix<double, 2, 1> x;
-//     Eigen::Matrix<double, 3, 1> y;
+    cout << "nlp.x0 = " << nlp.x0.transpose() << endl;
+    // cout << "dynamics.nlp.x0 = " << dynamics.nlp.x0.transpose() << endl;
 
-//     x.setConstant(1);
-//     y.setConstant(4);
-    
-//     Eigen::Matrix<double, 3, 1> out;
+    // dynamics(xp, x.tail<2>(), u, val);
+    cout << "val = " << val.transpose() << endl;
 
-//     testFunc(x, y, out);
-//     cout << "out = " << out.transpose() << endl;
+    J_dynamics.operator()<2,2,1>(val, xp, x, u, J_xp, J_x, J_u);   
 
-//     using ADScalarX = Eigen::AutoDiffScalar<Matrix<double, 2, 1>>;
-//     using ad_var_x_t = Eigen::Matrix<ADScalarX, 2, 1>;
-//     using ad_var_y_t = Eigen::Matrix<ADScalarX, 3, 1>;
-
-//     Matrix<ADScalarX, 3, 1> out_x;
-//     // using ad_var_y_t = Eigen::Matrix<Eigen::AutoDiffScalar<Matrix<double, 3, 1>>, 3, 1>;
-
-//     ad_var_x_t _x = x;
-//     ad_var_y_t _y = y;
-    
-//     AD_seed(_x);
-//     AD_clear(_y);
-
-//     testFunc(_x, _y, out_x);
-
-//     cout << "out_x = ";
-//     for(int i=0; i<3; i++)
-//     {
-//         cout << out_x[i].value() << ", ";
-//     }
-//     cout << endl;
-//     cout << "derivatives = \n";
-//     for(int i=0; i<3; i++)
-//     {
-//         cout << out_x[i].derivatives().transpose() << "\n";
-//     }
-//     cout << endl;
-
-//     // for (int i = 0; i < ad_eq.rows(); i++) {
-//     //     b_eq[i] = ad_eq[i].value();
-//     //     Eigen::Ref<MatX> deriv = ad_eq[i].derivatives().transpose();
-//     //     A_eq.row(i) = deriv;
-//     // }
-
-//     }
-
-//     cout << "\n\n\n";
-//     Eigen::Matrix<double, 2, 1> x;
-//     Eigen::Matrix<double, 3, 1> y;
-
-//     x.setConstant(1);
-//     y.setConstant(4);
-    
-//     // Eigen::Matrix<double, 3, 1> out;
-
-//    Eigen::Matrix<double, 3, 2> J_x;
-//    Eigen::Matrix<double, 3, 3> J_y;
-
-// // template<int nvars, int nout, typename Scalar, typename Functor>
-// // void jacobian(const Functor& f, 
-// //                 const Matrix<Scalar, nvars, 1> x, 
-// //                 Matrix<Scalar, nout, nvars>& J)
-
-//     testFunc<double>(x, y, J);
+    cout << "J_xp = \n" << J_xp << endl;
+    cout << "J_x = \n" << J_x << endl;
+    cout << "J_u= \n" << J_u << endl;
 
 
-//     auto f = [y](const Matrix<double, 2, 1> x, Matrix<double, 3, 1>& J)
-//             {testFunc<double>(x, y, J);};
+    cout << "*******************************\n";
 
-//     jacobian(f, x, J_x);
+    // test_jac.eval();
+
 
     return 0;
 

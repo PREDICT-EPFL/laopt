@@ -45,16 +45,16 @@ class Variable:
         if self.cols > 1:
             return f"{self.name}({self.col})"
         else:
-            return f"{self.name}"
+            return f"{self.name}()"
         # assert self.cols == 1, "Can only generate with vectors"
         # return self.name
 
     def gen_define(self, var_name = "x"):
         # Generate var(i) const function
         if self.cols == 1:
-            return f"constexpr auto {self.name}() {{return Base::{var_name}.template segment<{self.rows}>({self.offset});}};"
+            return f"constexpr auto {self.name}() {{return {var_name}.SEG({self.rows}, {self.offset});}};"
         else:
-            return f"constexpr auto {self.name}(int col) {{return Base::{var_name}.template segment<{self.rows}>({self.offset} + {self.rows} * col);}};"
+            return f"constexpr auto {self.name}(int col) {{return {var_name}.SEG({self.rows}, {self.offset} + {self.rows} * col);}};"
 
     @property
     def offset(self):
@@ -64,6 +64,10 @@ class Variable:
     def offset(self, offset):
         self.__offset = offset
 
+    @property
+    def seg(self):
+        # return a x.SEG(size, offset) form
+        return f"x.SEG({self.rows}, {self.offset})"
 
 class NLP:
     def __init__(self):
@@ -81,8 +85,22 @@ class NLP:
     def generate(self):
         # Produce short names for everything we're going to use
         cog.outl("using Base = NLP< MyNLP<Scalar, Traits> >;")
+        cog.outl("using Base::x;")
+        cog.outl("using Base::J;")
+        cog.outl("using Base::g;")
         for var in self.vars:
             cog.outl(var.gen_define())
+        # self.generate_eval() 
+
+    def generate_eval(self):
+        # Generate the "evaluation" functions
+
+        # Evaluation of constraints
+        cog.outl("inline void eval()")
+        cog.outl("{")
+        cog.outl("\t")
+        cog.outl(")")
+
 
     def generate_traits(self, class_name = "MyTraits"):
         # Produce a traits class with the required sizes
@@ -107,6 +125,12 @@ class Index:
     def __init__(self, rng, op = 'i'):
         self.op = op
         self.rng = rng
+
+    @property
+    def num_iterations(self):
+        # Compute the number of iterations that this index represents 
+        # i.e., max(i) - min(i)
+        return self.rng.stop - self.rng.start
 
     def __str__(self):
         return self.op
@@ -161,12 +185,48 @@ class Function:
     def gen_sig(self, varnames):
         # Generate function signature
         cog.outl("template <typename T>")
-        cog.out(f"inline void {self.name}")
-        args = (f"RVEC(T, {v.rows}) {vname}" for (vname, v) in zip(varnames, self.vars))
-        cog.out(f"({', '.join(args)}, RVEC(T, {self.size_output}) out)")
+        func_name = f"inline void {self.name}"
+        cog.out(func_name)
+        args = (f"const Ref<const Matrix<T, {v.rows}, 1>> {vname}" for (vname, v) in zip(varnames, self.vars))
+        pre = ",\n" + (" " * len(func_name)) + " "
+        cog.out(f"({pre.join(args)}{pre}Ref<Matrix<T, {self.size_output}, 1>> out)")
 
-    # @staticmethod
-    # def gen_args(varnames, vars):
+    def gen_eval(self, offset):
+        offset_str = str(offset)
+        if self.index is not None:
+            idx = self.index
+            cog.outl(f"\tfor(int i={idx.rng.start}; i<{idx.rng.stop}; i++)")
+            cog.out("\t")
+            offset_str = f"{offset}+i*{self.size_output}"
+        output = f"g.SEG({self.size_output},{offset_str})"
+        cog.outl(f"\t{self.name}<Scalar>(" + ", ".join(map(str, self.vars)) + f", {output});")
+        return self.size_output
+
+        # J_dynamics(x.SEG(2,0), x.SEG(2,2), x.SEG(1,4),
+        #     g.SEG(2,0), 
+        #     J.BLK(2,2,0,0), J.BLK(2,2,0,2), J.BLK(2,1,0,4));
+
+
+    def gen_eval_jacobian(self, offset):
+        pre = ""
+        offset_str = str(offset)
+        num_iterations = 1
+        if self.index is not None:
+            idx = self.index
+            cog.outl(f"\tfor(int i={idx.rng.start}; i<{idx.rng.stop}; i++)")
+            pre = "\t"
+            offset_str = f"{offset}+i*{self.size_output}"
+            num_iterations = self.index.num_iterations
+        cog.out(f"{pre}\t")
+        func_name = f"J_{self.name}("
+        pre = pre + "\t" + " " * len(func_name)
+        cog.out(func_name)
+        args = ", ".join(v.seg for v in self.vars)
+        cog.outl(args + ",")
+        cog.outl(f"{pre}g.SEG({self.size_output}, {offset_str}),")
+        Jargs = ", ".join(f"J.BLK({self.size_output},{v.rows},{offset_str},{v.offset})" for v in self.vars)
+        cog.outl(pre + Jargs + ");")
+        return self.size_output * num_iterations
 
     def gen_jacobian(self, varnames, nvars):
         # Generate a set of functions returning the Jacobian wrt each vector var
@@ -174,17 +234,17 @@ class Function:
         # Function sig
         func_name = f"inline void J_{self.name}("
         pre = ",\n" + (" " * len(func_name))
-        J_args = pre.join(f"RVEC(Scalar, {self.size_output}, {v.rows}) J_{vname}" for (vname, v) in zip(varnames, self.vars))
-        args = pre.join(f"RVEC(Scalar, {v.rows}) {vname}" for (vname, v) in zip(varnames, self.vars))
-        cog.outl(f"{func_name}{args}{pre}RVEC(Scalar, {self.size_output}) val{pre}{J_args})")
+        J_args = pre.join(f"Ref<Matrix<Scalar, {self.size_output}, {v.rows}>> J_{vname}" for (vname, v) in zip(varnames, self.vars))
+        args = pre.join(f"const Ref<const Matrix<Scalar, {v.rows}, 1>> {vname}" for (vname, v) in zip(varnames, self.vars))
+        cog.outl(f"{func_name}{args}{pre}Ref<Matrix<Scalar, {self.size_output}, 1>> val{pre}{J_args})")
         cog.outl("{")
 
         # Declare AD variables
         num_inputs = sum(v.rows for v in self.vars)
         cog.outl(f"\tusing input_t = Matrix<Scalar, {num_inputs}, 1>;")
         cog.outl(f"\tusing ADScalar = AutoDiffScalar<input_t>;")
-        cog.outl(f"\tVEC(ADScalar, {num_inputs}) _x;")
-        cog.outl(f"\tVEC(ADScalar, {self.size_output}) _out;")
+        cog.outl(f"\tMatrix<ADScalar, {num_inputs}, 1> _x;")
+        cog.outl(f"\tMatrix<ADScalar, {self.size_output}, 1> _out;")
 
         cog.outl("\t// Copy current value into dual variables")
         seg_names = []
@@ -197,21 +257,16 @@ class Function:
         cog.outl("\t// Compute the Jacobian")
         cog.outl("\tAD_seed(_x);")
         cog.outl(f"\tthis->{self.name}<ADScalar>({', '.join(seg_names)}, _out);")
-        cog.outl("\tval = _out.value();")
 
         cog.outl(f"\tfor(int i=0; i<{self.size_output}; i++) // Copy Jacobian into output variables")
         cog.outl("\t{")
-        cog.outl("\t\tRef<input_t> deriv = _out[i].derivatives().transpose();")
+        cog.outl("\t\tval(i) = _out[i].value();")
+        cog.outl("\t\tRef<input_t> deriv = _out[i].derivatives();")
         row = 0
         for (vname, v) in zip(varnames, self.vars):
             cog.outl(f"\t\tJ_{vname}.row(i) = deriv.SEG({v.rows},{row});")
             row = row + v.rows
         cog.outl("\t}")
-
-
-        # args = ", ".join([v for v in varnames])
-        # for (vname, v) in zip(varnames, self.vars):
-        #     cog.outl(f"\tJ_{vname} = jacobian(_{self.name}, wrt({vname}), at({args}));")
 
         cog.outl("};")
         cog.outl()
@@ -249,65 +304,23 @@ class Functions:
         cog.outl("Eigen::Matrix<Scalar, nfuncs, 1>     f; // Value of function")
         cog.outl()
 
-    def gen_eval(self, func_name = "f", var_name = "x"):
+    def gen_eval(self):
         # Evaluate the functions given the variable var_name into the vector func_name
-        cog.outl(f"void eval(RVec(Scalar, nvars) {var_name})")
+        cog.outl(f"inline void eval()")
         cog.outl("{")
         offset = 0
         for func in self.functions:
-            offset_str = str(offset)
-            if func.index is not None:
-                idx = func.index
-                cog.outl(f"\tfor(int i={idx.rng.start}; i<{idx.rng.stop}; i++)")
-                cog.out("\t")
-                offset_str = f"{offset}+i*{func.size_output}"
-            cog.out(f"\t{func_name}.SEG({func.size_output},{offset_str}) = ")
-            cog.out(f"{func.name}<Scalar>")
-            cog.outl('(' + ", ".join(map(str, func.vars)) + ");")
-            offset = offset + func.total_size
+            offset = offset + func.gen_eval(offset)
         cog.outl("}")
         cog.outl()
 
-    def gen_jacobian(self, jacobian_name = 'J', var_name = 'x'):
-        # Evaluate the jacobian of the functions at the variable var_name 
-        # into the vector jacobian_name
-        cog.outl(f"void eval_jacobian(RVec(dual, nvars) {var_name})")
+    def gen_jacobian(self):
+        cog.outl("inline void eval_jacobian()")
         cog.outl("{")
 
-        # Produce lambda functions for all the member functions that we want to pass
-        fnames = [f.name for f in self.functions]
-        indices = [fnames.index(x) for x in set(fnames)]
-        unique_funcs = [self.functions[i] for i in indices]
-
-        cog.outl("\t// Lambda functions to capture object, so we can get pointers to member functions")
-        for f in unique_funcs:
-            args = ", ".join([f"RVec(dual, {v.rows}) x{i}" for (i,v) in enumerate(f.vars)])
-            cog.outl(f"\tstatic const auto _{f.name} = [this]({args})")
-            args = ", ".join([f"x{i}" for (i,v) in enumerate(f.vars)])
-            cog.outl(f"\t\t{{return this->{f.name}<dual>({args});}};")
-        cog.outl()
-
-        cog.outl("\t// Compute Jacobians block-wise")
         offset = 0
         for func in self.functions:
-            pre = ""
-            offset_str = str(offset)
-            if func.index is not None:
-                idx = func.index
-                cog.outl(f"\tfor(int i={idx.rng.start}; i<{idx.rng.stop}; i++)")
-                cog.outl("\t{")
-                pre = "\t"
-                offset_str = f"{offset}+i*{func.size_output}"
-            for var in func.vars:
-                cog.out(f"{pre}\t{jacobian_name}.")
-                cog.out(f"BLK({func.size_output},{var.rows},{offset_str},{var.offset}) = ")
-                cog.out(f"jacobian(")
-                cog.out(f"_{func.name}, ")
-                cog.out("wrt(" + str(var) + "), ")
-                cog.outl('at(' + ",".join(map(str, func.vars)) + "));")
-            if func.index is not None:
-                cog.outl("\t}")
-            offset = offset + func.total_size
+            offset = offset + func.gen_eval_jacobian(offset)
         cog.outl("}")
         cog.outl()
 

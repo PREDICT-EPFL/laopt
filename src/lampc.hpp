@@ -52,6 +52,28 @@ void AD_clear(vec &x)
     }
 }
 
+// Computes total length of all eigen vectors passed in
+// template<typename... T>
+//   constexpr auto get_total_length(T... args) {
+//   int acc = 0;
+//   (void)std::initializer_list<int>{ (acc += T::RowsAtCompileTime, 0)... };
+//   return acc;
+// }
+
+// template<typename... T>
+//   constexpr auto get_total_length() {
+//   int acc = 0;
+//   (void)std::initializer_list<int>{ (acc += T::RowsAtCompileTime, 0)... };
+//   return acc;
+// }
+
+template<typename... T>
+  constexpr auto get_total_length(tuple<T&...> args) {
+  int acc = 0;
+  (void)std::initializer_list<int>{ (acc += T::Size, 0)... };
+  return acc;
+}
+
 
 
 
@@ -68,9 +90,10 @@ template<typename T> struct NLP;
     lb, ub can be +- inf
     if lb == ub, then this is an equality
 */
-template<template<typename, typename> class T, typename Scalar, typename Traits>
-struct NLP< T<Scalar, Traits> >
+template<template<typename, typename> class T, typename _Scalar, typename Traits>
+struct NLP< T<_Scalar, Traits> >
 {
+    using Scalar = _Scalar;
     using Derived = T<Scalar, Traits>;
 
     enum {
@@ -80,14 +103,14 @@ struct NLP< T<Scalar, Traits> >
 
     using jacobian_t = Eigen::Matrix<Scalar, num_eq, num_vars>;
     using primal_t = Eigen::Matrix<Scalar, num_vars, 1>;
+    using constraint_t = Eigen::Matrix<Scalar, num_eq, 1>;
+    using gradient_f_t = Eigen::Matrix<Scalar, 1, num_vars>;
 
-    primal_t x;
-    // Eigen::Matrix<dual, num_vars, 1> x_d; // Dual variables for gradients
-
-    jacobian_t J; // Jacobian
-    Eigen::Matrix<Scalar, num_eq, 1> g;
-    Scalar f;
-    Eigen::Matrix<Scalar, 1, num_vars> gradf; // Gradient of f
+    primal_t     x;
+    jacobian_t   J;
+    constraint_t g;
+    Scalar       f;
+    gradient_f_t gradient_f;
 
     // Upper and lower bounds
     Eigen::Matrix<Scalar, num_eq, 1> lb;
@@ -98,12 +121,11 @@ struct NLP< T<Scalar, Traits> >
     NLP()
     {
         x.setZero();
-        // x_d.setZero();
 
         J.setZero();
         g.setZero();
         f = 0;
-        gradf.setZero();
+        gradient_f.setZero();
 
         lb.setZero();
         ub.setZero();
@@ -116,7 +138,7 @@ struct NLP< T<Scalar, Traits> >
 
     }
 
-    void eval_jacobians()
+    void eval_jacobian()
     {
         // Copy x to dual variables
         // x_d = x;
@@ -126,7 +148,27 @@ struct NLP< T<Scalar, Traits> >
     // bnds(x) - sets [lb, ub, xlb, xub]
     // g(x), f(x)
     // Jg(x), gradf(x)
+
+
+
+
+
 };
+
+
+template <typename F, typename Vec>
+double timeit(const F &f, const Vec &x)
+{
+    const auto samples = 100;
+    const auto begin = std::chrono::high_resolution_clock::now();
+    for (auto i = 0; i < samples; ++i)
+        f(x);
+    const auto end = std::chrono::high_resolution_clock::now();
+    const std::chrono::duration<double> duration = end - begin;
+    return duration.count() / samples;
+}
+
+
 
 // Template for a function type
 // We can add all sorts of static_asserts in NLP to 
