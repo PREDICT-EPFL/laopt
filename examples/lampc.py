@@ -112,8 +112,11 @@ class NLP:
         cog.outl("    };")
         cog.outl("};")
 
-    def gen_func(self, name, varnames):
-        self.constraints.gen_func(name, varnames)
+    def begin_func(self, name, varnames):
+        self.constraints.begin_func(name, varnames)
+    
+    def end_func(self, name):
+        self.constraints.end_func(name)
 
     def equality(self, function_name, size_output, vars, index = None):
         self.constraints.append("equality", function_name, size_output, vars, index)
@@ -184,12 +187,18 @@ class Function:
 
     def gen_sig(self, varnames):
         # Generate function signature
-        cog.outl("template <typename T>")
-        func_name = f"inline void {self.name}"
+        cog.outl(f"template <typename T> struct {self.name}_t {{")
+        func_name = f"inline void operator()"
         cog.out(func_name)
-        args = (f"const Ref<const Matrix<T, {v.rows}, 1>> {vname}" for (vname, v) in zip(varnames, self.vars))
-        pre = ",\n" + (" " * len(func_name)) + " "
-        cog.out(f"({pre.join(args)}{pre}Ref<Matrix<T, {self.size_output}, 1>> out)")
+        inputs = ", ".join(f"RCVec<T,{v.rows}> {vname}" for (vname, v) in zip(varnames, self.vars))
+        outputs = f"RVec<T,{self.size_output}> out"
+        params = "param_t& param"
+        cog.outl("(\n\t" + ",\n\t".join([inputs, outputs, params]) + ")")
+
+    def instantiate(self):
+        arg_sizes = ", ".join(str(v.rows) for v in self.vars)
+        cog.outl(f"Jacobian<{self.name}_t, Scalar, param_t, {self.size_output}, {arg_sizes}> J_{self.name};")
+        cog.outl(f"{self.name}_t<Scalar> {self.name};")
 
     def gen_eval(self, offset):
         offset_str = str(offset)
@@ -199,7 +208,7 @@ class Function:
             cog.out("\t")
             offset_str = f"{offset}+i*{self.size_output}"
         output = f"g.SEG({self.size_output},{offset_str})"
-        cog.outl(f"\t{self.name}<Scalar>(" + ", ".join(map(str, self.vars)) + f", {output});")
+        cog.outl(f"\t{self.name}(" + ", ".join(map(str, self.vars)) + f", {output}, param);")
         return self.size_output
 
         # J_dynamics(x.SEG(2,0), x.SEG(2,2), x.SEG(1,4),
@@ -221,11 +230,11 @@ class Function:
         func_name = f"J_{self.name}("
         pre = pre + "\t" + " " * len(func_name)
         cog.out(func_name)
-        args = ", ".join(v.seg for v in self.vars)
-        cog.outl(args + ",")
-        cog.outl(f"{pre}g.SEG({self.size_output}, {offset_str}),")
+        cog.outl(f"g.SEG({self.size_output}, {offset_str}),")
+        args = ", ".join(str(v) for v in self.vars)
+        cog.outl(pre + args + ",")
         Jargs = ", ".join(f"J.BLK({self.size_output},{v.rows},{offset_str},{v.offset})" for v in self.vars)
-        cog.outl(pre + Jargs + ");")
+        cog.outl(pre + Jargs + f",\n{pre}param"");")
         return self.size_output * num_iterations
 
     def gen_jacobian(self, varnames, nvars):
@@ -324,9 +333,14 @@ class Functions:
         cog.outl("}")
         cog.outl()
 
-    def gen_func(self, name, varnames):
-        # Generates the function signature for the named function
+    def begin_func(self, name, varnames):
+        # Generates the functor signature for the named function
         f = next(f for f in self.functions if f.name == name)
-
-        f.gen_jacobian(varnames, self.nlp.num_vars)
         f.gen_sig(varnames)
+
+    def end_func(self, name):
+        cog.outl("};")
+
+        # Instantiates the jacobian and functor
+        f = next(f for f in self.functions if f.name == name)
+        f.instantiate()
