@@ -18,15 +18,10 @@ using namespace Eigen;
 
 #include "unsupported/Eigen/AutoDiff"
 
-// autodiff include
-// #include <autodiff/forward.hpp>
-// #include <autodiff/forward/eigen.hpp>
-// using namespace autodiff;
-
 #define SEG(size, offset) template segment<size>(offset) // Segment of an Eigen vector
 #define BLK(x_size, y_size, x_offset, y_offset) template block<x_size, y_size>(x_offset, y_offset) // Block of an eigen matrix
-#define VEC(Scalar, size) Eigen::Matrix<Scalar, size, 1> // Eigen vector
-#define MAT(Scalar, rows, cols) Eigen::Matrix<Scalar, rows, cols> // Eigen matrix
+// #define VEC(Scalar, size) Eigen::Matrix<Scalar, size, 1> // Eigen vector
+// #define MAT(Scalar, rows, cols) Eigen::Matrix<Scalar, rows, cols> // Eigen matrix
 // #define RVEC(Scalar, size) Eigen::Ref<Eigen::Matrix<Scalar, size, 1>> // Reference to eigen vector
 // #define RMAT(Scalar, rows, cols) Eigen::Ref<Eigen::Matrix<Scalar, rows, cols, Eigen::OuterStride<> >> // Reference to eigen matrix
 // #define RMAT(Scalar, rows, cols) Eigen::Ref<Eigen::Matrix<Scalar, rows, cols >> // Reference to eigen matrix
@@ -37,11 +32,12 @@ using namespace Eigen;
 
 template<typename Scalar, int Size>
 using RCVec = const Ref<const Eigen::Matrix<Scalar, Size, 1>>;
+template<typename Scalar, int Rows, int Cols>
+using RCMat = const Ref<const Eigen::Matrix<Scalar, Rows, Cols>>;
 template<typename Scalar, int Size>
 using Vec = Eigen::Matrix<Scalar, Size, 1>;
 template<typename Scalar, int Size>
 using RVec = Eigen::Ref<Eigen::Matrix<Scalar, Size, 1>>;
-
 
 template <typename vec>
 void AD_seed(vec &x)
@@ -119,6 +115,12 @@ struct NLP< T<_Scalar, Traits> >
     Scalar       f;
     gradient_f_t gradient_f;
 
+    // Expressions to access the variables and constraints
+    constexpr auto var(pair<const int, int> p) {return x.template segment<p.first>(p.second);};
+    constexpr auto con(pair<const int, int> p) {return g.template segment<p.first>(p.second);};
+    constexpr auto Jac(pair<const int, int> con, pair<int, int> var)
+        {return J.template block<con.first, var.first>(con.second, var.second);};
+
     // Upper and lower bounds
     Eigen::Matrix<Scalar, num_eq, 1> lb;
     Eigen::Matrix<Scalar, num_eq, 1> ub;
@@ -140,31 +142,15 @@ struct NLP< T<_Scalar, Traits> >
         xub.setZero();
     }
 
-    void eval()
-    {
-
-    }
-
-    void eval_jacobian()
-    {
-        // Copy x to dual variables
-        // x_d = x;
-    }
-
     // Must be implemented:
     // bnds(x) - sets [lb, ub, xlb, xub]
     // g(x), f(x)
     // Jg(x), gradf(x)
-
-
-
-
-
 };
 
 
-template<template <typename> class Functor, typename Scalar, typename param_t, int NumOutputs, int... n>
-struct Jacobian
+template<class Derived, typename Scalar, typename param_t, int NumOutputs, int... n>
+struct JJacobian
 {
     static constexpr int input_len()
     {
@@ -187,17 +173,28 @@ struct Jacobian
     using TplInputs = tuple<const Ref<const Matrix<Scalar, n, 1>>...>;
     using TplJacobians = tuple<Ref<Matrix<Scalar, NumOutputs, n>>...>;
 
-    Functor<ADScalar> f;  // Function to derivate with the AD variables
     AD_input_t _x;    // Tuple of dual variables as inputs
     AD_output_t _out; // Vector of dual variables as outputs
 
-    // Evaluation operator just packs arguments into tuples
-    void operator()(Ref<Matrix<Scalar,NumOutputs,1>> val, 
-                  const Ref<const Matrix<Scalar, n, 1>>... inputs,
-                  Ref<Matrix<Scalar, NumOutputs, n>>... J,
-                  param_t& param)
+
+    // Evaluation operator
+    inline void operator()(param_t& param,
+                    Ref<Matrix<Scalar,NumOutputs,1>> out, 
+                    const Ref<const Matrix<Scalar, n, 1>>... inputs
+                  )
     {
-        jacobian_impl(forward<decltype(val)>(val), 
+        auto derived = static_cast< Derived* >(this);
+        derived->eval(param, out, std::forward<decltype(inputs)>(inputs)...);
+    }
+
+    // Jacobian operator
+    inline void operator()(param_t& param,
+                    Ref<Matrix<Scalar,NumOutputs,1>> out, 
+                    const Ref<const Matrix<Scalar, n, 1>>... inputs,
+                    Ref<Matrix<Scalar, NumOutputs, n>>... J
+                  )
+    {
+        jacobian_impl(forward<decltype(out)>(out), 
                       forward_as_tuple(inputs...), 
                       forward_as_tuple(J...),
                       param,
@@ -232,7 +229,10 @@ struct Jacobian
         };
 
         // Call our function
-        f(std::get<Is>(_x)..., _out, param);
+        auto derived = static_cast< Derived* >(this);
+        derived->template eval<ADScalar>(param, _out, std::get<Is>(_x)...);
+        // std::forward<decltype(inputs)>(inputs)...);
+        // f(std::get<Is>(_x)..., _out, param);
 
         // Copy Jacobian into output variables
         for(int i=0; i<NumOutputs; i++)
@@ -252,6 +252,23 @@ struct Jacobian
         }
     }
 };
+
+
+// template <typename Scalar, typename param_t> 
+            // struct name##_diff : public JJacobian< name##_diff<Scalar, param_t>, 
+
+#define make_differentiable(name, NumOutputs, NumInputs...) \
+    struct name##_diff : public JJacobian< name##_diff, \
+                                Scalar, param_t, NumOutputs, NumInputs> \
+{ \
+    template<typename T, typename... Inputs> \
+    constexpr void eval(param_t& param, RVec<T,NumOutputs> out, \
+                     Inputs&&... inputs) \
+    { \
+        _##name<T,param_t>(param, out, inputs...); \
+    } \
+} name;
+
 
 
 // template <int N = 1000000, typename F, typename Vec>
