@@ -3,7 +3,7 @@ project(lampc)
 
 # add_executable(lampc mpc.cpp)
 
-find_package(autodiff REQUIRED NO_MODULE)
+# find_package(autodiff REQUIRED NO_MODULE)
 # find_package(Hana REQUIRED)
 # find_package(Boost REQUIRED COMPONENTS Hana)
 

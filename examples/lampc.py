@@ -4,9 +4,12 @@ from collections import namedtuple
 
 # TODOS
 
+# Refactoring...
+# seperate "functions" from the NLP - just make things that have eval, jacobian and hessian operators
+# from this build dense QP, dense NLP, blockwise QP, blockwise NLP, etc
+# layer integrators and collocation on top
+
 # Critical path
-# pass in matrix variables (for the cost function)
-# add hessian for cost
 # update RHS of equalities and inequalities
 # create a QP version of the NLP and attach to QP solver
 # hook up the NLP to IPOPT 
@@ -17,9 +20,10 @@ from collections import namedtuple
 # allow specification of variable bounds?
 # add a bunch of auto-generated constraints via python? (A*x <= b) type stuff?
 # allow for some of the jacobians to be specified manually and only generate the missing bits
+# implement BFGS
 
 class Variable:
-    def __init__(self, name, offset, rows, cols=1, col=0):
+    def __init__(self, name, offset, rows, cols=1, col=None):
         self.name = name
         self.rows = rows
         self.cols = cols
@@ -39,11 +43,12 @@ class Variable:
 
     def __str__(self):
         if self.cols > 1:
-            return f"{self.name}({self.col})"
+            if self.col is None: # Return the whole matrix as a vector
+                return f"{self.name}Mat()"
+            else:
+                return f"{self.name}({self.col})" # Return the requested column
         else:
             return f"{self.name}()"
-        # assert self.cols == 1, "Can only generate with vectors"
-        # return self.name
 
     def gen_define(self, size = False, offset = False, func = False):
         # Set to true the element to generate
@@ -51,20 +56,52 @@ class Variable:
         if size:
             cog.outl(f"static constexpr auto s{self.name} = {self.rows};")
 
+            if self.cols > 1:
+                cog.outl(f"static constexpr auto s{self.name}Mat = {self.rows * self.cols};")
+
+
         if self.cols == 1:
             if offset:
                 cog.outl(f"constexpr auto o{self.name}() {{return {self.offset};}};")
             if func:
                 cog.outl(f"constexpr auto  {self.name}() {{return x.template segment<s{self.name}>(o{self.name}());}};")
         else:
+            # Accessors for a column of the variable
             if offset:
                 cog.outl(f"constexpr auto o{self.name}(int col) {{return {self.offset}+{self.rows}*col;}};")
             if func:
                 cog.outl(f"constexpr auto  {self.name}(int col) {{return x.template segment<s{self.name}>(o{self.name}(col));}};")
 
+            # Accessors for the whole matrix
+            if offset:
+                cog.outl(f"constexpr auto o{self.name}Mat() {{return {self.offset};}};")
+            if func:
+                cog.outl(f"constexpr auto  {self.name}Mat() {{return x.template segment<s{self.name}Mat>(o{self.name}Mat());}};")
+
+    @property
+    def offset_func(self):
+        """Return the function to compute the offset"""
+        if self.cols == 1:
+            return f"o{self.name}()"
+        if self.col is None:
+            return f"o{self.name}Mat()"
+        return f"o{self.name}({self.col})"
+
+    @property
+    def size_func(self):
+        """Return the constant computing the size of the variable"""
+        if self.cols == 1:
+            return f"s{self.name}"    # There's only one column
+        if self.col is None:
+            return f"s{self.name}Mat" # Return the whole matrix
+        return f"s{self.name}"        # Size of one column
+
     @property
     def offset(self):
-        return self.__offset + self.rows * self.col
+        if self.col is None:
+            return self.__offset
+        else:
+            return self.__offset + self.rows * self.col
 
     @offset.setter
     def offset(self, offset):
@@ -145,6 +182,8 @@ class Constraint:
         return f.size_output
 
     def gen_eval_jacobian(self, offset):
+        """Generate Jacobian evaluation"""
+
         pre = ""
         f = self.function
         num_iterations = 1
@@ -159,9 +198,45 @@ class Constraint:
         func_name = f"{f.name}("
         pre = pre + "\t" + " " * len(func_name)
         cog.outl(func_name + f"param, {str(self)}, " + ", ".join(str(v) for v in self.args) + ", ")
-        Jargs = ", ".join(f"J.BLK(s{self.name},s{v.name},{offsetFunc},o{str(v)})" for v in self.args)
+        Jargs = ", ".join(f"J.BLK(s{self.name},{v.size_func},{offsetFunc},{v.offset_func})" for v in self.args)
         cog.outl(pre + Jargs + ");")
         return f.size_output * num_iterations
+
+    def gen_eval_hessian(self):
+        """Generate exact Hessian evaluation"""
+
+        def H_name(rVar,cVar):
+            return f"H_{rVar.name}{cVar.name}"
+
+        def H_blk(rowVar, colVar): 
+            return f"Ref<Matrix<Scalar,{rowVar.size_func},{colVar.size_func}>> {H_name(rowVar,colVar)} = " + \
+                   f"hessian_f.BLK({rowVar.size_func},{colVar.size_func},{rowVar.offset_func},{colVar.offset_func})"
+
+        for rVar in self.args:
+            for cVar in self.args:
+                cog.outl("\t" + H_blk(rVar,cVar) + ";")
+            args = ",".join(H_name(rVar,cVar) for cVar in self.args)
+            cog.outl("\t" + f"auto H_{rVar.name} = forward_as_tuple(" + args + f"); // Row {rVar.name} of the hessian")
+            cog.outl()
+
+        for v in self.args:
+            cog.out("\t" + f"Ref<Matrix<Scalar,{v.size_func},1>> grad_{v.name} = ")
+            cog.outl(f"gradient_f.SEG({v.size_func},{v.offset_func});")
+        cog.outl()
+
+
+        name = f"\t{self.function.name}"
+        pre = "\t" + " " * len(name)
+        cog.outl(f"{name}(param, f,")
+
+        # Variables
+        cog.outl(pre + ", ".join(str(v) for v in self.args) + ", ")  
+
+        # Gradients
+        cog.outl(pre + ", ".join(f"grad_{v.name}" for v in self.args) + ",")
+
+        # Hessian
+        cog.outl(pre + ", ".join(f"H_{v.name}" for v in self.args) + ");")
 
 
 class NLP:
@@ -171,6 +246,7 @@ class NLP:
         self.num_vars = 0
         self.constraints = [] # Evaluations of functions
         self.functions = [] # List of defined functions
+        self.objective = None
 
     def var(self, name, n, m = 1, lb=None, ub=None):
         var = Variable(name, self.num_vars, n, m)
@@ -194,6 +270,9 @@ class NLP:
         cog.outl("using Base::x;")
         cog.outl("using Base::J;")
         cog.outl("using Base::g;")
+        cog.outl("using Base::f;")
+        cog.outl("using Base::gradient_f;")
+        cog.outl("using Base::hessian_f;")
         cog.outl()
 
         cog.outl("// Define variables data and accessors")
@@ -214,9 +293,12 @@ class NLP:
         [con.gen_define(func=True) for con in self.constraints]
         cog.outl()
 
-        cog.outl("// Instantiate functions and jacobians")
+        cog.outl("// Instantiate function, jacobians and hessian")
         for f in self.functions:
+            if f == self.objective.function:
+                continue
             f.instantiate()
+        self.objective.function.instantiate(hessian = True)
         cog.outl()
 
         cog.outl("// Evaluate constraints")
@@ -232,6 +314,12 @@ class NLP:
             offset = offset + con.gen_eval_jacobian(offset)
         cog.outl("}\n")
 
+        cog.outl("// Evaluate hessian of objective")
+        cog.outl("inline void eval_objective()\n{")
+        self.objective.gen_eval_hessian();
+        cog.outl("}\n")
+
+
     def generate_traits(self, class_name = "MyTraits"):
         # Produce a traits class with the required sizes
         cog.outl(f"struct {class_name}")
@@ -242,7 +330,13 @@ class NLP:
         cog.outl("    };")
         cog.outl("};")
 
+    def scalar_function(self, function_name, *input_types):
+        f = Function(self, function_name, None, *input_types)
+        self.functions.append(f)
+        return f
+
     def function(self, function_name, size_output, *input_types):
+        """Define a vector valued function"""
         f = Function(self, function_name, size_output, *input_types)
         self.functions.append(f)
         return f
@@ -254,6 +348,10 @@ class NLP:
             t = "Scalar"
         cog.outl(f"constexpr {t} {name} = {val};")
         return val
+
+    def minimize(self, objective):
+        self.objective = objective
+
 
 class Index:
     def __init__(self, rng, op = 'i'):
@@ -304,7 +402,7 @@ class Function:
     def __init__(self, nlp, function_name, size_output, *input_types):
         self.nlp = nlp
         self.name = function_name
-        self.size_output = size_output
+        self.size_output = size_output # If None, then this is a scalar-output function
         self.input_types = input_types
 
         self.generate_signature()
@@ -323,7 +421,10 @@ class Function:
     def generate_signature(self):
         # Generate function signature
         inputs = ", ".join(f"RC{self.var_sig(var)}" for var in self.input_types)
-        outputs = f"R{self.var_sig(('out', self.size_output))}"
+        if self.size_output is None:
+            outputs = "T& out"
+        else:
+            outputs = f"R{self.var_sig(('out', self.size_output))}"
         params = "param_t& param"
 
         cog.outl(f"template <typename T, typename param_t>")
@@ -332,77 +433,11 @@ class Function:
     def __call__(self, *args):
         return Constraint(self, *args)
 
-    def instantiate(self):
+    def instantiate(self, hessian=False):
         arg_sizes = ", ".join(f"{var[1]}" for var in self.input_types)
-        cog.outl(f"make_differentiable({self.name}, {self.size_output}, {arg_sizes});")
-
-
-
-
-# # An array of FuncEvals
-# class Functions:
-#     def __init__(self, nlp):
-#         self.functions = []
-#         self.nlp = nlp
-#         self.Function = namedtuple("Function", ['function', 'lb', 'ub'])
-
-#     def append(self, funceval, lb = None, ub = None):
-#         self.functions.append(self.Function(funceval, lb, ub))
-#     # def append(self, function_type, function_name, size_output, vars, index = None):
-#     #     # function_type - "equality" or "inequality"
-#     #     # function_name - C++ function calldavy
-#     #     # size_output - size of output
-#     #     # vars - list of vars to call with
-#     #     self.functions.append(Function(function_type, function_name, size_output, vars, index))
-
-#     def __iter__(self):
-#         return iter(self.functions)
-
-#     def get_num_functions(self):
-#         if not self.functions:
-#             return 0
-#         return sum([func.total_size for func in self.functions])
-
-#     def gen_sizes(self):
-#         # Produce the nvars and nfuncs lines
-#         cog.outl("enum {")
-#         nfunc = sum([func.total_size for func in self.functions])
-#         cog.outl(f'\tnfuncs = {nfunc},')
-#         cog.outl(f'\tnvars = {self.nlp.num_vars}')
-#         cog.outl("};")
-#         cog.outl()
-#         cog.outl("Eigen::Matrix<Scalar, nfuncs, nvars> J; // Jacobian of function")
-#         cog.outl("Eigen::Matrix<Scalar, nfuncs, 1>     f; // Value of function")
-#         cog.outl()
-
-#     def gen_eval(self):
-#         # Evaluate the functions given the variable var_name into the vector func_name
-#         cog.outl(f"inline void eval()")
-#         cog.outl("{")
-#         offset = 0
-#         for func in self.functions:
-#             offset = offset + func.function.gen_eval(offset)
-#         cog.outl("}")
-#         cog.outl()
-
-#     def gen_jacobian(self):
-#         cog.outl("inline void eval_jacobian()")
-#         cog.outl("{")
-
-#         offset = 0
-#         for func in self.functions:
-#             offset = offset + func.function.gen_eval_jacobian(offset)
-#         cog.outl("}")
-#         cog.outl()
-
-#     def begin_func(self, name, varnames):
-#         # Generates the functor signature for the named function
-#         f = next(f for f in self.functions if f.name == name)
-#         f.gen_sig(varnames)
-
-#     def end_func(self, name):
-#         cog.outl("};")
-
-#         # Instantiates the jacobian and functor
-#         f = next(f for f in self.functions if f.name == name)
-#         f.instantiate()
+        if hessian == False:
+            assert self.size_output is not None, "Cannot generate jacobian for scalar function (use a vector valued function of length 1)"
+            cog.outl(f"make_jacobian({self.name}, {self.size_output}, {arg_sizes});")
+        else:
+            assert self.size_output is None, "Can only generate hessian for scalar functions"
+            cog.outl(f"make_hessian({self.name}, {arg_sizes});")

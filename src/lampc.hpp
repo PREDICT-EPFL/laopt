@@ -20,13 +20,6 @@ using namespace Eigen;
 
 #define SEG(size, offset) template segment<size>(offset) // Segment of an Eigen vector
 #define BLK(x_size, y_size, x_offset, y_offset) template block<x_size, y_size>(x_offset, y_offset) // Block of an eigen matrix
-// #define VEC(Scalar, size) Eigen::Matrix<Scalar, size, 1> // Eigen vector
-// #define MAT(Scalar, rows, cols) Eigen::Matrix<Scalar, rows, cols> // Eigen matrix
-// #define RVEC(Scalar, size) Eigen::Ref<Eigen::Matrix<Scalar, size, 1>> // Reference to eigen vector
-// #define RMAT(Scalar, rows, cols) Eigen::Ref<Eigen::Matrix<Scalar, rows, cols, Eigen::OuterStride<> >> // Reference to eigen matrix
-// #define RMAT(Scalar, rows, cols) Eigen::Ref<Eigen::Matrix<Scalar, rows, cols >> // Reference to eigen matrix
-
-// #define ADMatrix(Scalar, ninputs, noutputs) Eigen::Matrix<Eigen::AutoDiffScalar<Eigen::Matrix<Scalar, ninputs, 1>>, noutputs, 1> // AutoDiff type
 
 #define MatX Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>
 
@@ -107,19 +100,21 @@ struct NLP< T<_Scalar, Traits> >
     using jacobian_t = Eigen::Matrix<Scalar, num_eq, num_vars>;
     using primal_t = Eigen::Matrix<Scalar, num_vars, 1>;
     using constraint_t = Eigen::Matrix<Scalar, num_eq, 1>;
-    using gradient_f_t = Eigen::Matrix<Scalar, 1, num_vars>;
+    using gradient_f_t = Eigen::Matrix<Scalar, num_vars, 1>;
+    using hessian_f_t = Eigen::Matrix<Scalar, num_vars, num_vars>;
 
     primal_t     x;
     jacobian_t   J;
     constraint_t g;
     Scalar       f;
     gradient_f_t gradient_f;
+    hessian_f_t  hessian_f;
 
     // Expressions to access the variables and constraints
-    constexpr auto var(pair<const int, int> p) {return x.template segment<p.first>(p.second);};
-    constexpr auto con(pair<const int, int> p) {return g.template segment<p.first>(p.second);};
-    constexpr auto Jac(pair<const int, int> con, pair<int, int> var)
-        {return J.template block<con.first, var.first>(con.second, var.second);};
+    // constexpr auto var(pair<const int, int> p) {return x.template segment<p.first>(p.second);};
+    // constexpr auto con(pair<const int, int> p) {return g.template segment<p.first>(p.second);};
+    // constexpr auto Jac(pair<const int, int> con, pair<int, int> var)
+    //     {return J.template block<con.first, var.first>(con.second, var.second);};
 
     // Upper and lower bounds
     Eigen::Matrix<Scalar, num_eq, 1> lb;
@@ -135,6 +130,7 @@ struct NLP< T<_Scalar, Traits> >
         g.setZero();
         f = 0;
         gradient_f.setZero();
+        hessian_f.setZero();
 
         lb.setZero();
         ub.setZero();
@@ -257,7 +253,7 @@ struct JJacobian
 // template <typename Scalar, typename param_t> 
             // struct name##_diff : public JJacobian< name##_diff<Scalar, param_t>, 
 
-#define make_differentiable(name, NumOutputs, NumInputs...) \
+#define make_jacobian(name, NumOutputs, NumInputs...) \
     struct name##_diff : public JJacobian< name##_diff, \
                                 Scalar, param_t, NumOutputs, NumInputs> \
 { \
@@ -271,46 +267,180 @@ struct JJacobian
 
 
 
-// template <int N = 1000000, typename F, typename Vec>
-// double timeit(const F &f, const Vec &x)
-// {
-//     const auto samples = N;
-//     const auto begin = std::chrono::high_resolution_clock::now();
-//     for (auto i = 0; i < samples; ++i)
-//         f(x);
-//     const auto end = std::chrono::high_resolution_clock::now();
-//     const std::chrono::duration<double> duration = end - begin;
-//     return duration.count() / samples;
-// }
+template<class Derived, typename Scalar, typename param_t, int... n>
+struct HHessian
+{
+    static constexpr int input_len()
+    {
+        int NumInputs = 0;
+        (void)initializer_list<int>{ (NumInputs += n, 0)... };
+        return NumInputs;
+    };
+    static constexpr int NumInputs = input_len();         // Total number of inputs
+    static constexpr auto input_sizes = make_tuple(n...); // Size of each input
+
+    // AD dual variable
+    using Derivatives = Matrix<Scalar, NumInputs, 1>;
+    using ADScalar = AutoDiffScalar<Derivatives>;
+    using outerDerivatives = Eigen::Matrix<ADScalar, NumInputs, 1>;
+    using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
+
+    using Hessian_t = Eigen::Matrix<Scalar, NumInputs, NumInputs>;
+    using AD_input_t = tuple<Matrix<outerADScalar, n, 1>...>; 
+
+    // Tuples of input and gradient blocks
+    using TplInputs = tuple<const Ref<const Matrix<Scalar, n, 1>>...>;
+    using TplGradients = tuple<Ref<Matrix<Scalar, n, 1>>...>;
+
+    AD_input_t _x;      // Tuple of AD input variables
+    outerADScalar _out; // Dual variable as output
+
+    // Evaluation operator
+    inline void operator()(param_t& param,
+                    Scalar& out, 
+                    const Ref<const Matrix<Scalar, n, 1>>... inputs
+                  )
+    {
+        auto derived = static_cast< Derived* >(this);
+        derived->eval(param, out, std::forward<decltype(inputs)>(inputs)...);
+    }
+
+    // Gradient operator (Note: Also computes the Hessian, but doesn't return it - slow!)
+    // inline void operator()(param_t& param,
+    //                 Scalar& out, 
+    //                 const Ref<const Matrix<Scalar, n, 1>>... inputs,
+    //                 Ref<Matrix<Scalar, n, 1>>... g
+    //               )
+    // {
+    //     jacobian_impl(forward<decltype(out)>(out), 
+    //                   forward_as_tuple(inputs...), 
+    //                   forward_as_tuple(J...),
+    //                   param,
+    //                   std::make_index_sequence<sizeof...(n)>{});
+    // }
+
+    template<typename... H_t>
+    inline void operator()(param_t& param,
+                    Scalar& out, 
+                    const Ref<const Matrix<Scalar, n, 1>>... inputs,
+                    Ref<Matrix<Scalar, n, 1>>... g,
+                    H_t... H // tuple of rows
+                  )
+    {
+        hessian_impl(param,
+                     forward<decltype(out)>(out), 
+                     forward_as_tuple(inputs...), 
+                     forward_as_tuple(g...),
+                     forward_as_tuple(H...),
+                     std::make_index_sequence<sizeof...(n)>{});
+    }
 
 
+    template <typename vec>
+    constexpr int AD_Seed(vec &x, int offset)
+    {
+        for (int i=0; i<x.rows(); i++) {
+            x(i).value().derivatives() = Derivatives::Unit(NumInputs, i + offset);
+            x(i).derivatives() = Derivatives::Unit(NumInputs, i + offset);
+            
+            // Initialize hessian matrix to zero 
+            for (int j = 0; j < NumInputs; j++) {
+                x(i).derivatives()(j).derivatives().setZero();
+            }
+        }
+        return offset + x.rows();
+    }
 
-// Template for a function type
-// We can add all sorts of static_asserts in NLP to 
-// confirm that the function types are the right structure
-// template<typename Scalar>
-// struct Function
-// {
-//     enum {
-//         nvars =  ***,
-//         nfuncs = ***
-//     };
+    // Copy the vector x to the AD vector AD_x
+    template <typename ADvec, typename vec>
+    constexpr void copy_input(ADvec& AD_x, vec& x)
+    {
+        for(int i=0; i<x.rows(); i++) 
+            AD_x(i).value().value() = x(i);
+    }
 
-//     Eigen::Matrix<Scalar, nfuncs, nvars> J; // Jacobian of function
-//     Eigen::Matrix<Scalar, nfuncs, 1>     f; // Value of function
+    // template<std::size_t... Is, typename... H_t, int m>
+    // constexpr int copy_hessian_block(tuple<Ref<Matrix<Scalar,m,n...>>> H, //H_t&...> H, // Row of hessian blocks
 
-//     void Function() {
-//         J.setZero();
-//         f.setZero();
-//     }
+    template<std::size_t... Is, typename... H_t>
+    constexpr int copy_hessian_block(tuple<H_t&...> H, //H_t&...> H, // Row of hessian blocks
+                      int offset,                      // Offset of the input
+                      std::index_sequence<Is...>)
+    {
+        int H_offset = 0;        
+        for(int i=0; i<get<0>(H).rows(); i++)
+        {
+            Ref<Derivatives> hess_row = _out.derivatives()(i + offset).derivatives(); // The i'th row of the hessian
 
-//     void eval(Ref<Matrix<Scalar, nvars, 1>> x)
-//     {
-//         f(x) = ...
-//     }
+            H_offset = 0;
+            (void)initializer_list<int>{ 
+                (
+                    get<Is>(H).template middleRows<1>(i) = hess_row.template segment<get<Is>(input_sizes)>(H_offset), 
+                    H_offset += get<Is>(input_sizes),
+                    0
+                )... 
+            };
 
-//     void eval_jacobian(Ref<Matrix<dual, nvars, 1>> x)
-//     {
-//         J(x) = ...
-//     }
-// }
+        }
+        return get<0>(H).rows();
+    }
+
+    template<std::size_t... Is, typename... H_t>
+    void hessian_impl(param_t& param,
+                      Scalar& out, 
+                      TplInputs inputs,
+                      TplGradients g,
+                      tuple<H_t&...> H,
+                      std::index_sequence<Is...>)
+    {
+        // Copy the current value of the inputs into the AD variable
+        // and set derivative equal to identity
+        int offset = 0;
+        (void)initializer_list<int>{ 
+            (
+                copy_input(get<Is>(_x), get<Is>(inputs)),
+                offset = AD_Seed(get<Is>(_x), offset), // Set to unit vectors
+                0
+            )...
+        };
+
+        // Call our function
+        auto derived = static_cast< Derived* >(this);
+        derived->template eval<outerADScalar>(param, _out, std::get<Is>(_x)...);
+
+        // Function value
+        out = _out.value().value();
+
+        // Copy gradient into output variables
+        Ref<Derivatives> grad = _out.value().derivatives();
+        offset = 0;
+        (void)initializer_list<int>{ 
+            (
+                get<Is>(g) = grad.template segment<get<Is>(input_sizes)>(offset), 
+                offset += get<Is>(input_sizes),
+                0
+            )... 
+        };
+
+        // Ref<Derivatives> hess_row;
+        offset = 0;
+        (void)initializer_list<int>{
+            (
+                offset += copy_hessian_block(get<Is>(H), offset, std::make_index_sequence<sizeof...(n)>{}),
+                0
+            )...
+        };
+
+    }
+};
+
+
+#define make_hessian(name, NumInputs...) \
+    struct name##_hess : public HHessian< name##_hess, Scalar, param_t, NumInputs> \
+{ \
+    template<typename T, typename... Inputs> \
+    constexpr void eval(param_t& param, T& out, Inputs&&... inputs) \
+    { \
+        _##name<T,param_t>(param, out, inputs...); \
+    } \
+} name;
