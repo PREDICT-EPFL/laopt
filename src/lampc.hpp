@@ -70,25 +70,71 @@ template<typename... T>
   return acc;
 }
 
+/**
+ * Macro to define a variable
+ * 
+ * Args:
+ *  name - variable name
+ *  offset - offset of the start of this variable into the 
+ *  size - size of a vector of this variable type
+ *  number [optional] - number of vectors
+ */
+#define DECLARE_VAR3(name, offset, size) \
+    static constexpr auto s##name = size; /* Size of the variable */ \
+    constexpr auto o##name() {return offset;} /* Offset */ \
+    constexpr auto name(RCVec<Scalar, num_vars> x) \
+        {return x.template segment<s##name>();} /* Offset */
+
+#define DECLARE_VAR4(name, offset, size, number) \
+    static constexpr auto s##name = size; /* Size of the variable */ \
+    static constexpr auto s##name##Mat = size; /* Size of the vectorized variable */ \
+    constexpr auto o##name(int col) {return offset + size * col;} /* Offset */ \
+    constexpr auto name(RCVec<Scalar, num_vars> x, int col) \
+        {return x.template segment<s##name>(o##name(col));} /* Offset */
+
+#define GET_MACRO(_1,_2,_3,_4,NAME,...) NAME
+#define DECLARE_VAR(...) GET_MACRO(__VA_ARGS__, DECLARE_VAR4, DECLARE_VAR3)(__VA_ARGS__)
+
+/**
+ * Macro to define a constraint
+ * 
+ * Args:
+ *  name - constraint name
+ *  offset - offset from the start of the constraint vector
+ *  size - size of a vector of this variable type
+ *  number [optional] - number of vectors
+ */
+#define DECLARE_CON3(name, offset, size) \
+    static constexpr auto s##name = size; \
+    constexpr auto o##name() {return offset;}; \
+    template<typename T> \
+    constexpr auto name(T g) {return g.template segment<s##name>(o##name());};
+
+#define DECLARE_CON4(name, offset, size, number) \
+    static constexpr auto s##name = size; \
+    constexpr auto o##name(int ind) {return offset + size * ind;}; \
+    template<typename T> \
+    constexpr auto name(T g, int ind) {return g.template segment<s##name>(o##name(ind));};
+
+#define DECLARE_CONSTRAINT(...) GET_MACRO(__VA_ARGS__, DECLARE_CON4, DECLARE_CON3)(__VA_ARGS__)
 
 
 
-template<typename T> struct NLP;
+template<typename T> struct VectorFunction;
 
-/*
-    Represents a problem of the form
+/**
+    Represents a vector valued function f(x) mapping from Rn to Rm
 
-    min f(x)
-    s.t.
-        xlb <= x <= xub
-        lb <= g(x) <= ub
+    Provides eval and jacobian functions
 
-    lb, ub can be +- inf
-    if lb == ub, then this is an equality
+    operator()(param, out, x)           Evaluates function
+    operator()(param, out, x, jacobian) Evaluates jacobian
 */
 template<template<typename, typename> class T, typename _Scalar, typename Traits>
-struct NLP< T<_Scalar, Traits> >
+struct VectorFunction< T<_Scalar, Traits> >
 {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     using Scalar = _Scalar;
     using Derived = T<Scalar, Traits>;
 
@@ -97,57 +143,32 @@ struct NLP< T<_Scalar, Traits> >
         num_eq   =  Traits::num_eq    // Number of equations
     };
 
+    using f_t = Eigen::Matrix<Scalar, num_eq, 1>;
     using jacobian_t = Eigen::Matrix<Scalar, num_eq, num_vars>;
-    using primal_t = Eigen::Matrix<Scalar, num_vars, 1>;
-    using constraint_t = Eigen::Matrix<Scalar, num_eq, 1>;
-    using gradient_f_t = Eigen::Matrix<Scalar, num_vars, 1>;
-    using hessian_f_t = Eigen::Matrix<Scalar, num_vars, num_vars>;
+    using x_t = Eigen::Matrix<Scalar, num_vars, 1>;
 
-    primal_t     x;
-    jacobian_t   J;
-    constraint_t g;
-    Scalar       f;
-    gradient_f_t gradient_f;
-    hessian_f_t  hessian_f;
+    // // Evaluate function
+    // void operator(param_t& param, RVec<Scalar, num_eq> out, CRVec<Scalar, num_vars> x)
+    // {
 
-    // Expressions to access the variables and constraints
-    // constexpr auto var(pair<const int, int> p) {return x.template segment<p.first>(p.second);};
-    // constexpr auto con(pair<const int, int> p) {return g.template segment<p.first>(p.second);};
-    // constexpr auto Jac(pair<const int, int> con, pair<int, int> var)
-    //     {return J.template block<con.first, var.first>(con.second, var.second);};
+    // }
 
-    // Upper and lower bounds
-    Eigen::Matrix<Scalar, num_eq, 1> lb;
-    Eigen::Matrix<Scalar, num_eq, 1> ub;
-    Eigen::Matrix<Scalar, num_vars, 1> xlb;
-    Eigen::Matrix<Scalar, num_vars, 1> xub;
+    // // Compute Jacobian
+    // void operator(param_t& param,
+    //               RVec<Scalar, num_eq> out, 
+    //               CRVec<Scalar, num_vars> x, 
+    //               CRMat<Scalar, num_eq, num_vars> J)
+    // {
 
-    NLP()
-    {
-        x.setZero();
-
-        J.setZero();
-        g.setZero();
-        f = 0;
-        gradient_f.setZero();
-        hessian_f.setZero();
-
-        lb.setZero();
-        ub.setZero();
-        xlb.setZero();
-        xub.setZero();
-    }
-
-    // Must be implemented:
-    // bnds(x) - sets [lb, ub, xlb, xub]
-    // g(x), f(x)
-    // Jg(x), gradf(x)
+    // }
 };
 
 
 template<class Derived, typename Scalar, typename param_t, int NumOutputs, int... n>
 struct JJacobian
 {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     static constexpr int input_len()
     {
         int NumInputs = 0;
@@ -227,8 +248,6 @@ struct JJacobian
         // Call our function
         auto derived = static_cast< Derived* >(this);
         derived->template eval<ADScalar>(param, _out, std::get<Is>(_x)...);
-        // std::forward<decltype(inputs)>(inputs)...);
-        // f(std::get<Is>(_x)..., _out, param);
 
         // Copy Jacobian into output variables
         for(int i=0; i<NumOutputs; i++)
@@ -253,7 +272,7 @@ struct JJacobian
 // template <typename Scalar, typename param_t> 
             // struct name##_diff : public JJacobian< name##_diff<Scalar, param_t>, 
 
-#define make_jacobian(name, NumOutputs, NumInputs...) \
+#define MAKE_JACOBIAN(name, NumOutputs, NumInputs...) \
     struct name##_diff : public JJacobian< name##_diff, \
                                 Scalar, param_t, NumOutputs, NumInputs> \
 { \
@@ -270,6 +289,8 @@ struct JJacobian
 template<class Derived, typename Scalar, typename param_t, int... n>
 struct HHessian
 {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     static constexpr int input_len()
     {
         int NumInputs = 0;
@@ -435,7 +456,7 @@ struct HHessian
 };
 
 
-#define make_hessian(name, NumInputs...) \
+#define MAKE_HESSIAN(name, NumInputs...) \
     struct name##_hess : public HHessian< name##_hess, Scalar, param_t, NumInputs> \
 { \
     template<typename T, typename... Inputs> \

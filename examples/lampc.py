@@ -50,33 +50,41 @@ class Variable:
         else:
             return f"{self.name}()"
 
-    def gen_define(self, size = False, offset = False, func = False):
-        # Set to true the element to generate
-        # Generate var(i) const function
-        if size:
-            cog.outl(f"static constexpr auto s{self.name} = {self.rows};")
+    def gen_define(self):
+        # Generate DECLARE_VAR macro
 
-            if self.cols > 1:
-                cog.outl(f"static constexpr auto s{self.name}Mat = {self.rows * self.cols};")
+        cog.out(f"DECLARE_VAR({self.name}, {self.offset}, {self.rows}")
+        if self.cols > 1:
+            cog.out(f", {self.cols}")
+        cog.outl(");")
+
+    # def gen_define(self, size = False, offset = False, func = False):
+    #     # Set to true the element to generate
+    #     # Generate var(i) const function
+    #     if size:
+    #         cog.outl(f"static constexpr auto s{self.name} = {self.rows};")
+
+    #         if self.cols > 1:
+    #             cog.outl(f"static constexpr auto s{self.name}Mat = {self.rows * self.cols};")
 
 
-        if self.cols == 1:
-            if offset:
-                cog.outl(f"constexpr auto o{self.name}() {{return {self.offset};}};")
-            if func:
-                cog.outl(f"constexpr auto  {self.name}() {{return x.template segment<s{self.name}>(o{self.name}());}};")
-        else:
-            # Accessors for a column of the variable
-            if offset:
-                cog.outl(f"constexpr auto o{self.name}(int col) {{return {self.offset}+{self.rows}*col;}};")
-            if func:
-                cog.outl(f"constexpr auto  {self.name}(int col) {{return x.template segment<s{self.name}>(o{self.name}(col));}};")
+    #     if self.cols == 1:
+    #         if offset:
+    #             cog.outl(f"constexpr auto o{self.name}() {{return {self.offset};}};")
+    #         if func:
+    #             cog.outl(f"constexpr auto  {self.name}() {{return x.template segment<s{self.name}>(o{self.name}());}};")
+    #     else:
+    #         # Accessors for a column of the variable
+    #         if offset:
+    #             cog.outl(f"constexpr auto o{self.name}(int col) {{return {self.offset}+{self.rows}*col;}};")
+    #         if func:
+    #             cog.outl(f"constexpr auto  {self.name}(int col) {{return x.template segment<s{self.name}>(o{self.name}(col));}};")
 
-            # Accessors for the whole matrix
-            if offset:
-                cog.outl(f"constexpr auto o{self.name}Mat() {{return {self.offset};}};")
-            if func:
-                cog.outl(f"constexpr auto  {self.name}Mat() {{return x.template segment<s{self.name}Mat>(o{self.name}Mat());}};")
+    #         # Accessors for the whole matrix
+    #         if offset:
+    #             cog.outl(f"constexpr auto o{self.name}Mat() {{return {self.offset};}};")
+    #         if func:
+    #             cog.outl(f"constexpr auto  {self.name}Mat() {{return x.template segment<s{self.name}Mat>(o{self.name}Mat());}};")
 
     @property
     def offset_func(self):
@@ -148,22 +156,31 @@ class Constraint:
         else:
             return self.function.size_output * self.index.num_iterations
 
-    def gen_define(self, size = False, offset = False, func = False):
-        # Produce short name for this constraint
-        # Set to true the element to generate
-        if size:
-            cog.outl(f"static constexpr auto s{self.name} = {self.function.size_output};")
+    def gen_define(self):
+        # Generate DECLARE_CONSTRAINT macro
 
-        if self.index is None:
-            if offset:
-                cog.outl(f"constexpr auto o{self.name}() {{return {self.offset};}};")
-            if func:
-                cog.outl(f"constexpr auto  {self.name}() {{return g.template segment<s{self.name}>(o{self.name}());}};")
-        else:
-            if offset:
-                cog.outl(f"constexpr auto o{self.name}(int ind) {{return {self.offset}+{self.function.size_output}*ind;}};")
-            if func:
-                cog.outl(f"constexpr auto  {self.name}(int ind) {{return g.template segment<s{self.name}>(o{self.name}(ind));}};")
+        cog.out(f"DECLARE_CONSTRAINT({self.name}, {self.offset}, {self.function.size_output}")
+        if self.index is not None:
+            cog.out(f", true")
+        cog.outl(");")
+
+
+    # def gen_define(self, size = False, offset = False, func = False):
+    #     # Produce short name for this constraint
+    #     # Set to true the element to generate
+    #     if size:
+    #         cog.outl(f"static constexpr auto s{self.name} = {self.function.size_output};")
+
+    #     if self.index is None:
+    #         if offset:
+    #             cog.outl(f"constexpr auto o{self.name}() {{return {self.offset};}};")
+    #         if func:
+    #             cog.outl(f"constexpr auto  {self.name}() {{return g.template segment<s{self.name}>(o{self.name}());}};")
+    #     else:
+    #         if offset:
+    #             cog.outl(f"constexpr auto o{self.name}(int ind) {{return {self.offset}+{self.function.size_output}*ind;}};")
+    #         if func:
+    #             cog.outl(f"constexpr auto  {self.name}(int ind) {{return g.template segment<s{self.name}>(o{self.name}(ind));}};")
 
     def __str__(self):
         # Return the short name for the constraint
@@ -265,59 +282,47 @@ class NLP:
     def generate(self):
         self.finalize_constraints()
 
-        cog.outl("// Bring NLP names into this namespace")
-        cog.outl("using Base = NLP< MyNLP<Scalar, Traits> >;")
-        cog.outl("using Base::x;")
-        cog.outl("using Base::J;")
-        cog.outl("using Base::g;")
-        cog.outl("using Base::f;")
-        cog.outl("using Base::gradient_f;")
-        cog.outl("using Base::hessian_f;")
-        cog.outl()
+        # cog.outl("// Bring NLP names into this namespace")
+        # cog.outl("using Base = NLP< MyNLP<Scalar, Traits> >;")
+        # cog.outl("using Base::x;")
+        # cog.outl("using Base::J;")
+        # cog.outl("using Base::g;")
+        # cog.outl("using Base::f;")
+        # cog.outl("using Base::gradient_f;")
+        # cog.outl("using Base::hessian_f;")
+        # cog.outl()
 
         cog.outl("// Define variables data and accessors")
-        cog.outl("// Sizes")
-        [var.gen_define(size=True) for var in self.vars]
-        cog.outl("// Offsets")
-        [var.gen_define(offset=True) for var in self.vars]
-        cog.outl("// Accessor")
-        [var.gen_define(func=True) for var in self.vars]
-        cog.outl()
+        [var.gen_define() for var in self.vars]
 
         cog.outl("// Define short names for constraints")
-        cog.outl("// Sizes")
-        [con.gen_define(size=True) for con in self.constraints]
-        cog.outl("// Offsets")
-        [con.gen_define(offset=True) for con in self.constraints]
-        cog.outl("// Accessor")
-        [con.gen_define(func=True) for con in self.constraints]
-        cog.outl()
+        [con.gen_define() for con in self.constraints]
 
-        cog.outl("// Instantiate function, jacobians and hessian")
+        cog.outl("// Instantiate functions")
         for f in self.functions:
-            if f == self.objective.function:
-                continue
+            # if f == self.objective.function:
+            #     continue
             f.instantiate()
-        self.objective.function.instantiate(hessian = True)
+        # self.objective.function.instantiate(hessian = True)
         cog.outl()
 
         cog.outl("// Evaluate constraints")
-        cog.outl("inline void eval()\n{")
+        cog.outl("inline void eval(param_t& p, RCVec<Scalar, num_vars> x) noexcept\n{")
         for con in self.constraints:
             con.gen_eval()
         cog.outl("}\n")
 
         cog.outl("// Evaluate jacobians")
-        cog.outl("inline void eval_jacobian()\n{")
+        cog.outl("inline void eval_jacobian(param_t& p, RCVec<Scalar, num_vars> x)\n{")
         offset = 0
         for con in self.constraints:
             offset = offset + con.gen_eval_jacobian(offset)
         cog.outl("}\n")
 
-        cog.outl("// Evaluate hessian of objective")
-        cog.outl("inline void eval_objective()\n{")
-        self.objective.gen_eval_hessian();
-        cog.outl("}\n")
+        # cog.outl("// Evaluate hessian of objective")
+        # cog.outl("inline void eval_objective()\n{")
+        # self.objective.gen_eval_hessian();
+        # cog.outl("}\n")
 
 
     def generate_traits(self, class_name = "MyTraits"):
@@ -437,7 +442,7 @@ class Function:
         arg_sizes = ", ".join(f"{var[1]}" for var in self.input_types)
         if hessian == False:
             assert self.size_output is not None, "Cannot generate jacobian for scalar function (use a vector valued function of length 1)"
-            cog.outl(f"make_jacobian({self.name}, {self.size_output}, {arg_sizes});")
+            cog.outl(f"MAKE_JACOBIAN({self.name}, {self.size_output}, {arg_sizes});")
         else:
             assert self.size_output is None, "Can only generate hessian for scalar functions"
-            cog.outl(f"make_hessian({self.name}, {arg_sizes});")
+            cog.outl(f"MAKE_HESSIAN({self.name}, {arg_sizes});")
