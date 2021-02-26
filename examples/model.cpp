@@ -3,11 +3,10 @@
 #include <math.h>
 #include <iostream>
 #include <string>
+#include <type_traits>
 
 #include <Eigen/Dense>
 #include "unsupported/Eigen/AutoDiff"
-
-// #include "ADJacobian.h"
 
 #include "problemBase.hpp"
 #include "test.hpp"
@@ -36,8 +35,6 @@ struct MyNLP : public MyNLPBase<MyNLP>
     	out(0) = xp.sum() + 2*x.sum() + 3*u.sum();
     	out(1) = xp.sum() + 2*x.sum() + 3*u.sum();
     	out(2) = xp.sum() + 2*x.sum() + 3*u.sum();
-    	// out(3) = xp.sum() + 2*x.sum() + 3*u.sum(); 
-    	// std::cout << "out = " << out.transpose() << std::endl;
 
     	// std::cout << "IN SYS" << std::endl;
     }
@@ -59,6 +56,50 @@ EIGEN_STRONG_INLINE double test_call(Functor functor)
 }
 
 
+// template < typename... T, typename... O,
+//            typename = typename std::enable_if<sizeof...(T) == sizeof...(O)>::type>
+// void make_same(T... t, O... o) 
+// {
+// 	std::cout << "IN HERE" << std::endl;
+// }
+
+
+template<typename... T, typename... L, typename O>
+void test_arg_size(MatrixBase<O> const & _out, const MatrixBase<T>&... x, const MatrixBase<L>&... y)
+{
+	// auto out = const_cast< MatrixBase<O>& >(_out);
+
+	std::cout << "In test_arg_size" << std::endl;
+	std::cout << "Number of arguments T = " << sizeof...(T) << std::endl;
+	std::cout << "Number of arguments L = " << sizeof...(L) << std::endl;
+
+   //  // Copy gradients to Jacobian matrices
+    int offset = 0;
+    (void)std::initializer_list<int>{ 
+        (
+			std::cout << "x = " << x.transpose() << std::endl,
+			// std::cout << "type_name<decltype(x)> = " << type_name<decltype(x)>() << std::endl,
+			// std::cout << "type_name<T> = " << type_name<T>() << std::endl,
+			std::cout << "n = " << T::RowsAtCompileTime << std::endl,
+			const_cast< MatrixBase<O>& >(_out)[offset] = x[0],
+			offset++,
+            // offset += input_sizes,
+            0
+        )... 
+    };
+}
+
+// template<typename scalar_t, size_t n, template <typename scalar_t, size_t n, size_t m> class T>
+// template<size_t n> // , size_t n=T::RowsAtCompileTime()>
+// void test_arg_size(const Eigen::Ref<const Eigen::Matrix<double, n, 1>>& x)
+// {
+// 	std::cout << "In test_arg_size" << std::endl;
+// 	std::cout << "type_name<decltype(x)> = " << type_name<decltype(x)>() << std::endl;
+// 	std::cout << "type_name<T> = " << type_name<T>() << std::endl;
+// 	std::cout << "n = " << T::RowsAtCompileTime << std::endl;
+// }
+
+
 
 template<typename scalar_t>
 void test_function(
@@ -76,8 +117,116 @@ void test_function(
 }
 
 
+template<typename... Args>
+auto get_eigen_sizes(const Args... args)
+{
+	double out = 0;
+    (void)std::initializer_list<int>{ 
+        (
+            // std::cout << "Getting sizes = " << decltype(args)::RowsAtCompileTime << std::endl,
+            out += 2*args.sum(),
+            // std::cout << "type_name<args>() = " << type_name<Args>() << std::endl,
+            0
+        )...
+    };    
+    return out;
+}
+
+auto test_best(
+	const Eigen::Ref<const Eigen::Matrix<double, 5, 1>> a,
+	const Eigen::Ref<const Eigen::Matrix<double, 3, 1>> b,
+	const Eigen::Ref<const Eigen::Matrix<double, 4, 1>> c
+	)
+{
+	return 2*a.sum() + 2*b.sum() + 2*c.sum();
+}
+
+auto test_best2(
+	const Eigen::Matrix<double, 5, 1> a,
+	const Eigen::Matrix<double, 3, 1> b,
+	const Eigen::Matrix<double, 4, 1> c
+	)
+{
+	return 2*a.sum() + 2*b.sum() + 2*c.sum();
+}
+
+
+template<int... S>
+constexpr int sum_template() {
+    int result = 0;
+    for(auto s : { S... }) result += s;
+    return result;
+}
+
+
+template<typename scalar_t, int m, int... n>
+void testJac(
+	// const Matrix<scalar_t, n, 1>&... in,
+	Ref<Matrix<scalar_t, m, n>>... J,
+	const Ref<const Matrix<scalar_t, n, 1>>&... in)
+{
+	std::cout << "In testJac" << std::endl;	
+	std::cout << "sizeof...(n) = " << sizeof...(n) << std::endl;	
+	std::cout << "num inputs = " << sum_template<n...>() << std::endl;
+
+    (void)std::initializer_list<int>{ 
+        (
+			J.setOnes(),
+			J.row(1) = in,			
+            0
+        )... 
+    };
+}
+
+// template<typename... Args>
+// void testJac2(Args&&... args)
+// {
+// 	testJac(std::forward<decltype(Ref<Args>(args))>(Ref<Args>(args))...);
+// }
+
 int main(void)
 {
+
+	Eigen::Matrix<double, 5, 1> a;
+	Eigen::Matrix<double, 3, 1> b;
+	Eigen::Matrix<double, 10, 1> c;
+
+	a << 1,2,3,4,5;
+	b << 1,2,3;
+	c << 1,2,3,4,5,6,7,8,9,10;
+
+	Eigen::Matrix<double, 3,5> Ja;
+	Eigen::Matrix<double, 3,3> Jb;
+	Eigen::Matrix<double, 5,20> Jc;
+
+	Jc.setZero();
+	std::cout << "Jc = \n" << Jc << std::endl;
+
+	// testJac<double, 3, 5, 3, 10>(a,b,c,Ja,Jb,Jc);	
+	testJac<double,3,5,3,10>(Ja,Jb,Jc.template block<3,10>(2,5),a.template segment<5>(0),b,3*c);
+
+	std::cout << "c = " << c.transpose() << std::endl;
+	std::cout << "Jc = \n" << Jc << std::endl;
+
+	// volatile double out;
+	// for(int i=0; i<1e6; i++)
+	// 	// for(int j=0; j<1e4; j++)
+	// 	for(int j=0; j<1e3; j++)
+	// 		out = get_eigen_sizes(2*a+3.4*a,2*b,2*c.template segment<4>(2));
+	// 		// out = test_best(2*a+3.4*a,2*b,2*c.template segment<4>(2));
+	// std::cout << "out = " << out << std::endl;
+
+	// auto d = 2*a.template segment<3>(0) + 0.34*b;
+	// std::cout << "d = " << d.transpose() << std::endl;
+	// std::cout << "type_name<decltype(d)>() = " << type_name<decltype(d)>() << std::endl;
+	// test_arg_size(c, d, 2.23*d, (3.3537*d).template segment<2>(0));
+	// std::cout << "d = " << d.transpose() << std::endl;
+	// std::cout << "c = " << c.transpose() << std::endl;
+
+
+	// std::cout << "\n\n\n\n\n";
+
+return 0;
 
  //    // using Solver = SQPSolver<MyMPC>;
  //    // Solver solver;
@@ -248,8 +397,8 @@ int main(void)
 
 	for (int i=0; i<var.rows(); i++) var(i) = i;
 
-	for (int j=0; j<10; j++)
-	for (int i=0; i<2e6; i++)
+	// for (int j=0; j<10; j++)
+	// for (int i=0; i<2e6; i++)
 	mpc.equalities_linearised(var, equalities, jacobian);
 
 	// std::cout << "equalities = " << equalities.transpose() << std::endl;
