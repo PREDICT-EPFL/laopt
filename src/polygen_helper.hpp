@@ -42,21 +42,6 @@ constexpr auto type_name() noexcept {
 }
 
 
-
-// #define SEG(size, offset) template segment<size>(offset) // Segment of an Eigen vector
-// #define BLK(x_size, y_size, x_offset, y_offset) template block<x_size, y_size>(x_offset, y_offset) // Block of an eigen matrix
-
-// #define MatX Eigen::Matrix<scalar_t, Eigen::Dynamic, Eigen::Dynamic>
-
-template<typename scalar_t, int Size>
-using RCVec = const Ref<const Eigen::Matrix<scalar_t, Size, 1>>;
-// template<typename scalar_t, int Rows, int Cols>
-// using RCMat = const Ref<const Eigen::Matrix<scalar_t, Rows, Cols>>;
-// template<typename scalar_t, int Size>
-// using Vec = Eigen::Matrix<scalar_t, Size, 1>;
-// template<typename scalar_t, int Size>
-// using RVec = Eigen::Ref<Eigen::Matrix<scalar_t, Size, 1>>;
-
 /**
  * Macro to declare a templated variable type
  */
@@ -78,20 +63,6 @@ using RCVec = const Ref<const Eigen::Matrix<scalar_t, Size, 1>>;
     template<typename T> \
     constexpr auto name(T x) \
         {return x.template segment<size>(offset);} /* Offset */
-    // constexpr auto name(const Eigen::Ref<const Eigen::Matrix<scalar_t, VAR_SIZE, 1>> x) \
-    //     {return x.template segment<size>(offset);} /* Offset */ \
-    // template<typename T> \
-    // constexpr auto name##_d(const Eigen::Ref<const Eigen::Matrix<T, VAR_SIZE, 1>> x) \
-    //     {return x.template segment<size>(offset);} /* Offset */
-
-    // constexpr auto name(const Ref<const variable_t<scalar_t>>& x) \
-    //     {return x.template segment<s##name>(offset)} /* Offset */
-
-    // static constexpr auto s##name = size; /* Size of the variable */ \
-    // template<typename T> using name##_t = Eigen::Matrix<T, s##name, 1>; /* Templated type of the variable */ \
-    // constexpr auto o##name() {return offset;} /* Offset */ \
-    // constexpr auto name(RCVec<scalar_t, VAR_SIZE> x) \
-    //     {return x.template segment<s##name>(o##name());} /* Offset */
 
 #define DECLARE_VAR4(name, offset, size, number) \
     static constexpr auto name##_mat_size = size*number; /* Size of the vectorized variable */ \
@@ -100,20 +71,6 @@ using RCVec = const Ref<const Eigen::Matrix<scalar_t, Size, 1>>;
     template<typename T> \
     constexpr auto name(T x, int col) \
         {return x.template segment<size>(offset + size * col);} /* Offset */
-    // constexpr auto name(const Eigen::Ref<const Eigen::Matrix<scalar_t, VAR_SIZE, 1>> x, int col) \
-    //     {return x.template segment<size>(offset + size * col);} /* Offset */ \
-    // template<typename T> \
-    // constexpr auto name##_d(const Eigen::Ref<const Eigen::Matrix<T, VAR_SIZE, 1>> x, int col) \
-    //     {return x.template segment<size>(offset + size * col);} /* Offset */
-
-    // constexpr auto name(RCVec<scalar_t, VAR_SIZE> x, int col) \
-    //     {return x.template segment<size>(offset + size * col);} /* Offset */
-    // static constexpr auto s##name = size; /* Size of the variable */ \
-    // template<typename T> using name##_t = Eigen::Matrix<T, s##name, 1>; /* Templated type of the variable */ \
-    // static constexpr auto num##name = number; /* Number of vectors */ \
-    // constexpr auto o##name(int col) {return offset + size * col;} /* Offset */ \
-    // constexpr auto name(RCVec<scalar_t, VAR_SIZE> x, int col) \
-    //     {return x.template segment<s##name>(o##name(col));} /* Offset */
 
 #define GET_MACRO(_1,_2,_3,_4,NAME,...) NAME
 #define DECLARE_VAR(...) GET_MACRO(__VA_ARGS__, DECLARE_VAR4, DECLARE_VAR3)(__VA_ARGS__)
@@ -142,189 +99,154 @@ using RCVec = const Ref<const Eigen::Matrix<scalar_t, Size, 1>>;
 #define DECLARE_CONSTRAINT(...) GET_MACRO(__VA_ARGS__, DECLARE_CON4, DECLARE_CON3)(__VA_ARGS__)
 
 
-template<typename scalar_t, int num_inputs>
-using AD_scalar = AutoDiffScalar<Eigen::Matrix<scalar_t, num_inputs, 1>>;
 
-// Declares a factory for a lambda of the given member function in the derived class
-#define DECLARE_FUNCTION(function_name) \
-    template<typename T, int num_outputs, int... n> \
-    EIGEN_STRONG_INLINE auto make_lambda_sys() \
+// Declares a functor for member function in the derived class
+#define DECLARE_FUNCTION(function_name, num_outputs, input_sizes...) \
+    template<int nOutputs, int... inSizes> \
+    struct function_name##_wrap \
     { \
-        return [this]( \
-            const Eigen::Ref<const Eigen::Matrix<T, n, 1>>&... inputs, \
-            Eigen::Ref<Eigen::Matrix<T, num_outputs, 1>> out) \
+        template<typename T> \
+        static EIGEN_STRONG_INLINE void eval( \
+            const Derived *obj,  \
+            const Ref<const Matrix<T, inSizes, 1>>&... args, \
+            Ref<Matrix<T, nOutputs, 1>> out) noexcept \
         { \
-        (static_cast<const Derived*>(this)->template function_name<T>)( \
-            std::forward<decltype(inputs)>(inputs)...,  \
-            std::forward<decltype(out)>(out)); \
-        }; \
-    } \
+            obj->template function_name<T>(std::forward<decltype(args)>(args)...,  \
+                                           std::forward<decltype(out)>(out)); \
+        } \
+    }; \
+    Jacobian<function_name##_wrap, Derived, scalar_t, num_outputs, input_sizes> function_name;
 
-template<typename Functor, typename AD_Functor, int num_outputs, int num_inputs, int... input_sizes>
-class Jacobian
+
+
+// Sum the inputs to get total number of inputs
+template<int... S>
+constexpr int sum_template() {
+    int result = 0;
+    for(auto s : { S... }) result += s;
+    return result;
+}
+
+template<template <int, int...> class _Functor, // Wrapped function from DECLARE_FUNCTION
+        typename Object, // Object type of class that contains the wrapped function
+        typename scalar_t,
+        int num_outputs, int... input_sizes>
+struct Jacobian
 {
-public:
-    Functor func;
-    AD_Functor ad_func;
+    static constexpr int num_inputs = sum_template<input_sizes...>();
 
-    Jacobian(Functor func, AD_Functor ad_func) : func(func), ad_func(ad_func) {}
+    using AD_scalar = AutoDiffScalar<Eigen::Matrix<scalar_t, num_inputs, 1>>;
+    using AD_output_t = Matrix<AD_scalar, num_outputs, 1>;  
+
+    using Functor = _Functor<num_outputs, input_sizes...>;
+
+    const Object* obj;
+    template<typename T>
+    Jacobian(const T *_obj) : obj(static_cast<const Object*>(_obj)) {}
+
+    EIGEN_STRONG_INLINE void operator()(
+        const Ref<const Matrix<scalar_t, input_sizes, 1>>&... args,
+        Ref<Matrix<scalar_t, num_outputs, 1>> out) const noexcept
+    {
+        Functor::template eval<scalar_t>(
+                    obj,
+                    std::forward<decltype(args)>(args)..., 
+                    std::forward<decltype(out)>(out));
+    }
+
+    EIGEN_STRONG_INLINE void operator()(
+        const Ref<const Matrix<scalar_t, input_sizes, 1>>... args,
+        Ref<Matrix<scalar_t, num_outputs, 1>> out,
+        Ref<Matrix<scalar_t, num_outputs, input_sizes>>... J
+        ) const noexcept
+    {
+        AD_output_t _out;
+
+        // Convert to AD variables for the inputs and call our function
+        seed_and_call(make_ad<input_sizes>(args)..., _out);
+
+        // Copy Jacobian into output variables
+        for(int i=0; i<num_outputs; i++)
+        {
+            out(i) = _out[i].value();
+            Eigen::Ref<Eigen::Matrix<scalar_t, num_inputs, 1>> deriv = _out[i].derivatives();
+            
+            // Copy gradients to Jacobian matrices
+            int offset = 0;
+            (void)std::initializer_list<int>{ 
+                (
+                    J.row(i) = deriv.template segment<input_sizes>(offset), 
+                    offset += input_sizes,
+                    0
+                )... 
+            };
+        }
+    }
 
 private:
-//     template <typename vec>
-//     constexpr int AD_Seed(vec &x, int offset)
-//     {
-//         for (int i=0; i<x.rows(); i++) {
-//             x[i].derivatives().coeffRef(i + offset) = 1;
-//         }
-//         return offset + x.rows();
-//     }
+    EIGEN_STRONG_INLINE void seed_and_call(
+            Matrix<AD_scalar, input_sizes, 1>... args,
+            Eigen::Ref<Eigen::Matrix<AD_scalar, num_outputs, 1>> out) const
+    {
+        // Set derivative equal to identity
+        int offset = 0;
+        (void)std::initializer_list<int>{ 
+            (
+                offset = AD_Seed(args, offset), // Set to unit vectors
+                0
+            )...
+        };
 
-//     // Take a vector input and return a AD version of the vector
-//     template<typename scalar_t, int num_inputs, int n>
-//     EIGEN_STRONG_INLINE Matrix<AD_scalar<scalar_t, num_inputs>, n, 1> 
-//         make_ad(const Ref<const Matrix<scalar_t, n, 1>> x)
-//     {
-//         Matrix<AD_scalar<scalar_t, num_inputs>, n, 1> y;
-//         y = x;
-//         for (int i=0; i<y.rows(); i++) {
-//             y[i].derivatives().setZero();
-//         }
-//         return y;
-//     }
+        // Call our function
+        Functor::template eval<AD_scalar>(obj, args..., out);
+    }
 
-//     EIGEN_STRONG_INLINE void jacobian_impl(
-//             Functor func, // Function with AD template
-//             Matrix<AD_scalar<scalar_t, num_inputs>, input_sizes, 1>... inputs,
-//             Eigen::Ref<Eigen::Matrix<scalar_t, num_outputs, 1>> out, 
-//             Eigen::Ref<Eigen::Matrix<scalar_t, num_outputs, input_sizes>>... J)
-//     {
-//         // Set derivative equal to identity
-//         int offset = 0;
-//         (void)std::initializer_list<int>{ 
-//             (
-//                 offset = AD_Seed(inputs, offset), // Set to unit vectors
-//                 0
-//             )...
-//         };
 
-//         // AD output
-//         using AD_scalar = AD_scalar<scalar_t, num_inputs>;
-//         using AD_output_t = Matrix<AD_scalar, num_outputs, 1>;  
-//         AD_output_t _out;
+    // Take a vector input and return a AD version of the vector
+    template<int n>
+    EIGEN_STRONG_INLINE Matrix<AD_scalar, n, 1> 
+        make_ad(const Ref<const Matrix<scalar_t, n, 1>> x) const
+    {
+        Matrix<AD_scalar, n, 1> y;
+        y = x;
+        for (int i=0; i<y.rows(); i++) {
+            y[i].derivatives().setZero();
+        }
+        return y;
+    }
 
-//         // Call our function
-//         func(inputs..., _out);
-
-//         // Copy Jacobian into output variables
-//         for(int i=0; i<num_outputs; i++)
-//         {
-//             out(i) = _out[i].value();
-//             Eigen::Ref<Eigen::Matrix<scalar_t, num_inputs, 1>> deriv = _out[i].derivatives();
-            
-//             // Copy gradients to Jacobian matrices
-//             offset = 0;
-//             (void)std::initializer_list<int>{ 
-//                 (
-//                     J.row(i) = deriv.template segment<input_sizes>(offset), 
-//                     offset += input_sizes,
-//                     0
-//                 )... 
-//             };
-//         }
-//     }
-
-// public:
-//     EIGEN_STRONG_INLINE void call_jacobian(
-//             Functor func, // Function with AD template
-//             const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>... inputs,
-//             Eigen::Ref<Eigen::Matrix<scalar_t, num_outputs, 1>> out, 
-//             Eigen::Ref<Eigen::Matrix<scalar_t, num_outputs, input_sizes>>... J
-//     )
-//     {
-//         jacobian_impl<scalar_t, num_outputs, num_inputs, input_sizes...>(
-//             func, 
-//             make_ad<scalar_t, num_inputs, input_sizes>(inputs)..., // Convert inputs to AD variables
-//             out, J...);
-//     }
+    // Sets the input derivatives to the identity. 
+    // Assumes that the derivative matrix is initially zero
+    template <typename vec>
+    constexpr int AD_Seed(vec &x, int offset) const
+    {
+        for (int i=0; i<x.rows(); i++)
+            x[i].derivatives().coeffRef(i + offset) = 1;
+        return offset + x.rows();
+    }
 };
 
 
 
 
-template <typename vec>
-constexpr int AD_Seed(vec &x, int offset)
-{
-    for (int i=0; i<x.rows(); i++) {
-        x[i].derivatives().coeffRef(i + offset) = 1;
-    }
-    return offset + x.rows();
-}
+// // How to build a functor to a member function
+// template <typename Member, typename Obj> 
+// struct MemberFunctor
+// {
+//     Obj _obj;
+//     Member _member;
+//     MemberFunctor(Obj obj, Member member) : _obj(obj), _member(member) {};
 
-// Take a vector input and return a AD version of the vector
-template<typename scalar_t, int num_inputs, int n>
-EIGEN_STRONG_INLINE Matrix<AD_scalar<scalar_t, num_inputs>, n, 1> 
-    make_ad(const Ref<const Matrix<scalar_t, n, 1>> x)
-{
-    Matrix<AD_scalar<scalar_t, num_inputs>, n, 1> y;
-    y = x;
-    for (int i=0; i<y.rows(); i++) {
-        y[i].derivatives().setZero();
-    }
-    return y;
-}
+//     template<typename... T>
+//     EIGEN_STRONG_INLINE auto operator()(T&&... args) noexcept
+//     {
+//         return _member(_obj, std::forward<T>(args)...);
+//     }
+// };
 
-template<typename scalar_t, int num_outputs, int num_inputs, int... input_sizes, typename Functor>
-EIGEN_STRONG_INLINE void jacobian_impl(
-        Functor func, // Function with AD template
-        Matrix<AD_scalar<scalar_t, num_inputs>, input_sizes, 1>... inputs,
-        Eigen::Ref<Eigen::Matrix<scalar_t, num_outputs, 1>> out, 
-        Eigen::Ref<Eigen::Matrix<scalar_t, num_outputs, input_sizes>>... J)
-{
-    // Set derivative equal to identity
-    int offset = 0;
-    (void)std::initializer_list<int>{ 
-        (
-            offset = AD_Seed(inputs, offset), // Set to unit vectors
-            0
-        )...
-    };
-
-    // AD output
-    using AD_scalar = AD_scalar<scalar_t, num_inputs>;
-    using AD_output_t = Matrix<AD_scalar, num_outputs, 1>;  
-    AD_output_t _out;
-
-    // Call our function
-    func(inputs..., _out);
-
-    // Copy Jacobian into output variables
-    for(int i=0; i<num_outputs; i++)
-    {
-        out(i) = _out[i].value();
-        Eigen::Ref<Eigen::Matrix<scalar_t, num_inputs, 1>> deriv = _out[i].derivatives();
-        
-        // Copy gradients to Jacobian matrices
-        offset = 0;
-        (void)std::initializer_list<int>{ 
-            (
-                J.row(i) = deriv.template segment<input_sizes>(offset), 
-                offset += input_sizes,
-                0
-            )... 
-        };
-    }
-}
-
-template<typename scalar_t, int num_outputs, int num_inputs, int... input_sizes, typename Functor>
-EIGEN_STRONG_INLINE void call_jacobian(
-        Functor func, // Function with AD template
-        const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>... inputs,
-        Eigen::Ref<Eigen::Matrix<scalar_t, num_outputs, 1>> out, 
-        Eigen::Ref<Eigen::Matrix<scalar_t, num_outputs, input_sizes>>... J
-)
-{
-    jacobian_impl<scalar_t, num_outputs, num_inputs, input_sizes...>(
-        func, 
-        make_ad<scalar_t, num_inputs, input_sizes>(inputs)..., // Convert inputs to AD variables
-        out, J...);
-}
+// template<typename Functor>
+// EIGEN_STRONG_INLINE auto get_functor(Functor f) noexcept
+// {
+//     return MemberFunctor<decltype(std::mem_fn(f)), Derived*> 
+//         (static_cast<Derived*>(this), std::mem_fn(f));
+// }
