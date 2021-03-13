@@ -42,7 +42,7 @@ public:
     template<typename T>
     using parameter_t = Eigen::Matrix<T, nlp_traits<Derived>::NP, 1>;
 
-    /** optimisation variable */
+    /** Parameterized variables */
     template<typename T>
     using variable_t = Eigen::Matrix<T, VAR_SIZE, 1>;
 
@@ -92,6 +92,39 @@ public:
     {
         static_cast<const Derived*>(this)->equalities_linearised(var, p, equalities, jacobian);
     }
+
+    
+    // /**  NLP interface functions */
+    // EIGEN_STRONG_INLINE void cost(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p, scalar_t &cost) noexcept
+    // {
+    //     static_cast<const Derived*>(this)->cost_impl(var, p, cost);
+    // }
+
+    // EIGEN_STRONG_INLINE void cost_gradient(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+    //                                        scalar_t &_cost, Eigen::Ref<nlp_variable_t> cost_gradient) noexcept
+    // {
+    //     static_cast<const Derived*>(this)->cost_gradient_impl(var, p, _cost, cost_gradient);
+    // }
+
+    // EIGEN_STRONG_INLINE void cost_gradient_hessian(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+    //                                                scalar_t &_cost, Eigen::Ref<nlp_variable_t> _cost_gradient, Eigen::Ref<nlp_hessian_t> hessian) noexcept
+    // {
+    //     static_cast<const Derived*>(this)->cost_gradient_hessian_impl(var, p, _cost, _cost_gradient, hessian);
+    // }
+
+    // EIGEN_STRONG_INLINE void equalities(const Eigen::Ref<const nlp_variable_t>& var, const Eigen::Ref<const static_parameter_t>& p,
+    //                                     Eigen::Ref<nlp_constraints_t> equalities) noexcept
+    // {
+    //     static_cast<const Derived*>(this)->template equalities_impl<scalar_t>(var, p, equalities);
+    // }
+
+    // EIGEN_STRONG_INLINE void equalities_linearised(const Eigen::Ref<const nlp_variable_t>& var,
+				// 								   const Eigen::Ref<const static_parameter_t>& p,
+				// 								   Eigen::Ref<nlp_constraints_t> equalities,
+				// 								   Eigen::Ref<nlp_eq_jacobian_t> jacobian) noexcept
+    // {
+    //     static_cast<const Derived*>(this)->equalities_linearised(var, p, equalities, jacobian);
+    // }
 
 };
 

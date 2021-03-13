@@ -250,3 +250,90 @@ private:
 //     return MemberFunctor<decltype(std::mem_fn(f)), Derived*> 
 //         (static_cast<Derived*>(this), std::mem_fn(f));
 // }
+
+
+
+
+
+    // EIGEN_STRONG_INLINE void expression_1(
+    //     const Eigen::Ref<const x_t<scalar_t>>& x0, 
+    //     const Eigen::Ref<const u_t<scalar_t>>& ui, 
+    //     const Eigen::Ref<const x_t<scalar_t>>& xss, 
+    //     const Eigen::Ref<const u_t<scalar_t>>& uss, 
+    //     Eigen::Ref<x_t<scalar_t>> out
+    //     ) noexcept
+    // {
+    //     // sys(x[0], +(*([1,2;3,4;5,6], u[i]), x[0]), *([1 2 3; 4 5 6], sys(xss, xss, uss)))
+
+    //     // [*([1,2;3,4;5,6], u[i])]
+    //     using Matrix_Tmp_1 = Eigen::Matrix<scalar_t, x_t_size, u_t_size>;
+    //     const Matrix_Tmp_1 Tmp_1 = (Matrix_Tmp_1() << 1,2,3,4,5,6).finished();
+    //     auto tmp_1 = Tmp_1 * ui; // [*([1,2;3,4;5,6], u[i])]
+
+    //     // +(tmp_1(ui), x[0])
+    //     auto tmp_3 = tmp_1 + x0; // +(tmp_1(ui), x[0])
+
+    //     // sys(xss, xss, uss)
+    //     x_t<scalar_t> tmp_2; // sys(xss, xss, uss)
+    //     sys(xss, xss, uss, tmp_2); // sys(xss, xss, uss)
+
+    //     // *([1 2 3; 4 5 6], tmp_2(xss, uss))
+    //     using Matrix_Tmp_2 = Eigen::Matrix<scalar_t, u_t_size, x_t_size>;
+    //     const Matrix_Tmp_2 Tmp_2 = (Matrix_Tmp_2() << 1,2,3,4,5,6).finished();
+    //     auto tmp_4 = Tmp_2 * tmp_2; // *([1 2 3; 4 5 6], tmp_2(xss, uss))
+
+    //     // sys(x0, tmp_3(ui, x0), tmp_4(xss, uss))
+    //     sys(x0, tmp_3, tmp_4, out); // sys(x0, tmp_3(ui, x0), tmp_4(xss, uss))
+    // }
+
+    // EIGEN_STRONG_INLINE void expression_1(
+    //     const Eigen::Ref<const x_t<scalar_t>>& x0, 
+    //     const Eigen::Ref<const u_t<scalar_t>>& ui, 
+    //     const Eigen::Ref<const x_t<scalar_t>>& xss, 
+    //     const Eigen::Ref<const u_t<scalar_t>>& uss, 
+    //     Eigen::Ref<x_t<scalar_t>> out,
+    //     Eigen::Ref<Eigen::Matrix<scalar_t, 3, x_t_size>> J_x0,
+    //     Eigen::Ref<Eigen::Matrix<scalar_t, 3, u_t_size>> J_ui,
+    //     Eigen::Ref<Eigen::Matrix<scalar_t, 3, x_t_size>> J_xss,
+    //     Eigen::Ref<Eigen::Matrix<scalar_t, 3, u_t_size>> J_uss
+    //     ) noexcept
+    // {
+    //     // sys(x[0], +(*([1,2;3,4;5,6], u[i]), x[0]), *([1 2 3; 4 5 6], sys(xss, xss, uss)))
+
+    //     // [*([1,2;3,4;5,6], u[i])]
+    //     using Matrix_Tmp_1 = Eigen::Matrix<scalar_t, x_t_size, u_t_size>;
+    //     const Matrix_Tmp_1 Tmp_1 = (Matrix_Tmp_1() << 1,2,3,4,5,6).finished();
+    //     auto tmp_1 = Tmp_1 * ui; // [*([1,2;3,4;5,6], u[i])]
+    //     auto J1 = Tmp_1;  // J_ui 
+
+    //     // +(tmp_1(ui), x[0])
+    //     auto tmp_3 = tmp_1 + x0; // +(tmp_1(ui), x[0])
+    //     auto J7 = Eigen::Matrix<scalar_t, 3, 3>::Identity(); // J_x0
+    //     auto J8 = J1; // J_ui
+
+    //     // sys(xss, xss, uss)
+    //     x_t<scalar_t> tmp_2; // sys(xss, xss, uss)
+    //     Eigen::Matrix<scalar_t, 3, x_t_size> J2; // Jsys_xp
+    //     Eigen::Matrix<scalar_t, 3, x_t_size> J3; // Jsys_x
+    //     Eigen::Matrix<scalar_t, 3, u_t_size> J4; // Jsys_u
+    //     sys(xss, xss, uss, tmp_2, J2, J3, J4); // sys(xss, xss, uss)
+    //     auto J5 = J2 + J3; // J_xss
+    //     auto J6 = J4;      // J_uss
+
+    //     // *([1 2 3; 4 5 6], tmp_2(xss, uss))
+    //     using Matrix_Tmp_2 = Eigen::Matrix<scalar_t, u_t_size, x_t_size>;
+    //     const Matrix_Tmp_2 Tmp_2 = (Matrix_Tmp_2() << 1,2,3,4,5,6).finished();
+    //     auto tmp_4 = Tmp_2 * tmp_2; // *([1 2 3; 4 5 6], tmp_2(xss, uss))
+    //     auto J9 = Tmp_2 * J5;  // J_xss
+    //     auto J10 = Tmp_2 * J6;  // J_uss
+
+    //     // sys(x0, tmp_3(ui, x0), tmp_4(xss, uss))
+    //     Eigen::Matrix<scalar_t, 3, x_t_size> J11; // Jsys_xp
+    //     Eigen::Matrix<scalar_t, 3, x_t_size> J12; // Jsys_x
+    //     Eigen::Matrix<scalar_t, 3, u_t_size> J13; // Jsys_u
+    //     sys(x0, tmp_3, tmp_4, out, J11, J12, J13); // sys(x0, tmp_3(ui, x0), tmp_4(xss, uss))
+    //     J_x0 = J11 + J12 * J7; // J_x0
+    //     J_ui = J12 * J8;  // J_ui
+    //     J_xss = J13 * J9; // J_xss
+    //     J_uss = J13 * J10; // J_uss
+    // }

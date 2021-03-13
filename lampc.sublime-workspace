@@ -1,0 +1,1542 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"num",
+				"numbers\tmodule"
+			],
+			[
+				"Ma",
+				"MatrixData\tclass"
+			],
+			[
+				"expre",
+				"Expression\tclass"
+			],
+			[
+				"M",
+				"MatrixConstant\tclass"
+			],
+			[
+				"valid",
+				"validate_name\tfunction"
+			],
+			[
+				"asci",
+				"ascii_letters\tinstance"
+			],
+			[
+				"function",
+				"function_name\tparam"
+			],
+			[
+				"fun",
+				"function_name\tparam"
+			],
+			[
+				"Matr",
+				"Matrix_Tmp_1"
+			],
+			[
+				"Mat",
+				"Matrix_Tmp_1"
+			],
+			[
+				"func",
+				"function_name"
+			],
+			[
+				"stati",
+				"static_cast"
+			],
+			[
+				"test",
+				"test_templated_t"
+			],
+			[
+				"type",
+				"type_name"
+			],
+			[
+				"rows",
+				"RowsAtCompileTime"
+			],
+			[
+				"Member",
+				"MemberFunctor"
+			],
+			[
+				"E",
+				"EIGEN_STRONG_INLINE"
+			],
+			[
+				"equ",
+				"equalities_linearised"
+			],
+			[
+				"Function",
+				"Function_sys"
+			],
+			[
+				"Functi",
+				"Function_sys"
+			],
+			[
+				"input",
+				"input_sizes"
+			],
+			[
+				"jac",
+				"jacobian_impl"
+			],
+			[
+				"inpu",
+				"input_sizes"
+			],
+			[
+				"make_",
+				"make_index_sequence"
+			],
+			[
+				"JAC",
+				"Jacobian_impl"
+			],
+			[
+				"Jac",
+				"Jacobian_impl"
+			],
+			[
+				"equa",
+				"equality"
+			],
+			[
+				"eq_st",
+				"eq_steady_state_size"
+			],
+			[
+				"xt_",
+				"x_t_size"
+			],
+			[
+				"u_t",
+				"u_t_size"
+			],
+			[
+				"x_t",
+				"x_t_size"
+			],
+			[
+				"nlp_",
+				"nlp_variable_t"
+			],
+			[
+				"variab",
+				"variable_t"
+			],
+			[
+				"stat",
+				"static_parameter_t"
+			],
+			[
+				"use",
+				"user_function1"
+			],
+			[
+				"number",
+				"number_type"
+			],
+			[
+				"const",
+				"nlp_constraints_t"
+			],
+			[
+				"m_ad",
+				"m_ad_var"
+			],
+			[
+				"deri",
+				"derivatives"
+			],
+			[
+				"e",
+				"equality_constraints"
+			],
+			[
+				"BLOCK_",
+				"BLOCK_EQS"
+			],
+			[
+				"Equa",
+				"EqualityConstraint"
+			],
+			[
+				"Equ",
+				"EqualityConstraint_diff"
+			],
+			[
+				"Equali",
+				"EqualityConstraint"
+			],
+			[
+				"EqualityC",
+				"EqualityConstraint_impl"
+			],
+			[
+				"sys",
+				"sys_general"
+			],
+			[
+				"size_",
+				"size_func"
+			],
+			[
+				"off",
+				"offset_func"
+			],
+			[
+				"Col",
+				"RowsAtCompileTime"
+			]
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "testGen.py",
+			"settings":
+			{
+				"buffer_size": 1724,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "polypy/poly.py",
+			"settings":
+			{
+				"buffer_size": 17507,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "polypy/Index.py",
+			"settings":
+			{
+				"buffer_size": 2330,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "test.py",
+			"settings":
+			{
+				"buffer_size": 1332,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "testXX.hpp",
+			"settings":
+			{
+				"buffer_size": 136,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "polypy/__init__.py",
+			"settings":
+			{
+				"buffer_size": 1145,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "polypy/generator.py",
+			"settings":
+			{
+				"buffer_size": 8981,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "examples/test.hpp",
+			"settings":
+			{
+				"buffer_size": 7531,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "src/polygen_helper.hpp",
+			"settings":
+			{
+				"buffer_size": 11893,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "examples/model.cpp",
+			"settings":
+			{
+				"buffer_size": 1897,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"contents": "Traceback (most recent call last):\n  File \"/Users/cnjones/git/lampc/polypy/poly.py\", line 1, in <module>\n    from polypy.Index import Index\nModuleNotFoundError: No module named 'polypy'\n[Finished in 0.1s with exit code 1]\n[shell_cmd: \"python3\" -u \"/Users/cnjones/git/lampc/polypy/poly.py\"]\n[dir: /Users/cnjones/git/lampc/polypy]\n[path: /usr/local/opt/python/libexec/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Library/TeX/texbin:/Library/Apple/usr/bin]",
+			"settings":
+			{
+				"buffer_size": 458,
+				"line_ending": "Unix",
+				"name": "Build output",
+				"scratch": true
+			}
+		},
+		{
+			"contents": "Traceback (most recent call last):\n  File \"/Users/cnjones/git/lampc/polypy/poly.py\", line 1, in <module>\n    from polypy.Index import Index\nModuleNotFoundError: No module named 'polypy'\n[Finished in 0.1s with exit code 1]\n[shell_cmd: \"python3\" -u \"/Users/cnjones/git/lampc/polypy/poly.py\"]\n[dir: /Users/cnjones/git/lampc/polypy]\n[path: /usr/local/opt/python/libexec/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Library/TeX/texbin:/Library/Apple/usr/bin]",
+			"settings":
+			{
+				"buffer_size": 458,
+				"line_ending": "Unix",
+				"name": "Build output",
+				"scratch": true
+			}
+		},
+		{
+			"contents": "AE here\n4\n['u[2]', 'x[0]', 'x[1]']\n+(x[0], g(f(x[1]), -(u[2], 4)))\nsys(x[0], +(@(B, u[i]), x[0]), +(@(A, sys(xss, xss, *(7, uss))), c))\n\tEIGEN_STRONG_INLINE void expression_1(\n\t\tconst Eigen::Ref<const u_t<scalar_t>>& ui, \n\t\tconst Eigen::Ref<const x_t<scalar_t>>& x, \n\t\tconst Eigen::Ref<const u_t<scalar_t>>& uss, \n\t\tconst Eigen::Ref<const x_t<scalar_t>>& xss, \n\t\tEigen::Ref<Eigen::Matrix<scalar_t, 3, 1>> out) noexcept\n\t{\n\t}\n[Finished in 0.2s]",
+			"settings":
+			{
+				"buffer_size": 443,
+				"line_ending": "Unix",
+				"name": "Build output",
+				"scratch": true
+			}
+		},
+		{
+			"contents": "Traceback (most recent call last):\n  File \"/Users/cnjones/git/lampc/polypy/poly.py\", line 1, in <module>\n    from polypy.Index import Index\nModuleNotFoundError: No module named 'polypy'\n[Finished in 0.1s with exit code 1]\n[shell_cmd: \"python3\" -u \"/Users/cnjones/git/lampc/polypy/poly.py\"]\n[dir: /Users/cnjones/git/lampc/polypy]\n[path: /usr/local/opt/python/libexec/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Library/TeX/texbin:/Library/Apple/usr/bin]",
+			"settings":
+			{
+				"buffer_size": 458,
+				"line_ending": "Unix",
+				"name": "Build output",
+				"scratch": true
+			}
+		}
+	],
+	"build_system": "",
+	"build_system_choices":
+	[
+		[
+			[
+				[
+					"Packages/C++/C++ Single File.sublime-build",
+					""
+				],
+				[
+					"Packages/C++/C++ Single File.sublime-build",
+					"Run"
+				]
+			],
+			[
+				"Packages/C++/C++ Single File.sublime-build",
+				"Run"
+			]
+		],
+		[
+			[
+				[
+					"Packages/LaTeXTools/LaTeX.sublime-build",
+					""
+				],
+				[
+					"Packages/LaTeXTools/LaTeX.sublime-build",
+					"Traditional"
+				],
+				[
+					"Packages/LaTeXTools/LaTeX.sublime-build",
+					"PdfLaTeX"
+				],
+				[
+					"Packages/LaTeXTools/LaTeX.sublime-build",
+					"XeLaTeX"
+				],
+				[
+					"Packages/LaTeXTools/LaTeX.sublime-build",
+					"LuaLaTeX"
+				],
+				[
+					"Packages/LaTeXTools/LaTeX.sublime-build",
+					"Basic Builder"
+				],
+				[
+					"Packages/LaTeXTools/LaTeX.sublime-build",
+					"Basic Builder - PdfLaTeX"
+				],
+				[
+					"Packages/LaTeXTools/LaTeX.sublime-build",
+					"Basic Builder - XeLaTeX"
+				],
+				[
+					"Packages/LaTeXTools/LaTeX.sublime-build",
+					"Basic Builder - LuaLaTeX"
+				],
+				[
+					"Packages/LaTeXTools/LaTeX.sublime-build",
+					"Script Builder"
+				]
+			],
+			[
+				"Packages/LaTeXTools/LaTeX.sublime-build",
+				""
+			]
+		],
+		[
+			[
+				[
+					"Packages/Python/Python.sublime-build",
+					""
+				],
+				[
+					"Packages/Python/Python.sublime-build",
+					"Syntax Check"
+				]
+			],
+			[
+				"Packages/Python/Python.sublime-build",
+				""
+			]
+		]
+	],
+	"build_varint": "",
+	"command_palette":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+			[
+				"install",
+				"Package Control: Install Package"
+			],
+			[
+				"package",
+				"Package Control: Install Package"
+			],
+			[
+				"ter",
+				"Terminus: Open Default Shell in Tab (View)"
+			],
+			[
+				"install pack",
+				"Package Control: Install Package"
+			],
+			[
+				"pack",
+				"Install Package Control"
+			]
+		],
+		"width": 0.0
+	},
+	"console":
+	{
+		"height": 178.0,
+		"history":
+		[
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"expanded_folders":
+	[
+		"/Users/cnjones/git/lampc"
+	],
+	"file_history":
+	[
+		"/Users/cnjones/git/lampc/lampc.sublime-project",
+		"/Users/cnjones/git/lampc/examples/Index.py",
+		"/Users/cnjones/git/lampc/examples/main.py",
+		"/Users/cnjones/git/lampc/poly.py",
+		"/Users/cnjones/Library/Application Support/Sublime Text 3/Packages/Anaconda/Anaconda.sublime-settings",
+		"/Users/cnjones/git/lampc/examples/test3.cpp",
+		"/Users/cnjones/git/lampc/examples/test2.cpp",
+		"/Users/cnjones/git/lampc/examples/model.cpp",
+		"/Users/cnjones/git/lampc/CMakeLists.txt",
+		"/Users/cnjones/git/teaching/grades/mpc course/2018/submitted/mpc_grades_2018_submit.csv",
+		"/Users/cnjones/Dropbox/work/letters/2021/jean pierre/laletter.sty",
+		"/Users/cnjones/Dropbox/work/letters/2021/jean pierre/jeanpierre.tex",
+		"/Users/cnjones/Dropbox/work/letters/2021/jean pierre/epflletter50.sty",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/exam_2020.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/q_multiplechoice.tex",
+		"/Users/cnjones/Dropbox/work/reviews/2021/ERC/Clarinet/CLariNet review",
+		"/Users/cnjones/Dropbox/work/reviews/2021/ERC/AEPCO/AEPCO",
+		"/Users/cnjones/sig.html",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2018/exam/src/q_robust.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/jonesTikz.sty",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/jonesCourse.sty",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2017/exam/src/exam_2017.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/q_unconstrained.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/q1.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/q2.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/q3.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/q4.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/q5.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/q6.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/q_constrained.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/q_mpc.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/q_nmpc.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2020/exam/src/q_robust.tex",
+		"/Users/cnjones/git/teaching/mpc-course/annual/2017/exam/src/q6.tex",
+		"/Users/cnjones/git/teaching/mpc-course/project/quad 2019/soln/deliverable_6_1/RK4.m",
+		"/Users/cnjones/Downloads/src 3/ctrl_NMPC.m",
+		"/Users/cnjones/git/teaching/mpc-course/project/quad 2019/soln/deliverable_6_1/deliverable_6_1.m",
+		"/Users/cnjones/git/papers/2020/yingzhao ecc 2020/main.tex",
+		"/Users/cnjones/Downloads/silvestro/silvestro.tex",
+		"/Users/cnjones/git/projects/splines/kpc/kpc.tex",
+		"/Users/cnjones/Dropbox/work/letters/2020/schedules/engelmann/engelmann.tex",
+		"/Users/cnjones/git/projects/splines/dfo/dfo_notes.pdf",
+		"/Users/cnjones/Dropbox/work/letters/2020/summer school/summerschool.tex",
+		"/Users/cnjones/Dropbox/work/letters/2020/schedules/Lavaei/Lavaei.tex",
+		"/usr/local/texlive/2020/texmf-dist/tex/latex/fontspec/fontspec.sty",
+		"/Users/cnjones/Dropbox/work/admin/budgets/2020/sept 2020/future.py",
+		"/Users/cnjones/Dropbox/work/admin/budgets/2020/sept 2020/people/Altug.pickle",
+		"/Users/cnjones/Dropbox/work/admin/budgets/2020/sept 2020/funds.csv",
+		"/Users/cnjones/Dropbox/work/letters/2020/Waibel/epflletter50.sty",
+		"/Users/cnjones/Dropbox/work/letters/2020/Waibel/waibel.tex",
+		"/Users/cnjones/Dropbox/work/letters/2020/Waibel/laletter.sty",
+		"/Users/cnjones/Dropbox/work/reviews/theses/2020/Engelmann/Engelmann review.md",
+		"/Users/cnjones/Dropbox/work/reviews/theses/2020/yuning/jiang.tex",
+		"/Users/cnjones/Dropbox/work/reviews/theses/2020/Engelmann/Engelmann review.tex",
+		"/Users/cnjones/git/teaching/control-systems/exercises/exercise 0/makeProblems.py",
+		"/Users/cnjones/git/teaching/control-systems/slides/latex/ex.sty",
+		"/Users/cnjones/git/teaching/mpc-course/exercises/ex1/doc/ex.sty",
+		"/Users/cnjones/git/teaching/control-systems/slides/3. PID/PID.tex",
+		"/Users/cnjones/git/teaching/control-systems/online slides/2. Properties/properties.tex",
+		"/Users/cnjones/git/teaching/control-systems/online slides/1. Introduction/intro.tex",
+		"/Users/cnjones/git/lampc/examples/test2.i",
+		"/Users/cnjones/git/lampc/build/Makefile",
+		"/Users/cnjones/git/lampc/examples/CMakeLists.txt",
+		"/Users/cnjones/git/lampc/src/lampc.hpp",
+		"/Users/cnjones/Downloads/harsh plan.txt",
+		"/Users/cnjones/Downloads/review"
+	],
+	"find":
+	{
+		"height": 28.0
+	},
+	"find_in_files":
+	{
+		"height": 119.0,
+		"where_history":
+		[
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"_WrappedNumber(other) ",
+			"self._v",
+			"subtract",
+			"add'",
+			"add",
+			"'id",
+			"{str(self)}",
+			"\"Attempt",
+			"add",
+			".vars",
+			"vars",
+			"constants",
+			"Expression",
+			"const",
+			"'I",
+			"'",
+			"name",
+			"test",
+			"matrixbase",
+			"<T",
+			"scalar_t",
+			"tmp_4",
+			"p_1",
+			"Eigen::Matrix<scalar_t, u_t_size, x_t_size>",
+			"test",
+			"lint"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+		],
+		"reverse": false,
+		"show_context": true,
+		"use_buffer2": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"selected": 1,
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "testGen.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 1724,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1724,
+								1724
+							]
+						],
+						"settings":
+						{
+							"draw_centered": false,
+							"draw_indent_guides": true,
+							"draw_white_space": "selection",
+							"fold_buttons": true,
+							"gutter": true,
+							"line_numbers": true,
+							"rulers":
+							[
+							],
+							"scroll_past_end": false,
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"translate_tabs_to_spaces": true,
+							"word_wrap": "auto",
+							"wrap_width": 0
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "polypy/poly.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 17507,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								4957,
+								4957
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 2419.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "polypy/Index.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2330,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								246,
+								246
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 5,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "test.py",
+					"semi_transient": true,
+					"settings":
+					{
+						"buffer_size": 1332,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1127,
+								1178
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Python/Python.sublime-syntax"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 12,
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "testXX.hpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 136,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								136,
+								136
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.sublime-syntax"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 7,
+					"type": "text"
+				},
+				{
+					"buffer": 5,
+					"file": "polypy/__init__.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 1145,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								539,
+								539
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 6,
+					"type": "text"
+				},
+				{
+					"buffer": 6,
+					"file": "polypy/generator.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 8981,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								463,
+								463
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 11,
+					"type": "text"
+				},
+				{
+					"buffer": 7,
+					"file": "examples/test.hpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 7531,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1670,
+								1757
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 4,
+					"type": "text"
+				},
+				{
+					"buffer": 8,
+					"file": "src/polygen_helper.hpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 11893,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								11893,
+								8017
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 9,
+					"type": "text"
+				},
+				{
+					"buffer": 9,
+					"file": "examples/model.cpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 1897,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								439,
+								439
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.sublime-syntax"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"type": "text"
+				}
+			]
+		},
+		{
+			"selected": 3,
+			"sheets":
+			[
+				{
+					"buffer": 10,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 458,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								458,
+								458
+							]
+						],
+						"settings":
+						{
+							"draw_centered": false,
+							"draw_indent_guides": true,
+							"draw_white_space": "selection",
+							"fold_buttons": true,
+							"gutter": true,
+							"line_numbers": true,
+							"rulers":
+							[
+							],
+							"scroll_past_end": false,
+							"syntax": "Packages/Text/Plain text.tmLanguage",
+							"word_wrap": "auto",
+							"wrap_width": 0
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 13,
+					"type": "text"
+				},
+				{
+					"buffer": 11,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 458,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								458,
+								458
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Text/Plain text.tmLanguage"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 10,
+					"type": "text"
+				},
+				{
+					"buffer": 12,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 443,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								443,
+								443
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Text/Plain text.tmLanguage",
+							"word_wrap": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 8,
+					"type": "text"
+				},
+				{
+					"buffer": 13,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 458,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								458,
+								458
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Text/Plain text.tmLanguage"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 28.0
+	},
+	"input":
+	{
+		"height": 0.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			],
+			[
+				0,
+				1,
+				1,
+				2
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			0.5,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.exec":
+	{
+		"height": 319.0
+	},
+	"output.find_results":
+	{
+		"height": 0.0
+	},
+	"output.latextools":
+	{
+		"height": 227.0
+	},
+	"pinned_build_system": "Anaconda Python Builder",
+	"project": "lampc.sublime-project",
+	"replace":
+	{
+		"height": 52.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+			[
+				"",
+				"polypy/poly.py"
+			],
+			[
+				"mode",
+				"examples/model.cpp"
+			],
+			[
+				"test.h",
+				"examples/test.hpp"
+			],
+			[
+				"test.hpp",
+				"examples/test.hpp"
+			],
+			[
+				"pol",
+				"polypy/poly.py"
+			],
+			[
+				"test",
+				"testGen.py"
+			],
+			[
+				"in",
+				"polypy/Index.py"
+			],
+			[
+				"__",
+				"polypy/__init__.py"
+			],
+			[
+				"polyp",
+				"polypy/poly.py"
+			],
+			[
+				"testg",
+				"testGen.py"
+			],
+			[
+				"inde",
+				"examples/Index.py"
+			],
+			[
+				"index",
+				"polypy/Index.py"
+			],
+			[
+				"test.hp",
+				"examples/test.hpp"
+			],
+			[
+				"poly",
+				"src/polygen_helper.hpp"
+			],
+			[
+				"polygen",
+				"src/polygen_helper.hpp"
+			],
+			[
+				"model",
+				"examples/model.cpp"
+			],
+			[
+				"testgen",
+				"testGen.py"
+			],
+			[
+				"testxx",
+				"testXX.hpp"
+			],
+			[
+				"gener",
+				"polypy/generator.py"
+			],
+			[
+				"po",
+				"poly.py"
+			],
+			[
+				"desi",
+				"design"
+			],
+			[
+				"problem",
+				"src/problemBase.hpp"
+			],
+			[
+				"test3",
+				"examples/test3.cpp"
+			],
+			[
+				"test2",
+				"examples/test2.cpp"
+			],
+			[
+				"lamp",
+				"src/lampc.hpp"
+			],
+			[
+				"model.cpp",
+				"examples/model.cpp"
+			],
+			[
+				"cm",
+				"examples/CMakeLists.txt"
+			],
+			[
+				"pr",
+				"src/problemBase.hpp"
+			],
+			[
+				"prob",
+				"src/problemBase.hpp"
+			],
+			[
+				"untit",
+				"untitled"
+			],
+			[
+				"lampc",
+				"examples/lampc.py"
+			],
+			[
+				"problm",
+				"src/problemBase.hpp"
+			],
+			[
+				"test4",
+				"examples/test4.cpp"
+			],
+			[
+				"polyge",
+				"src/polygen_helper.hpp"
+			],
+			[
+				"lam",
+				"src/lampc.hpp"
+			],
+			[
+				"lampc.py",
+				"examples/lampc.py"
+			],
+			[
+				"mod",
+				"examples/model.cpp"
+			],
+			[
+				"cmak",
+				"examples/CMakeLists.txt"
+			],
+			[
+				"hel",
+				"src/polygen_helper.hpp"
+			],
+			[
+				"lampc.hpp",
+				"src/lampc.hpp"
+			],
+			[
+				"test.",
+				"examples/test.cpp"
+			],
+			[
+				"des",
+				"design"
+			],
+			[
+				"cmake",
+				"examples/CMakeLists.txt"
+			],
+			[
+				"la",
+				"examples/lampc.py"
+			],
+			[
+				"kpc.te",
+				"kpc.tex"
+			],
+			[
+				"q6",
+				"q6.tex"
+			],
+			[
+				"q5",
+				"q5.tex"
+			],
+			[
+				"q4",
+				"q4.tex"
+			],
+			[
+				"q2",
+				"q2.tex"
+			],
+			[
+				"q1",
+				"q1.tex"
+			],
+			[
+				"q3",
+				"q3.tex"
+			],
+			[
+				"nmpc",
+				"q_nmpc.tex"
+			],
+			[
+				"explici",
+				"q_explicit.tex"
+			],
+			[
+				"exam",
+				"exam_2020.tex"
+			],
+			[
+				"expli",
+				"q_explicit.tex"
+			],
+			[
+				"ques",
+				"question_style.sty"
+			],
+			[
+				"robu",
+				"q_robust.tex"
+			],
+			[
+				"uncon",
+				"q_unconstrained.tex"
+			],
+			[
+				"mpc",
+				"q_mpc.tex"
+			],
+			[
+				"ex",
+				"exam_2020.tex"
+			],
+			[
+				"multip",
+				"q_multiplechoice.tex"
+			],
+			[
+				"exa",
+				"exam_2020.tex"
+			],
+			[
+				"mul",
+				"q_multiplechoice.tex"
+			],
+			[
+				"robust",
+				"q_robust.tex"
+			],
+			[
+				"mult",
+				"src/q_multiplechoice.tex"
+			],
+			[
+				"sty",
+				"src/question_style.sty"
+			],
+			[
+				"exp",
+				"src/q_explicit.tex"
+			],
+			[
+				"robus",
+				"src/q_robust.tex"
+			],
+			[
+				"q_nmp",
+				"src/q_nmpc.tex"
+			],
+			[
+				"tikz",
+				"src/jonesTikz.sty"
+			],
+			[
+				"jonesCou",
+				"src/jonesCourse.sty"
+			],
+			[
+				"q_mp",
+				"src/q_mpc.tex"
+			],
+			[
+				"ex3",
+				"ex3.tex"
+			],
+			[
+				"bode",
+				"bodeProbs.tex"
+			],
+			[
+				"ex2",
+				"ex2.tex"
+			],
+			[
+				"ex7",
+				"ex7.tex"
+			],
+			[
+				"ex1b",
+				"ex1b.tex"
+			],
+			[
+				"ex1a",
+				"ex1a.tex"
+			],
+			[
+				"ex0",
+				"ex0.tex"
+			],
+			[
+				"cv_fn",
+				"cv_fns.tex"
+			],
+			[
+				"tenu",
+				"tenure.sty"
+			],
+			[
+				"load",
+				"load_sesame.py"
+			],
+			[
+				"jone",
+				"jonesTikz.sty"
+			],
+			[
+				"ex.",
+				"ex.sty"
+			],
+			[
+				"secon",
+				"second.tex"
+			],
+			[
+				"tun",
+				"tuning.tex"
+			],
+			[
+				"tunin",
+				"tuning.tex"
+			],
+			[
+				"pid.tex",
+				"PID.tex"
+			],
+			[
+				"pid_sec",
+				"pid_section.tex"
+			],
+			[
+				"pi",
+				"pi.tex"
+			],
+			[
+				"lap",
+				"examples/lampc.py"
+			],
+			[
+				"prop",
+				"proportional_control.tex"
+			],
+			[
+				"test.cp",
+				"examples/test.cpp"
+			],
+			[
+				"cmakelists.",
+				"examples/CMakeLists.txt"
+			],
+			[
+				"mak",
+				"build/Makefile"
+			],
+			[
+				"lo",
+				"Login Shell"
+			],
+			[
+				"test.c",
+				"examples/test.cpp"
+			]
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_symbol":
+	{
+		"height": 120.0,
+		"last_filter": "prepr",
+		"selected_items":
+		[
+			[
+				"prepr",
+				"PrePrint"
+			],
+			[
+				"preprin",
+				"PrePrint"
+			],
+			[
+				"inde",
+				"Index"
+			],
+			[
+				"con",
+				"Constraint"
+			],
+			[
+				"const",
+				"const"
+			],
+			[
+				"cons",
+				"Constraint"
+			]
+		],
+		"width": 592.0
+	},
+	"selected_group": 0,
+	"settings":
+	{
+	},
+	"show_minimap": false,
+	"show_open_files": false,
+	"show_tabs": false,
+	"side_bar_visible": false,
+	"side_bar_width": 247.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+	}
+}

@@ -60,7 +60,7 @@ class Variable:
 
     # def gen_define(self, size = False, offset = False, func = False):
     #     # Set to true the element to generate
-    #     # Generate var(i) const function
+    #     # Generate var(i) const op
     #     if size:
     #         cog.outl(f"static constexpr auto s{self.name} = {self.rows};")
 
@@ -88,7 +88,7 @@ class Variable:
 
     @property
     def offset_func(self):
-        """Return the function to compute the offset"""
+        """Return the op to compute the offset"""
         if self.cols == 1:
             return f"o{self.name}()"
         if self.col is None:
@@ -122,14 +122,14 @@ class Variable:
 
 
 class Constraint:
-    # Evaluation of a Function
+    # Expression of a Function
     # e.g. sys(X, U)
     # and associated constraint
     # Has a short-name that we can refer to with an index
     def __init__(self, function, *args):
         # name - [string] Short name used to refer to the constraint
-        # function - [Function] to be evaluated
-        # args - [*Variable] to be passed to the function
+        # op - [Function] to be evaluated
+        # args - [*Variable] to be passed to the op
         #        If args contain an index, then this is a looped constraint
 
         self.name = None # Set later
@@ -169,7 +169,7 @@ class Constraint:
     #     # Produce short name for this constraint
     #     # Set to true the element to generate
     #     if size:
-    #         cog.outl(f"static constexpr auto s{self.name} = {self.function.size_output};")
+    #         cog.outl(f"static constexpr auto s{self.name} = {self.op.size_output};")
 
     #     if self.index is None:
     #         if offset:
@@ -178,7 +178,7 @@ class Constraint:
     #             cog.outl(f"constexpr auto  {self.name}() {{return g.template segment<s{self.name}>(o{self.name}());}};")
     #     else:
     #         if offset:
-    #             cog.outl(f"constexpr auto o{self.name}(int ind) {{return {self.offset}+{self.function.size_output}*ind;}};")
+    #             cog.outl(f"constexpr auto o{self.name}(int ind) {{return {self.offset}+{self.op.size_output}*ind;}};")
     #         if func:
     #             cog.outl(f"constexpr auto  {self.name}(int ind) {{return g.template segment<s{self.name}>(o{self.name}(ind));}};")
 
@@ -300,10 +300,10 @@ class NLP:
 
         cog.outl("// Instantiate functions")
         for f in self.functions:
-            # if f == self.objective.function:
+            # if f == self.objective.op:
             #     continue
             f.instantiate()
-        # self.objective.function.instantiate(hessian = True)
+        # self.objective.op.instantiate(hessian = True)
         cog.outl()
 
         cog.outl("// Evaluate constraints")
@@ -341,7 +341,7 @@ class NLP:
         return f
 
     def function(self, function_name, size_output, *input_types):
-        """Define a vector valued function"""
+        """Define a vector valued op"""
         f = Function(self, function_name, size_output, *input_types)
         self.functions.append(f)
         return f
@@ -407,7 +407,7 @@ class Function:
     def __init__(self, nlp, function_name, size_output, *input_types):
         self.nlp = nlp
         self.name = function_name
-        self.size_output = size_output # If None, then this is a scalar-output function
+        self.size_output = size_output # If None, then this is a scalar-output op
         self.input_types = input_types
 
         self.generate_signature()
@@ -424,7 +424,7 @@ class Function:
             raise TypeError("Input variable description wrong")
 
     def generate_signature(self):
-        # Generate function signature
+        # Generate op signature
         inputs = ", ".join(f"RC{self.var_sig(var)}" for var in self.input_types)
         if self.size_output is None:
             outputs = "T& out"
@@ -441,7 +441,7 @@ class Function:
     def instantiate(self, hessian=False):
         arg_sizes = ", ".join(f"{var[1]}" for var in self.input_types)
         if hessian == False:
-            assert self.size_output is not None, "Cannot generate jacobian for scalar function (use a vector valued function of length 1)"
+            assert self.size_output is not None, "Cannot generate jacobian for scalar op (use a vector valued op of length 1)"
             cog.outl(f"MAKE_JACOBIAN({self.name}, {self.size_output}, {arg_sizes});")
         else:
             assert self.size_output is None, "Can only generate hessian for scalar functions"

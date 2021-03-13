@@ -1,0 +1,34 @@
+{
+	"build_systems":
+	[
+		{
+			"file_regex": "^[ ]*File \"(...*?)\", line ([0-9]*)",
+			"name": "Anaconda Python Builder",
+			"selector": "source.python",
+			"shell_cmd": "\"python3\" -u \"$file\""
+		},
+		{
+			"name": "testGen",
+			"selector": "source.python",
+			"shell_cmd": "\"python3\" -u testGen.py",
+			"working_dir": "/Users/cnjones/git/lampc/"
+        },
+        {
+        	"name": "Run testExpression",
+		    "working_dir": "/Users/cnjones/git/lampc/",
+		    "shell_cmd": "python3 testExpression.py"
+        }
+
+	],
+	"folders":
+	[
+		{
+			"path": "/Users/cnjones/git/lampc"
+		}
+	],
+	"settings":
+	{
+		"buildview.enabled": true,
+		"buildview.scroll": "right"
+	}
+}

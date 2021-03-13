@@ -5,7 +5,7 @@
 #include <string>
 #include <type_traits>
 
-#include <Eigen/Dense>
+#include "Eigen/Dense"
 #include "unsupported/Eigen/AutoDiff"
 
 #include "problemBase.hpp"
@@ -30,9 +30,9 @@ struct MyNLP : public ThisIsMyNLPBase<MyNLP>
     							 const Ref<const u_t<T>>& u,
     							 Ref<x_t<T>> out) const noexcept
     {
-    	out(0) = scl*(xp.sum() + 2*x.sum() + 3*u.sum());
-    	out(1) = scl*(xp.sum() + 2*x.sum() + 3*u.sum());
-    	out(2) = scl*(xp.sum() + 2*x.sum() + 3*u.sum());
+    	out(0) = scl*(xp.sum());// + 2*x.sum() + 3*u.sum());
+    	out(1) = scl*(2*x.sum());
+    	out(2) = scl*(3*u.sum());
     }
 
 	template<typename T>
@@ -52,25 +52,29 @@ int main(void)
 	MyNLP::nlp_constraints_t equalities;
 	MyNLP::nlp_eq_jacobian_t jacobian;
 
-	for(int i=0; i<var.rows(); i++) var(i) = i;
+	for(int i=0; i<var.rows(); i++) var(i) = ((MyNLP::scalar_t)i)/10.0;
 	jacobian.setZero();
 	equalities.setZero();
 
 	mpc.equalities(var, equalities);
 	cout << "Equalities = " << equalities.transpose() << endl;
 
-	mpc.equalities_linearised(var, equalities, jacobian);
+	// for(int i=0; i<1e6; i++)
+		mpc.equalities_linearised(var, equalities, jacobian);
 	cout << "Equalities = " << equalities.transpose() << endl;
 	cout << "Jacobian = \n" << jacobian << endl;
 
-	cout << "=============================================\n";
-	mpc.scl = 2.0;
-	mpc.equalities(var, equalities);
-	cout << "Equalities = " << equalities.transpose() << endl;
 
-	mpc.equalities_linearised(var, equalities, jacobian);
-	cout << "Equalities = " << equalities.transpose() << endl;
-	cout << "Jacobian = \n" << jacobian << endl;
+	cout << "EIGEN version : " << EIGEN_WORLD_VERSION << "." << EIGEN_MAJOR_VERSION << "." << EIGEN_MINOR_VERSION << std::endl;
+
+	// cout << "=============================================\n";
+	// mpc.scl = 2.0;
+	// mpc.equalities(var, equalities);
+	// cout << "Equalities = " << equalities.transpose() << endl;
+
+	// mpc.equalities_linearised(var, equalities, jacobian);
+	// cout << "Equalities = " << equalities.transpose() << endl;
+	// cout << "Jacobian = \n" << jacobian << endl;
 
 	return 0;
 }

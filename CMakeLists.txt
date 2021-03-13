@@ -25,6 +25,6 @@ else()
   set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
-include_directories(src src/examples /use/local/include/)
+include_directories(src src/examples /usr/local/include/)
 # add_subdirectory(src)
 add_subdirectory(examples)
