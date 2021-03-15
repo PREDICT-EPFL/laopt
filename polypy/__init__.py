@@ -9,33 +9,7 @@
 
 from polypy.poly import NLP
 from polypy.poly import Index
-# from polypy.generator import Generator
-from polypy.expression import VarType, Variable, VariableSet
-from polypy.expression import Expression, Identity, ConstantScalar
-
-from contextlib import redirect_stdout
-
-class PrePrint:
-    """Overload print by adding a prefix to every line"""
-    def __init__(self, pre):
-        self.pre = pre
-
-    def __enter__(self):
-        self.pre = self.pre + "\t"
-        return self
-
-    def __exit__(self, exc_type, exc_value, tb):
-        if self.pre is not None:
-            self.pre = self.pre[1:]
-        return True
-
-    def __call__(self, *args, **kwargs):
-        """My custom print() op."""
-        args = [self.pre + a for a in args]
-        return print(*args, **kwargs)
-
-
-def preprint(pre=""):
-    """Factory to generate a PrePrint object"""
-    return PrePrint(pre)
-
+from polypy.expression import Variable, VariableSet
+from polypy.expression import Expression, Identity, ConstScalar, VarType, Matrix, Scalar, ConstMatrix
+from polypy.function import Function
+from polypy.generator import preprint, Generator

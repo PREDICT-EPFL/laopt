@@ -101,7 +101,7 @@ constexpr auto type_name() noexcept {
 
 
 // Declares a functor for member function in the derived class
-#define DECLARE_FUNCTION(function_name, num_outputs, input_sizes...) \
+#define MAKE_JACOBIAN(function_name, Derived, num_outputs, input_sizes...) \
     template<int nOutputs, int... inSizes> \
     struct function_name##_wrap \
     { \
@@ -111,8 +111,8 @@ constexpr auto type_name() noexcept {
             const Ref<const Matrix<T, inSizes, 1>>&... args, \
             Ref<Matrix<T, nOutputs, 1>> out) noexcept \
         { \
-            obj->template function_name<T>(std::forward<decltype(args)>(args)...,  \
-                                           std::forward<decltype(out)>(out)); \
+            obj->template _##function_name<T>(std::forward<decltype(args)>(args)...,  \
+                                            std::forward<decltype(out)>(out)); \
         } \
     }; \
     Jacobian<function_name##_wrap, Derived, scalar_t, num_outputs, input_sizes> function_name;

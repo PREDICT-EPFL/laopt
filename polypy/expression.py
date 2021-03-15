@@ -1,19 +1,9 @@
 import numbers
 import numpy as np
-from functools import reduce
-from string import ascii_letters, digits
+from polypy.generator import validate_name, preprint
+import itertools
 
 # TODO Error : Shape of sliced objects is wrong
-
-
-def validate_name(name):
-    # Validate name as valid C++ name
-    if set(name).difference(ascii_letters + digits + "_") \
-       or name[0] not in ascii_letters + "_":
-        raise ValueError(f"""Invalid name: {name}
-            Only letters, numbers and underscores allowed.
-            First character must be a letter or underscore.""")
-
 
 
 tmp_index = 1  # Used to specify uniquely named temporary variables
@@ -45,16 +35,13 @@ def convert(op):
         if isinstance(other, np.ndarray):
             other = ConstMatrix(other)
         if isinstance(other, numbers.Number):
-            other = ConstantScalar(other)
+            other = ConstScalar(other)
         return op(self, other)
     return newOp
 
 
 class Expression:
-    """General nonlinear matrix-valued expression
-
-        This just records an evaluation tree, and re-produces it in Eigen.
-    """
+    """General nonlinear matrix-valued expression"""
 
     # TODO Expressions to add : trig expressions, transpose, all Eigen expressions...
 
@@ -161,23 +148,55 @@ class Expression:
         """Return Python code to evaluate this expression"""
         return self._generate_python(*(self._generate("to_python", p)))
 
-    def to_eigen(self, p=None):
+    def generate(self, p):
         """Produce Eigen code to evaluate this expression"""
-        # return self._generate_eigen(*(self._generate("to_eigen", p)))
-        arg_eval = [arg.to_eigen(p) for arg in self.args]
+        # return self._generate_eigen(*(self._generate("generate", p)))
+        arg_eval = [arg.generate(p) for arg in self.args]
         for i, arg in enumerate(self.args):
             if self.priority != -1 and self.args[i].priority > self.priority:
                 arg_eval[i] = "(" + arg_eval[i] + ")"
-        # return arg_eval
-        return self._generate_eigen(*arg_eval)
+        return self._generate_eigen(p, *arg_eval)
 
+    def generate_array(self):
+        # Convert this expression to an eigen array
+        return ".array()"
 
     @property
     def isZero(self):
         # Return True is expression is zero
         return False
-    
 
+    def __eq__(self, other):
+        # Test recursively if two expressions are equal
+        if type(self) != type(other):
+            return False
+        if len(self.args) != len(other.args):
+            return False
+        return all(s == o for s, o in zip(self.args, other.args))
+
+    def get_by_property(self, property):
+        # Return a set of nodes for which the property(node) returns true
+        rec = set()
+        for arg in self.args:
+            rec.update(arg.get_by_property(property))
+        try:
+            if property(self):
+                rec.add(self)
+        except AttributeError:
+            pass
+        return rec
+
+    @property
+    def parameters(self):
+        # Return a set of variable data in this expression
+        return self.get_by_property(lambda n: n.isParameter)
+
+    def __hash__(self):
+        return hash((self.op, self.args))
+
+    def generate_initialization(self):
+        # Return string to initialize this node in the constructor
+        return ""
 
 # Priorioties for order of operations. We have to do the highest priority things first.
 #  -1: abs, functions (never need brackets)
@@ -187,7 +206,41 @@ class Expression:
 #  3. +
 #  4: pos, neg
 
-# Implement arithmatic operations
+class functionExpression(Expression):
+    # Evaluation of a l'opt function
+    def __init__(self, function, *args):
+        super().__init__(*args)
+        self.priority = 0
+        self.function = function
+        self.shape = (len(function), 1)
+
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self):
+        args = [str(x) for x in self.args]
+        return f"{self.function.name}({', '.join(args)})"
+
+    def _generate_eigen(self, p, *args):
+        out = p.get(self)  # Test if this function has been generated before
+        if not out:
+            out = _get_temp_name()
+            p(f"Eigen::Matrix<T, {len(self.function)}, 1> {out};")
+            p(f"{self.function.name}<T>({', '.join(args)}, {out});")
+            p.add(self, out)
+
+        return out
+
+    def get_by_property(self, property):
+        # Return a set of nodes for which the property(node) returns true
+        rec = super().get_by_property(property)
+        rec.update(self.function.expression.get_by_property(property))
+        return rec
+
+    def __hash__(self):
+        return hash((self.function, self.args))
+
+
 class UnaryExpression(Expression):
     def __init__(self, *args):
         super().__init__(*args)
@@ -195,10 +248,10 @@ class UnaryExpression(Expression):
         self.shape = args[0].shape
 
     def _generate_python(self, *args):
-        return f"{self.python_op}{args[0]}"
+        return f"{self.python_op}({args[0]})"
 
-    def _generate_eigen(self, *args):
-        return f"{self.python_op}{args[0]}"
+    def _generate_eigen(self, p, *args):
+        return f"{self.python_op}({args[0]})"
 
 class BinaryExpression(Expression):
     def __init__(self, *args):
@@ -207,7 +260,7 @@ class BinaryExpression(Expression):
     def _generate_python(self, *args):
         return f"{args[0]} {self.python_op} {args[1]}"
 
-    def _generate_eigen(self, *args):
+    def _generate_eigen(self, p, *args):
         return f"{args[0]} {self.python_op} {args[1]}"
 
 class sliceExpression(UnaryExpression):
@@ -245,12 +298,12 @@ class sliceExpression(UnaryExpression):
             rep = str(key)
         return rep
 
-    def _generate_python(self, *args):
+    def _generate_python(self, p, *args):
         rep = ", ".join(sliceExpression._slice_to_python(k) for k in self.key)
         return f"{args[0]}[{rep}]"
 
     @staticmethod
-    def _slice_to_eigen(key):
+    def _slice_generate(key):
         rep = ""
         if isinstance(key, slice):
             rep += str(key.start) if key.start else ""
@@ -277,7 +330,7 @@ class sliceExpression(UnaryExpression):
 
         return (stop - start, start)
 
-    def _generate_eigen(self, *args):
+    def _generate_eigen(self, p, *args):
         if len(self.key) == 1:  # Segment of a vector
             size, offset = sliceExpression._slice_to_offset(self.key[0], self.args[0].shape[0])
             rep = f"segment<{size}>({offset})"
@@ -309,7 +362,7 @@ class absExpression(UnaryExpression):
     def _generate_python(self, *args):
         return f"abs({args[0]})"
 
-    def _generate_eigen(self, *args):
+    def _generate_eigen(self, p, *args):
         return f"abs({args[0]})"
 
 class diagExpression(UnaryExpression):
@@ -323,7 +376,7 @@ class diagExpression(UnaryExpression):
     def _generate_python(self, *args):
         return f"diag({args[0]})"
 
-    def _generate_eigen(self, *args):
+    def _generate_eigen(self, p, *args):
         return f"({args[0]}).asDiagonal()"
 
 class addExpression(BinaryExpression):
@@ -356,8 +409,11 @@ class mulExpression(BinaryExpression):
         self.priority = 1
         self.python_op = "*"
 
-    def _generate_eigen(self, *args):
-        return f"({args[0]}.array() * {args[1]}.array()).matrix()"
+    def _generate_eigen(self, p, *args):
+        if isScalar(self.args[0]) or isScalar(self.args[1]):
+            return f"{args[0]} * {args[1]}"
+        else:
+            return f"({args[0]}{self.args[0].generate_array()} * {args[1]}{self.args[1].generate_array()}).matrix()"
 
 class matmulExpression(BinaryExpression):
     def __init__(self, *args):
@@ -375,7 +431,7 @@ class matmulExpression(BinaryExpression):
         self.priority = 1
         self.python_op = "@"
 
-    def _generate_eigen(self, *args):
+    def _generate_eigen(self, p, *args):
         return f"{args[0]} * {args[1]}"
 
 
@@ -387,21 +443,28 @@ class AtomicExpression(Expression):
     def _generate_python(self, *args):
         return str(self)
 
-    def _generate_eigen(self, *args):
+    def _generate_eigen(self, p, *args):
         return str(self)
+
+    def generate_declaration(self):
+        # Return string to declare this variable / constant
+        raise NotImplementedError("_generate_declaration must be implemented in all AtomicExpression's")
 
 
 class Matrix(AtomicExpression):
     """Symbolic matrix. Elements can be changed at runtime"""
 
-    def __init__(self, shape, name=None):
+    isParameter = True
+
+    def __init__(self, shape, name=None, initial=None):
         super().__init__()
         self.name = _get_temp_name(name)
         self.shape = shape
         self.op = "id"
+        self.initial = initial  # Initial value of the matrix
 
-    # def __repr__(self):
-    #     return f"{self.name}{self.shape}"
+    def __repr__(self):
+        return f"{self.name}"
 
     def __str__(self):
         return self.name
@@ -409,9 +472,31 @@ class Matrix(AtomicExpression):
     def __len__(self):
         return self.shape[0]
 
+    def __hash__(self):
+        return (hash(self.name) ^ hash(self.shape))
+
+    def generate_declaration(self):
+        # Return string to declare this variable / constant
+        ret = f"Eigen::Matrix<scalar_t, {self.shape[0]}, {self.shape[1]}> {self.name};"
+        return ret
+
+    def generate_initialization(self):
+        # Initialize the variable if initial is specified
+        ret = ""
+        if self.initial is not None:
+            ret = f"{self.name} << \n"
+            rows = []
+            for row in self.initial:
+                rows.append("\t" + ", ".join(str(x) for x in row))
+            ret += ",\n".join(rows) + ";"
+        return ret
+
 
 class ConstMatrix(Matrix):
     """Matrix whose elements are known at generation time and are fixed"""
+
+    isParameter = False
+    isConstant = True
 
     def __init__(self, M, name=None):
         if isinstance(M, numbers.Number):  # Convert to numpy array
@@ -427,6 +512,21 @@ class ConstMatrix(Matrix):
     @property
     def isZero(self):
         return np.all((self.M == 0))
+
+    def generate_declaration(self):
+        # Return string to declare this variable / constant
+        ret = f"using M_{self.name} = Eigen::Matrix<scalar_t, {self.shape[0]}, {self.shape[1]}>;\n"
+        ret += f"const M_{self.name} {self.name} = (M_{self.name}() << \n"
+        rows = []
+        for row in self.M:
+            rows.append("\t" + ", ".join(str(x) for x in row))
+        ret += ",\n".join(rows) + ").finished();"
+        return ret
+
+        # ret += ', '.join(str(x) for x in np.nditer(self.M, order='F'))
+        # ret += ").finished();"
+        # return ret
+
 
     # @convert
     # def __matmul__(self, other):
@@ -458,6 +558,8 @@ class ConstMatrix(Matrix):
 
 class Identity(ConstMatrix):
     """An identity matrix"""
+
+    isParameter = False
 
     def __init__(self, n):
         super(Identity, self).__init__(np.identity(n), f"I_{n}")
@@ -492,6 +594,8 @@ class Identity(ConstMatrix):
 class Scalar(AtomicExpression):
     """A scalar value. Treated as a variable, and changable at runtime"""
 
+    isParameter = True
+
     def __init__(self, value, name):
         self.value = value
         self.op = 'id'
@@ -503,15 +607,32 @@ class Scalar(AtomicExpression):
     def __str__(self):
         return self.name
 
+    def __repr__(self):
+        return self.name
+
     def to_python(self, p=None):
         return str(self)
 
-    def to_eigen(self, p=None):
+    def generate(self, p):
         return str(self)
 
+    def generate_array(self):
+        # Convert this expression to an eigen array
+        return ""
 
-class ConstantScalar(Scalar):
+    def __hash__(self):
+        return hash(self.name) ^ hash(self.value)
+
+    def generate_declaration(self):
+        # Return string to declare this variable / constant
+        return f"scalar_t {self.name} = {self.value};"
+
+
+class ConstScalar(Scalar):
     """A scalar value. Treated as a constant."""
+
+    isParameter = False
+    isConstant = True
 
     def __init__(self, value):
         super().__init__(value, str(value))
@@ -523,8 +644,12 @@ class ConstantScalar(Scalar):
     def to_python(self, p=None):
         return str(self.value)
 
-    def to_eigen(self, p=None):
+    def generate(self, p):
         return str(self.value)
+
+    def generate_declaration(self):
+        # Return string to declare this variable / constant
+        return f"const scalar_t {self.name} = {self.value};"
 
 
 class VarType:
@@ -610,5 +735,7 @@ class Variable(AtomicExpression):
     def shape(self):
         return (len(self), 1)
 
-    def to_eigen(self, p=None):
+    def generate(self, p):
+        # If var is given, then an expression is returned to evaluate this variable as an offset into var
+        # If not, then a generic name is created that can be used while creating a function 
         return str(self)
