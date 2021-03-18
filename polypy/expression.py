@@ -1,10 +1,30 @@
 import numbers
 import numpy as np
 from polypy.generator import validate_name, preprint
+import polypy
+import copy
 import itertools
 
-# TODO Error : Shape of sliced objects is wrong
+# TODO Errors
+# - Shape of sliced objects is wrong
+# - Call a function with some args being parameters and some differentiable vars
 
+# TODO Features
+# - concantenate / hstack and vstack
+# - functions with multiple outputs (?)
+# - add generation code and wrappers to call from python\
+# - add variable sets back in
+# - drop all variables from the generation that aren't used some constraint
+
+# Optimizations
+# - construct non-mutable nodes to speed hashing
+# - look for repeated expressions and buffer them into temporary variables
+# - buffer property calls 
+# - reuse temporary variables and allocate at the top of the function
+
+# Checks
+# - Confirm that functions only use the variables in their argument list
+# - Confirm that substitutions are valid sizes (perhaps shift to a post-construction validation?)
 
 tmp_index = 1  # Used to specify uniquely named temporary variables
 def _get_temp_name(name=None):
@@ -18,7 +38,7 @@ def _get_temp_name(name=None):
 
 
 def isScalar(arg):
-    """Returns True is arg is a scalar"""
+    """Returns True if arg is a scalar"""
     if isinstance(arg, numbers.Number):
         return True
     if isinstance(arg, Scalar):
@@ -48,7 +68,7 @@ class Expression:
     __array_priority__ = 10  # numpy + Expression => calls Expression radd
 
     def __init__(self, *args):
-        self.args = args
+        self.args = tuple(args)
 
     def __str__(self):
         args = ", ".join([str(a) for a in self.args])
@@ -137,16 +157,16 @@ class Expression:
         """Implements reflected true division. Note that this only works when from __future__ import division is in effect."""
         raise NotImplementedError
 
-    def _generate(self, generator, p=None):
-        arg_eval = [eval("arg." + generator + "(p)") for arg in self.args]
-        for i, arg in enumerate(self.args):
-            if self.priority != -1 and self.args[i].priority > self.priority:
-                arg_eval[i] = "(" + arg_eval[i] + ")"
-        return arg_eval
+    # def _generate(self, generator, p=None):
+    #     arg_eval = [eval("arg." + generator + "(p)") for arg in self.args]
+    #     for i, arg in enumerate(self.args):
+    #         if self.priority != -1 and self.args[i].priority > self.priority:
+    #             arg_eval[i] = "(" + arg_eval[i] + ")"
+    #     return arg_eval
 
-    def to_python(self, p=None):
-        """Return Python code to evaluate this expression"""
-        return self._generate_python(*(self._generate("to_python", p)))
+    # def to_python(self, p=None):
+    #     """Return Python code to evaluate this expression"""
+    #     return self._generate_python(*(self._generate("to_python", p)))
 
     def generate(self, p):
         """Produce Eigen code to evaluate this expression"""
@@ -161,42 +181,94 @@ class Expression:
         # Convert this expression to an eigen array
         return ".array()"
 
-    @property
-    def isZero(self):
-        # Return True is expression is zero
-        return False
+    # @property
+    # def isZero(self):
+    #     # Return True is expression is zero
+    #     return False
 
-    def __eq__(self, other):
+    def is_equal(self, other):
         # Test recursively if two expressions are equal
         if type(self) != type(other):
             return False
         if len(self.args) != len(other.args):
             return False
-        return all(s == o for s, o in zip(self.args, other.args))
+        if not self._is_equal(other):  # Test any local data
+            return False
+        for s, o in zip(self.args, other.args):
+            if isinstance(s, Expression):
+                if s.is_equal(o) == False:
+                    return False
+            else:
+                if s != o:
+                    return False
+        return True
+
+    def _is_equal(self, other):
+        # Specialized in children if there are additional member elements to test for equality
+        return True
 
     def get_by_property(self, property):
         # Return a set of nodes for which the property(node) returns true
-        rec = set()
-        for arg in self.args:
-            rec.update(arg.get_by_property(property))
+        return set(self._get_by_property(property))
+
+    def _get_by_property(self, property):
+        # Return a list of nodes for which the property(node) returns true
+        rec = sum([arg._get_by_property(property) for arg in self.args], [])
         try:
             if property(self):
-                rec.add(self)
+                rec.append(self)
         except AttributeError:
             pass
         return rec
 
-    @property
-    def parameters(self):
-        # Return a set of variable data in this expression
-        return self.get_by_property(lambda n: n.isParameter)
+    def count_nodes(self):
+        return 1 + sum([arg.count_nodes() for arg in self.args])
+
+    # @property
+    # def parameters(self):
+    #     # Return a set of variable data in this expression
+    #     return self.get_by_property(lambda n: n.isParameter)
 
     def __hash__(self):
-        return hash((self.op, self.args))
+        # return hash(self.name)
+        return hash(id(self))
 
     def generate_initialization(self):
         # Return string to initialize this node in the constructor
         return ""
+
+    def __eq__(self, other):
+        # Return a constraint that imposes equality between the two arguments
+        # Note: This constraint will evaluate to True if equality can be determined
+        #       at compile time
+        return polypy.problem.Equality(self, other)
+
+    # def _substitute(self, vars, subs):
+    #     # Return the element[vars.index(arg)] if arg in vars else arg
+    #     if not isinstance(arg, Variable):
+    #         return arg.substitute(vars, subs)
+    #     try:
+    #         i = vars.index(arg)
+    #         return subs[i]
+    #     except ValueError:  # Not found
+    #         return arg
+
+    def substitute(self, vars, subs):
+        # Return a new expression where variables in the list vars are replaced by the expressions in the list subs        
+
+        # print(f"self = {self}")
+        if not isinstance(self, Variable):
+            ret = copy.copy(self)
+            ret.args = [arg.substitute(vars, subs) for arg in self.args]
+            return ret
+
+        # print(f"Searching for {self} in vars")
+        for var, sub in zip(vars, subs):
+            if var.is_equal(self):
+                return sub
+        return self
+
+
 
 # Priorioties for order of operations. We have to do the highest priority things first.
 #  -1: abs, functions (never need brackets)
@@ -226,19 +298,27 @@ class functionExpression(Expression):
         if not out:
             out = _get_temp_name()
             p(f"Eigen::Matrix<T, {len(self.function)}, 1> {out};")
-            p(f"{self.function.name}<T>({', '.join(args)}, {out});")
+            p(f"{self.function.wrapped_name}<T>({', '.join(args)}, {out});")
             p.add(self, out)
 
         return out
 
-    def get_by_property(self, property):
-        # Return a set of nodes for which the property(node) returns true
-        rec = super().get_by_property(property)
-        rec.update(self.function.expression.get_by_property(property))
-        return rec
+    def _is_equal(self, other):
+        if id(self.function) != id(other.function):
+            return False
+        return True
 
-    def __hash__(self):
-        return hash((self.function, self.args))
+    # def get_by_property_function(self, property):
+    #     # Return a set of nodes for which the property(node) returns true in the expression of this function
+    #     return self.function.expression.get_by_property(property)
+    #     # return super()._get_by_property(property) + self.function.expression._get_by_property(property)
+
+    #     # rec = super().get_by_property(property) 
+    #     # rec.update(self.function.expression.get_by_property(property))
+    #     # return rec
+
+    # def __hash__(self):
+    #     return hash((self.function, self.args))
 
 
 class UnaryExpression(Expression):
@@ -269,7 +349,7 @@ class sliceExpression(UnaryExpression):
         self.op = "slice"
         self.python_op = ""
         if isinstance(key, slice):
-            key = [key, ]
+            key = (key, )
         self.key = key
         self.priority = 0
 
@@ -340,6 +420,12 @@ class sliceExpression(UnaryExpression):
             rep = f"block<{x_size}, {y_size}>({x_offset}, {y_offset})"
 
         return f"{args[0]}.template {rep}"
+
+    def _is_equal(self, other):
+        if self.key != other.key:
+            return False
+        return True
+
 
 class posExpression(UnaryExpression):
     def __init__(self, *args):
@@ -439,6 +525,7 @@ class AtomicExpression(Expression):
     def __init__(self):
         super().__init__()
         self.priority = 0
+        self.op = "id"
 
     def _generate_python(self, *args):
         return str(self)
@@ -473,7 +560,7 @@ class Matrix(AtomicExpression):
         return self.shape[0]
 
     def __hash__(self):
-        return (hash(self.name) ^ hash(self.shape))
+        return (hash((self.name, self.shape)))
 
     def generate_declaration(self):
         # Return string to declare this variable / constant
@@ -490,6 +577,11 @@ class Matrix(AtomicExpression):
                 rows.append("\t" + ", ".join(str(x) for x in row))
             ret += ",\n".join(rows) + ";"
         return ret
+
+    def _is_equal(self, other):
+        if self.name != other.name:
+            return False
+        return np.array_equiv(self.initial, other.initial)
 
 
 class ConstMatrix(Matrix):
@@ -523,9 +615,8 @@ class ConstMatrix(Matrix):
         ret += ",\n".join(rows) + ").finished();"
         return ret
 
-        # ret += ', '.join(str(x) for x in np.nditer(self.M, order='F'))
-        # ret += ").finished();"
-        # return ret
+    def _is_equal(self, other):
+        return np.array_equiv(self.M, other.M)
 
 
     # @convert
@@ -566,6 +657,12 @@ class Identity(ConstMatrix):
         self.n = n
         self.shape = (n,n)
 
+    def _is_equal(self, other):
+        if self.n != other.n:
+            return False
+
+        return True
+
     # @convert
     # def __matmul__(self, other):
     #     print("Identity.matmul")
@@ -600,7 +697,7 @@ class Scalar(AtomicExpression):
         self.value = value
         self.op = 'id'
         self.name = name
-        self.args = []
+        self.args = ()
         self.shape = (1, 1)
         self.priority = 0
 
@@ -621,12 +718,19 @@ class Scalar(AtomicExpression):
         return ""
 
     def __hash__(self):
-        return hash(self.name) ^ hash(self.value)
+        return hash((self.name, self.value))
 
     def generate_declaration(self):
         # Return string to declare this variable / constant
         return f"scalar_t {self.name} = {self.value};"
 
+    def _is_equal(self, other):
+        if self.value != other.value:
+            return False
+        if self.name != other.name:
+            return False
+
+        return True
 
 class ConstScalar(Scalar):
     """A scalar value. Treated as a constant."""
@@ -651,85 +755,91 @@ class ConstScalar(Scalar):
         # Return string to declare this variable / constant
         return f"const scalar_t {self.name} = {self.value};"
 
+    def _is_equal(self, other):
+        if self.value != other.value:
+            return False
 
-class VarType:
-    def __init__(self, name, len):
-        validate_name(name)
-        self.name = name
-        self.len = len
-
-    def __str__(self):
-        return self.name
-
-    def __repr__(self):
-        return f"{self.name}[{self.len}]"
-
-    def __len__(self):
-        return self.len
+        return True
 
 
-class VariableSet:
-    def __init__(self, name, var_type, num_vars):
-        validate_name(name)
-        self.name = name
-        self.var_type = var_type
-        self.num_vars = num_vars
+# class VarType:
+#     def __init__(self, name, len):
+#         validate_name(name)
+#         self.name = name
+#         self.len = len
 
-    def __getitem__(self, key):
-        return Variable(None, None, self, key)
+#     def __str__(self):
+#         return self.name
 
-    def __str__(self):
-        return self.name
+#     def __repr__(self):
+#         return f"{self.name}[{self.len}]"
 
-    @property
-    def len(self):
-        return self.var_type.len
+#     def __len__(self):
+#         return self.len
 
-    # def __repr__(self):
-    #     cols = f"{self.cols}" if self.cols > 1 else ""
-    #     return f"{str(self)}[{str(self.var_type)}*{cols}]"
+
+# class VariableSet(list):
+#     def __init__(self, name, length, num_vars):
+#         validate_name(name)
+#         self.name = name
+#         self._len = length
+#         self.num_vars = num_vars
+
+#     def __getitem__(self, key):
+#         return Variable(None, None, self, key)
+
+#     def __repr__(self):
+#         return str(self)
+
+#     def __str__(self):
+#         return self.name
+
+#     def __len__(self):
+#         return self._len
+
+#     # def __repr__(self):
+#     #     cols = f"{self.cols}" if self.cols > 1 else ""
+#     #     return f"{str(self)}[{str(self.var_type)}*{cols}]"
 
 
 class Variable(AtomicExpression):
     # A vector variable, or an index into a VectorSet
 
-    def __init__(self, name, var_type, var_set=None, ind=None):
+    # def __init__(self, name, length, var_set=None, ind=None):
+    def __init__(self, name, length):
         super().__init__()
-        if name is None:
-            # We're taking a column from a VarSet
-            self.name = var_set.name
-            self.var_type = var_set.var_type
-            self.var_set = var_set
-            self.ind = ind
-        else:
-            # We're defining a new variable
-            self.name = name
-            self.var_type = var_type
-            self.var_set = None
-            self.ind = None
+        # if name is None:
+        #     # We're taking a column from a VarSet
+        #     self.name = var_set.name
+        #     self._len = len(var_set)
+        #     self.var_set = var_set
+        #     self.ind = ind
+        # else:
+        # We're defining a new variable
+        self.name = name
+        self._len = length
+        # self.var_set = None
+        # self.ind = None
 
     def __str__(self):
         val = f"{self.name}"
-        if self.ind is not None:
-            return f"{val}[{str(self.ind)}]"
+        # if self.ind is not None:
+        #     return f"{val}[{str(self.ind)}]"
         return val
 
     def __repr__(self):
         return str(self)
 
     def __len__(self):
-        return self.var_type.len
+        return self._len
 
-    def __eq__(self, other):
-        if (isinstance(other, Variable)):
-            return self.name == other.name and self.var_type.name == other.var_type.name\
-                and self.var_set == other.var_set and self.ind == other.ind
-        return False
+    # def __eq__(self, other):
+    #     if (isinstance(other, Variable)):
+    #         return self.name == other.name and len(self) == len(other) and self.ind == other.ind
+    #     return False
 
-    def __hash__(self):
-        return (hash(self.name) ^
-                hash(self.var_type.name) ^
-                hash(self.ind))
+    # def __hash__(self):
+    #     return hash((self.name, self._len, self.ind))
 
     @property
     def shape(self):
@@ -739,3 +849,12 @@ class Variable(AtomicExpression):
         # If var is given, then an expression is returned to evaluate this variable as an offset into var
         # If not, then a generic name is created that can be used while creating a function 
         return str(self)
+
+    def _is_equal(self, other):
+        # return id(self) == id(other)
+        if self.name != other.name:
+            return False
+        if self._len != other._len:
+            return False
+
+        return True

@@ -9,7 +9,17 @@
 
 from polypy.poly import NLP
 from polypy.poly import Index
-from polypy.expression import Variable, VariableSet
-from polypy.expression import Expression, Identity, ConstScalar, VarType, Matrix, Scalar, ConstMatrix
+from polypy.expression import Variable
+from polypy.expression import Expression, Identity, ConstScalar, Matrix, Scalar, ConstMatrix
 from polypy.function import Function
 from polypy.generator import preprint, Generator
+from polypy.problem import Problem
+
+from collections import defaultdict
+
+unique_names = defaultdict(int)
+def _get_unique_name(basename=None):
+    if basename is None:
+        basename = "tmp"
+    unique_names[basename] = unique_names[basename] + 1
+    return basename + str(unique_names[basename])

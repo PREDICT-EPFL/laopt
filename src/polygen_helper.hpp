@@ -61,8 +61,8 @@ constexpr auto type_name() noexcept {
 #define DECLARE_VAR3(name, offset, size) \
     static constexpr auto name##_offset() {return offset;} /* Offset */ \
     template<typename T> \
-    constexpr auto name(T x) \
-        {return x.template segment<size>(offset);} /* Offset */
+    constexpr auto name(T x) {return x.template segment<size>(offset);} /* Offset */ \
+    static constexpr int name##_len = size;
 
 #define DECLARE_VAR4(name, offset, size, number) \
     static constexpr auto name##_mat_size = size*number; /* Size of the vectorized variable */ \
@@ -70,7 +70,8 @@ constexpr auto type_name() noexcept {
     static constexpr auto name##_offset(int col) {return offset + size * col;} /* Offset */ \
     template<typename T> \
     constexpr auto name(T x, int col) \
-        {return x.template segment<size>(offset + size * col);} /* Offset */
+        {return x.template segment<size>(offset + size * col);} /* Offset */ \
+    static constexpr int name##_len = size;
 
 #define GET_MACRO(_1,_2,_3,_4,NAME,...) NAME
 #define DECLARE_VAR(...) GET_MACRO(__VA_ARGS__, DECLARE_VAR4, DECLARE_VAR3)(__VA_ARGS__)
@@ -85,16 +86,16 @@ constexpr auto type_name() noexcept {
  *  number [optional] - number of vectors
  */
 #define DECLARE_CON3(name, offset, size) \
-    static constexpr auto name##_size = size; \
+    static constexpr auto name##_len = size; \
     constexpr auto name##_offset() {return offset;}; \
     template<typename T> \
-    constexpr auto name(T g) {return g.template segment<name##_size>(name##_offset());};
+    constexpr auto name(T g) {return g.template segment<name##_len>(name##_offset());};
 
 #define DECLARE_CON4(name, offset, size, number) \
-    static constexpr auto name##_size = size; \
+    static constexpr auto name##_len = size; \
     constexpr auto name##_offset(int ind) {return offset + size * ind;}; \
     template<typename T> \
-    constexpr auto name(T g, int ind) {return g.template segment<name##_size>(name##_offset(ind));};
+    constexpr auto name(T g, int ind) {return g.template segment<name##_len>(name##_offset(ind));};
 
 #define DECLARE_CONSTRAINT(...) GET_MACRO(__VA_ARGS__, DECLARE_CON4, DECLARE_CON3)(__VA_ARGS__)
 

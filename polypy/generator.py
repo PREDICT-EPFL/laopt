@@ -41,6 +41,18 @@ def validate_name(name):
             First character must be a letter or underscore.""")
 
 
+def print_buffer(op):
+    """Use the internal print buffer if one is not provided"""
+
+    def newOp(self, *args, **kwargs):
+        buffer = kwargs.pop("buffer", None)
+        if buffer is None:
+            buffer = self.p
+        kwargs['p'] = buffer
+        return op(self, *args, **kwargs)
+    return newOp
+
+
 class Generator:
     # Generate a collection of functions in a class
 
@@ -48,6 +60,8 @@ class Generator:
         self._functions = []
         self.data = []  # Constants (matrices and/or scalars)
         self.variables = []  # Parameters (matrices and/or scalars)
+
+        self.p = preprint()  # String buffer with indentation support
 
     def add_function(self, function):
         self._functions.append(function)
@@ -60,66 +74,122 @@ class Generator:
     def parameters(self):
         return set().union(*[f.parameters for f in self.functions])
 
-    @property
-    def constants(self):
-        return set().union(*[f.constants for f in self.functions])
+    # @property
+    # def constants(self):
+    #     return set().union(*[f.constants for f in self.functions])
 
     @property
     def constantMatrices(self):
+        # These are eigen matrices that need to be initialized
         return set().union(*[f.constantMatrices for f in self.functions])
 
-    def generate(self, filename="", classname="LOpt"):
-        # Write out a header file containing a class that provides the given functions
-        p = preprint()
-
+    @print_buffer
+    def generate_preamble(self, p=None):
         p('#include <math.h>')
         p('#include "Eigen/Dense"')
         p('#include "unsupported/Eigen/AutoDiff"')
         p('')
         p('#include "polygen_helper.hpp"')  # Generates Jacobians
         p('')
+
+    @print_buffer
+    def function_body(self, p=None, post_string=""):
+
+        class Body:
+            def __enter__(self):
+                p('{')
+                p.__enter__()
+                return self
+
+            def __exit__(self, exc_type, exc_value, tb):
+                p.__exit__(exc_type, exc_value, tb)
+                p('}' + post_string)
+                p("")
+                return True
+
+        return Body()
+
+    @print_buffer
+    def generate_class(self, classname="LOpt", p=None):
+        self.classname = classname
         p('template<typename scalar_t>')
-        p(f'struct {classname}')
-        p('{')
+        p(f'struct {self.classname}')
+        return self.function_body(p=p, post_string=";")
 
+        # class OpenClass:
+        #     def __init__(self, p, classname="LOpt"):
+        #         self.p = p
+        #         self.classname = classname
+
+        #     def __enter__(self):
+        #         print("ENTER")
+        #         p = self.p
+        #         p('template<typename scalar_t>')
+        #         p(f'struct {self.classname}')
+        #         p('{')
+        #         p.__enter__()
+        #         return self
+
+        #     def __exit__(self, exc_type, exc_value, tb):
+        #         print("EXIT")
+        #         p = self.p
+        #         p.__exit__(exc_type, exc_value, tb)
+        #         p('};')
+        #         return True
+
+        # return OpenClass(p, classname)
+
+
+
+    # @print_buffer
+    # def open_class(self, classname="LOpt", p=None):
+    #     p('template<typename scalar_t>')
+    #     p(f'struct {classname}')
+    #     p('{')
+    #     return p
+
+    # @print_buffer
+    # def close_class(self, p=None):
+    #     p('};')
+    #     return p
+
+    @print_buffer
+    def generate_functions(self, p=None):
+        if self.parameters:
+            p("// Parameters")
+            for param in self.parameters:
+                p(param.generate_declaration())
+            p("")
+
+        if self.constantMatrices:
+            p("// Constant matrices")
+            for const in self.constantMatrices:
+                p(const.generate_declaration())
+            p("")
+
+        for func in self.functions:
+            func.generate(p)
+            func.generate_jacobian(self.classname, p)
+            p("")
+
+        # Build the constructor
+        p(f"{self.classname}() :")
         with p:
-
-            if self.parameters:
-                p("// Parameters")
-                for param in self.parameters:
-                    p(param.generate_declaration())
-                p("")
-
-            if self.constantMatrices:
-                p("// Constant matrices")
-                for const in self.constantMatrices:
-                    p(const.generate_declaration())
-                p("")
-
-            for func in self.functions:
-                func.generate(p)
-                func.generate_jacobian(classname, p)
-                p("")
-
-
-            # Build the constructor
-            p(f"{classname}() :")
-            with p:
-                # Initialize jacobian objects
-                p(",\n".join(f"{func.wrapped_name}(this)" for func in self.functions))
-            p("{")
-            with p:
-                for param in self.parameters:
-                    init = param.generate_initialization()
-                    p(init) if init else ""
-            p("}")
-
-        p("};")
-
-        with open(filename, "w+") as f:
-            f.write(str(p))
+            # Initialize jacobian objects
+            p(",\n".join(f"{func.name}(this)" for func in self.functions))
+        p("{")
+        with p:
+            for param in self.parameters:
+                init = param.generate_initialization()
+                p(init) if init else ""
+        p("}")
 
         return p
+
+    def write_file(self, filename="gen.hpp"):
+        print(f"Writing to file {filename}")
+        with open(filename, "w+") as f:
+            f.write(str(self.p))
 
 
 # class Generator:

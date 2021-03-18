@@ -1,3 +1,18 @@
-1. Generate any Python function in Eigen with dual overloading
-2. Flag "variables" for inputs and outputs
-3. Use existing 
+N, n, m = 10, 2, 1
+
+opt = LOpt()
+x = opt.Variable("x", n, N)
+u = opt.Variable("u", m, N - 1)
+xss = opt.Variable("xss", n)
+uss = opt.Variable("uss", m)
+r = opt.Parameter("r")
+
+
+for i in range(N):
+    opt.add(x[i+1] == f(x[i]), u[i])
+    opt.add(x[i][0] >= 1)
+    opt.add(-1 <= u[i] <= 1)
+opt.add(xss == f(xss, uss))
+
+opt.minimize(sum())
+

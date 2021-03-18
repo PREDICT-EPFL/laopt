@@ -6,8 +6,8 @@ class Function:
 
     def __init__(self, name, inputs, output, expression):
         validate_name(name)
-        self.name = "_" + name  # Private name used for all internal purposes
-        self.wrapped_name = name  # Public name
+        self.wrapped_name = "_" + name  # Private name used for all internal purposes
+        self.name = name  # Public name
         self.inputs = inputs  # List of Variables
         self.output = output  # Variable
         self.expression = expression
@@ -37,7 +37,7 @@ class Function:
 
         # Produce function signature
         p(f"template<typename T>")
-        p(f"EIGEN_STRONG_INLINE void {self.name}(")
+        p(f"EIGEN_STRONG_INLINE void {self.wrapped_name}(")
         with p:
             for x in self.inputs:
                 p(f"const Eigen::Ref<const Eigen::Matrix<T, {x.shape[0]}, {x.shape[1]}>>& {x}, ")
@@ -56,7 +56,7 @@ class Function:
     def generate_jacobian(self, classname, p=preprint()):
         # Wrapper for Jacobian call
         sizes = [str(len(x)) for x in self.inputs]
-        p(f"MAKE_JACOBIAN({self.wrapped_name}, {classname}<scalar_t>, {len(self.output)}, {', '.join(sizes)});")
+        p(f"MAKE_JACOBIAN({self.name}, {classname}<scalar_t>, {len(self.output)}, {', '.join(sizes)});")
 
 
     @property
@@ -74,16 +74,40 @@ class Function:
         # Return a set of constant data that needs to be written out for this function
         return self.expression.get_by_property(lambda n: n.isConstant and n.shape != (1, 1))
 
+    def _functions(self):
+        # Return a set of functions that this function calls (recursively)
+        funcs = list(set([f.function for f in self.expression.get_by_property(lambda n: n.function)]))
+        return list(set(sum([f._functions() for f in funcs], funcs) + [self, ]))
+
     @property
     def functions(self):
         # Return a set of functions that this function calls (recursively)
-        functions = self.expression.get_by_property(lambda n: n.function)  # True if has a function attribute
-        return set(f.function for f in functions)
+        return set(self._functions())
 
     def __call__(self, *args):
         # Evaluate this function and return the expression
         return functionExpression(self, *args)
 
+    def __eq__(self, other):
+        # Returns true if two functions would evaluate to the same value for all inputs
+        if not isinstance(other, Function):
+            return False
+        if len(self.inputs) != len(other.inputs):
+            return False
+        for arg1, arg2 in zip(self.inputs, other.inputs):
+            if len(arg1) != len(arg2):
+                return False
+
+        # Create matching input variables for both functions
+        args = [Variable("var" + str(i), len(arg)) for i, arg in enumerate(self.inputs)]
+        eval_self = self(*args)
+        eval_other = other(*args)
+        print(f"eval_self = {eval_self}")
+        print(f"eval_other = {eval_other}")
+        return eval_self.is_equal(eval_other)
+
+    def __hash__(self):
+        return hash(id(self))
 
 class FunctionGenerator:
 

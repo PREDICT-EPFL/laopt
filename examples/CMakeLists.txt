@@ -8,7 +8,7 @@ link_directories(/Users/cnjones/git/lampc)
 # add_executable(mpc mpc.cpp)
 # target_link_libraries(mpc hana Eigen3::Eigen)
 
-# add_executable(test test.cpp)
+add_executable(test test.cpp myproblem.hpp)
 add_executable(model model.cpp gen.c)
 add_executable(gen gen.cpp)
 # add_executable(test4 test4.cpp)
