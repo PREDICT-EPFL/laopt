@@ -13,7 +13,7 @@ from polypy.expression import Variable
 from polypy.expression import Expression, Identity, ConstScalar, Matrix, Scalar, ConstMatrix
 from polypy.function import Function
 from polypy.generator import preprint, Generator
-from polypy.problem import Problem
+from polypy.nlp import NLP
 
 from collections import defaultdict
 

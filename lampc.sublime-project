@@ -16,7 +16,12 @@
         {
         	"name": "Run testExpression",
 		    "working_dir": "/Users/cnjones/git/lampc/",
-		    "shell_cmd": "python3 testExpression.py"
+		    "shell_cmd": "/Users/cnjones/.pyenv/shims/python testExpression.py"
+        },
+        {
+        	"name": "Run test_ipopt",
+		    "working_dir": "/Users/cnjones/git/lampc/",
+		    "shell_cmd": "/Users/cnjones/.pyenv/shims/python test_ipopt.py"
         }
 
 	],

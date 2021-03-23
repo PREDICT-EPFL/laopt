@@ -21,6 +21,9 @@ import itertools
 # - look for repeated expressions and buffer them into temporary variables
 # - buffer property calls 
 # - reuse temporary variables and allocate at the top of the function
+# - change the jacobian generation of functions so that rather than a list of matrices 
+#   to fill in, it takes a callback function. We than use the callback to fill in sparse 
+#   matrices without a copy operation.
 
 # Checks
 # - Confirm that functions only use the variables in their argument list
@@ -241,17 +244,7 @@ class Expression:
         # Return a constraint that imposes equality between the two arguments
         # Note: This constraint will evaluate to True if equality can be determined
         #       at compile time
-        return polypy.problem.Equality(self, other)
-
-    # def _substitute(self, vars, subs):
-    #     # Return the element[vars.index(arg)] if arg in vars else arg
-    #     if not isinstance(arg, Variable):
-    #         return arg.substitute(vars, subs)
-    #     try:
-    #         i = vars.index(arg)
-    #         return subs[i]
-    #     except ValueError:  # Not found
-    #         return arg
+        return polypy.nlp.Equality(self, other)
 
     def substitute(self, vars, subs):
         # Return a new expression where variables in the list vars are replaced by the expressions in the list subs        

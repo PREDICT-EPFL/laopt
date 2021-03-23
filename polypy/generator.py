@@ -87,6 +87,7 @@ class Generator:
     def generate_preamble(self, p=None):
         p('#include <math.h>')
         p('#include "Eigen/Dense"')
+        p('#include <Eigen/Sparse>')
         p('#include "unsupported/Eigen/AutoDiff"')
         p('')
         p('#include "polygen_helper.hpp"')  # Generates Jacobians
@@ -161,6 +162,7 @@ class Generator:
                 p(param.generate_declaration())
             p("")
 
+        print(f"CONSTANT MATRICES = {self.constantMatrices}")
         if self.constantMatrices:
             p("// Constant matrices")
             for const in self.constantMatrices:

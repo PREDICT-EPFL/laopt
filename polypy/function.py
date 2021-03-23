@@ -1,6 +1,7 @@
 from polypy.expression import Variable, Expression, functionExpression
 from polypy.generator import preprint, validate_name
 import types
+import numpy as np
 
 class Function:
 
@@ -26,6 +27,9 @@ class Function:
 
     def __len__(self):
         return len(self.output)
+
+    def num_inputs(self):
+        return sum(len(x) for x in self.inputs)
 
     def generate(self, p=preprint()):
         # Generate an eigen function to evaluate this Function
@@ -72,7 +76,7 @@ class Function:
     @property
     def constantMatrices(self):
         # Return a set of constant data that needs to be written out for this function
-        return self.expression.get_by_property(lambda n: n.isConstant and n.shape != (1, 1))
+        return self.expression.get_by_property(lambda n: n.isConstant and isinstance(n.M, np.ndarray))
 
     def _functions(self):
         # Return a set of functions that this function calls (recursively)

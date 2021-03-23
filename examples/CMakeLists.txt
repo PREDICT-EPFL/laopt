@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 
-include_directories(include /usr/local/include/ ${EIGEN3_INCLUDE_DIR})
-link_directories(/Users/cnjones/git/lampc)
+include_directories(include /usr/local/include/ ${EIGEN3_INCLUDE_DIR} /usr/local/Cellar/ipopt/3.13.4/include/coin-or/ /usr/local/Cellar/fmt/7.1.3/include)
+link_directories(/Users/cnjones/git/lampc /usr/local/Cellar/ipopt/3.13.4/lib/ /usr/local/Cellar/fmt/7.1.3/lib)
 
 # if(BUILD_EXAMPLES)
 
@@ -9,10 +9,16 @@ link_directories(/Users/cnjones/git/lampc)
 # target_link_libraries(mpc hana Eigen3::Eigen)
 
 add_executable(test test.cpp myproblem.hpp)
-add_executable(model model.cpp gen.c)
-add_executable(gen gen.cpp)
+# add_executable(model model.cpp gen.c)
+# add_executable(gen gen.cpp)
 # add_executable(test4 test4.cpp)
 # add_executable(test2 test2.cpp)
+
+
+link_directories(${CMAKE_SOURCE_DIR}/third_party/opencv/lib)
+
+target_link_libraries(test ipopt fmt)
+
 
 # target_link_libraries(model gen)
 
