@@ -58,3 +58,5 @@ opt.generate(filename="examples/myproblem.hpp")
 print(opt.variables)
 
 
+
+################ Test ##################

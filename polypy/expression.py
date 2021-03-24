@@ -1,9 +1,11 @@
+from enum import Enum, auto
 import numbers
 import numpy as np
 from polypy.generator import validate_name, preprint
 import polypy
 import copy
 import itertools
+
 
 # TODO Errors
 # - Shape of sliced objects is wrong
@@ -24,6 +26,7 @@ import itertools
 # - change the jacobian generation of functions so that rather than a list of matrices 
 #   to fill in, it takes a callback function. We than use the callback to fill in sparse 
 #   matrices without a copy operation.
+# - switch to a delegate formulation 
 
 # Checks
 # - Confirm that functions only use the variables in their argument list
@@ -70,8 +73,16 @@ class Expression:
 
     __array_priority__ = 10  # numpy + Expression => calls Expression radd
 
+    # State of the expression. During construction, the == and <= operators produce 
+    # constraints. Once frozen, equality converts to a comparison operator, and <= 
+    # raises an error.
+    class State(Enum):
+        Construction = auto()  # Building an expression
+        Frozen = auto()  # Expression finalized
+
     def __init__(self, *args):
         self.args = tuple(args)
+        self._state = Expression.State.Construction
 
     def __str__(self):
         args = ", ".join([str(a) for a in self.args])
@@ -210,6 +221,17 @@ class Expression:
         # Specialized in children if there are additional member elements to test for equality
         return True
 
+    @property
+    def state(self):
+        return self._state
+
+    @state.setter
+    def state(self, newState):
+        # Change the state recursively
+        self._state = newState
+        for arg in self.args:
+            arg.state = newState
+
     def get_by_property(self, property):
         # Return a set of nodes for which the property(node) returns true
         return set(self._get_by_property(property))
@@ -244,7 +266,11 @@ class Expression:
         # Return a constraint that imposes equality between the two arguments
         # Note: This constraint will evaluate to True if equality can be determined
         #       at compile time
-        return polypy.nlp.Equality(self, other)
+        if self.state == Expression.State.Frozen:
+            return self.is_equal(other)
+        elif self.state == Expression.State.Construction:
+            return polypy.nlp.Equality(self, other)
+        raise ValueError("Testing equality while in unknown state.")
 
     def substitute(self, vars, subs):
         # Return a new expression where variables in the list vars are replaced by the expressions in the list subs        
