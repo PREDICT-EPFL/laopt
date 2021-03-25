@@ -506,29 +506,31 @@ int main(void)
   
 	NLP::constraint_jacobian_t J;
 	J = decltype(J)::Zero();
+	std::cout << "J.shape = " << decltype(J)::RowsAtCompileTime << " x " << decltype(J)::ColsAtCompileTime << std::endl;
 	// for (long i=0; i<10000000; i++)
 	{
 		var(0)++;
-		nlp.constraints_jacobian(var, con, J);		
+		nlp.constraints(var, con, J);
 	}
 	std::cout << "J = \n" << J << std::endl;
 
 	std::cout << "=========================================\n";
 
-	// {
-	// Eigen::SparseMatrix<scalar_t> J_sparse(NLP::NUM_CON, NLP::NUM_VARS);
-	// nlp.constraints_sparse_initialize(J_sparse);
-	// std::cout << "J_sparse = \n" << Eigen::MatrixXd(J_sparse) << std::endl;
-	// var(0) = 0;
-	// // for (long i=0; i<10000000; i++)
-	// {
-	// 	var(0)++;
-	// 	// nlp.constraints_sparse_jacobian(var, con, J_sparse);		
-	// }
-	// std::cout << "J_sparse = \n" << Eigen::MatrixXd(J_sparse) << std::endl;
-	// }
+	{
+	Eigen::SparseMatrix<scalar_t> J_sparse(NLP::NUM_CON, NLP::NUM_VARS);
+	nlp.constraints_sparse_initialize(J_sparse);
+	for(int i=0; i<NLP::nnz_constraints_jacobian; i++) J_sparse.valuePtr()[i] = i;
+	std::cout << "J_sparse = \n" << Eigen::MatrixXd(J_sparse) << std::endl;
+	var(0) = 0;
+	// for (long i=0; i<10000000; i++)
+	{
+		var(0)++;
+		nlp.constraints(var, con, J_sparse);		
+	}
+	std::cout << "J_sparse = \n" << Eigen::MatrixXd(J_sparse) << std::endl;
+	}
 
-	// std::cout << "=========================================\n";
+	std::cout << "=========================================\n";
 
 	// // auto x = var.template segment<2>(2);
 	// Eigen::Matrix<double, 10, 20> t;

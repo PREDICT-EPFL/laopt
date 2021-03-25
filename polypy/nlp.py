@@ -244,11 +244,7 @@ class NLP:
                 offset += len(con)
             p("")
 
-            self._generate_equalities(p)
-            p("")
-            self._generate_equalities_linearized(p)
-            p("")
-            self._get_constraints_sparsity(p)
+            self._generate_constraints(p)
             p("")
 
             g.generate_functions()
@@ -261,28 +257,31 @@ class NLP:
 
         return p
 
-    def _generate_equalities(self, p):
-        p("EIGEN_STRONG_INLINE void constraints(const Eigen::Ref<const variable_t>& var, ")
-        p("                                     Eigen::Ref<constraint_t> constraints) noexcept")
-        p("{")
-        with p:
-            for con in self.constraints:
-                p(f"{con.function.name}({', '.join([f'{arg.name}(var)' for arg in con.args])}, {con.name}(constraints));")
-        p("}")
+    # def _generate_equalities(self, p):
+    #     p("EIGEN_STRONG_INLINE void constraints(const Eigen::Ref<const variable_t>& var, ")
+    #     p("                                     Eigen::Ref<constraint_t> constraints) noexcept")
+    #     p("{")
+    #     with p:
+    #         for con in self.constraints:
+    #             p(f"{con.function.name}({{{', '.join([f'{arg.name}' for arg in con.args])}}}, {con.name}, var, constraints);")
+    #             # p(f"{con.function.name}({', '.join([f'{arg.name}(var)' for arg in con.args])}, {con.name}(constraints));")
+    #     p("}")
 
-    def _generate_equalities_linearized(self, p):
-        p("EIGEN_STRONG_INLINE void constraints_jacobian(const Eigen::Ref<const variable_t>& var,")
-        p("                                              Eigen::Ref<constraint_t> constraints,")
-        p("                                              Eigen::Ref<constraint_jacobian_t> jacobian) noexcept")
-        p("{")
-        with p:
-            for con in self.constraints:
-                offsets = ", ".join([f"{var.name}_o()" for var in con.args])
-                offsets = f"{con.function.name}.template fill_dense<decltype(jacobian), {con.name}_o(), {offsets}>(jacobian));"
-                p(f"{con.function.name}({', '.join([f'{arg.name}(var)' for arg in con.args])}, {con.name}(constraints), " + offsets)
-        p("}")
+    # def _generate_equalities_linearized(self, p):
+    #     p("EIGEN_STRONG_INLINE void constraints(const Eigen::Ref<const variable_t>& var,")
+    #     p("                                     Eigen::Ref<constraint_t> constraints,")
+    #     p("                                     Eigen::Ref<constraint_jacobian_t> jacobian) noexcept")
+    #     p("{")
+    #     with p:
+    #         for con in self.constraints:
+    #             p(f"{con.function.name}({{{', '.join([f'{arg.name}' for arg in con.args])}}}, {con.name}, var, constraints, jacobian);")
 
-    def _get_constraints_sparsity(self, p):
+    #             # offsets = ", ".join([f"{var.name}" for var in con.args])
+    #             # offsets = f"{con.function.name}.template fill_dense<decltype(jacobian), {con.name}, {offsets}>(jacobian));"
+    #             # p(f"{con.function.name}({', '.join([f'{arg.name}(var)' for arg in con.args])}, {con.name}(constraints), " + offsets)
+    #     p("}")
+
+    def _generate_constraints(self, p):       
         # Build a dictionary mapping variables to their place in the global variable
         var_pos = dict()
         pos = 0
@@ -353,78 +352,36 @@ class NLP:
             blk_info = [", ".join(blk_info[i:i+6]) for i in range(0, len(blk_info), 6)]
             p(",\n".join(blk_info))
             p("});")
-        p("}")
+        p("}\n")
+
+        p("// Forwarding calls for dense and sparse jacobians. Will be moved to parent class later.")
+        p("EIGEN_STRONG_INLINE void constraints(const Eigen::Ref<const variable_t>& var, ")
+        p("                                     Eigen::Ref<constraint_t> constraints) noexcept")
+        p("{this->template constraints_impl<int>(var, constraints, 0);}")
+        p("EIGEN_STRONG_INLINE void constraints(const Eigen::Ref<const variable_t>& var,")
+        p("                                     Eigen::Ref<constraint_t> constraints,")
+        p("                                     Eigen::Ref<constraint_jacobian_t> jacobian) noexcept")
+        p("{this->template constraints_impl<Eigen::Ref<constraint_jacobian_t>>(var, constraints, jacobian);}")
+        p("EIGEN_STRONG_INLINE void constraints(const Eigen::Ref<const variable_t>& var, ")
+        p("                                     Eigen::Ref<constraint_t> constraints, ")
+        p("                                     Eigen::Ref<Eigen::SparseMatrix<scalar_t>> jacobian) noexcept")
+        p("{this->template constraints_impl<Eigen::Ref<Eigen::SparseMatrix<scalar_t>>>(var, constraints, jacobian);}")
         p("")
 
-        # Generate function to fill in the jacobian
-        #
-        p("EIGEN_STRONG_INLINE void constraints_sparse_jacobian(const Eigen::Ref<const variable_t>& var,")
-        p("                                                     Eigen::Ref<constraint_t> constraints,")
-        p("                                                     Eigen::SparseMatrix<scalar_t>& J) noexcept")
+        p("template<typename jacobian_t>")
+        p("EIGEN_STRONG_INLINE void constraints_impl(const Eigen::Ref<const variable_t>& var,")
+        p("                                          Eigen::Ref<constraint_t> constraints,")
+        p("                                          jacobian_t jacobian) noexcept")
         p("{")
         with p:
             for con in self.constraints:
-                offsets = [f"{var.name}_o()" for var in con.args]
-                offsets = ", ".join(offsets)
-                offsets = f"{con.function.name}.template fill_sparse<{con.name}_o(), {offsets}>(J));"
-                p(f"{con.function.name}({', '.join([f'{arg.name}(var)' for arg in con.args])}, {con.name}(constraints), " + offsets)
+                col_offset = []
+                for var in con.args:
+                    iVar = self.variables.index(var)
+                    iCon = self.constraints.index(con)
+                    col_offset.append(sum([len(blk.con) for blk in blocks[:iCon, iVar] if blk]))
 
-            # for con in self.constraints:
-            #     p("{")
-            #     with p:
-            #         # Declare dense temporaries for the jacobians
-            #         for var in con.args:
-            #             p(f"Eigen::Matrix<scalar_t, {con.name}_len, {var.name}_len> J_{var.name};")
-
-            #         # Call the function
-            #         call = f"{con.function.name}({', '.join([f'{arg.name}(var)' for arg in con.args])}, "
-            #         call += f"{con.name}(constraints), " + ", ".join([f"J_{var.name}" for var in con.args]) + ");"
-            #         p(call)
-
-            #         # Copy the jacobians into the sparse J
-            #         p(f"for(int row={con_pos[con]}, i=0; row<{con_pos[con] + len(con)}; row++, i++)")
-            #         p("{")
-            #         with p:
-            #             for var in con.args:
-            #                 p(f"for(int col={var_pos[var]}, j=0; col<{var_pos[var]+len(var)}; col++, j++) J.coeffRef(row, col) = J_{var.name}(i, j);")
-            #         p("}")
-            #     p("}")
-        p("}")
-
-        p("// Fills in the values of a sparse matrix in compressed row storage order")
-        p("EIGEN_STRONG_INLINE void constraints_sparse_jacobian_crs(const Eigen::Ref<const variable_t>& var,")
-        p("                                                         Eigen::Ref<constraint_t> constraints,")
-        p("                                                         Eigen::Ref<Eigen::Matrix<scalar_t, nnz_constraints_jacobian, 1>> J) noexcept")
-        p("{")
-        with p:
-            for con in self.constraints:
-                call = f"{con.function.name}({', '.join([f'{arg.name}(var)' for arg in con.args])}, "
-                call += f"{con.name}(constraints), "
-                num_inputs = sum(len(var) for var in con.args)
-                call += f"{con.function.name}.fill_sparse_values(J.template segment<{len(con) * num_inputs}>({con.name}_o())));"
-                p(call)
-
-            # p("int ind = 0;")
-            # for con in self.constraints:
-            #     p("{")
-            #     with p:
-            #         # Declare dense temporaries for the jacobians
-            #         for var in con.args:
-            #             p(f"Eigen::Matrix<scalar_t, {con.name}_len, {var.name}_len> J_{var.name};")
-
-            #         # Call the function
-            #         call = f"{con.function.name}({', '.join([f'{arg.name}(var)' for arg in con.args])}, "
-            #         call += f"{con.name}(constraints), " + ", ".join([f"J_{var.name}" for var in con.args]) + ");"
-            #         p(call)
-
-            #         # Copy the jacobians into the sparse J
-            #         p(f"for(int row=0; row<{len(con)}; row++)")
-            #         p("{")
-            #         with p:
-            #             for var in con.args:
-            #                 p(f"for(int col=0; col<{len(var)}; col++) J(ind++) = J_{var.name}(row, col);")
-            #         p("}")
-            #     p("}")
+                p(f"{con.function.name}({{{', '.join([f'{arg.name}' for arg in con.args])}}}, {{{', '.join(str(i) for i in col_offset)}}}, {con.name}, var, constraints, jacobian);")
         p("}")
 
 
