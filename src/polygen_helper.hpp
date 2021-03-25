@@ -1,15 +1,3 @@
-// #include <iostream>
-// #include <typeinfo>
-// #include <vector>
-// #include <tuple>
-// #include <functional>
-// #include <string>
-// #include <sstream>
-// #include <array>
-// #include <chrono>
-// #include <utility>
-// using namespace std;
-
 // Eigen includes
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -46,9 +34,9 @@ constexpr auto type_name() noexcept {
 /**
  * Macro to declare a templated variable type
  */
-#define DECLARE_VAR_TYPE(name, length) \
-    static constexpr int name##_size = length; \
-    template<typename T> using name = Eigen::Matrix<T, name##_size, 1>;
+// #define DECLARE_VAR_TYPE(name, length) \
+//     static constexpr int name##_size = length; \
+//     template<typename T> using name = Eigen::Matrix<T, name##_size, 1>;
 
 /**
  * Macro to define a variable
@@ -60,17 +48,17 @@ constexpr auto type_name() noexcept {
  *  number [optional] - number of vectors
  */
 #define DECLARE_VAR3(name, offset, size) \
-    static constexpr auto name##_o() {return offset;} /* Offset */ \
+    static constexpr auto name = offset; /* Offset */ \
     template<typename T> \
-    constexpr auto name(T x) {return x.template segment<size>(offset);} /* Offset */ \
+    constexpr auto name##_get(T x) {return x.template segment<size>(offset);} /* Offset */ \
     static constexpr int name##_len = size;
 
 #define DECLARE_VAR4(name, offset, size, number) \
     static constexpr auto name##_mat_size = size*number; /* Size of the vectorized variable */ \
     static constexpr auto name##_numvecs = number; /* Number of vectors */ \
-    static constexpr auto name##_o(int col) {return offset + size * col;} /* Offset */ \
+    static constexpr auto name(int col) {return offset + size * col;} /* Offset */ \
     template<typename T> \
-    constexpr auto name(T x, int col) \
+    constexpr auto name##_get(T x, int col) \
         {return x.template segment<size>(offset + size * col);} /* Offset */ \
     static constexpr int name##_len = size;
 
@@ -88,15 +76,15 @@ constexpr auto type_name() noexcept {
  */
 #define DECLARE_CON3(name, offset, size) \
     static constexpr auto name##_len = size; \
-    static constexpr auto name##_o() {return offset;}; \
+    static constexpr auto name = offset; \
     template<typename T> \
-    constexpr auto name(T g) {return g.template segment<name##_len>(name##_o());};
+    constexpr auto name##_get(T g) {return g.template segment<name##_len>(name);};
 
 #define DECLARE_CON4(name, offset, size, number) \
     static constexpr auto name##_len = size; \
-    constexpr auto name##_o(int ind) {return offset + size * ind;}; \
+    constexpr auto name(int ind) {return offset + size * ind;}; \
     template<typename T> \
-    constexpr auto name(T g, int ind) {return g.template segment<name##_len>(name##_o(ind));};
+    constexpr auto name##_get(T g, int ind) {return g.template segment<name##_len>(name(ind));};
 
 #define DECLARE_CONSTRAINT(...) GET_MACRO(__VA_ARGS__, DECLARE_CON4, DECLARE_CON3)(__VA_ARGS__)
 
@@ -118,9 +106,6 @@ constexpr auto type_name() noexcept {
         } \
     }; \
     Jacobian<function_name##_wrap, Derived, scalar_t, num_outputs, input_sizes> function_name;
-    // using function_name##_fill_dense = decltype({con.function.name})::Fill_Dense; \
-    // using function_name##_fill_sparse = decltype({con.function.name})::Fill_Sparse; \
-    // using function_name##_fill_sparse_values = decltype({con.function.name})::Fill_Sparse_Values; \
 
 
 // Sum the inputs to get total number of inputs
@@ -159,19 +144,6 @@ struct Jacobian
                     obj,
                     std::forward<decltype(args)>(args)..., 
                     std::forward<decltype(out)>(out));
-    }
-
-    // Call format:
-    //   function({offset1, offset2, ...}, variable, out)
-    template<typename variable_t, typename out_t,
-             typename Indices = std::make_index_sequence<num_input_vars>>
-    EIGEN_STRONG_INLINE void operator()(
-        const std::array<int, num_input_vars> var_offsets,  // Offsets into the variable where the start of each input are stored
-        const int eq_offset,  // Offset into constraint vector where we should start writing the output
-        const Eigen::MatrixBase<variable_t>& var,
-        Eigen::MatrixBase<out_t>& out) const noexcept
-    {
-        call_array(var_offsets, var, Indices{}, out.template segment<num_outputs>(eq_offset));
     }
 
     // Call format:
@@ -224,187 +196,164 @@ struct Jacobian
         for(int i=0; i<num_outputs; i++)
         {
             out(i) = _out[i].value();
-            // std::cout << "Size of row  " << type_name<decltype(_out[i].derivatives())>() << std::endl;
             Eigen::Ref<Eigen::Matrix<scalar_t, num_inputs, 1>> deriv = _out[i].derivatives();
-            // std::cout << "Size of row  " << type_name<decltype(deriv)>() << std::endl;
             jacobian_callback.template set_jacobian<decltype(deriv), input_sizes...>(deriv, i);
-
-            // Eigen::Ref<Eigen::Matrix<scalar_t, num_inputs, 1>> deriv = _out[i].derivatives();            
-            // // Copy gradients to Jacobian matrices
-            // int offset = 0;
-            // (void)std::initializer_list<int>{ 
-            //     (
-            //         J.row(i) = deriv.template segment<input_sizes>(offset), 
-            //         offset += input_sizes,
-            //         0
-            //     )... 
-            // };
         }
+    }
+
+    /********************************************************
+     * Call formats taking a variable vector + offsets
+     ********************************************************/
+
+    // Call format:
+    //   function({offset1, offset2, ...}, variable, out)
+    template<typename variable_t, typename out_t,
+             typename Indices = std::make_index_sequence<num_input_vars>>
+    EIGEN_STRONG_INLINE void operator()(
+        const std::array<Eigen::Index, num_input_vars> var_offsets,  // Offsets into the variable where the start of each input are stored
+        const std::array<Eigen::Index, num_input_vars> col_offsets,  // Offset into the compressed column for each variable
+        const int eq_offset,  // Offset into constraint vector where we should start writing the output
+        const Eigen::MatrixBase<variable_t>& var,
+        Eigen::MatrixBase<out_t>& out,
+        int jacobian  // Ignored
+        ) const noexcept
+    {
+        call_array(var_offsets, var, Indices{}, out.template segment<num_outputs>(eq_offset));
     }
 
     // Call format:
     //   function({offset1, offset2, ..., offsetN}, eq_offset, variable, out, jacobian)
     //   Takes the args from variable(offset1), variable(offset2), ...
     //   and writes the output into out(eq_offset)
-    // template<typename variable_t, typename out_t, typename jacobian_t, 
-    //          typename Indices = std::make_index_sequence<num_inputs>>
-    // EIGEN_STRONG_INLINE void operator()(
-    //     const std::array<int, num_inputs> var_offsets,  // Offsets into the variable where the start of each input are stored
-    //     const int eq_offset,  // Offset into constraint vector where we should start writing the output
-    //     const Eigen::MatrixBase<const variable_t>& var,
-    //     Eigen::MatrixBase<out_t>& out,
-    //     Eigen::MatrixBase<jacobian_t>& jacobian) const noexcept
-    // {
-    //     AD_output_t _out;
-    //     seed_and_call_array(var_offsets, var, Indices{}, _out);
+    template<typename variable_t, typename out_t, 
+             typename Indices = std::make_index_sequence<num_input_vars>>
+    EIGEN_STRONG_INLINE void operator()(
+        const std::array<Eigen::Index, num_input_vars> var_offsets,  // Offsets into the variable where the start of each input are stored
+        const std::array<Eigen::Index, num_input_vars> col_offsets,  // Offset into the compressed column for each variable
+        const int eq_offset,  // Offset into constraint vector where we should start writing the output
+        const Eigen::MatrixBase<variable_t>& var,
+        Eigen::MatrixBase<out_t>& out,
+        Eigen::Ref<Eigen::Matrix<scalar_t, out_t::RowsAtCompileTime, variable_t::RowsAtCompileTime>> jacobian
+        ) const noexcept
+    {
+        AD_output_t _out;
+        seed_and_call_array(var_offsets, var, Indices{}, _out);
+        copy_jacobian_dense_array<decltype(jacobian)>(var_offsets, eq_offset, out, jacobian, _out, Indices{});
+    }
 
-    //     // Copy Jacobian into output variables
-    //     for(int i=0; i<num_outputs; i++)
-    //     {
-    //         out(i) = _out[i].value();
-    //         Eigen::Ref<Eigen::Matrix<scalar_t, num_inputs, 1>> deriv = _out[i].derivatives();
-    //         jacobian_callback.template set_jacobian<decltype(deriv), input_sizes...>(deriv, i);
+    // Helper function to fill in the jacobian
+    template<typename J_t, typename out_t, typename T, T... ind>
+    EIGEN_STRONG_INLINE void copy_jacobian_dense_array(
+        const std::array<Eigen::Index, num_input_vars> var_offsets,  // Offsets into the variable where the start of each input are stored
+        const int eq_offset,  // Offset into constraint vector where we should start writing the output
+        Eigen::MatrixBase<out_t>& out,
+        Eigen::Ref<J_t> jacobian,
+        AD_output_t& _out,
+        std::integer_sequence<T, ind...> int_seq
+        ) const noexcept
+    {
+        // Copy Jacobian into output variables
+        for(int i=0; i<num_outputs; i++)
+        {
+            out(i + eq_offset) = _out[i].value();
+            Eigen::Ref<Eigen::Matrix<scalar_t, num_inputs, 1>> deriv = _out[i].derivatives();
 
-    //         // Eigen::Ref<Eigen::Matrix<scalar_t, num_inputs, 1>> deriv = _out[i].derivatives();            
-    //         // // Copy gradients to Jacobian matrices
-    //         // int offset = 0;
-    //         // (void)std::initializer_list<int>{ 
-    //         //     (
-    //         //         J.row(i) = deriv.template segment<input_sizes>(offset), 
-    //         //         offset += input_sizes,
-    //         //         0
-    //         //     )... 
-    //         // };
-    //     }
-    // }
-
-    // template<int m, std::size_t N, std::size_t... I>
-    // EIGEN_STRONG_INLINE void call_impl(
-    //     const Ref<const Eigen::Matrix<scalar_t, m, 1>>& var,
-    //     const std::array<int, N> offsets,
-    //     Ref<Matrix<scalar_t, num_outputs, 1>> out,
-    //     std::index_sequence<I...>
-    //     ) const noexcept
-    // {
-    //     Functor::template eval<scalar_t>(
-    //                 obj,
-    //                 var.template segment<input_sizes>(offsets[I])...,
-    //                 std::forward<decltype(out)>(out));
-    // }
-
-
-    // template<int m, std::size_t N, typename Indices = std::make_index_sequence<N>>
-    // EIGEN_STRONG_INLINE void call(
-    //     const Ref<const Eigen::Matrix<scalar_t, m, 1>>& var,
-    //     const std::array<int, N> offsets,
-    //     Ref<Matrix<scalar_t, num_outputs, 1>> out
-    //     ) const noexcept
-    // {
-    //     static_assert(sizeof...(input_sizes) == N, "Array size is the wrong length");
-    //     call_impl<m, N>(std::forward<decltype(var)>(var),
-    //         std::forward<decltype(offsets)>(offsets),
-    //         std::forward<decltype(out)>(out),
-    //         Indices{}
-    //     );
-    // }
+            // Copy gradients to Jacobian matrix
+            int offset = 0;
+            (void)std::initializer_list<int>{ 
+                (
+                    jacobian.row(i+eq_offset).template segment<input_sizes>(var_offsets[ind])
+                        = deriv.template segment<input_sizes>(offset), 
+                    offset += input_sizes,
+                    0
+                )... 
+            };
+        }
+    }
 
 
-    // // Functor to copy rows of a jacobian into a larger jacobian matrix at the given var_offsets locations
-    // template<typename T, int eq_offset, int... var_offsets>
-    // struct Fill_Dense
-    // {
-    //     template<typename D, int... var_sizes>
-    //     EIGEN_STRONG_INLINE void set_jacobian(Eigen::Ref<D> row, int iRow)
-    //     {
-    //         // Copy gradients into Jacobian matrix
-    //         int offset = 0;
-    //         auto Jrow = J.row(eq_offset + iRow);
-    //         (void)std::initializer_list<int>{ 
-    //             (
-    //                 Jrow.template segment<var_sizes>(var_offsets) = row.template segment<var_sizes>(offset), 
-    //                 offset += var_sizes,
-    //                 0
-    //             )... 
-    //         };
-    //     }
+    // Call format:
+    //   function({offset1, offset2, ..., offsetN}, eq_offset, variable, out, jacobian, ...)
+    //   Takes the args from variable(offset1), variable(offset2), ...
+    //   and writes the output into out(eq_offset)
+    //   jacobian here is a vector of non-zeros of length nnz_constraints_jacobian
+    template<typename variable_t, typename out_t,
+             typename Indices = std::make_index_sequence<num_input_vars>>
+    EIGEN_STRONG_INLINE void operator()(
+        const std::array<Eigen::Index, num_input_vars> var_offsets,  // Offsets into the variable where the start of each input are stored
+        const std::array<Eigen::Index, num_input_vars> col_offsets,  // Offset into the compressed column for each variable
+        const int eq_offset,  // Offset into constraint vector where we should start writing the output
+        const Eigen::MatrixBase<variable_t>& var,
+        Eigen::MatrixBase<out_t>& out,
+        Eigen::Ref<Eigen::SparseMatrix<scalar_t>> jacobian
+        ) const noexcept
+    {
+        AD_output_t _out;
+        seed_and_call_array(var_offsets, var, Indices{}, _out);
+        copy_jacobian_sparse_array<decltype(jacobian)>(var_offsets, col_offsets, eq_offset, out, jacobian, _out, Indices{});
+    }
 
-    //     Fill_Dense(Eigen::Ref<T> _J) : J(_J) {}
-    //     Eigen::Ref<T> J;
-    // };
+    // Helper function to fill in a sparse jacobian
+    template<typename J_t, typename out_t, typename T, T... ind>
+    EIGEN_STRONG_INLINE void copy_jacobian_sparse_array(
+        const std::array<Eigen::Index, num_input_vars> var_offsets,  // Offsets into the variable where the start of each input are stored
+        const std::array<Eigen::Index, num_input_vars> col_offsets,  // Offset into the compressed column for each variable
+        const int eq_offset,  // Offset into constraint vector where we should start writing the output
+        Eigen::MatrixBase<out_t>& out,
+        Eigen::Ref<Eigen::SparseMatrix<scalar_t>> jacobian,
+        AD_output_t& _out,
+        std::integer_sequence<T, ind...> int_seq
+        ) const noexcept
+    {
 
-    // // Factory
-    // template<typename T, int eq_offset, int... var_offsets>
-    // EIGEN_STRONG_INLINE Fill_Dense<T, eq_offset, var_offsets...> fill_dense(Eigen::Ref<T> J)
-    // {
-    //     return Fill_Dense<T, eq_offset, var_offsets...>(J);
-    // }
+        // We know that the jacobian is blockwise sparse, meaning that it's either zero
+        // for a given constraint / variable, or it's dense
+        // 
+        // We have the form
+        //         var1 | var2 | var3 | ... | varN
+        //  con1 |      |      |      |     |
+        //  con2 |      |      |      |     |
+        //  con3 |      |      |      |     |
+        //  con4 |      |      |      |     |
+        //  con5 |      |      |      |     |
+        //
+        //
+        // We take the dense Values vector of the sparse jacobian and reshape it into a 
+        // dense matrix of size nnz_var x var_len
+        // We then write into the row eq_offset. Note that eq_offset needs to refer to the 
+        // row in the compressed matrix
+        //
+        // OuterIndexPtr[var_offset] => Index into Values for the start of this column.
+        // nnz_var = OuterStarts[j+1]-OuterStarts[j] => Number of non-zero elements 
+        //
+        // 
 
+        using MatrixScalar = Eigen::Matrix<scalar_t, Eigen::Dynamic, Eigen::Dynamic>;
+        using Map_t = Eigen::Map<MatrixScalar, 0, Eigen::Stride<Eigen::Dynamic, 1>>;
+        using Stride_t = Eigen::Stride<Eigen::Dynamic, 1>;
 
-    // // Functor to copy rows of a jacobian into a larger jacobian matrix at the given var_offsets locations
-    // template<int eq_offset, int... var_offsets>
-    // struct Fill_Sparse
-    // {
-    //     template<typename D>
-    //     EIGEN_STRONG_INLINE int fill_var(Eigen::Ref<D> row, int iRow, 
-    //                                     int var_size,   // Column (variable) offset and size for J
-    //                                     int var_offset,
-    //                                     int offset // Initial column offset for row
-    //                                     )
-    //     {
-    //         for(int col=0; col<var_size; col++)
-    //            J.coeffRef(iRow, var_offset + col) = row(offset++);
-    //         return offset;
-    //     }    
+        // Copy Jacobian into output variables
+        for(int i=0; i<num_outputs; i++)
+        {
+            out(i + eq_offset) = _out[i].value();
+            Eigen::Ref<Eigen::Matrix<scalar_t, num_inputs, 1>> deriv = _out[i].derivatives();
 
-    //     template<typename D, int... var_sizes>
-    //     EIGEN_STRONG_INLINE void set_jacobian(Eigen::Ref<D> row, int iRow)
-    //     {
-    //         // Copy gradients into Jacobian matrix
-    //         int offset = 0;
-    //         (void)std::initializer_list<int>{ 
-    //             (
-    //                 offset = fill_var<D>(row, eq_offset + iRow, var_sizes, var_offsets, offset),
-    //                 0
-    //             )... 
-    //         };
-    //     }
-
-    //     Fill_Sparse(Eigen::SparseMatrix<scalar_t>& _J) : J(_J) {}
-    //     Eigen::SparseMatrix<scalar_t>& J;
-    // };
-    
-    // // Factory
-    // template<int eq_offset, int... var_offsets>
-    // EIGEN_STRONG_INLINE Fill_Sparse<eq_offset, var_offsets...> fill_sparse(Eigen::SparseMatrix<scalar_t>& J)
-    // {
-    //     return Fill_Sparse<eq_offset, var_offsets...>(J);
-    // }
-
-
-    // // Functor to copy rows of a jacobian into a sparse jacobian matrix formed by constraints_sparse_initialize
-    // // This functor only takes the value array of the sparse matrix and fills it in in the order defined in 
-    // // constraints_sparse_initialize (i.e., as ipopt requires)
-    // struct Fill_Sparse_Values
-    // {
-    //     template<typename D, int... var_sizes>
-    //     EIGEN_STRONG_INLINE void set_jacobian(Eigen::Ref<D> row, int iRow)
-    //     {
-    //         J.row(iRow) = row;
-    //     }
-
-    //     // Pass in a vector of length num_outpus * num_inputs where the derivative will be placed rowwise
-    //     Fill_Sparse_Values(Eigen::Ref<Eigen::Matrix<scalar_t, num_outputs*num_inputs, 1>> _J) : 
-    //         J(_J) {}
-    //     Eigen::Map<Eigen::Matrix<scalar_t, num_outputs, num_inputs>> J;
-    // };
-
-    // // Factory
-    // EIGEN_STRONG_INLINE Fill_Sparse_Values fill_sparse_values(Eigen::Ref<Eigen::Matrix<scalar_t, num_outputs*num_inputs, 1>> J)
-    // {
-    //     return Fill_Sparse_Values(J);
-    // }
-
-
+            // Copy gradients to Jacobian matrix
+            int offset = 0;
+            int nnz = 0;
+            scalar_t* data;
+            (void)std::initializer_list<int>{ 
+                (
+                    // We use map to produce a dense view into the constraint/variable block and then copy over the right
+                    nnz = jacobian.outerIndexPtr()[var_offsets[ind]+1] - jacobian.outerIndexPtr()[var_offsets[ind]],
+                    data = jacobian.valuePtr() + jacobian.outerIndexPtr()[var_offsets[ind]] + col_offsets[ind],
+                    Map_t(data, num_outputs, input_sizes, Stride_t(nnz, 1)).row(i) = deriv.template segment<input_sizes>(offset),
+                    offset += input_sizes,
+                    0
+                )... 
+            };
+        }
+    }
 
 private:
     EIGEN_STRONG_INLINE void seed_and_call(
@@ -425,21 +374,21 @@ private:
     }
 
     // Takes an array of offsets, and then calls seed_and_call with the args as offsets into the var vector
-    template<typename variable_t, typename out_t, int... ind>
+    template<typename variable_t, typename T, T... ind>
     EIGEN_STRONG_INLINE void seed_and_call_array(
-        const std::array<int, num_input_vars> var_offsets,  // Offsets into the variable where the start of each input is stored
-        const Eigen::MatrixBase<const variable_t>& var,
-        std::integer_sequence<int, ind...> int_seq,
+        const std::array<Eigen::Index, num_input_vars> var_offsets,  // Offsets into the variable where the start of each input is stored
+        const Eigen::MatrixBase<variable_t>& var,
+        std::integer_sequence<T, ind...> int_seq,
         Eigen::Ref<Eigen::Matrix<AD_scalar, num_outputs, 1>> out
         ) const noexcept
     {
-        seed_and_call(var.template segment<input_sizes>(var_offsets[ind])..., out);
+        seed_and_call(make_ad<input_sizes>(var.template segment<input_sizes>(var_offsets[ind]))..., out);
     }
 
     // Takes an array of offsets, and then calls our function with the args as offsets into the var vector
     template<typename variable_t, typename T, T... ind>
     EIGEN_STRONG_INLINE void call_array(
-        const std::array<int, num_input_vars> var_offsets,  // Offsets into the variable where the start of each input is stored
+        const std::array<Eigen::Index, num_input_vars> var_offsets,  // Offsets into the variable where the start of each input is stored
         const Eigen::MatrixBase<variable_t>& var,
         std::integer_sequence<T, ind...> int_seq,
         Eigen::Ref<Eigen::Matrix<scalar_t, num_outputs, 1>> out
@@ -501,31 +450,6 @@ void set_nonzero_blocks(Eigen::SparseMatrix<scalar_t>& J,
     J.setFromTriplets(trip.begin(), trip.end());
     J.makeCompressed();    
 }
-
-
-
-
-// // How to build a functor to a member function
-// template <typename Member, typename Obj> 
-// struct MemberFunctor
-// {
-//     Obj _obj;
-//     Member _member;
-//     MemberFunctor(Obj obj, Member member) : _obj(obj), _member(member) {};
-
-//     template<typename... T>
-//     EIGEN_STRONG_INLINE auto operator()(T&&... args) noexcept
-//     {
-//         return _member(_obj, std::forward<T>(args)...);
-//     }
-// };
-
-// template<typename Functor>
-// EIGEN_STRONG_INLINE auto get_functor(Functor f) noexcept
-// {
-//     return MemberFunctor<decltype(std::mem_fn(f)), Derived*> 
-//         (static_cast<Derived*>(this), std::mem_fn(f));
-// }
 
 
 
