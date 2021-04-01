@@ -29,20 +29,25 @@ template<typename scalar_t, typename Prob>
 class NLP_Ipopt: public TNLP, public Prob
 {
 public:
-	NLP_Ipopt() : jac_g(Prob::NUM_CON, Prob::NUM_VARS) {
-		this->constraints_sparse_initialize(jac_g);  // Compute sparsity structure of constraints
-	};
-
 	using typename Prob::variable_t;
 	using typename Prob::constraint_t;
 	using typename Prob::constraint_jacobian_t;
-	using typename Prob::cost_hessian_t;
-	using typename Prob::cost_t;
+	using typename Prob::obj_gradient_t;
+	using typename Prob::obj_hessian_t;
+	using typename Prob::obj_t;
 
 
 	using Prob::NUM_VARS;
 	using Prob::NUM_CON;
 	using Prob::nnz_constraints_jacobian;
+
+	variable_t x0;  // Initial iterate
+
+	NLP_Ipopt() : jac_g(Prob::NUM_CON, Prob::NUM_VARS) {
+		this->constraints_sparse_initialize(jac_g);  // Compute sparsity structure of constraints
+		for(int i=0; i<NUM_VARS; i++)
+			x0[i] = 0.0;
+	};
 
 	// Sparsity structure for the constraints
 	Eigen::SparseMatrix<scalar_t> jac_g;
@@ -77,11 +82,7 @@ public:
 		assert(m == NUM_CON);
 
 		this->variable_bounds(Eigen::Map<variable_t>(x_l), Eigen::Map<variable_t>(x_u));
-
-		// TODO: Set upper and lower constraint bounds
-		g_l[0] = 25;
-		g_u[0] = 2e19;  // == infinity
-		g_l[1] = g_u[1] = 40.0;  // Equality
+		this->constraint_bounds(Eigen::Map<constraint_t>(g_l), Eigen::Map<constraint_t>(g_u));
 
 		return true;	
 	}
@@ -102,10 +103,8 @@ public:
 		assert(init_z == false);  // Not sure what this is
 		assert(init_lambda == false);  // Not providing dual
 
-		x[0] = 1.0;
-		x[1] = 5.0;
-		x[2] = 5.0;
-		x[3] = 1.0;
+		for (int i=0; i<n; i++)
+			x[i] = x0[i];
 
 		return true;
 	}
@@ -117,10 +116,8 @@ public:
 		Number&       obj_value
 	)
 	{
-		assert(n == NUM_VARS);
-
-		obj_value = x[0] * x[3] * (x[0] + x[1] + x[2]) + x[2];
-
+		assert(n == NUM_VARS);		
+		obj_value = this->objective(Eigen::Map<const variable_t>(x));
 		return true;
 	}
 
@@ -132,12 +129,7 @@ public:
 	)
 	{
 		assert(n == NUM_VARS);
-
-		grad_f[0] = x[0] * x[3] + x[3] * (x[0] + x[1] + x[2]);
-		grad_f[1] = x[0] * x[3];
-		grad_f[2] = x[0] * x[3] + 1;
-		grad_f[3] = x[0] * (x[0] + x[1] + x[2]);
-
+		this->objective(Eigen::Map<const variable_t>(x), Eigen::Map<obj_gradient_t>(grad_f));
 		return true;
 	}
 
@@ -368,19 +360,8 @@ private:
 
 int main(void)
 {
-	Eigen::Matrix<double, 10, 1> x;
-	x << 1,2,3,4,5,6,7,8,9,10;
-	x.template segment<3>(3) = Eigen::Matrix<double, 3, 1> {1,2,3};
-
-	x.array() = 6.66;
-
-	x.template segment<3>(6).array() = 3.4;
-
-	std::cout << "x = " << x.transpose() << std::endl;
-
-
-//    std::cout << "Testing" << std::endl;
-   SmartPtr<TNLP> mynlp = new NLP_Ipopt<double, LOpt<double>>();
+	using myNLP = NLP_Ipopt<double, LOpt<double>>;
+   SmartPtr<myNLP> mynlp = new myNLP();
    Ipopt::SmartPtr<Ipopt::IpoptApplication> app = new Ipopt::IpoptApplication();
 
    app->Options()->SetNumericValue("tol", 1e-7);
@@ -395,6 +376,12 @@ int main(void)
       return (int) status;
    }
 
+	mynlp->x0[0] = 1.0;
+	mynlp->x0[1] = 5.0;
+	mynlp->x0[2] = 5.0;
+	mynlp->x0[3] = 1.0;
+
+
    // Ask Ipopt to solve the problem
    status = app->OptimizeTNLP(mynlp);
 
@@ -406,6 +393,7 @@ int main(void)
    {
       std::cout << std::endl << std::endl << "*** The problem FAILED!" << std::endl;
    }
+
 
    return (int) status;
 }

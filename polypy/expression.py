@@ -20,11 +20,14 @@ import itertools
 # - drop all variables from the generation that aren't used some constraint
 # - basic nonlinear functions (sin, cos, division, etc)
 # - collect dependencies into different print buffers so they can be split out in order
+# - add a __le__ and __ge__ to generate inequalties
+# - allow setting of initial dual points
 
 # Optimizations
 # - look for repeated expressions and buffer them into temporary variables
 # - reuse temporary variables and allocate at the top of the function
 # - switch to a delegate formulation
+# - keep a set of generated constants to re-use, rather than generating more (e.g., for lower bounds from numpy, etc)
 
 # Checks
 # - Confirm that functions only use the variables in their argument list
@@ -264,6 +267,7 @@ class Expression:
         # return hash(self.name)
         return hash(id(self))
 
+    @convert
     def __eq__(self, other):
         # Return a constraint that imposes equality between the two arguments
         # Note: This constraint will evaluate to True if equality can be determined
@@ -674,6 +678,7 @@ class Matrix(AtomicExpression):
 
     def generate_initialization(self, p):
         # Initialize the variable if initial is specified
+        print(f"initializing {self}")
         M = self.initial
         if np.all(M == np.ravel(M)[0]):  # All values are the same
             p(f"{self.name}.array() = {M[0][0]};")
@@ -708,7 +713,7 @@ class ConstMatrix(Matrix):
             M = np.array([M])
         if M.ndim == 1:
             M = M.reshape(len(M), 1)  # Convert to column vector
-        super().__init__(M.shape, name)
+        super().__init__(M.shape, name=name, initial=M)
         self.M = M
         self.shape = M.shape
 
@@ -716,15 +721,18 @@ class ConstMatrix(Matrix):
     def isZero(self):
         return np.all((self.M == 0))
 
-    # def generate_declaration(self, p):
-    #     # Return string to declare this variable / constant
-    #     ret = f"using M_{self.name} = Matrix<scalar_t, {self.shape[0]}, {self.shape[1]}>;\n"
-    #     ret += f"const M_{self.name} {self.name} = (M_{self.name}() << \n"
-    #     rows = []
-    #     for row in self.M:
-    #         rows.append("\t" + ", ".join(str(x) for x in row))
-    #     ret += ",\n".join(rows) + ").finished();"
-    #     p(ret)
+    def generate_declaration(self, p):
+        # Return string to declare this constant
+        ret = f"using M_{self.name} = Matrix<scalar_t, {self.shape[0]}, {self.shape[1]}>;\n"
+        ret += f"const M_{self.name} {self.name} = (M_{self.name}() << "
+        rows = []
+        for row in self.M:
+            rows.append(", ".join(str(x) for x in row))
+        ret += ", ".join(rows) + ").finished();"
+        p(ret)
+
+    def generate_initialization(self, p):
+        pass  # No initialization in the constructor - it's in the declaration
 
     def _is_equal(self, other):
         return np.array_equiv(self.M, other.M)
@@ -735,14 +743,15 @@ class ConstMatrix(Matrix):
             return f"Matrix<{p.number_type}, {M.shape[0]}, {M.shape[1]}>::Constant({M[0][0]})"
         # if self.shape[0] * self.shape[1] > 30:
         #     # Buffer large matrices for re-use
+        # print(f"Adding dependency for {self}")
         p.add_dependency(self, 'ConstantMatrix')  # Register this matrix for generation
         return str(self)
-        # else:
-        #     rows = []
-        #     for row in self.M:
-        #         rows.append(", ".join(str(x) for x in row))
-        #     value = ", ".join(rows)
-        #     return f"Matrix<scalar_t, {self.shape[0]}, {self.shape[1]}> {{{value}}}"
+
+    def generate_scalar(self, p, *args):
+        """Generate a scalar assignment - x.array() = value"""
+        if np.all(self.M == np.ravel(self.M)[0]):
+            return str(self.M[0][0])
+        raise AttributeError(f"Elements of ConstMatrix {self} are not all the same")
 
 
     # @convert
@@ -861,6 +870,11 @@ class Scalar(AtomicExpression):
         p.add_dependency(self, 'VariableScalar')  # Register this matrix for generation
         return super()._generate_eigen(p, *args)
 
+    def generate_scalar(self, p, *args):
+        """Generate a scalar assignment - x.array() = value"""
+        p.add_dependency(self, 'VariableScalar')  # Register this matrix for generation
+        return str(self)
+
 
 class ConstScalar(Scalar):
     """A scalar value. Treated as a constant."""
@@ -879,6 +893,10 @@ class ConstScalar(Scalar):
     #     return str(self.value)
 
     def _generate_eigen(self, p, *args):
+        return str(self.value)
+
+    def generate_scalar(self, p, *args):
+        """Generate a scalar assignment - x.array() = value"""
         return str(self.value)
 
     # def generate_declaration(self, p):

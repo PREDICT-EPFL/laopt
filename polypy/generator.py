@@ -247,7 +247,6 @@ class Generator:
         jacobians_to_initialize = set()
         while True:
             to_generate = p.dependencies - generated
-            print(to_generate)
             if not to_generate:
                 break
             for dep in to_generate:
@@ -289,11 +288,8 @@ class Generator:
         with p.function(): 
             for param in generated:
                 try:
-                    print(f"Trying {param} of type {type(param)}")
                     param.generate_initialization(p)
-                    print("success")
                 except AttributeError:
-                    print("fail")
                     pass
 
         # return p

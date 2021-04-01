@@ -13,7 +13,7 @@ from polypy.expression import Variable, hstack
 from polypy.expression import Expression, Identity, ConstScalar, Matrix, Scalar, ConstMatrix
 from polypy.function import Function
 from polypy.generator import preprint, Generator
-from polypy.nlp import NLP
+from polypy.nlp import NLP, Inequality
 
 from collections import defaultdict
 

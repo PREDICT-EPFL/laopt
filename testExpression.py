@@ -81,7 +81,7 @@ uss = opt.variable("uss", m)
 xx = Matrix((n, 1), 'xx')
 
 C = np.array([[1, 2], [3, 4]])
-c = np.array([[1], [2]])
+c = ConstMatrix(np.array([[1], [2]]), 'c')
 
 for i in range(N - 2):
     opt.add(rk4(x[i], u[i]) == x[i+1])
@@ -90,9 +90,6 @@ for i in range(N - 2):
 opt.add(xx == x[0])
 opt.add(rk4(xss, uss) == xss)
 opt.add(np.zeros((2, 1)) == sum([rk4(x[i], u[i]) for i in range(N - 1)], np.array([0, 0]).T))
-
-print(opt.equalities[0].original_expr)
-
 
 with Generator(filename="examples/myproblem.hpp") as gen:
     with gen.generate_class('LOpt') as p:
