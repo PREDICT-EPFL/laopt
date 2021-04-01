@@ -116,8 +116,6 @@ class NLP:
         #  lb, ub are list-like objects
         self.inequalities = []
 
-        self.variableBnds = []  # (lb, ub)
-
         self.variables = []  # List of variables
 
         self.parameters = []  # List of parameters
@@ -126,22 +124,22 @@ class NLP:
 
     def freeze(self):
         # Freeze all expressions
-        for x in self.equalities + self.inequalities + self.variableBnds \
+        for x in self.equalities + self.inequalities \
                + self.variables + self.parameters + self.aux_functions:
             x.state = polypy.Expression.State.Frozen
 
     def unfreeze(self):
         # Freeze all expressions
-        for x in self.equalities + self.inequalities + self.variableBnds \
+        for x in self.equalities + self.inequalities \
                + self.variables + self.parameters + self.aux_functions:
             x.state = polypy.Expression.State.Frozen
 
-    def variable(self, name, length, number=None):
+    def variable(self, name, length, number=None, **kwargs):
         if number:
-            x = [Variable(name + str(i), length) for i in range(number)]
+            x = [Variable(name + str(i), length, **kwargs) for i in range(number)]
             self.variables += x
         else:
-            x = Variable(name, length)
+            x = Variable(name, length, **kwargs)
             self.variables.append(x)
         return x
 
@@ -187,99 +185,86 @@ class NLP:
     def functions(self):
         # Return all functions that need to be generated for this nlp
         funcs = set(con.function for con in self.constraints)
-        dependents = []
-        for func in funcs:
-            dependents += func.functions
-        return funcs.union(dependents).union(self.aux_functions)
+        return funcs.union(self.aux_functions)  # Dependencies will be discovered during generation
+        # dependents = []
+        # for func in funcs:
+        #     dependents += func.functions
+        # return funcs.union(dependents).union(self.aux_functions)
 
-    def generate(self, filename="gen.hpp", classname="LOpt"):
+    def generate(self, p): #filename="gen.hpp", classname="LOpt"):
         # Write out a class to evaluate this nlp
 
         # Freeze everything to make it easier to do set operations
         self.freeze()
 
-        g = Generator()
-        p = g.p
         for f in self.functions():
-            g.add_function(f)
-        g.generate_preamble()
+            p.add_dependency(f, "Function")
 
-        with g.generate_class(classname):
-            p("// Define NLP sizes")
-            p("enum")
-            with g.function_body(post_string=";"):
-                p(f"NUM_VARS  = {sum(len(var) for var in self.variables)},")
-                p(f"NUM_CON   = {sum(len(eq) for eq in self.constraints)},")
-                # p(f"NUM_INEQ  = {sum(len(eq) for eq in self.inequalities)},")
-                # p(f"NUM_CON   = NUM_EQ + NUM_INEQ,")
-                # p(f"NUM_BOX   = 0,")
-                # p(f"DUAL_SIZE = NUM_EQ + NUM_INEQ + NUM_BOX,")
-                p(f"nnz_constraints_jacobian = {self.nnz_constraints_jacobian},")
-            p("")
+        # with g.generate_class(classname):
+        p("// Define NLP sizes")
+        p("enum")
+        with p.function(post_string=";"):
+            p(f"NUM_VARS  = {sum(len(var) for var in self.variables)},")
+            p(f"NUM_CON   = {sum(len(eq) for eq in self.constraints)},")
+            # p(f"NUM_INEQ  = {sum(len(eq) for eq in self.inequalities)},")
+            # p(f"NUM_CON   = NUM_EQ + NUM_INEQ,")
+            # p(f"NUM_BOX   = 0,")
+            # p(f"DUAL_SIZE = NUM_EQ + NUM_INEQ + NUM_BOX,")
+            p(f"nnz_constraints_jacobian = {self.nnz_constraints_jacobian},")
+        p("")
 
-            p("// NLP variable types")
-            p(f"using variable_t   = Eigen::Matrix<scalar_t, NUM_VARS, 1>;")
-            p(f"using constraint_t = Eigen::Matrix<scalar_t, NUM_CON, 1>;")
+        p("// NLP variable types")
+        p(f"using variable_t   = Matrix<scalar_t, NUM_VARS, 1>;")
+        p(f"using constraint_t = Matrix<scalar_t, NUM_CON, 1>;")
 
-            # For now - we're assuming dense jacobians and hessian
-            p(f"using constraint_jacobian_t = Eigen::Matrix<scalar_t, NUM_CON,  NUM_VARS>;")
-            p(f"using cost_hessian_t        = Eigen::Matrix<scalar_t, NUM_VARS, NUM_VARS>;")
-            p(f"using cost_t                = scalar_t;")
-            # p(f"using dual_t       = Eigen::Matrix<scalar_t, DUAL_SIZE, 1>;")
-            p("")
+        # For now - we're assuming dense jacobians and hessian
+        p(f"using constraint_jacobian_t = Matrix<scalar_t, NUM_CON,  NUM_VARS>;")
+        p(f"using cost_hessian_t        = Matrix<scalar_t, NUM_VARS, NUM_VARS>;")
+        p(f"using cost_t                = scalar_t;")
+        # p(f"using dual_t       = Matrix<scalar_t, DUAL_SIZE, 1>;")
+        p("")
 
-            p("// Define optimization variables (offsets in var)")
-            offset = 0
-            for var in self.variables:
-                setattr(var, 'offset', offset)
-                p(f"DECLARE_VAR({var}, {var.offset}, {len(var)})")
-                offset += len(var)
-            p("")
+        p("// Define optimization variables (offsets in var)")
+        offset = 0
+        for var in self.variables:
+            setattr(var, 'offset', offset)
+            p(f"DECLARE_VAR({var}, {var.offset}, {len(var)})")
+            offset += len(var)
+        p("")
 
-            p("// Define constraints (offset functions)")
-            offset = 0
-            for con in self.constraints:
-                setattr(con, 'offset', offset)
-                p(f"DECLARE_CONSTRAINT({con.name}, {con.offset}, {len(con)})")
-                offset += len(con)
-            p("")
+        p("// Define constraints (offset functions)")
+        offset = 0
+        for con in self.constraints:
+            setattr(con, 'offset', offset)
+            p(f"DECLARE_CONSTRAINT({con.name}, {con.offset}, {len(con)})")
+            offset += len(con)
+        p("")
 
-            self._generate_constraints(p)
-            p("")
-
-            g.generate_functions()
-
-
-        g.write_file(filename)
+        self._generate_constraints(p)
+        p("")
+        self._generate_bounds(p)
 
         # Freeze everything to make it easier to do set operations
         self.unfreeze()
 
         return p
 
-    # def _generate_equalities(self, p):
-    #     p("EIGEN_STRONG_INLINE void constraints(const Eigen::Ref<const variable_t>& var, ")
-    #     p("                                     Eigen::Ref<constraint_t> constraints) noexcept")
-    #     p("{")
-    #     with p:
-    #         for con in self.constraints:
-    #             p(f"{con.function.name}({{{', '.join([f'{arg.name}' for arg in con.args])}}}, {con.name}, var, constraints);")
-    #             # p(f"{con.function.name}({', '.join([f'{arg.name}(var)' for arg in con.args])}, {con.name}(constraints));")
-    #     p("}")
+    def _generate_bounds(self, p):
+        # Generate variable bounds
 
-    # def _generate_equalities_linearized(self, p):
-    #     p("EIGEN_STRONG_INLINE void constraints(const Eigen::Ref<const variable_t>& var,")
-    #     p("                                     Eigen::Ref<constraint_t> constraints,")
-    #     p("                                     Eigen::Ref<constraint_jacobian_t> jacobian) noexcept")
-    #     p("{")
-    #     with p:
-    #         for con in self.constraints:
-    #             p(f"{con.function.name}({{{', '.join([f'{arg.name}' for arg in con.args])}}}, {con.name}, var, constraints, jacobian);")
+        p("// Evaluates the upper and lower bounds for the optimization variable into x_l and x_u")
+        p("// Can access the resulting bounds with the macros var_get(x_l), where var is the variable")
+        p("EIGEN_STRONG_INLINE void variable_bounds(Ref<variable_t> x_l, ")
+        p("                                         Ref<variable_t> x_u) noexcept")
+        with p.function():
+            p("using T = scalar_t;")  # All function calls will not use derivatives
+            for var in self.variables:
+                # print(f"Generating {var}")
+                # print(f"\tlb = {var.lb}")
+                p(f"{str(var)}_get(x_l) = {var.lb.generate(p)};")
+                # print(f"\tub = {var.ub}")
+                p(f"{str(var)}_get(x_u) = {var.ub.generate(p)};")
 
-    #             # offsets = ", ".join([f"{var.name}" for var in con.args])
-    #             # offsets = f"{con.function.name}.template fill_dense<decltype(jacobian), {con.name}, {offsets}>(jacobian));"
-    #             # p(f"{con.function.name}({', '.join([f'{arg.name}(var)' for arg in con.args])}, {con.name}(constraints), " + offsets)
-    #     p("}")
 
     def _generate_constraints(self, p):       
         # Build a dictionary mapping variables to their place in the global variable
@@ -344,7 +329,7 @@ class NLP:
 
         # Generate function to return the sparsity structure
         #
-        p("EIGEN_STRONG_INLINE void constraints_sparse_initialize(Eigen::SparseMatrix<scalar_t>& J)")
+        p("EIGEN_STRONG_INLINE void constraints_sparse_initialize(SparseMatrix<scalar_t>& J)")
         p("{")
         with p:
             p("set_nonzero_blocks<scalar_t>(J, {BlockInfo")
@@ -355,22 +340,22 @@ class NLP:
         p("}\n")
 
         p("// Forwarding calls for dense and sparse jacobians. Will be moved to parent class later.")
-        p("EIGEN_STRONG_INLINE void constraints(const Eigen::Ref<const variable_t>& var, ")
-        p("                                     Eigen::Ref<constraint_t> constraints) noexcept")
+        p("EIGEN_STRONG_INLINE void constraints(const Ref<const variable_t>& var, ")
+        p("                                     Ref<constraint_t> constraints) noexcept")
         p("{this->template constraints_impl<int>(var, constraints, 0);}")
-        p("EIGEN_STRONG_INLINE void constraints(const Eigen::Ref<const variable_t>& var,")
-        p("                                     Eigen::Ref<constraint_t> constraints,")
-        p("                                     Eigen::Ref<constraint_jacobian_t> jacobian) noexcept")
-        p("{this->template constraints_impl<Eigen::Ref<constraint_jacobian_t>>(var, constraints, jacobian);}")
-        p("EIGEN_STRONG_INLINE void constraints(const Eigen::Ref<const variable_t>& var, ")
-        p("                                     Eigen::Ref<constraint_t> constraints, ")
-        p("                                     Eigen::Ref<Eigen::SparseMatrix<scalar_t>> jacobian) noexcept")
-        p("{this->template constraints_impl<Eigen::Ref<Eigen::SparseMatrix<scalar_t>>>(var, constraints, jacobian);}")
+        p("EIGEN_STRONG_INLINE void constraints(const Ref<const variable_t>& var,")
+        p("                                     Ref<constraint_t> constraints,")
+        p("                                     Ref<constraint_jacobian_t> jacobian) noexcept")
+        p("{this->template constraints_impl<Ref<constraint_jacobian_t>>(var, constraints, jacobian);}")
+        p("EIGEN_STRONG_INLINE void constraints(const Ref<const variable_t>& var, ")
+        p("                                     Ref<constraint_t> constraints, ")
+        p("                                     Ref<SparseMatrix<scalar_t>> jacobian) noexcept")
+        p("{this->template constraints_impl<Ref<SparseMatrix<scalar_t>>>(var, constraints, jacobian);}")
         p("")
 
         p("template<typename jacobian_t>")
-        p("EIGEN_STRONG_INLINE void constraints_impl(const Eigen::Ref<const variable_t>& var,")
-        p("                                          Eigen::Ref<constraint_t> constraints,")
+        p("EIGEN_STRONG_INLINE void constraints_impl(const Ref<const variable_t>& var,")
+        p("                                          Ref<constraint_t> constraints,")
         p("                                          jacobian_t jacobian) noexcept")
         p("{")
         with p:
@@ -383,6 +368,9 @@ class NLP:
 
                 p(f"{con.function.name}({{{', '.join([f'{arg.name}' for arg in con.args])}}}, {{{', '.join(str(i) for i in col_offset)}}}, {con.name}, var, constraints, jacobian);")
         p("}")
+
+
+
 
 
 # class Ipopt:

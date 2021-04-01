@@ -31,31 +31,27 @@ class Function:
     def num_inputs(self):
         return sum(len(x) for x in self.inputs)
 
-    def generate(self, p=preprint()):
+    def generate_declaration(self, p, generate_jacobian=True):
         # Generate an eigen function to evaluate this Function
         # Assumptions: 
         #  - All parameters and constants have already been defined in the containing class
         #  - All functions that this function calls exist
 
-        p = FunctionGenerator(p)
+        # print("ABOUT TO CREATE A FUNCTIONGENERATOR")
+        # p = FunctionGenerator(p)
+        # print("CAN'T BE HERE")
 
         # Produce function signature
         p(f"template<typename T>")
         p(f"EIGEN_STRONG_INLINE void {self.wrapped_name}(")
         with p:
             for x in self.inputs:
-                p(f"const Eigen::Ref<const Eigen::Matrix<T, {x.shape[0]}, {x.shape[1]}>>& {x}, ")
-            p(f"Eigen::Ref<Eigen::Matrix<T, {self.output.shape[0]}, {self.output.shape[1]}>> {self.output}) const noexcept")
-        p("{")
-
+                p(f"const Ref<const Matrix<T, {x.shape[0]}, {x.shape[1]}>>& {x}, ")
+            p(f"Ref<Matrix<T, {self.output.shape[0]}, {self.output.shape[1]}>> {self.output}) const noexcept")
         # Evaluate expression
-        # TODO: Change this function to accept a normal preprint, and then wrap it with a FunctionGenerator here
-        with p:
+        self.expression.state = Expression.State.Frozen
+        with p.function(number_type="T"):
             p(f"{self.output} = {self.expression.generate(p)};")
-
-        p("}")
-
-        return p
 
     def generate_jacobian(self, classname, p=preprint()):
         # Wrapper for Jacobian call
@@ -113,36 +109,36 @@ class Function:
     def __hash__(self):
         return hash(id(self))
 
-class FunctionGenerator:
+# class FunctionGenerator:
 
-    def __init__(self, p=preprint()):
-        self.evaluations = []  # List of sub-expressions (functions) that have already been evaluated
-        self.constants = []
-        self.p = p  # PrePrint object
+#     def __init__(self, p=preprint()):
+#         self.evaluations = []  # List of sub-expressions (functions) that have already been evaluated
+#         # self.constants = []
+#         self.p = p  # PrePrint object
 
-    def __enter__(self):
-        return self.p.__enter__()
+#     def __enter__(self):
+#         return self.p.__enter__()
 
-    def __exit__(self, exc_type, exc_value, tb):
-        self.p.__exit__(exc_type, exc_value, tb)
-        return True
+#     def __exit__(self, exc_type, exc_value, tb):
+#         self.p.__exit__(exc_type, exc_value, tb)
+#         return True
 
-    def __call__(self, *args, **kwargs):
-        return self.p(*args, **kwargs)
+#     def __call__(self, *args, **kwargs):
+#         return self.p(*args, **kwargs)
 
-    def add(self, expr, name):
-        # Add an expression 
-        if self.evaluations:
-            evaled, _ = zip(*(self.evaluations))
-            assert expr not in evaled, ValueError("Adding an evaluation that has already been evaluated... shouldn't happen")
-        self.evaluations.append((expr, name))
+#     def add(self, expr, name):
+#         # Add an expression 
+#         if self.evaluations:
+#             evaled, _ = zip(*(self.evaluations))
+#             assert expr not in evaled, ValueError("Adding an evaluation that has already been evaluated... shouldn't happen")
+#         self.evaluations.append((expr, name))
 
-    def get(self, expr):
-        # Return name of expression if it's been previously eavluated, else None
-        if self.evaluations:
-            name = next((name for e, name in self.evaluations if expr == e), None)
-            return name
-        return None
+#     def get(self, expr):
+#         # Return name of expression if it's been previously eavluated, else None
+#         if self.evaluations:
+#             name = next((name for e, name in self.evaluations if expr == e), None)
+#             return name
+#         return None
 
-    # def __call__(self, *args):
-    #     return self.p(*args)
+#     # def __call__(self, *args):
+#     #     return self.p(*args)

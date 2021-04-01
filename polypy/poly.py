@@ -58,6 +58,7 @@ class Expression:
             try:
                 vars = vars.union(a.vars)
             except AttributeError:
+                print("HERE IN ATTRIBUTERROR")
                 pass
         return sorted(vars, key=str)
 

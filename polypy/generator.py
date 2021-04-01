@@ -1,12 +1,32 @@
+from enum import Enum, auto
+import polypy
 from polypy.poly import VariableSet
 import io
 from string import ascii_letters, digits
+from collections import defaultdict
+from copy import copy
+from contextlib import contextmanager
+
 
 class PrePrint:
+
+    # List of things that we want to generate
+    class GenTypes(Enum):
+        Function = auto() 
+        ConstantMatrix = auto()
+        ConstantScalar = auto()
+        VariableMatrix = auto()
+        VariableScalar = auto()
+
+
     """Overload print by adding a prefix to every line"""
     def __init__(self, pre):
         self.pre = pre
         self.output = io.StringIO()
+        self.dependencies = set()
+        self.evaluations = []
+
+        self.number_type = "scalar_t"  # Used to generate eigen matrices. Are they templated types, or scalar_t?
 
     def __enter__(self):
         self.pre = self.pre + "\t"
@@ -15,7 +35,19 @@ class PrePrint:
     def __exit__(self, exc_type, exc_value, tb):
         if self.pre is not None:
             self.pre = self.pre[1:]
-        return True
+        # return True
+
+    @contextmanager
+    def function(self, post_string="", number_type="scalar_t"):
+        self.__call__("{")
+        current_type = self.number_type
+        self.number_type = number_type
+        try:
+            with self:
+                yield self
+        finally:
+            self.number_type = current_type
+            self.__call__("}" + post_string)
 
     def __call__(self, *args, **kwargs):
         """My custom print() op."""
@@ -26,6 +58,36 @@ class PrePrint:
     def __str__(self):
         # Dump our current output to a string
         return self.output.getvalue()
+
+    def add_dependency(self, dependency, dependencyType):
+        # Register the item as needing generation, 
+        # or return the generated item if its already been registered
+        self.dependencies.add(dependency)
+        # assert dependencyType in PrePrint.GenTypes._member_names_, f"Adding dependency for unknown type {dependencyType}"
+        # self.dependencies.add((dependencyType, dependency))
+        # dependencies = self.dependencies[dependencyType]
+        # dependencies.add(dependency)
+        # self.dependencies[dependencyType] = dependencies
+
+    # add and get are there for the reuse of function calls. If in a single expression a call to the same
+    # function with the same arguments is made multiple times, then get will just return the solution of 
+    # the previous call.
+    # Note that if the same PrePrint object is used to generate multiple functions and the previous call 
+    # goes out of scope, we may have a problem here...
+    def add(self, expr, name):
+        # Add an expression 
+        if self.evaluations:
+            evaled, _ = zip(*(self.evaluations))
+            assert expr not in evaled, ValueError("Adding an evaluation that has already been evaluated... shouldn't happen")
+        self.evaluations.append((expr, name))
+
+    def get(self, expr):
+        # Return name of expression if it's been previously eavluated, else None
+        if self.evaluations:
+            name = next((name for e, name in self.evaluations if expr == e), None)
+            return name
+        return None
+
 
 def preprint(pre=""):
     """Factory to generate a PrePrint object"""
@@ -56,12 +118,22 @@ def print_buffer(op):
 class Generator:
     # Generate a collection of functions in a class
 
-    def __init__(self):
+    def __init__(self, filename="gen.hpp"):
         self._functions = []
         self.data = []  # Constants (matrices and/or scalars)
         self.variables = []  # Parameters (matrices and/or scalars)
 
+        self.filename = filename
+
         self.p = preprint()  # String buffer with indentation support
+        self.generate_preamble()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, tb):
+        # Write out the function
+        self.write_file(filename=self.filename)
 
     def add_function(self, function):
         self._functions.append(function)
@@ -92,30 +164,43 @@ class Generator:
         p('')
         p('#include "polygen_helper.hpp"')  # Generates Jacobians
         p('')
+        p('using namespace Eigen;')
+        p('')
 
-    @print_buffer
-    def function_body(self, p=None, post_string=""):
+    # @print_buffer
+    # def function_body(self, p=None, post_string=""):
 
-        class Body:
-            def __enter__(self):
-                p('{')
-                p.__enter__()
-                return self
+    #     class Body:
+    #         def __enter__(self):
+    #             p('{')
+    #             p.__enter__()
+    #             return self
 
-            def __exit__(self, exc_type, exc_value, tb):
-                p.__exit__(exc_type, exc_value, tb)
-                p('}' + post_string)
-                p("")
-                return True
+    #         def __exit__(self, exc_type, exc_value, tb):
+    #             p.__exit__(exc_type, exc_value, tb)
+    #             p('}' + post_string)
+    #             p("")
 
-        return Body()
+    #     return Body()
 
-    @print_buffer
-    def generate_class(self, classname="LOpt", p=None):
+    @contextmanager
+    def generate_class(self, classname="LOpt"):
         self.classname = classname
-        p('template<typename scalar_t>')
-        p(f'struct {self.classname}')
-        return self.function_body(p=p, post_string=";")
+        self.p('template<typename scalar_t>')
+        self.p(f'struct {self.classname}')
+        self.p("{")
+        p = PrePrint("")  # Create new buffer for this class
+        try:
+            with p:
+                yield p  # Get user input on what they want in the class
+        finally:
+            with p:
+                # Generate any dependencies that have come up for this class
+                self.generate_dependencies(p)
+            self.p(p)
+            self.p("};")
+
+        # return self.function_body(p=self.p, post_string=";")
 
         # class OpenClass:
         #     def __init__(self, p, classname="LOpt"):
@@ -154,39 +239,64 @@ class Generator:
     #     p('};')
     #     return p
 
-    @print_buffer
-    def generate_functions(self, p=None):
-        if self.parameters:
-            p("// Parameters")
-            for param in self.parameters:
-                p(param.generate_declaration())
-            p("")
+    # @print_buffer
+    def generate_dependencies(self, p):
+        """Recursively generate all dependencies that have been added via add_dependency"""
 
-        print(f"CONSTANT MATRICES = {self.constantMatrices}")
-        if self.constantMatrices:
-            p("// Constant matrices")
-            for const in self.constantMatrices:
-                p(const.generate_declaration())
-            p("")
+        generated = set()  # Set of things that have been generated
+        jacobians_to_initialize = set()
+        while True:
+            to_generate = p.dependencies - generated
+            print(to_generate)
+            if not to_generate:
+                break
+            for dep in to_generate:
+                p.evaluations = []  # Reuse function evaluations locally
+                dep.generate_declaration(p)
+                try:
+                    dep.generate_jacobian(self.classname, p)
+                    jacobians_to_initialize.add(dep)
+                except AttributeError:
+                    pass
 
-        for func in self.functions:
-            func.generate(p)
-            func.generate_jacobian(self.classname, p)
-            p("")
+                p("")
+                generated.add(dep)
+
+
+    # if self.parameters:
+        #     p("// Parameters")
+        #     for param in self.parameters:
+        #         p(param.generate_declaration())
+        #     p("")
+
+        # # print(f"CONSTANT MATRICES = {self.constantMatrices}")
+        # if self.constantMatrices:
+        #     p("// Constant matrices")
+        #     for const in self.constantMatrices:
+        #         p(const.generate_declaration())
+        #     p("")
+
+        # for func in self.functions:
+        #     func.generate(p)
+        #     func.generate_jacobian(self.classname, p)
+        #     p("")
 
         # Build the constructor
         p(f"{self.classname}() :")
         with p:
             # Initialize jacobian objects
-            p(",\n".join(f"{func.name}(this)" for func in self.functions))
-        p("{")
-        with p:
-            for param in self.parameters:
-                init = param.generate_initialization()
-                p(init) if init else ""
-        p("}")
+            p(",\n".join(f"{func.name}(this)" for func in jacobians_to_initialize))
+        with p.function(): 
+            for param in generated:
+                try:
+                    print(f"Trying {param} of type {type(param)}")
+                    param.generate_initialization(p)
+                    print("success")
+                except AttributeError:
+                    print("fail")
+                    pass
 
-        return p
+        # return p
 
     def write_file(self, filename="gen.hpp"):
         print(f"Writing to file {filename}")

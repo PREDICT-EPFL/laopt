@@ -12,14 +12,26 @@
 #include "IpTNLP.hpp"
 
 using namespace Ipopt;
-// using namespace Eigen;
+using namespace Eigen;
+
+/*
+TODO:
+- variable bounds
+- bounds info
+
+- cost evaluation, jacobian and hessian
+- get starting point
+- finalize solution
+*/
 
 
 template<typename scalar_t, typename Prob>
 class NLP_Ipopt: public TNLP, public Prob
 {
 public:
-	NLP_Ipopt() {};
+	NLP_Ipopt() : jac_g(Prob::NUM_CON, Prob::NUM_VARS) {
+		this->constraints_sparse_initialize(jac_g);  // Compute sparsity structure of constraints
+	};
 
 	using typename Prob::variable_t;
 	using typename Prob::constraint_t;
@@ -32,13 +44,8 @@ public:
 	using Prob::NUM_CON;
 	using Prob::nnz_constraints_jacobian;
 
-
-	// using LOpt<scalar_t>::constraint_t;
-	// using LOpt<scalar_t>::variable_t;
-
-	// using variable_t    = Eigen::Matrix<scalar_t, NUM_VARS, 1>;
-	// using constraint_t = Eigen::Matrix<scalar_t, NUM_CON, 1>;
-
+	// Sparsity structure for the constraints
+	Eigen::SparseMatrix<scalar_t> jac_g;
 
 	bool get_nlp_info(
 		Ipopt::Index&          n,
@@ -69,15 +76,7 @@ public:
 		assert(n == NUM_VARS);
 		assert(m == NUM_CON);
 
-		// TODO: Compute upper and lower variable bounds
-		for( Ipopt::Index i = 0; i < 4; i++ )
-		{
-			x_l[i] = 1.0;
-		}
-		for( Ipopt::Index i = 0; i < 4; i++ )
-		{
-			x_u[i] = 5.0;
-		}
+		this->variable_bounds(Eigen::Map<variable_t>(x_l), Eigen::Map<variable_t>(x_u));
 
 		// TODO: Set upper and lower constraint bounds
 		g_l[0] = 25;
@@ -180,9 +179,7 @@ public:
 
 		if( values == NULL )
 		{
-			Eigen::SparseMatrix<scalar_t> jac_g(Prob::NUM_CON, Prob::NUM_VARS);
-			this->constraints_sparse_initialize(jac_g);
-
+			// Copy the pre-computed jacobian structure into the Ipopt variables
 			int ind = 0;
 		    for (int k=0; k < jac_g.outerSize(); ++k)
 		    {
@@ -196,9 +193,13 @@ public:
 		else
 		{
 			Eigen::Map<const variable_t> var(x);
+
+			// Map the Ipopt values vectors into our pre-computed sparse matrix structure
+			Eigen::Map<Eigen::SparseMatrix<scalar_t>> J(jac_g.rows(), jac_g.rows(), jac_g.nonZeros(), 
+													    jac_g.outerIndexPtr(), jac_g.innerIndexPtr(),
+													    values);
 			constraint_t tmp;
-			Eigen::Map<Eigen::Matrix<scalar_t, nnz_constraints_jacobian, 1>> J(values);
-			this->constraints_sparse_jacobian_values(var, tmp, J); 
+			this->constraints(var, tmp, J); 
 		}
 
 		return true;
@@ -364,242 +365,48 @@ private:
 };
 
 
-// template<int... x>
-// struct Len {};
-
-// template<template <typename...> class Var_Lengths, template <typename...> class Var_Lengths>
-// struct Jacobian_Setter
-// {
-// 	// const std::initializer_list<int> var_lengths;
-// 	// const std::initializer_list<int> var_offsets;
-
-// 	// Jacobian_Setter(std::initializer_list<int> _var_lengths, std::initializer_list<int> _var_offsets) :
-// 	// 	var_lengths(_var_lengths), var_offsets(_var_offsets) {}
-
-// 	// template<int len>
-// 	// EIGEN_STRONG_INLINE void set_dense(Eigen::Ref<Eigen::Matrix<scalar_t, len, 1> )
-// };
-
-// template<int... var_sizes>
-// // void foo(std::initializer_list<int> a, std::initializer_list<int> b)
-// void foo(const Len<var_sizes...> a, const Len<var_lengths...> b)
-// {
-// 	std::cout << "A = " << type_name<decltype(a)>() << std::endl;
-// 	std::cout << "B = " << type_name<decltype(b)>() << std::endl;
-
-//     int offset = 0;
-//     (void)std::initializer_list<int>{ 
-//         (
-//             J.row(i) = deriv.template segment<input_sizes>(offset), 
-//             offset += input_sizes,
-//             0
-//         )... 
-//     };
-
-
-// 	// for(auto i: a)
-// 	// 	std::cout << i << std::endl;
-// }
-
-// template
-// template<
-// EIGEN_STRONG_INLINE make_setter()
-// [J](int iRow, Eigen::Ref<Eigen::Matrix<scalar_t, 1, x1_len+x2_len+x3_len+x4_len>> row)
-// {
-// 	for(auto )
-
-// 	J.row(eq1_offset() + iRow).template segment<x1_len>(x1_offset()) = row.template segment<x1_len>(offset);
-
-// 	J.template block<1, x1_len>(eq1_offset(), x1_offset()),
-
-// using pairlist = std::initializer_list<std::pair<int,int>>;
-
-template<typename V, typename V2, typename scalar1 = typename V::Scalar, typename scalar2 = typename V2::Scalar>
-void test_function_impl(Eigen::MatrixBase<V>& v,
-	Eigen::MatrixBase<V2>& v2)
-{
-	static_assert(V::ColsAtCompileTime == 1, "col test");
-	static_assert(std::is_same<typename V::Scalar, typename V2::Scalar>::value, "type test");
-
-	std::cout << "v = " << v.transpose() << std::endl;
-	std::cout << "type_name(v) = " << type_name<decltype(v)>() << std::endl;
-	v[0] = 100.0;
-
-	// std::cout << "data during = " << v.data() << std::endl;
-}
-
-// template<typename V>
-// void test_function(V&& v)
-// {
-// 	std::cout << "test_function: type_name(v) = " << type_name<decltype(v)>() << std::endl;
-// 	test_function_impl<typename V::Scalar, V::RowsAtCompileTime>(v);
-// }
-
-
-void test_function(std::array<int, 4> x)
-{
-	std::cout << "x[0] = " << x[0] << std::endl;
-}
-
-
 
 int main(void)
 {
-	// test_function({1,2,3,4});
+	Eigen::Matrix<double, 10, 1> x;
+	x << 1,2,3,4,5,6,7,8,9,10;
+	x.template segment<3>(3) = Eigen::Matrix<double, 3, 1> {1,2,3};
+
+	x.array() = 6.66;
+
+	x.template segment<3>(6).array() = 3.4;
+
+	std::cout << "x = " << x.transpose() << std::endl;
 
 
-	using scalar_t = double;
-	using NLP = LOpt<scalar_t>;
+//    std::cout << "Testing" << std::endl;
+   SmartPtr<TNLP> mynlp = new NLP_Ipopt<double, LOpt<double>>();
+   Ipopt::SmartPtr<Ipopt::IpoptApplication> app = new Ipopt::IpoptApplication();
 
-	NLP nlp;
-	NLP::variable_t var;
-	NLP::constraint_t con;
+   app->Options()->SetNumericValue("tol", 1e-7);
+   app->Options()->SetStringValue("mu_strategy", "adaptive");
+   app->Options()->SetStringValue("output_file", "ipopt.out");
 
-	// // Eigen::Matrix<scalar_t, 1, 1> x0;
-	// // Eigen::Matrix<scalar_t, 1, 1> x1;
-	// // Eigen::Matrix<scalar_t, 1, 1> x2;
-	// // Eigen::Matrix<scalar_t, 1, 1> x3;
-	// // Eigen::Matrix<scalar_t, 1, 1> out;
+   ApplicationReturnStatus status;
+   status = app->Initialize();
+   if( status != Solve_Succeeded )
+   {
+      std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl;
+      return (int) status;
+   }
 
-	// // x0 << 1;
-	// // x1 << 2;
-	// // x2 << 3;
-	// // x3 << 3;
+   // Ask Ipopt to solve the problem
+   status = app->OptimizeTNLP(mynlp);
 
-	// // nlp.func2(x0, x1, x2, x3, out);
+   if( status == Solve_Succeeded )
+   {
+      std::cout << std::endl << std::endl << "*** The problem solved!" << std::endl;
+   }
+   else
+   {
+      std::cout << std::endl << std::endl << "*** The problem FAILED!" << std::endl;
+   }
 
-	// // std::cout << "x = [" << x0 << ", " << x1 << ", " << x2 << ", " << x3 << "]" << std::endl;
-	// // std::cout << "out = " << out << std::endl;
-
-	// // Eigen::Matrix<scalar_t, 1, 1> J0;
-	// // Eigen::Matrix<scalar_t, 1, 1> J1;
-	// // Eigen::Matrix<scalar_t, 1, 1> J2;
-	// // Eigen::Matrix<scalar_t, 1, 1> J3;
-	// // nlp.func2(x0, x1, x2, x3, out, J0, J1, J2, J3);
-
-	// // std::cout << "J = [" << J0 << ", " << J1 << ", " << J2 << ", " << J3 << "]" << std::endl;
-
-	// // Eigen::Matrix<scalar_t, 10, 10> J;
-
-	// // constexpr int eq1_offset = 1;
-	// // // eq1_offset
-	// // // auto filler = Fill_Dense<decltype(J)>({0,1,2,3}, {1,1,1,1}, J);
-	// // // auto filler = Fill_Dense<decltype(J)>(pairlist{{0,1}, {1,1}, {2,1}, {3,1}}, J);
-
-	// // std::cout << "J = \n" << J << std::endl;
-
-	// // for (long i=0; i<100000000; i++)
-	// // {		
-	// // 	auto filler = Fill_Dense<decltype(J), 1, 0, 1, 5, 6>(J);
-	// // 	x0(0) += 1;
-	// // 	nlp.func2(x0, x1, x2, x3, out, filler);
-	// // }
-	// // std::cout << "J = \n" << J << std::endl;
-
-
-	for(int i=0; i<NLP::NUM_VARS; i++) var(i) = i;
-
-	std::cout << "var = " << var.transpose() << std::endl;
-
-	nlp.constraints(var, con);
-	std::cout << "con = " << con.transpose() << std::endl;
-  
-	NLP::constraint_jacobian_t J;
-	J = decltype(J)::Zero();
-	std::cout << "J.shape = " << decltype(J)::RowsAtCompileTime << " x " << decltype(J)::ColsAtCompileTime << std::endl;
-	// for (long i=0; i<10000000; i++)
-	{
-		var(0)++;
-		nlp.constraints(var, con, J);
-	}
-	std::cout << "J = \n" << J << std::endl;
-
-	std::cout << "=========================================\n";
-
-	{
-	Eigen::SparseMatrix<scalar_t> J_sparse(NLP::NUM_CON, NLP::NUM_VARS);
-	nlp.constraints_sparse_initialize(J_sparse);
-	for(int i=0; i<NLP::nnz_constraints_jacobian; i++) J_sparse.valuePtr()[i] = i;
-	std::cout << "J_sparse = \n" << Eigen::MatrixXd(J_sparse) << std::endl;
-	var(0) = 0;
-	// for (long i=0; i<10000000; i++)
-	{
-		var(0)++;
-		nlp.constraints(var, con, J_sparse);		
-	}
-	std::cout << "J_sparse = \n" << Eigen::MatrixXd(J_sparse) << std::endl;
-	}
-
-	std::cout << "=========================================\n";
-
-	// // auto x = var.template segment<2>(2);
-	// Eigen::Matrix<double, 10, 20> t;
-	// t.array() = 0;
-	// std::cout << "t = \n" << t << std::endl;
-
-	// auto x = t.row(3).template segment<2>(2).transpose();
-	// std::cout << "x = " << x.transpose() << std::endl;
-	// std::cout << "x.shape = (" << x.rows() << ", " << x.cols() << ")\n";
-	// std::cout << "type_name(x) = " << type_name<decltype(x)>() << std::endl; 
-	// std::cout << "data pre = " << x.data() << std::endl;
-
-
-	// std::cout << "--------- calling ---------" << std::endl;
-	// Eigen::Matrix<double, 3,1> y;
-	// test_function_impl(x, y);
-	// std::cout << "--------- post ---------" << std::endl;
-	
-	// std::cout << "x = " << x.transpose() << std::endl;
-	// std::cout << "data post = " << x.data() << std::endl;
-
-
-	// {
-	// Eigen::SparseMatrix<scalar_t> J_sparse(NLP::NUM_CON, NLP::NUM_VARS);
-	// nlp.constraints_sparse_initialize(J_sparse);
-	// Eigen::Map<Eigen::Matrix<scalar_t, NLP::nnz_constraints_jacobian, 1>> Jvalues(J_sparse.valuePtr(), J_sparse.nonZeros(), 1);
-	// var(0) = 0;
-	// // for (long i=0; i<10000000; i++)
-	// {
-	// 	var(0)++;
-	// 	nlp.constraints_sparse_jacobian_crs(var, con, Jvalues);
-	// }
-	// std::cout << "J_sparse = \n" << Eigen::MatrixXd(J_sparse) << std::endl;
-
-	// std::cout << "J_sparse.Values = " << Jvalues.transpose() << std::endl;
-	// }
-
-
- //   SmartPtr<TNLP> mynlp = new NLP_Ipopt<double, NLP>();
- //   Ipopt::SmartPtr<Ipopt::IpoptApplication> app = new Ipopt::IpoptApplication();
-
- //   app->Options()->SetNumericValue("tol", 1e-7);
- //   app->Options()->SetStringValue("mu_strategy", "adaptive");
- //   app->Options()->SetStringValue("output_file", "ipopt.out");
-
- //   ApplicationReturnStatus status;
- //   status = app->Initialize();
- //   if( status != Solve_Succeeded )
- //   {
- //      std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl;
- //      return (int) status;
- //   }
-
- //   // Ask Ipopt to solve the problem
- //   status = app->OptimizeTNLP(mynlp);
-
- //   if( status == Solve_Succeeded )
- //   {
- //      std::cout << std::endl << std::endl << "*** The problem solved!" << std::endl;
- //   }
- //   else
- //   {
- //      std::cout << std::endl << std::endl << "*** The problem FAILED!" << std::endl;
- //   }
-
- //   // As the SmartPtrs go out of scope, the reference count
- //   // will be decremented and the objects will automatically
- //   // be deleted.
-
- //   return (int) status;
+   return (int) status;
 }
 
