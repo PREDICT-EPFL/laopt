@@ -8,6 +8,8 @@ link_directories(/Users/cnjones/git/lampc /usr/local/Cellar/ipopt/3.13.4/lib/ /u
 # add_executable(mpc mpc.cpp)
 # target_link_libraries(mpc hana Eigen3::Eigen)
 
+add_definitions(-std=c++11 -DEIGEN_MATRIX_PLUGIN="Matrix_initializer_list.h" -DEIGEN_ARRAY_PLUGIN="Array_initializer_list.h")
+
 add_executable(test test.cpp myproblem.hpp /Users/cnjones/git/lampc/src/polygen_helper.hpp)
 # add_executable(model model.cpp gen.c)
 # add_executable(gen gen.cpp)

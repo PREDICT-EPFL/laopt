@@ -1,6 +1,7 @@
 # from expression import Variable
 import polypy
 from polypy import Variable, Function
+from polypy.function import Jacobian, Hessian
 from polypy.generator import Generator
 
 from collections import namedtuple
@@ -34,7 +35,7 @@ class Constraint:
         self.args = sorted(args, key=lambda v: v.name)
 
         # Generic named variables
-        vars = [Variable(f"_x{i}", len(arg)) for i, arg in enumerate(self.args)]
+        vars = [Variable(f"_var{i}", len(arg)) for i, arg in enumerate(self.args)]
 
         # Create function
         funcname = polypy._get_unique_name("func")
@@ -211,6 +212,13 @@ class NLP:
             p(f"nnz_constraints_jacobian = {self.nnz_constraints_jacobian},")
         p("")
 
+        p("template<typename T, std::size_t n>")
+        p("using cVec = const Eigen::Ref<const Eigen::Matrix<T, n, 1>>;")
+        p("template<typename T, std::size_t n>")
+        p("using Vec = Eigen::Ref<Eigen::Matrix<T, n, 1>>;")
+        p("")
+
+
         p("// NLP variable types")
         p(f"using variable_t   = Matrix<scalar_t, NUM_VARS, 1>;")
         p(f"using constraint_t = Matrix<scalar_t, NUM_CON, 1>;")
@@ -289,7 +297,7 @@ class NLP:
 
 
 
-    def _generate_constraints(self, p):       
+    def _generate_constraints(self, p):
         # Build a dictionary mapping variables to their place in the global variable
         var_pos = dict()
         pos = 0
@@ -334,42 +342,154 @@ class NLP:
         p("{")
         with p:
             for con in self.constraints:
+                p.add_dependency(Jacobian(con.function), "Function")
+
                 col_offset = []
                 for var in con.args:
                     iVar = self.variables.index(var)
                     iCon = self.constraints.index(con)
                     col_offset.append(sum([len(blk.con) for blk in blocks[:iCon, iVar] if blk]))
 
-                p(f"{con.function.name}({{{', '.join([f'{arg.name}' for arg in con.args])}}}, {{{', '.join(str(i) for i in col_offset)}}}, {con.name}, var, constraints, jacobian);")
+                p(f"{con.function.name}({{{', '.join([f'{arg.name}_o' for arg in con.args])}}}, {{{', '.join(str(i) for i in col_offset)}}}, {con.name}, var, constraints, jacobian);")
         p("}")
 
     def _generate_objective(self, p):
         """Generate objective function"""
-        p.add_dependency(self.obj.function, "Function")
+        # p.add_dependency(self.obj.function, "Function")
 
-        p("EIGEN_STRONG_INLINE scalar_t objective(const Ref<const variable_t>& var, Ref<obj_gradient_t> gradient, Ref<obj_hessian_t> hessian) noexcept")
-        p("\t{return this->template objective_impl<Ref<obj_gradient_t>, Ref<obj_hessian_t>>(var, gradient, hessian);}")
-        p("EIGEN_STRONG_INLINE scalar_t objective(const Ref<const variable_t>& var, Ref<obj_gradient_t> gradient) noexcept")
-        p("\t{return this->template objective_impl<Ref<obj_gradient_t>, int>(var, gradient, 0);}")
-        p("EIGEN_STRONG_INLINE scalar_t objective(const Ref<const variable_t>& var) noexcept")
-        p("\t{return this->template objective_impl<int, int>(var, 0, 0);}")
+        # Decompose our objective into a summation of objectives
+        try:
+            obj = self.obj.original_expr._decompose()
+        except AttributeError:
+            obj = [self.obj.original_expr, ]
+
+        # Create objective function
+        obj_func = [Constraint(expr) for expr in obj]
+        for o in obj_func:
+            p.add_dependency(Hessian(o.function), "Hessian")
+
+        print(obj_func)
+
+        # Compute interactions between variables
+        vars = self.variables
+        H = np.zeros((len(vars), len(vars)))  # One if this element of the hessian is filled in
+        for o in obj_func:
+            for v_col in o.args:
+                iv_col = self.variables.index(v_col)
+                for v_row in o.args:
+                    iv_row = self.variables.index(v_row)
+                    H[iv_row, iv_col] = 1
+
+        # Compute offsets into the Values vector for each block
+        H_offset = np.zeros((len(vars), len(vars)), dtype=int)  # Offset into the Values vector where this variable block starts
+        offset = 0  # Offset into the Values vector
+        for col in range(len(vars)):
+            col_offset = offset
+            for row in range(len(vars)):
+                if H[row, col]:
+                    H_offset[row, col] = col_offset
+                    col_offset += len(self.variables[row])
+                    offset += len(self.variables[row]) * len(self.variables[col])
+
+        # Build a dictionary mapping variables to their place in the global variable
+        var_pos = dict()
+        pos = 0
+        for var in self.variables:
+            var_pos[var] = pos
+            pos += len(var)
+
+
+        # Generate function to return the sparsity structure
+        #
+        p("EIGEN_STRONG_INLINE void objective_sparse_initialize(SparseMatrix<scalar_t>& H)")
+        p("{")
+        with p:
+            # BlockInfo = row, col, num_rows, num_cols
+            p("set_nonzero_blocks<scalar_t>(H, {BlockInfo")
+            blk_info = []
+            for iRow, row_var in enumerate(self.variables):
+                for iCol, col_var in enumerate(self.variables):
+                    if H[iRow, iCol]:
+                        row = var_pos[row_var]
+                        num_rows = len(row_var)
+                        col = var_pos[col_var]
+                        num_cols = len(col_var)
+                        blk_info.append(f"{{{row}, {col}, {num_rows}, {num_cols}}}")
+
+            # blk_info = [f"{{{', '.join(str(i) for i in blk.shape)}}}" for blk in blocks.flatten() if blk]
+            blk_info = [", ".join(blk_info[i:i+6]) for i in range(0, len(blk_info), 6)]
+            p(",\n".join(blk_info))
+            p("});")
+        p("}\n")
+
+        # p("EIGEN_STRONG_INLINE scalar_t objective(const Ref<const variable_t>& var, Ref<obj_gradient_t> gradient, Ref<obj_hessian_t> hessian) noexcept")
+        # p("\t{return this->template objective_impl<Ref<obj_gradient_t>, Ref<obj_hessian_t>>(var, gradient, hessian);}")
+        # p("EIGEN_STRONG_INLINE scalar_t objective(const Ref<const variable_t>& var, Ref<obj_gradient_t> gradient) noexcept")
+        # p("\t{return this->template objective_impl<Ref<obj_gradient_t>, int>(var, gradient, 0);}")
+        # p("EIGEN_STRONG_INLINE scalar_t objective(const Ref<const variable_t>& var) noexcept")
+        # p("\t{return this->template objective_impl<int, int>(var, 0, 0);}")
+        # p("")
+
+        p("// Locations to store the computed hessians")
+        for i, o in enumerate(obj_func):
+            offset = np.zeros((len(o.args), len(o.args)), dtype=int)
+            for iCol, col in enumerate(o.args):
+                for iRow, row in enumerate(o.args):
+                    ind_row = self.variables.index(row)
+                    ind_col = self.variables.index(col)
+                    offset[iRow, iCol] = H_offset[ind_row, ind_col]
+            str_offset = ", ".join("{" + ", ".join(str(offset[iRow, iCol]) for iCol in range(len(o.args))) + "}" for iRow in range(len(o.args)))
+            if len(o.args) == 1:
+                p(f"const Matrix<Eigen::Index, {len(o.args)}, {len(o.args)}> H_offset_{i} = {str_offset};")
+            else:
+                p(f"const Matrix<Eigen::Index, {len(o.args)}, {len(o.args)}> H_offset_{i} = {{{str_offset}}};")
         p("")
-        p("template<typename gradient_t, typename hessian_t>")
-        p("EIGEN_STRONG_INLINE scalar_t objective_impl(const Ref<const variable_t>& var,")
-        p("                                            gradient_t gradient,")
-        p("                                            hessian_t hessian) noexcept")
-        blocks = self._sparsity_structure([self.obj])
-        with p.function():
-            obj = self.obj
-            col_offset = []
-            for var in obj.args:
-                iVar = self.variables.index(var)
-                iCon = 0
-                col_offset.append(sum([len(blk.con) for blk in blocks[:iCon, iVar] if blk]))
 
-            p("Matrix<scalar_t, 1, 1> objective;")
-            p(f"{obj.function.name}({{{', '.join([f'{arg.name}' for arg in obj.args])}}}, {{{', '.join(str(i) for i in col_offset)}}}, 0, var, objective, gradient);")
-            p("return objective(0,0);")
+        p("EIGEN_STRONG_INLINE scalar_t objective(const Ref<const variable_t>& var) noexcept")
+        with p.function():
+            p("scalar_t val = 0.0;")
+            p("")
+
+            for i, o in enumerate(obj_func):
+                # var_offsets = "{" + ', '.join(str(var_pos[var]) for var in o.args) + "}"
+                var_offsets = "{" + ', '.join(var.name + "_o" for var in o.args) + "}"
+                p(f"val += {o.function.name}({var_offsets}, var);")
+            p("return val;")
+        p("")
+
+        p("EIGEN_STRONG_INLINE scalar_t objective(const Ref<const variable_t>& var,")
+        p("                                       Ref<obj_gradient_t> gradient) noexcept")
+        with p.function():
+            p("scalar_t val = 0.0;")
+            p("gradient.setZero();")
+            p("")
+
+            for i, o in enumerate(obj_func):
+                # var_offsets = "{" + ', '.join(str(var_pos[var]) for var in o.args) + "}"
+                var_offsets = "{" + ', '.join(var.name + "_o" for var in o.args) + "}"
+                p(f"val += {o.function.name}({var_offsets}, var, gradient, true);")
+            p("return val;")
+        p("")
+
+        p("EIGEN_STRONG_INLINE scalar_t objective(const Ref<const variable_t>& var,")
+        p("                                       Ref<obj_gradient_t> gradient,")
+        p("                                       SparseMatrix<scalar_t>& hessian) noexcept")
+        with p.function():
+            p("scalar_t val = 0.0;")
+            p("gradient.setZero();")
+            p("// Set non-zero elements of hessian to zero, but don't change nnz")
+            p("Eigen::Map<Eigen::Matrix<scalar_t, Eigen::Dynamic, Eigen::Dynamic>> (hessian.valuePtr(), hessian.nonZeros(), 1).array() = 0.0;")
+            p("")
+
+            for i, o in enumerate(obj_func):
+                var_offsets = "{" + ', '.join(var.name + "_o" for var in o.args) + "}"
+                p(f"val += {o.function.name}({var_offsets}, "
+                    + f"var, gradient, H_offset_{i}, hessian, true);")
+            p("return val;")
+
+
+
+
 
     def _sparsity_structure(self, constraints):
         # We assume that our jacobian is stored in compressed column format
@@ -422,20 +542,3 @@ class NLP:
 
 
 
-# class Ipopt:
-#     # Interface to Ipopt
-    
-#     def __init__(self, nlp):
-#         # nlp = instance of NLP
-#         self.nlp = nlp
-
-#     def generate(self, p):
-#         nlp = self.nlp
-
-#         p("\n\n")
-#         p('#include "IpIpoptApplication.hpp"')
-#         p('#include "IpTNLP.hpp"')
-#         p("")
-#         p("template<typename scalar_t>")
-#         p(f"{nlp.classname}_Ipopt : public TNLP, public {nlp.classname}")
-#         

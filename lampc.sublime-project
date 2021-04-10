@@ -22,6 +22,11 @@
         	"name": "Run test_ipopt",
 		    "working_dir": "/Users/cnjones/git/lampc/",
 		    "shell_cmd": "/Users/cnjones/.pyenv/shims/python test_ipopt.py"
+        },
+        {
+        	"name": "Run test_linearMPC",
+		    "working_dir": "/Users/cnjones/git/lampc/",
+		    "shell_cmd": "/Users/cnjones/.pyenv/shims/python testLinearMPC.py"
         }
 
 	],

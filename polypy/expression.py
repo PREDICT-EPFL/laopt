@@ -9,9 +9,9 @@ import itertools
 
 # TODO Errors
 # - Shape of sliced objects is wrong
-# - Call a function with some args being parameters and some differentiable vars
+# - bind: Call a function with some args being parameters and some differentiable vars
 # - Deal with inf in variable bounds properly
-# - Remove the _is_equal process and replace with "Freeze"
+# - Add a template cast for all constants in 2nd-order derivatives https://gist.github.com/nuft/828bd48994a1f18e85b806e8e417b6d4
 
 # TODO Features / improvements
 # - functions with multiple outputs (?)
@@ -22,6 +22,9 @@ import itertools
 # - collect dependencies into different print buffers so they can be split out in order
 # - add a __le__ and __ge__ to generate inequalties
 # - allow setting of initial dual points
+# - add hooks to the end of all NLP functions to allow user customization in C
+# - use the correct variable names in functions
+# - stack variables from different vectors z = [x[-1];u[2]]
 
 # Optimizations
 # - look for repeated expressions and buffer them into temporary variables
@@ -396,8 +399,8 @@ class functionExpression(Expression):
 
         if not out:
             out = _get_temp_name()
-            p(f"Matrix<{p.number_type}, {len(self.function)}, 1> {out};")
-            p(f"{self.function.wrapped_name}<{p.number_type}>({', '.join(args)}, {out});")
+            p(f"Matrix<{p.option('number_type')}, {len(self.function)}, 1> {out};")
+            p(f"{self.function.wrapped_name}<{p.option('number_type')}>({', '.join(args)}, {out});")
             p.add(self, out)
 
         return out
@@ -436,11 +439,13 @@ class BinaryExpression(Expression):
     def __init__(self, *args):
         super().__init__(*args)
 
-    def _generate_python(self, *args):
-        return f"{args[0]} {self.python_op} {args[1]}"
+    # def _generate_python(self, *args):
+    #     return f" {self.python_op} ".join(args) #f"{args[0]} {self.python_op} {args[1]}"
+    #     # return f"{args[0]} {self.python_op} {args[1]}"
 
     def _generate_eigen(self, p, *args):
-        return f"{args[0]} {self.python_op} {args[1]}"
+        return _to_infix(self.python_op, self.args, args)
+        # return f" {self.python_op} ".join(args) #f"{args[0]} {self.python_op} {args[1]}"
 
 class sliceExpression(UnaryExpression):
     def __init__(self, *args, key):
@@ -572,15 +577,73 @@ class diagExpression(UnaryExpression):
     def _generate_eigen(self, p, *args):
         return f"({args[0]}).asDiagonal()"
 
+
+def _to_infix(op, args, argstrings):
+    """Generate a string in infix format"""
+    # args = objects representing arguments
+    # argstrings = generated representations of the args
+
+    scalar = map(isScalar, args)
+    if all(scalar) or all(not s for s in scalar):
+        return f" {op} ".join(argstrings)
+
+    ret = f" {op} ".join(argstr if isScalar(arg) else "(" + argstr + ").array()" for arg, argstr in zip(args, argstrings)) 
+    return "(" + ret + ").matrix()"
+
 class addExpression(BinaryExpression):
     def __init__(self, *args):
+        # Test if our arguments are all addExpressions. If they are, we collapse them into a summation
+        tmp = []
+        for arg in args:
+            if isinstance(arg, addExpression):
+                tmp.extend(arg.args)
+            else:
+                tmp.append(arg)
+
+        def replace_exception(original, default=True):
+            def safe(*args, **kwargs):
+                try:
+                    return original(*args, **kwargs)
+                except AttributeError:
+                    return default
+            return safe
+
+        # Filter out any arguments that know that they are zero.
+        args = list(filter(replace_exception(lambda x: not x.isZero), tmp))
+
         super().__init__(*args)
         self.op = "add"
-        self.shape = args[0].shape if isinstance(args[1], Scalar) else args[1].shape
+        self.shape = (max(arg.shape[0] for arg in args), max(arg.shape[1] for arg in args))
         assert all(isScalar(arg) or self.shape == arg.shape for arg in args), \
-            TypeError(f"Adding matrices of incompatible sizes {args[0]}({args[0].shape}) vs {args[1]}({args[1].shape})")
+            TypeError(f"Adding matrices of incompatible sizes")
         self.priority = 3
         self.python_op = "+"
+
+
+def summation(*args):
+    """Sum all the arguments while maintaining the sparsity information"""
+    return summationExpression(*args)
+
+
+class summationExpression(BinaryExpression):
+    """Represents the summation of a set of expressions 
+        expr = sum(exp1, exp2, ...)
+       If used in an objective, the hessian will be generated as the sum of the arguments.
+    """
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.op = "sum"
+        self.shape = (max(arg.shape[0] for arg in args), max(arg.shape[1] for arg in args))
+        assert all(isScalar(arg) or self.shape == arg.shape for arg in args), \
+            TypeError(f"Adding matrices of incompatible sizes")
+        self.priority = 3
+        self.python_op = "+"
+
+    def _decompose(self):
+        # Returns the arguments
+        # Other types of expressions can't be decomposed in this way
+        return self.args
+
 
 class subExpression(BinaryExpression):
     def __init__(self, *args):
@@ -602,11 +665,11 @@ class mulExpression(BinaryExpression):
         self.priority = 1
         self.python_op = "*"
 
-    def _generate_eigen(self, p, *args):
-        if isScalar(self.args[0]) or isScalar(self.args[1]):
-            return f"{args[0]} * {args[1]}"
-        else:
-            return f"({args[0]}{self.args[0].generate_array()} * {args[1]}{self.args[1].generate_array()}).matrix()"
+    # def _generate_eigen(self, p, *args):
+    #     if isScalar(self.args[0]) or isScalar(self.args[1]):
+    #         return f"{args[0]} * {args[1]}"
+    #     else:
+    #         return f"({args[0]}{self.args[0].generate_array()} * {args[1]}{self.args[1].generate_array()}).matrix()"
 
 class matmulExpression(BinaryExpression):
     def __init__(self, *args):
@@ -697,7 +760,10 @@ class Matrix(AtomicExpression):
 
     def _generate_eigen(self, p, *args):
         p.add_dependency(self, 'VariableMatrix')  # Register this matrix for generation
-        return super()._generate_eigen(p, *args)
+        # return super()._generate_eigen(p, *args)
+        if p.option('cast_constants'):
+            return f"{self}.template cast<T>()"
+        return str(self)
 
 
 class ConstMatrix(Matrix):
@@ -723,12 +789,15 @@ class ConstMatrix(Matrix):
 
     def generate_declaration(self, p):
         # Return string to declare this constant
-        ret = f"using M_{self.name} = Matrix<scalar_t, {self.shape[0]}, {self.shape[1]}>;\n"
-        ret += f"const M_{self.name} {self.name} = (M_{self.name}() << "
-        rows = []
-        for row in self.M:
-            rows.append(", ".join(str(x) for x in row))
-        ret += ", ".join(rows) + ").finished();"
+        if self.shape[0] == 1 or self.shape[1] == 1:
+            values = ", ".join(str(x) for x in np.ravel(self.M))
+        else:
+            rows = []
+            for row in self.M:
+                rows.append(", ".join(str(x) for x in row))
+            rows = [f"{{{row}}}" for row in rows]
+            values = ", ".join(rows)
+        ret = f"const Matrix<scalar_t, {self.shape[0]}, {self.shape[1]}> {self.name} = {{{values}}};"
         p(ret)
 
     def generate_initialization(self, p):
@@ -740,11 +809,11 @@ class ConstMatrix(Matrix):
     def _generate_eigen(self, p, *args):
         M = self.M
         if np.all(M == np.ravel(M)[0]):
-            return f"Matrix<{p.number_type}, {M.shape[0]}, {M.shape[1]}>::Constant({M[0][0]})"
-        # if self.shape[0] * self.shape[1] > 30:
-        #     # Buffer large matrices for re-use
-        # print(f"Adding dependency for {self}")
+            return f"Matrix<{p.option('number_type')}, {M.shape[0]}, {M.shape[1]}>::Constant({M[0][0]})"
+
         p.add_dependency(self, 'ConstantMatrix')  # Register this matrix for generation
+        if p.option('cast_constants'):
+            return f"{self}.template cast<T>()"
         return str(self)
 
     def generate_scalar(self, p, *args):
@@ -893,6 +962,9 @@ class ConstScalar(Scalar):
     #     return str(self.value)
 
     def _generate_eigen(self, p, *args):
+        if p.option('cast_constants'):
+            scalar_t = p.option('number_type')
+            return f"static_cast<{scalar_t}>({self.value})"
         return str(self.value)
 
     def generate_scalar(self, p, *args):
@@ -947,7 +1019,6 @@ class ConstScalar(Scalar):
 #     # def __repr__(self):
 #     #     cols = f"{self.cols}" if self.cols > 1 else ""
 #     #     return f"{str(self)}[{str(self.var_type)}*{cols}]"
-
 
 class Variable(AtomicExpression):
     # A vector variable, or an index into a VectorSet

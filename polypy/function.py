@@ -31,33 +31,29 @@ class Function:
     def num_inputs(self):
         return sum(len(x) for x in self.inputs)
 
-    def generate_declaration(self, p, generate_jacobian=True):
+    def generate_declaration(self, p):
         # Generate an eigen function to evaluate this Function
         # Assumptions: 
         #  - All parameters and constants have already been defined in the containing class
         #  - All functions that this function calls exist
 
-        # print("ABOUT TO CREATE A FUNCTIONGENERATOR")
-        # p = FunctionGenerator(p)
-        # print("CAN'T BE HERE")
-
         # Produce function signature
         p(f"template<typename T>")
-        p(f"EIGEN_STRONG_INLINE void {self.wrapped_name}(")
-        with p:
-            for x in self.inputs:
-                p(f"const Ref<const Matrix<T, {x.shape[0]}, {x.shape[1]}>>& {x}, ")
-            p(f"Ref<Matrix<T, {self.output.shape[0]}, {self.output.shape[1]}>> {self.output}) const noexcept")
+        p(f"EIGEN_STRONG_INLINE void {self.wrapped_name}("
+            + ", ".join(f"cVec<T, {x.shape[0]}>& {x}" for x in self.inputs)
+            + f", Vec<T, {self.output.shape[0]}> {self.output}) const noexcept")
+
+        for x in self.inputs:
+            assert x.shape[1] == 1, "Can only handle vector inputs"
+        assert self.output.shape[1] == 1, "Output must be a vector"
+        # with p:
+        #     for x in self.inputs:
+        #         p(f"const Ref<const Matrix<T, {x.shape[0]}, {x.shape[1]}>>& {x}, ")
+        #     p(f"Ref<Matrix<T, {self.output.shape[0]}, {self.output.shape[1]}>> {self.output}) const noexcept")
         # Evaluate expression
         self.expression.state = Expression.State.Frozen
         with p.function(number_type="T"):
             p(f"{self.output} = {self.expression.generate(p)};")
-
-    def generate_jacobian(self, classname, p=preprint()):
-        # Wrapper for Jacobian call
-        sizes = [str(len(x)) for x in self.inputs]
-        p(f"MAKE_JACOBIAN({self.name}, {classname}<scalar_t>, {len(self.output)}, {', '.join(sizes)});")
-
 
     @property
     def parameters(self):
@@ -109,36 +105,51 @@ class Function:
     def __hash__(self):
         return hash(id(self))
 
-# class FunctionGenerator:
 
-#     def __init__(self, p=preprint()):
-#         self.evaluations = []  # List of sub-expressions (functions) that have already been evaluated
-#         # self.constants = []
-#         self.p = p  # PrePrint object
+class Jacobian(Function):
+    """Generates jacobian for the function during generation"""
 
-#     def __enter__(self):
-#         return self.p.__enter__()
+    def __init__(self, parent):
+        self.__dict__.update(parent.__dict__)
 
-#     def __exit__(self, exc_type, exc_value, tb):
-#         self.p.__exit__(exc_type, exc_value, tb)
-#         return True
+    def generate_jacobian(self, classname, p=preprint()):
+        # Wrapper for Jacobian call
+        sizes = [str(len(x)) for x in self.inputs]
+        p(f"MAKE_JACOBIAN({self.name}, {classname}<scalar_t>, {len(self.output)}, {', '.join(sizes)});")
 
-#     def __call__(self, *args, **kwargs):
-#         return self.p(*args, **kwargs)
 
-#     def add(self, expr, name):
-#         # Add an expression 
-#         if self.evaluations:
-#             evaled, _ = zip(*(self.evaluations))
-#             assert expr not in evaled, ValueError("Adding an evaluation that has already been evaluated... shouldn't happen")
-#         self.evaluations.append((expr, name))
+class Hessian(Function):
+    """Generates hessian for the function during generation"""
 
-#     def get(self, expr):
-#         # Return name of expression if it's been previously eavluated, else None
-#         if self.evaluations:
-#             name = next((name for e, name in self.evaluations if expr == e), None)
-#             return name
-#         return None
+    def __init__(self, parent):
+        self.__dict__.update(parent.__dict__)
 
-#     # def __call__(self, *args):
-#     #     return self.p(*args)
+    def generate_hessian(self, classname, p=preprint()):
+        # Wrapper for Jacobian call
+        sizes = [str(len(x)) for x in self.inputs]
+        p(f"MAKE_HESSIAN({classname}, {self.name});")
+        p(f"{self.name}Hessian<{', '.join(sizes)}> {self.name};")
+
+    def generate_declaration(self, p):
+        # Generate an eigen function to evaluate this Function
+        # Assumptions: 
+        #  - All parameters and constants have already been defined in the containing class
+        #  - All functions that this function calls exist
+
+        # Produce function signature
+        p(f"template<typename T>")
+        p(f"EIGEN_STRONG_INLINE void {self.wrapped_name}("
+            + ", ".join(f"cVec<T, {x.shape[0]}>& {x}" for x in self.inputs)
+            + f", T& {self.output}) const noexcept")
+        with p:
+            for x in self.inputs:
+                assert x.shape[1] == 1, "Can only handle vector variables"
+
+            
+            # p(f"const Ref<const Matrix<T, {x.shape[0]}, {x.shape[1]}>>& {x}, ")
+            # p(f"T& {self.output}) const noexcept")
+
+        # Evaluate expression
+        self.expression.state = Expression.State.Frozen
+        with p.function(number_type="T", cast_constants=True):
+            p(f"{self.output} = ({self.expression.generate(p)})[0];")

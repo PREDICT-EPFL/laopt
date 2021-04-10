@@ -2,46 +2,11 @@ import numpy as np
 from polypy import Variable, Matrix, Function, ConstScalar, Scalar, Generator, ConstMatrix
 from polypy import Index
 from polypy import preprint
-from polypy.expression import AtomicExpression, functionExpression, hstack
+from polypy.expression import AtomicExpression, functionExpression, hstack, summation
 from polypy import NLP
 from polypy.nlp import Inequality
 
-
-# class A(object):
-#     def __init__(self):
-#         self._prop = None
-
-#     @property
-#     def prop(self):
-#         return self._prop
-
-#     @prop.setter
-#     def prop(self, value):
-#         print("In A")
-#         self._prop = value
-
-
-# class C(A):
-#     pass
-
-
-# class B(C):
-#     @property
-#     def prop(self):
-#         value = super(B, self).prop
-#         # do something with / modify value here
-#         return value
-
-#     @prop.setter
-#     def prop(self, value):
-#         print("In B")
-#         super(B, self.__class__).prop.fset(self, value)
-
-# bob = B()
-# bob.prop = 4
-# print(bob.prop)
-
-# exit()
+import polypy as pp
 
 N, n, m = 5, 2, 1
 
@@ -68,28 +33,46 @@ rk4 = Function("rk4", (x, u), out, expr)
 
 ################ Generate optimization problem ##################
 
-i = Variable("i", 2)
-testfunc = Function("testfunc", (i, ), Variable("out", 1), i[0] + 4 * i[1])
-q = Matrix((2, 1), 'q')
+# i = Variable("i", 2)
+# testfunc = Function("testfunc", (i, ), Variable("out", 1), i[0] + 4 * i[1])
+# q = Matrix((2, 1), 'q')
 
 opt = NLP("MyProblem")
-x = opt.variable("x", n, N, lb=4 * ConstMatrix(np.ones((2, 1)), 't') * Scalar(1.2, 'd'))
-u = opt.variable("u", m, N - 1, ub=2 * testfunc(q * 5 + 3.2))
+x = []
+u = []
+for i in range(N):
+    x.append(opt.variable("x" + str(i), n)) #, lb=-4 * ConstMatrix(np.ones((2, 1)), 't') * Scalar(1.2, 'd')))
+    u.append(opt.variable("u" + str(i), m)) #, ub=2))
+
+# x = opt.variable("x", n, N, lb=4 * ConstMatrix(np.ones((2, 1)), 't') * Scalar(1.2, 'd'))
+# u = opt.variable("u", m, N - 1, ub=2 * testfunc(q * 5 + 3.2))
 xss = opt.variable("xss", n)
 uss = opt.variable("uss", m)
 
-xx = Matrix((n, 1), 'xx')
+x_initial = Matrix((n, 1), 'x_initial')
 
-C = np.array([[1, 2], [3, 4]])
-c = ConstMatrix(np.array([[1], [2]]), 'c')
+_x = Variable("x", n)
+_u = Variable("u", m)
+l = Function("stage_cost", (_x, _u), Variable("out", 1), _x[0] * _x[0] + _x[1] * _x[1] + 2 * _u[0] * _u[0])
 
 for i in range(N - 2):
-    opt.add(rk4(x[i], u[i]) == x[i+1])
-    opt.add(Inequality(C @ x[i], lb=-c, ub=c))
-    opt.add(Inequality(C @ x[i], lb=-c, ub=5))
-opt.add(xx == x[0])
+    opt.add(rk4(x[i], u[i]) == x[i + 1])
+    # opt.add(Inequality(C @ x[i], lb=-c, ub=5))
+opt.add(x_initial == x[0])
 opt.add(rk4(xss, uss) == xss)
-opt.add(np.zeros((2, 1)) == sum([rk4(x[i], u[i]) for i in range(N - 1)], np.array([0, 0]).T))
+# opt.add(np.zeros((2, 1)) == sum([rk4(x[i], u[i]) for i in range(N - 1)], np.array([0, 0]).T))
+
+# for i in range(N):
+#     val = 0
+#     for j in range(n):
+#         val += (x[i][j]) * (x[i][j])
+#     print(val)
+# opt.minimize(sum(sum(y) for y in x))
+
+opt.minimize(summation(*map(lambda y: l(y[0] - xss, y[1] - uss), zip(x, u)), xss[0]*xss[0] + xss[1]*xss[1] + uss[0]*uss[0]))
+
+# t = pp.expression.addExpression(x[0], x[1], x[2], x[3])
+# opt.add_function(Function('test', x, Variable('out', n), sum(x)))
 
 with Generator(filename="examples/myproblem.hpp") as gen:
     with gen.generate_class('LOpt') as p:

@@ -23,10 +23,12 @@ class PrePrint:
     def __init__(self, pre):
         self.pre = pre
         self.output = io.StringIO()
-        self.dependencies = set()
+        self.dependencies = dict()
         self.evaluations = []
 
-        self.number_type = "scalar_t"  # Used to generate eigen matrices. Are they templated types, or scalar_t?
+        # self.number_type = "scalar_t"  # Used to generate eigen matrices. Are they templated types, or scalar_t?
+        self._options = dict()  # Options that can be queried during generation
+        self._options['number_type'] = 'scalar_t'
 
     def __enter__(self):
         self.pre = self.pre + "\t"
@@ -37,17 +39,39 @@ class PrePrint:
             self.pre = self.pre[1:]
         # return True
 
+    def option(self, option_name):
+        """Return the value of the option, or None"""
+        return self._options.get(option_name, None)
+
+    def set_option(self, name, value):
+        """Set the given option
+
+        Note: In the current implementation, this option will be unset 
+        when leaving the current "with" block
+        """
+        self._options[name] = value
+
     @contextmanager
-    def function(self, post_string="", number_type="scalar_t"):
-        self.__call__("{")
-        current_type = self.number_type
-        self.number_type = number_type
+    def set_options(self, **kwargs):
+        old_options = copy(self._options)
+        for key, value in kwargs.items():
+            self._options[key] = value
         try:
             with self:
                 yield self
         finally:
-            self.number_type = current_type
-            self.__call__("}" + post_string)
+            pass
+            self._options = old_options
+
+
+    @contextmanager
+    def function(self, **kwargs):
+        self.__call__("{")
+        try:
+            with self.set_options(**kwargs):
+                yield self
+        finally:
+            self.__call__("}" + kwargs.get("post_string", ""))
 
     def __call__(self, *args, **kwargs):
         """My custom print() op."""
@@ -62,12 +86,7 @@ class PrePrint:
     def add_dependency(self, dependency, dependencyType):
         # Register the item as needing generation, 
         # or return the generated item if its already been registered
-        self.dependencies.add(dependency)
-        # assert dependencyType in PrePrint.GenTypes._member_names_, f"Adding dependency for unknown type {dependencyType}"
-        # self.dependencies.add((dependencyType, dependency))
-        # dependencies = self.dependencies[dependencyType]
-        # dependencies.add(dependency)
-        # self.dependencies[dependencyType] = dependencies
+        self.dependencies[dependency.name] = dependency
 
     # add and get are there for the reuse of function calls. If in a single expression a call to the same
     # function with the same arguments is made multiple times, then get will just return the solution of 
@@ -243,13 +262,14 @@ class Generator:
     def generate_dependencies(self, p):
         """Recursively generate all dependencies that have been added via add_dependency"""
 
-        generated = set()  # Set of things that have been generated
+        p.set_option("cast_constants", True)
+        generated = dict()  # Set of things that have been generated
         jacobians_to_initialize = set()
         while True:
-            to_generate = p.dependencies - generated
+            to_generate = {k: p.dependencies[k] for k in set(p.dependencies) - set(generated)}
             if not to_generate:
                 break
-            for dep in to_generate:
+            for dep in to_generate.values():
                 p.evaluations = []  # Reuse function evaluations locally
                 dep.generate_declaration(p)
                 try:
@@ -257,9 +277,14 @@ class Generator:
                     jacobians_to_initialize.add(dep)
                 except AttributeError:
                     pass
+                try:
+                    dep.generate_hessian(self.classname, p)
+                    jacobians_to_initialize.add(dep)
+                except AttributeError:
+                    pass
 
                 p("")
-                generated.add(dep)
+                generated[dep.name] = dep
 
 
     # if self.parameters:
@@ -286,7 +311,7 @@ class Generator:
             # Initialize jacobian objects
             p(",\n".join(f"{func.name}(this)" for func in jacobians_to_initialize))
         with p.function(): 
-            for param in generated:
+            for param in generated.values():
                 try:
                     param.generate_initialization(p)
                 except AttributeError:
