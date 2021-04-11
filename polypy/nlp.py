@@ -365,8 +365,19 @@ class NLP:
 
         # Create objective function
         obj_func = [Constraint(expr) for expr in obj]
-        for o in obj_func:
-            p.add_dependency(Hessian(o.function), "Hessian")
+
+        # Identify unique function calls and add then to the generation list
+        unique_funcs = []
+        for i, o in enumerate(obj_func):
+            found = False
+            for u in unique_funcs:
+                if o.function.expression.is_equal(u.function.expression):
+                    o.function = u.function
+                    found = True
+                    break
+            if not found:
+                unique_funcs.append(o)
+                p.add_dependency(Hessian(o.function), "Hessian")
 
         print(obj_func)
 

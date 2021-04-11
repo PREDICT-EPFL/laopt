@@ -483,7 +483,7 @@ int main(void)
    std::cout << "q = " << mynlp->q << std::endl;   
    status = app->OptimizeTNLP(mynlp);
 
-   mynlp->q = {1000,1000};
+   mynlp->q = {100000,100000};
 
    std::cout << "x_initial = " << mynlp->x_initial << std::endl;
    std::cout << "q = " << mynlp->q << std::endl;   
