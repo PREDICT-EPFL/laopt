@@ -17,8 +17,7 @@ A = ConstMatrix(np.array([[0, 0], [1, 0]]), 'A')
 B = Matrix((n, m), "B", initial=np.array([[1], [0]]))
 c = ConstMatrix(np.array([1, 2]).T, 'c')
 
-dx = Variable("dx", n)
-f = Function("sys", (x, u), dx, A @ x + B @ u)
+f = Function("sys", (x, u), A @ x + B @ u)
 
 h = Scalar(0.1, 'h')
 xp = x
@@ -28,8 +27,7 @@ k3 = f(xp + (h * 0.5) * k2, u)
 k4 = f(xp + h * k3, u)
 expr = xp + (h * 0.1667) * (k1 + 2 * k2 + 2 * k3 + k4)
 
-out = Variable("out", n)
-rk4 = Function("rk4", (x, u), out, expr)
+rk4 = Function("rk4", (x, u), expr)
 
 ################ Generate optimization problem ##################
 
@@ -53,7 +51,7 @@ x_initial = Matrix((n, 1), 'x_initial')
 
 _x = Variable("x", n)
 _u = Variable("u", m)
-l = Function("stage_cost", (_x, _u), Variable("out", 1), _x[0] * _x[0] + _x[1] * _x[1] + 2 * _u[0] * _u[0])
+l = Function("stage_cost", (_x, _u), _x[0] * _x[0] + _x[1] * _x[1] + 2 * _u[0] * _u[0])
 
 for i in range(N - 2):
     opt.add(rk4(x[i], u[i]) == x[i + 1])

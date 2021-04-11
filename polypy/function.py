@@ -5,17 +5,17 @@ import numpy as np
 
 class Function:
 
-    def __init__(self, name, inputs, output, expression):
+    def __init__(self, name, inputs, expression):
         validate_name(name)
         self.wrapped_name = "_" + name  # Private name used for all internal purposes
         self.name = name  # Public name
         self.inputs = inputs  # List of Variables
-        self.output = output  # Variable
+        self.output = Variable("out", len(expression))  # Variable
         self.expression = expression
 
         for x in inputs:
             assert isinstance(x, Variable), TypeError("Inputs must be a list of variables")
-        assert isinstance(output, Variable), TypeError("Output must be a variable")
+        # assert isinstance(output, Variable), TypeError("Output must be a variable")
         assert isinstance(expression, Expression), TypeError("Expression must be an expression")
 
     def __repr__(self):

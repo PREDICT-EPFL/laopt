@@ -39,9 +39,8 @@ class Constraint:
 
         # Create function
         funcname = polypy._get_unique_name("func")
-        out = Variable("out", len(expr))
         expr = expr.substitute(self.args, vars)        
-        self.function = Function(funcname, vars, out, expr)
+        self.function = Function(funcname, vars, expr)
 
         self.name = None
         self.expr = expr
