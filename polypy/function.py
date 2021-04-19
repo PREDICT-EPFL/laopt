@@ -1,5 +1,6 @@
 from polypy.expression import Variable, Expression, functionExpression
 from polypy.generator import preprint, validate_name
+import polypy as pp
 import types
 import numpy as np
 
@@ -10,7 +11,7 @@ class Function:
         self.wrapped_name = "_" + name  # Private name used for all internal purposes
         self.name = name  # Public name
         self.inputs = inputs  # List of Variables
-        self.output = Variable("out", len(expression))  # Variable
+        self.output = pp.variable("out", len(expression))  # Variable
         self.expression = expression
 
         for x in inputs:
@@ -95,7 +96,7 @@ class Function:
                 return False
 
         # Create matching input variables for both functions
-        args = [Variable("var" + str(i), len(arg)) for i, arg in enumerate(self.inputs)]
+        args = [pp.variable("var" + str(i), len(arg)) for i, arg in enumerate(self.inputs)]
         eval_self = self(*args)
         eval_other = other(*args)
         print(f"eval_self = {eval_self}")

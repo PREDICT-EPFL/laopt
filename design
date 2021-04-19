@@ -16,3 +16,32 @@ opt.add(xss == f(xss, uss))
 
 opt.minimize(sum())
 
+
+
+Expression: Capture to expression trees
+NLP: Set of expressions
+
+Eigen: Convert from Expression to 
+-- evaluation
+-- jacobian
+-- declaration
+-- initialization
+
+
+Transpiler
+- expression => code
+
+
+Targets
+- ansi c
+- ansi c + blas + lapack
+- Eigen
+- python
+- matlab
+
+Notions to be transpiled:
+- class
+- function
+- evaluation
+- jacobian (?)
+- hessian (?)

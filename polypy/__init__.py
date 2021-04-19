@@ -7,9 +7,9 @@
 # TODO: Create "virtual" function in python, which can then be treated as normal functions in C++
 #       i.e., e = f(x), q(e,e,e). This prevent re-computation of e.
 
-from polypy.poly import NLP
-from polypy.poly import Index
-from polypy.expression import Variable, hstack, summation
+# from polypy.poly import NLP
+from polypy.Index import Range
+from polypy.expression import variable, hstack, summation
 from polypy.expression import Expression, Identity, ConstScalar, Matrix, Scalar, ConstMatrix
 from polypy.function import Function
 from polypy.generator import preprint, Generator

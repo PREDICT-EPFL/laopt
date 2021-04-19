@@ -1,17 +1,31 @@
+from collections.abc import Iterable
+import polypy as pp
+
 # TODO: Simplifying arithmetic for index. Convert to linear expression only, and do simplification of coefficients. i + i = 2*i
 
-class Index:
-    def __init__(self, **kwargs):
-        self.rng = kwargs.get('rng')
-        self.index_name = kwargs.get('name')
+class Range(Iterable):
+    # def __init__(self, name=None, rng=None, **kwargs):
+    def __init__(self, start=None, stop=None, step=None):
+        if stop is None and step is None:
+            self.rng = range(start)
+        elif step is None:
+            self.rng = range(start, stop)
+        else:
+            self.rng = range(start, stop, step)
 
-        self.left = kwargs.get('left')
-        self.op = kwargs.get('op')
-        self.right = kwargs.get('right')
+        self.left = None
+        self.right = None
+        self.op = None
 
-        from polypy.poly import validate_name
+        self.index_name = 'i'  # = kwargs.get('name')
+
+        from polypy.generator import validate_name
         if self.index_name:
             validate_name(self.index_name)
+
+    def __iter__(self):
+        # We "iterate" here over ourselves
+        return iter([self, ])
 
     @property
     def num_iterations(self):
@@ -23,13 +37,14 @@ class Index:
     @property
     def indices(self):
         # Return list of all indices used in this index expression
-        if self.index_name is not None:
+        # if self.index_name is not None:
+        if type(self) == Range:
             return {self}
         else:
             indices = set()
-            if type(self.left) == Index:
+            if type(self.left) == Range:
                 indices = indices.union(self.left.indices)
-            if type(self.right) == Index:
+            if type(self.right) == Range:
                 indices = indices.union(self.right.indices)
             return indices
 
@@ -43,7 +58,7 @@ class Index:
         return str(self)
 
     def makeop(self, other, op):
-        return Index(left=self, right=other, op=op)
+        return RangeExpression(left=self, right=other, op=op)
 
     def __add__(self, other):
         return self.makeop(other, '+')
@@ -52,15 +67,15 @@ class Index:
         return self.makeop(other, '-')
 
     def __mul__(self, other):
-        assert type(other) != Index, "Cannot multiply two indices"
+        assert type(other) != Range, "Cannot multiply two indices"
         return self.makeop(other, '*')
 
     def __floordiv__(self, other):
-        assert type(other) != Index, "Cannot divide two indices"
+        assert type(other) != Range, "Cannot divide two indices"
         return self.makeop(other, '/')
 
     def __truediv__(self, other):
-        assert type(other) != Index, "Cannot divide two indices"
+        assert type(other) != Range, "Cannot divide two indices"
         return self.makeop(other, '/')
 
     def __radd__(self, other):
@@ -71,7 +86,7 @@ class Index:
 
     def __rmul__(self, other):
         return self.makeop(other, '*')
-        assert type(other) != Index, "Cannot multiply two indices"
+        assert type(other) != Range, "Cannot multiply two indices"
 
     @property
     def cpp_name(self):
@@ -81,11 +96,11 @@ class Index:
         else:
             op = {"+": "plus", "-": "minus", "/": "divide", "*": "times"}[self.op]
 
-            if isinstance(self.left, Index):
+            if isinstance(self.left, Range):
                 left = self.left.cpp_name
             else:
                 left = str(self.left)
-            if isinstance(self.right, Index):
+            if isinstance(self.right, Range):
                 right = self.right.cpp_name
             else:
                 right = str(self.right)
@@ -93,10 +108,18 @@ class Index:
             return f"_{left}_{op}_{right}_"
 
 
+class RangeExpression(Range):
+    def __init__(self, **kwargs):
+        self.left = kwargs.get('left')
+        self.op = kwargs.get('op')
+        self.right = kwargs.get('right')
+
+
+
 if __name__ == '__main__':
     N = 4
-    i = Index(rng=range(1, N - 1), name='i')
-    j = Index(rng=range(1, N - 1), name='j')
+    i = Range(rng=range(1, N - 1), name='i')
+    j = Range(rng=range(1, N - 1), name='j')
 
     print(i*9+i/4.4*6+j)
 

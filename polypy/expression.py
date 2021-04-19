@@ -4,45 +4,17 @@ import numpy as np
 from polypy.generator import validate_name, preprint, PrePrint
 import polypy
 import copy
-import itertools
+from collections.abc import Sequence
+import polypy as pp
 
-
-# TODO Errors
-# - Shape of sliced objects is wrong
-# - bind: Call a function with some args being parameters and some differentiable vars
-# - Deal with inf in variable bounds properly
-# - Add a template cast for all constants in 2nd-order derivatives https://gist.github.com/nuft/828bd48994a1f18e85b806e8e417b6d4
-
-# TODO Features / improvements
-# - functions with multiple outputs (?)
-# - add generation code and wrappers to call from python\
-# - add variable sets back in
-# - drop all variables from the generation that aren't used some constraint
-# - basic nonlinear functions (sin, cos, division, etc)
-# - collect dependencies into different print buffers so they can be split out in order
-# - add a __le__ and __ge__ to generate inequalties
-# - allow setting of initial dual points
-# - add hooks to the end of all NLP functions to allow user customization in C
-# - use the correct variable names in functions
-# - stack variables from different vectors z = [x[-1];u[2]]
-
-# Optimizations
-# - look for repeated expressions and buffer them into temporary variables
-# - reuse temporary variables and allocate at the top of the function
-# - switch to a delegate formulation
-# - keep a set of generated constants to re-use, rather than generating more (e.g., for lower bounds from numpy, etc)
-
-# Checks
-# - Confirm that functions only use the variables in their argument list
-# - Confirm that substitutions are valid sizes (perhaps shift to a post-construction validation?)
 
 tmp_index = 1  # Used to specify uniquely named temporary variables
-def _get_temp_name(name=None):
+def _get_temp_name(name=None, basename="tmp"):
     if name:
         return name
     else:
         global tmp_index
-        name = f"tmp{tmp_index}"
+        name = f"{basename}{tmp_index}"
         tmp_index += 1
         return name
 
@@ -91,6 +63,9 @@ class Expression:
     def __str__(self):
         args = ", ".join([str(a) for a in self.args])
         return f"{self.op}({args})"
+
+    def __repr__(self):
+        return str(self)
 
     def __len__(self):
         return self.shape[0]
@@ -257,6 +232,19 @@ class Expression:
             # print("ATTRIBUTE ERROR")
             pass
         return rec
+
+    def get_index(self):
+        """Return an Index if this expression is using one, otherwise raises an exception.
+
+        If multiple indices are found, then this raises an exception too.
+        """
+        nodes_with_indices = self.get_by_property(lambda n: n.ind.indices)
+        indices = set().union(*[n.ind.indices for n in nodes_with_indices])
+        if len(indices) == 1:
+            return indices.pop()
+        if len(indices) > 1:
+            raise IndexError(f"Multiple indices found in the expression {str(self)}")
+        raise IndexError(f"No index found in the expression {str(self)}")
 
     def count_nodes(self):
         return 1 + sum([arg.count_nodes() for arg in self.args])
@@ -715,7 +703,7 @@ class Matrix(AtomicExpression):
 
     def __init__(self, shape, name=None, initial=None):
         super().__init__()
-        self.name = _get_temp_name(name)
+        self.name = _get_temp_name(name, basename="Mat")
         self.shape = shape
         self.op = "id"
         if initial is not None:
@@ -741,7 +729,7 @@ class Matrix(AtomicExpression):
 
     def generate_initialization(self, p):
         # Initialize the variable if initial is specified
-        print(f"initializing {self}")
+        # print(f"initializing {self}")
         M = self.initial
         if np.all(M == np.ravel(M)[0]):  # All values are the same
             p(f"{self.name}.array() = {M[0][0]};")
@@ -779,7 +767,7 @@ class ConstMatrix(Matrix):
             M = np.array([M])
         if M.ndim == 1:
             M = M.reshape(len(M), 1)  # Convert to column vector
-        super().__init__(M.shape, name=name, initial=M)
+        super().__init__(M.shape, name=_get_temp_name(name, basename="Const"), initial=M)
         self.M = M
         self.shape = M.shape
 
@@ -996,97 +984,170 @@ class ConstScalar(Scalar):
 #     def __len__(self):
 #         return self.len
 
+class VariableList(Sequence):
+    """A wrapper on a list of variables in a VariableSet. 
 
-# class VariableSet(list):
-#     def __init__(self, name, length, num_vars):
-#         validate_name(name)
-#         self.name = name
-#         self._len = length
-#         self.num_vars = num_vars
+    This exists so that we can write x[i] for i = Index()
+    """
+    def __init__(self, variables):
+        self.vars = variables
 
-#     def __getitem__(self, key):
-#         return Variable(None, None, self, key)
+    def __len__(self):
+        return len(self.vars)
 
-#     def __repr__(self):
-#         return str(self)
+    def __getitem__(self, key):
+        if isinstance(key, pp.Range):
+            var_set = self.vars[0].var_set
+            return Variable(None, None, var_set=var_set, ind=key)
+        else:
+            return self.vars.__getitem__(key)
 
-#     def __str__(self):
-#         return self.name
-
-#     def __len__(self):
-#         return self._len
-
-#     # def __repr__(self):
-#     #     cols = f"{self.cols}" if self.cols > 1 else ""
-#     #     return f"{str(self)}[{str(self.var_type)}*{cols}]"
-
-class Variable(AtomicExpression):
-    # A vector variable, or an index into a VectorSet
-
-    # def __init__(self, name, length, var_set=None, ind=None):
-    def __init__(self, name, length, **kwargs):
-        super().__init__()
-        # if name is None:
-        #     # We're taking a column from a VarSet
-        #     self.name = var_set.name
-        #     self._len = len(var_set)
-        #     self.var_set = var_set
-        #     self.ind = ind
-        # else:
-        # We're defining a new variable
-        self.name = name
-        self._len = length
-        # self.var_set = None
-        # self.ind = None
-
-        self.lb = kwargs.get('lb', -2e20)  # Deal with INF properly...
-        self.ub = kwargs.get('ub', 2e20)
-
-        if isinstance(self.lb, numbers.Number):
-            self.lb = np.ones((length)) * self.lb
-        if isinstance(self.ub, numbers.Number):
-            self.ub = np.ones((length)) * self.ub
-
-        assert len(self.lb) == len(self), ValueError(f"Lower bound must be a vector of length {len(self)}")
-        assert len(self.ub) == len(self), ValueError(f"Upper bound must be a vector of length {len(self)}")
-
-        if isinstance(self.lb, np.ndarray):
-            self.lb = ConstMatrix(self.lb)
-        if isinstance(self.ub, np.ndarray):
-            self.ub = ConstMatrix(self.ub)
+    def __repr__(self):
+        return repr(self.vars)
 
     def __str__(self):
-        val = f"{self.name}"
-        # if self.ind is not None:
-        #     return f"{val}[{str(self.ind)}]"
-        return val
+        return str(self.vars[0].var_set)
+
+
+
+class VariableSet:
+    def __init__(self, name, var_length, num_vars, **kwargs):
+        validate_name(name)
+        self.name = name
+        self.var_len = var_length
+        self.num_vars = num_vars
+        self.lb = kwargs.get('lb')
+        self.ub = kwargs.get('ub')
+
+        self.var_list = VariableList([
+            Variable(None, self.var_len,
+                     lb=copy.copy(self.lb), ub=copy.copy(self.ub),
+                     var_set=self, ind=i)
+            for i in range(self.num_vars)])
+
+    def expand(self):
+        """Return a list of Variables that this VariableSet refers to
+
+        Note: upper and lower bounds of the variables will be reset to default
+        """
+        return self.var_list
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return f"{str(self)}[{self.var_len}x{self.num_vars}]"
+
+    def __len__(self):
+        return self.var_len
+
+    def eigen_get(self, var, **kwargs):
+        """Return an eigen statement to access this variable as an offset into var"""
+        if kwargs.get("columnwise", False):
+            return f"{str(self.name)}_get_matrix({var}).colwise()"
+        else:
+            return f"{str(self.name)}_get_matrix({var})"
+
+
+def variable(name, var_length, **kwargs):
+    """Create a Variable, or a VariableSet, depending on shape"""
+
+    lb = kwargs.get('lb', -2e20)  # Deal with INF properly...
+    ub = kwargs.get('ub', 2e20)
+
+    if isinstance(lb, numbers.Number):
+        lb = np.ones((var_length)) * lb
+    if isinstance(ub, numbers.Number):
+        ub = np.ones((var_length)) * ub
+
+    assert len(lb) == var_length, ValueError(f"Lower bound must be a vector of var_length {var_length}")
+    assert len(ub) == var_length, ValueError(f"Upper bound must be a vector of var_length {var_length}")
+
+    if isinstance(lb, np.ndarray):
+        lb = ConstMatrix(lb)
+    if isinstance(ub, np.ndarray):
+        ub = ConstMatrix(ub)
+
+    num_vars = kwargs.get('num_vars', 1)
+    var_set = None
+    if num_vars > 1:
+        var_set = VariableSet(name, var_length, num_vars, lb=lb, ub=ub)
+        return var_set.expand()
+    return Variable(name, var_length, lb=lb, ub=ub)
+
+
+class Variable(AtomicExpression):
+    """A vector variable, or an index into a VariableSet"""
+
+    def __init__(self, name, length, **kwargs):
+        super().__init__()
+        self._name = name
+        self._len = length
+        self.var_set = kwargs.get("var_set", None)
+        self.ind = kwargs.get("ind", None)
+
+        self._lb = kwargs.get('lb', None)
+        self._ub = kwargs.get('ub', None)
+
+    def __str__(self):
+        return self.name
 
     def __repr__(self):
         return str(self)
 
     def __len__(self):
+        if self.var_set:
+            return len(self.var_set)
         return self._len
 
-    # def __eq__(self, other):
-    #     if (isinstance(other, Variable)):
-    #         return self.name == other.name and len(self) == len(other) and self.ind == other.ind
-    #     return False
+    @property
+    def name(self):
+        if self.var_set:
+            return f"{self.var_set.name}[{str(self.ind)}]"
+        return self._name
 
-    # def __hash__(self):
-    #     return hash((self.name, self._len, self.ind))
+    @property
+    def lb(self):
+        if isinstance(self.ind, pp.Range):
+            raise AttributeError("Lower bound not defined for dynamically indexed variables")
+        return self._lb
+
+    @lb.setter
+    def lb(self, new_lb):
+        if isinstance(self.ind, pp.Range):
+            raise AttributeError("Cannot set lower bound for dynamically indexed variables")
+        self._lb = new_lb
+
+    @property
+    def ub(self):
+        if isinstance(self.ind, pp.Range):
+            raise AttributeError("Upper bound not defined for dynamically indexed variables")
+        return self._ub
+
+    @ub.setter
+    def ub(self, new_ub):
+        if isinstance(self.ind, pp.Range):
+            raise AttributeError("Cannot set upper bound for dynamically indexed variables")
+        self._ub = new_ub
 
     @property
     def shape(self):
         return (len(self), 1)
 
-    def _generate_eigen(self, p, *args):
-        return str(self)
+    # def _generate_eigen(self, p, *args):
+    #     if self.var_set:
+    #         p.add_dependency(self.var_set, 'VariableSet')
+    #     else:
+    #         p.add_dependency(self, 'Variable')
+    #     return str(self)
 
     def _is_equal(self, other):
         # return id(self) == id(other)
         if self.name != other.name:
             return False
         if self._len != other._len:
+            return False
+        if self.ind != other.ind:
             return False
         return True
 
@@ -1100,3 +1161,68 @@ class Variable(AtomicExpression):
         super(Variable, self.__class__).state.fset(self, newState)
         self.lb.state = newState
         self.ub.state = newState
+
+    def eigen_get(self, var, **kwargs):
+        """Return an eigen statement to access this variable as an offset into var"""
+        if self.var_set:
+            return f"{str(self.var_set.name)}_get({var}, {self.ind})"
+        else:
+            return f"{str(self)}_get({var})"
+
+    def eigen_offset(self):
+        """Return an eigen statement to compute the offset of this variable via macro"""
+        if self.var_set:
+            return f"{str(self.var_set.name)}_o({self.ind})"
+        else:
+            return f"{str(self)}_o"
+
+
+# class VariableRef(AtomicExpression):
+#     """A dynamic reference into a VariableSet"""
+
+#     def __init__(self, var_set, index):
+#         super().__init__()
+#         self.var_set = var_set
+#         self.index = index
+
+#     def __str__(self):
+#         return self.var_set.name + str(self.index)
+
+#     def __repr__(self):
+#         return str(self)
+
+#     def __len__(self):
+#         return len(self.var_set)
+
+#     def _is_equal(self, other):
+#         try:
+#             if not self.var_set.is_equal(other.var_set):
+#                 return False
+#             if self.index != other.index:
+#                 return False
+#         except AttributeError:
+#             return False
+#         return True
+
+#     @property
+#     def state(self):
+#         return self.var_set.state
+
+#     @state.setter
+#     def state(self, newState):
+#         self.var_set.state = newState
+
+#     def eigen_get(self, var, **kwargs):
+#         """Return an eigen statement to access this variable as an offset into var"""
+#         if self.var_set:
+#             return f"{str(self.var_set.name)}_get({var}, {self.ind})"
+#         else:
+#             return f"{str(self)}_get({var})"
+
+#     def eigen_offset(self):
+#         """Return an eigen statement to compute the offset of this variable via macro"""
+#         if self.var_set:
+#             return f"{str(self.var_set.name)}_o({self.ind})"
+#         else:
+#             return f"{str(self)}_o"
+

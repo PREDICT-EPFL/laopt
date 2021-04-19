@@ -93,6 +93,14 @@ public:
 		this->variable_bounds(Eigen::Map<variable_t>(x_l), Eigen::Map<variable_t>(x_u));
 		this->constraint_bounds(Eigen::Map<constraint_t>(g_l), Eigen::Map<constraint_t>(g_u));
 
+		std::cout << "============ TEST ===========\n";
+		// auto Xl = Eigen::Map<variable_t>(x_l);
+		// std::cout << "x_lb = \n" << Prob::x_get_matrix(Xl) << std::endl;
+		// Eigen::Matrix<scalar_t, 2, 1> tmp1 = {1,2};
+		// std::cout << "Prob::x_get_matrix(Xl).rows = " << Prob::x_get_matrix(Xl).rows() << std::endl;
+		// // Prob::x_get_matrix(Xl).colwise() = tmp1;
+		// std::cout << "x_lb = \n" << Prob::x_get_matrix(Xl) << std::endl;
+
 		return true;	
 	}
 
@@ -290,6 +298,20 @@ public:
 		// return true;
 	}   
 
+	// template <class T,
+	//          typename std::enable_if_t<std::is_const<T>::value == true>* = nullptr>
+	// constexpr auto test_const(T& x) {
+	// 	std::cout << "In const" << std::endl;
+ //        return Eigen::Map<const Eigen::Matrix<scalar_t, 2, 5>>((x).data());
+	// }
+
+	// template <class T,
+	//          typename std::enable_if_t<std::is_const<T>::value == false>* = nullptr>
+	// constexpr auto test_const(T& x) {
+	// 	std::cout << "In non-const" << std::endl;
+ //        return Eigen::Map<Eigen::Matrix<scalar_t, 2, 5>>((x).data());
+	// }
+
    /** This method is called when the algorithm is complete so the TNLP can store/write the solution */
 	void finalize_solution(
 		SolverReturn               status,
@@ -335,30 +357,22 @@ public:
 		// }
 
 
-		const int N = 5;
 		std::cout << "========== Solution =========\n";
 		auto X = Eigen::Map<const variable_t>(x);
-		std::cout << "x0 = " << Prob::x0_get(X).transpose() << std::endl;
-		std::cout << "x1 = " << Prob::x1_get(X).transpose() << std::endl;
-		std::cout << "x2 = " << Prob::x2_get(X).transpose() << std::endl;
-		std::cout << "x3 = " << Prob::x3_get(X).transpose() << std::endl;
-		std::cout << "x4 = " << Prob::x4_get(X).transpose() << std::endl;
-		std::cout << "x5 = " << Prob::x5_get(X).transpose() << std::endl;
-		std::cout << "x6 = " << Prob::x6_get(X).transpose() << std::endl;
-		std::cout << "x7 = " << Prob::x7_get(X).transpose() << std::endl;
-		std::cout << "x8 = " << Prob::x8_get(X).transpose() << std::endl;
-		std::cout << "x9 = " << Prob::x9_get(X).transpose() << std::endl;
 
-		std::cout << "u0 = " << Prob::u0_get(X).transpose() << std::endl;
-		std::cout << "u1 = " << Prob::u1_get(X).transpose() << std::endl;
-		std::cout << "u2 = " << Prob::u2_get(X).transpose() << std::endl;
-		std::cout << "u3 = " << Prob::u3_get(X).transpose() << std::endl;
-		std::cout << "u4 = " << Prob::u4_get(X).transpose() << std::endl;
-		std::cout << "u5 = " << Prob::u5_get(X).transpose() << std::endl;
-		std::cout << "u6 = " << Prob::u6_get(X).transpose() << std::endl;
-		std::cout << "u7 = " << Prob::u7_get(X).transpose() << std::endl;
-		std::cout << "u8 = " << Prob::u8_get(X).transpose() << std::endl;
-		std::cout << "u9 = " << Prob::u9_get(X).transpose() << std::endl;
+		std::cout << "x = \n" << Prob::x_get_matrix(X).transpose() << std::endl;
+		std::cout << "u = \n" << Prob::u_get_matrix(X).transpose() << std::endl;
+		std::cout << "xss = " << Prob::xss_get(X).transpose() << std::endl;
+		std::cout << "uss = " << Prob::uss_get(X) << std::endl;
+
+		// typename Prob::constraint_t constraints;
+		// typename Prob::constraint_jacobian_t jacobian;
+		// jacobian.setZero();
+		// this->constraints(X, constraints, jacobian);
+
+		// std::cout << "Constraints at optimality:\n";
+		// std::cout << constraints.transpose() << std::endl;
+		// std::cout << jacobian << std::endl;
 
 	}
 
@@ -476,18 +490,24 @@ int main(void)
 
 
    // Ask Ipopt to solve the problem
-   mynlp->x_initial = {1,2};
-   mynlp->q = {1,1};
+   mynlp->x_initial = {0,1};
+   mynlp->q = {0,1000};
 
    std::cout << "x_initial = " << mynlp->x_initial << std::endl;
    std::cout << "q = " << mynlp->q << std::endl;   
    status = app->OptimizeTNLP(mynlp);
 
-   mynlp->q = {100000,100000};
 
-   std::cout << "x_initial = " << mynlp->x_initial << std::endl;
-   std::cout << "q = " << mynlp->q << std::endl;   
-   status = app->OptimizeTNLP(mynlp);
+   std::cout << "A = \n" << mynlp->A << std::endl;
+   std::cout << "B = \n" << mynlp->B << std::endl;
+
+
+
+   // mynlp->q = {10,100000};
+
+   // std::cout << "x_initial = " << mynlp->x_initial << std::endl;
+   // std::cout << "q = " << mynlp->q << std::endl;   
+   // status = app->OptimizeTNLP(mynlp);
 
    // if( status == Solve_Succeeded )
    // {

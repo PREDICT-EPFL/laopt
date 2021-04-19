@@ -9,6 +9,7 @@ using namespace Eigen;
 #include <string_view>
 #include <array>
 #include <tuple>
+#include <type_traits>
 
 /************************************************************************
     Optimizations / TODO
@@ -80,14 +81,40 @@ void type_args(Args... args)
     constexpr auto name##_get(T x) {return x.template segment<size>(offset);} /* Offset */ \
     static constexpr int name##_len = size;
 
+// template<typename T, typename = std::enable_if_t<std::is_const<T>::value>>
+// constexpr auto _map_matrix(map_from x)
+// {
+//     return Eigen::Map<const Eigen::Matrix<scalar_t, name##_len, name##_numvecs>>((x.template segment<size>(offset)).data());} /* Matrix representation */
+// }
+
+// Helper function to reshape an eigen matrix while maintaining const'ness
+template <typename map_to, typename scalar_t>
+constexpr auto _map_matrix(const scalar_t* x) {
+    return Eigen::Map<const map_to>(x);
+}
+
+template <typename map_to, typename scalar_t>
+constexpr auto _map_matrix(scalar_t* x) {
+    return Eigen::Map<map_to>(x);
+}
+
+
 #define DECLARE_VAR4(name, offset, size, number) \
     static constexpr auto name##_mat_size = size*number; /* Size of the vectorized variable */ \
     static constexpr auto name##_numvecs = number; /* Number of vectors */ \
     static constexpr auto name##_o(int col) {return offset + size * col;} /* Offset */ \
-    template<typename T> \
-    constexpr auto name##_get(T x, int col) \
+    static constexpr int name##_len = size; \
+    template <typename T> \
+    constexpr auto name##_get(T& x, int col) \
         {return x.template segment<size>(offset + size * col);} /* Offset */ \
-    static constexpr int name##_len = size;
+    template <typename T> \
+    constexpr auto name##_get_matrix(T& x) \
+        {return _map_matrix<Eigen::Matrix<scalar_t, name##_len, name##_numvecs>>(x.template segment<size*number>(offset).data());}
+
+    // template<typename T> \
+    // constexpr auto name##_get_matrix(T& x) \
+    //     {return Eigen::Map<const Eigen::Matrix<scalar_t, name##_len, name##_numvecs>>((x.template segment<size>(offset)).data());} /* Matrix representation */ 
+
 
 #define GET_MACRO(_1,_2,_3,_4,NAME,...) NAME
 #define DECLARE_VAR(...) GET_MACRO(__VA_ARGS__, DECLARE_VAR4, DECLARE_VAR3)(__VA_ARGS__)

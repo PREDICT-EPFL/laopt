@@ -1,10 +1,14 @@
 # from expression import Variable
 import polypy
-from polypy import Variable, Function
+import polypy as pp
+from polypy.expression import Variable
+from polypy import variable
+from polypy import Function
 from polypy.function import Jacobian, Hessian
 from polypy.generator import Generator
 
 from collections import namedtuple
+from collections.abc import Iterable
 import numpy as np
 import copy
 import numbers
@@ -35,7 +39,7 @@ class Constraint:
         self.args = sorted(args, key=lambda v: v.name)
 
         # Generic named variables
-        vars = [Variable(f"_var{i}", len(arg)) for i, arg in enumerate(self.args)]
+        vars = [pp.variable(f"var{i}_", len(arg)) for i, arg in enumerate(self.args)]
 
         # Create function
         funcname = polypy._get_unique_name("func")
@@ -58,6 +62,12 @@ class Constraint:
         if isinstance(self.ub, np.ndarray):
             self.ub = polypy.expression.ConstMatrix(self.ub)
 
+        # Test if this constraint is a set of constraints indexed by an Index
+        try:
+            self.index = self.original_expr.get_index()
+        except IndexError:
+            self.index = None
+
     def __repr__(self):
         return str(self)
 
@@ -67,7 +77,10 @@ class Constraint:
         return str(self.original_expr)
 
     def __len__(self):
-        return len(self.function)
+        try:
+            return len(self.function) * self.index.num_iterations
+        except AttributeError:
+            return len(self.function)
 
     @property    
     def shape(self):
@@ -124,27 +137,30 @@ class NLP:
         self.constraints = []  # List of constraints
         self.aux_functions = []  # Additional functions that the user wants
         
-        self.variables = []  # List of variables
-        self.parameters = []  # List of parameters
+        self.variables = None  # List of variables with VariableSets expanded
+        self.compressed_vars = None  # List of variables with VariableSets not expanded
 
     def freeze(self):
         # Freeze all expressions
-        for x in self.constraints + self.variables + self.parameters + self.aux_functions:
+        for x in self.constraints + self.variables + self.aux_functions:
             x.state = polypy.Expression.State.Frozen
 
     def unfreeze(self):
         # Freeze all expressions
-        for x in self.constraints + self.variables + self.parameters + self.aux_functions:
+        for x in self.constraints + self.variables + self.aux_functions:
             x.state = polypy.Expression.State.Frozen
 
-    def variable(self, name, length, number=None, **kwargs):
-        if number:
-            x = [Variable(name + str(i), length, **kwargs) for i in range(number)]
-            self.variables += x
-        else:
-            x = Variable(name, length, **kwargs)
-            self.variables.append(x)
-        return x
+    # def variable(self, name, shape, **kwargs):
+    #     x = pp.variable(name, shape, **kwargs)
+    #     self.variables += x
+    #     return x
+    #     # if number:
+    #     #     x = [variable(name + str(i), length, **kwargs) for i in range(number)]
+    #     #     self.variables += x
+    #     # else:
+    #     #     x = variable(name, length, **kwargs)
+    #     #     self.variables.append(x)
+    #     # return x
 
     def add_function(self, function):
         # Add an auxillary function to the generation list
@@ -158,23 +174,30 @@ class NLP:
             nnz += con.shape[0] * con.shape[1]
         return nnz
 
-    def add(self, constraint, name=None):
-        # Add an inequality or equality constraint to the nlp
+    def add(self, constraints, name=None):
+        """Add an inequality or equality constraint to the NLP.
 
-        if name is None:
-            if isinstance(constraint, Equality):
-                name = polypy._get_unique_name("eq")
-            elif isinstance(constraint, Inequality):
-                name = polypy._get_unique_name("ineq")
-            else:
-                name = polypy._get_unique_name("con")
-        constraint.name = name
+        constraint can be an element, or an iterable
+        """
 
-        for eq in self.constraints:
-            if constraint.function.expression.is_equal(eq.function.expression):
-                constraint.function = eq.function
+        if not isinstance(constraints, Iterable):
+            constraints = (constraints, )
 
-        self.constraints.append(constraint)
+        for constraint in constraints:
+            if name is None:
+                if isinstance(constraint, Equality):
+                    name = polypy._get_unique_name("eq")
+                elif isinstance(constraint, Inequality):
+                    name = polypy._get_unique_name("ineq")
+                else:
+                    name = polypy._get_unique_name("con")
+            constraint.name = name
+
+            for eq in self.constraints:
+                if constraint.function.expression.is_equal(eq.function.expression):
+                    constraint.function = eq.function
+
+            self.constraints.append(constraint)
 
     def minimize(self, expr):
         """Set objective function to minimize"""
@@ -189,8 +212,53 @@ class NLP:
         #     dependents += func.functions
         # return funcs.union(dependents).union(self.aux_functions)
 
-    def generate(self, p): #filename="gen.hpp", classname="LOpt"):
-        # Write out a class to evaluate this nlp
+    def get_variables(self, expand=True):
+        """Search through every equation in the NLP and extract all used Variables
+        """
+
+        # Collect all Variables and compress into VariableSets (so we can get the contiguous ordering correct)
+        compressed_vars = set()
+        for con in self.constraints:
+            for var in con.original_expr.get_by_property(lambda n: isinstance(n, Variable)):
+                if var.var_set:
+                    compressed_vars.add(var.var_set)
+                else:
+                    compressed_vars.add(var)
+        return list(compressed_vars)
+
+    def _expand_variables(self, compressed_vars):
+        """Take a list of Variables and VariableSets, and expands the VariableSets in place"""
+        vars = []
+        for v in compressed_vars:
+            try:
+                vars.extend(v.expand())
+            except AttributeError:
+                vars.append(v)
+        return vars
+
+    def set_variables(self, variables=None):
+        """Set the variable for this NLP, and the desired order.
+
+        If variables is not specfied, then we'll search through the NLP and extract all variables.
+
+        Note: VariableSets must appear in contiguous order.
+        """
+        if not variables:
+            variables = self.get_variables()
+        else:
+            # Convert lists to VariableSets
+            for i in range(len(variables)):
+                if isinstance(variables[i], list):
+                    variables[i] = variables[i][0].var_set
+
+        self.compressed_vars = variables
+        self.variables = self._expand_variables(variables)
+
+    def generate(self, p):
+        """Write out a class to evaluate this nlp"""
+
+        if not self.variables:  # If the variable order hasn't been set, detect and set it
+            self.set_variables()
 
         # Freeze everything to make it easier to do set operations
         self.freeze()
@@ -211,6 +279,7 @@ class NLP:
             p(f"nnz_constraints_jacobian = {self.nnz_constraints_jacobian},")
         p("")
 
+        p("// Short names to pass constant vectors and writable vectors")
         p("template<typename T, std::size_t n>")
         p("using cVec = const Eigen::Ref<const Eigen::Matrix<T, n, 1>>;")
         p("template<typename T, std::size_t n>")
@@ -219,26 +288,29 @@ class NLP:
 
 
         p("// NLP variable types")
-        p(f"using variable_t   = Matrix<scalar_t, NUM_VARS, 1>;")
-        p(f"using constraint_t = Matrix<scalar_t, NUM_CON, 1>;")
+        p(f"using variable_t            = Matrix<scalar_t, NUM_VARS, 1>;")
+        p(f"using constraint_t          = Matrix<scalar_t, NUM_CON, 1>;")
 
         # For now - we're assuming dense jacobians and hessian
         p(f"using constraint_jacobian_t = Matrix<scalar_t, NUM_CON,  NUM_VARS>;")
-        p(f"using obj_gradient_t       = Matrix<scalar_t, 1, NUM_VARS>;")
-        p(f"using obj_hessian_t        = Matrix<scalar_t, NUM_VARS, NUM_VARS>;")
-        p(f"using obj_t                = scalar_t;")
+        p(f"using obj_gradient_t        = Matrix<scalar_t, 1, NUM_VARS>;")
+        p(f"using obj_hessian_t         = Matrix<scalar_t, NUM_VARS, NUM_VARS>;")
+        p(f"using obj_t                 = scalar_t;")
         # p(f"using dual_t       = Matrix<scalar_t, DUAL_SIZE, 1>;")
         p("")
 
-        p("// Define optimization variables (offsets in var)")
+        p("// Define functions to access optimization variables")
         offset = 0
-        for var in self.variables:
-            setattr(var, 'offset', offset)
-            p(f"DECLARE_VAR({var}, {var.offset}, {len(var)})")
-            offset += len(var)
+        for var in self.compressed_vars:
+            try:
+                p(f"DECLARE_VAR({var}, {offset}, {len(var)}, {var.num_vars})")
+                offset += len(var) * var.num_vars
+            except:
+                p(f"DECLARE_VAR({var}, {offset}, {len(var)})")
+                offset += len(var)
         p("")
 
-        p("// Define constraints (offset functions)")
+        p("// Define functions to access constraints")
         offset = 0
         for con in self.constraints:
             setattr(con, 'offset', offset)
@@ -266,17 +338,37 @@ class NLP:
         p("EIGEN_STRONG_INLINE void variable_bounds(Ref<variable_t> x_l, ")
         p("                                         Ref<variable_t> x_u) noexcept")
         with p.function():
-            # p("using T = scalar_t;")  # All function calls will not use derivatives
-            for var in self.variables:
+            for var in self.compressed_vars:
                 try:
-                    p(f"{str(var)}_get(x_l).array() = {var.lb.generate_scalar(p)};")
+                    scalar = var.lb.generate_scalar(p)
+                    p(f"{var.eigen_get('x_l', columnwise=False)}.array() = {scalar};")
                 except AttributeError:
-                    p(f"{str(var)}_get(x_l) = {var.lb.generate(p)};")
+                    p(f"{var.eigen_get('x_l', columnwise=True)} = {var.lb.generate(p)};")
 
                 try:
-                    p(f"{str(var)}_get(x_u).array() = {var.ub.generate_scalar(p)};")
+                    scalar = var.ub.generate_scalar(p)
+                    p(f"{var.eigen_get('x_u', columnwise=False)}.array() = {scalar};")
                 except AttributeError:
-                    p(f"{str(var)}_get(x_u) = {var.ub.generate(p)};")
+                    p(f"{var.eigen_get('x_u', columnwise=True)} = {var.ub.generate(p)};")
+
+            for var in self.variables:
+                try:
+                    if not var.var_set.lb._is_equal(var.lb):
+                        try:
+                            scalar = var.lb.generate_scalar(p)
+                            p(f"{var.eigen_get('x_l', columnwise=False)}.array() = {scalar};")
+                        except AttributeError:
+                            p(f"{var.eigen_get('x_l', columnwise=True)} = {var.lb.generate(p)};")
+
+                    if not var.var_set.ub._is_equal(var.ub):
+                        try:
+                            scalar = var.ub.generate_scalar(p)
+                            p(f"{var.eigen_get('x_u', columnwise=False)}.array() = {scalar};")
+                        except AttributeError:
+                            p(f"{var.eigen_get('x_u', columnwise=True)} = {var.ub.generate(p)};")
+                except AttributeError:
+                    pass
+
         p("")
         p("// Evaluates the upper and lower bounds for the constraints variable into g_l and g_u")
         p("// Can access the resulting bounds with the macros con_get(g_l), where con is the variable")
@@ -349,7 +441,7 @@ class NLP:
                     iCon = self.constraints.index(con)
                     col_offset.append(sum([len(blk.con) for blk in blocks[:iCon, iVar] if blk]))
 
-                p(f"{con.function.name}({{{', '.join([f'{arg.name}_o' for arg in con.args])}}}, {{{', '.join(str(i) for i in col_offset)}}}, {con.name}, var, constraints, jacobian);")
+                p(f"{con.function.name}({{{', '.join([arg.eigen_offset() for arg in con.args])}}}, {{{', '.join(str(i) for i in col_offset)}}}, {con.name}, var, constraints, jacobian);")
         p("}")
 
     def _generate_objective(self, p):
@@ -377,8 +469,6 @@ class NLP:
             if not found:
                 unique_funcs.append(o)
                 p.add_dependency(Hessian(o.function), "Hessian")
-
-        print(obj_func)
 
         # Compute interactions between variables
         vars = self.variables
@@ -462,7 +552,7 @@ class NLP:
 
             for i, o in enumerate(obj_func):
                 # var_offsets = "{" + ', '.join(str(var_pos[var]) for var in o.args) + "}"
-                var_offsets = "{" + ', '.join(var.name + "_o" for var in o.args) + "}"
+                var_offsets = "{" + ', '.join(var.eigen_offset() for var in o.args) + "}"
                 p(f"val += {o.function.name}({var_offsets}, var);")
             p("return val;")
         p("")
@@ -476,7 +566,7 @@ class NLP:
 
             for i, o in enumerate(obj_func):
                 # var_offsets = "{" + ', '.join(str(var_pos[var]) for var in o.args) + "}"
-                var_offsets = "{" + ', '.join(var.name + "_o" for var in o.args) + "}"
+                var_offsets = "{" + ', '.join(var.eigen_offset() for var in o.args) + "}"
                 p(f"val += {o.function.name}({var_offsets}, var, gradient, true);")
             p("return val;")
         p("")
@@ -492,13 +582,10 @@ class NLP:
             p("")
 
             for i, o in enumerate(obj_func):
-                var_offsets = "{" + ', '.join(var.name + "_o" for var in o.args) + "}"
+                var_offsets = "{" + ', '.join(var.eigen_offset() for var in o.args) + "}"
                 p(f"val += {o.function.name}({var_offsets}, "
                     + f"var, gradient, H_offset_{i}, hessian, true);")
             p("return val;")
-
-
-
 
 
     def _sparsity_structure(self, constraints):
