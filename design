@@ -45,3 +45,64 @@ Notions to be transpiled:
 - evaluation
 - jacobian (?)
 - hessian (?)
+
+
+
+
+
+
+
+
+top matter
+
+class
+	members
+
+	functions
+
+	constructor
+
+
+
+Types of things that we need to generate:
+
+- define
+	Variables: Produce the int x = 4; statement
+	Functions: Produce void f(x) {}; statement
+	Expression: Nothing
+
+- eval: Return string evaluating the item.
+	Variables: Return name
+	Functions: Return matrix tmp; f(x, tmp); tmp
+	Expression: Return string evaluation
+
+- initialization: 
+	Two types... in 
+
+
+
+
+
+
+Tree of generation scopes
+- global
+	- header material
+	- class
+		- function
+		- function
+
+generation => file
+	- scope
+
+
+
+
+Merging preprint + generator into one:
+
+on creation: open file
+
+preprint is then the "internal" buffers
+-> open/close class
+-> open/close function
+
+on final exit: close file

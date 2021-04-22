@@ -1,21 +1,70 @@
 import numpy as np
-from polypy import Variable, Matrix, Function, ConstScalar, Scalar, Generator, ConstMatrix
-from polypy import Index
-from polypy import preprint
-from polypy.expression import AtomicExpression, functionExpression, hstack, summation
-from polypy import NLP
-from polypy.nlp import Inequality
-
 import polypy as pp
 
 N, n, m = 5, 2, 1
 
-x = Variable("x", n)
-u = Variable("u", m)
+A = pp.matrix([[0, 0, 1, 2], [1, 0, 3, 4]], name='A')
+B = pp.matrix([1, 0], name='B', constant=False)
+c = pp.matrix([[1], [2]], name='c')
 
-A = ConstMatrix(np.array([[0, 0], [1, 0]]), 'A')
-B = Matrix((n, m), "B", initial=np.array([[1], [0]]))
-c = ConstMatrix(np.array([1, 2]).T, 'c')
+
+@pp.function
+def dynamics(x: n, u: m):
+    vel = pp.matrix([1, 1]) @ pp.sin(x[0] + x[1])
+    xdot = A @ pp.vstack(vel, pp.cos(u), x[2]) + B @ u
+    return xdot
+
+
+def rk4(f, x, u):
+    h = pp.Scalar(0.1, 'h')
+    xp = x
+    k1 = f(xp, u)
+    k2 = f(xp + (h * 0.5) * k1, u)
+    k3 = f(xp + (h * 0.5) * k2, u)
+    k4 = f(xp + h * k3, u)
+    return xp + (h * 0.1667) * (k1 + 2 * k2 + 2 * k3 + k4)
+
+
+@pp.function
+def sys_d(x: n, u: m):
+    return rk4(dynamics, x, u)
+
+x0 = pp.matrix(np.zeros(n), name="x0")
+@pp.function
+def sys_0(u: m):
+    return sys_d(x0, u)
+
+x = pp.variable("x", n, num_vars=N)
+u = pp.variable("u", m, num_vars=N)
+
+
+
+with pp.EigenGenerator(filename="examples/myproblem.hpp") as generator:
+    # generator.generate_dependencies(generator)
+    with generator.generate_class('LOpt') as gen:  # <= generates class declaration at open
+        # sys.generate_declaration(gen)
+        # print(sys_d)
+        sys_d.generate_declaration(gen)
+        dynamics.generate_declaration(gen)
+        sys_0.generate_declaration(gen)
+
+        sys_d(x[1], u[1]).generate(gen)
+
+    #     gen("ehhlo")
+        # gen(f, jacobian=True)  # <= shorthand for generate declaration
+        # gen(A)
+    # <= generates constructor at close
+
+    # with generator.generate_class('CBob') as gen:
+    #     gen(A)
+    #     gen(u)
+
+
+# print(pp.sin(x))
+# print(len(pp.sin(x)))
+
+exit()
+
 
 f = Function("sys", (x, u), A @ x + B @ u)
 

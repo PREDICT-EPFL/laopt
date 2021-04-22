@@ -4,6 +4,14 @@
 		"selected_items":
 		[
 			[
+				"exp",
+				"expression\tmodule"
+			],
+			[
+				"gen",
+				"generator_eigen"
+			],
+			[
 				"Ind",
 				"IndexError\tclass"
 			],
@@ -126,10 +134,6 @@
 			[
 				"variabl",
 				"variable_t"
-			],
-			[
-				"gen",
-				"generate_jacobian\tfunction"
 			],
 			[
 				"num",
@@ -510,29 +514,16 @@
 			[
 				"xt_",
 				"x_t_size"
-			],
-			[
-				"u_t",
-				"u_t_size"
 			]
 		]
 	},
 	"buffers":
 	[
 		{
-			"file": "polypy/expression.py",
-			"settings":
-			{
-				"buffer_size": 39300,
-				"encoding": "UTF-8",
-				"line_ending": "Unix"
-			}
-		},
-		{
 			"file": "todo",
 			"settings":
 			{
-				"buffer_size": 2348,
+				"buffer_size": 2781,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -541,7 +532,7 @@
 			"file": "design",
 			"settings":
 			{
-				"buffer_size": 690,
+				"buffer_size": 693,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -574,19 +565,20 @@
 			}
 		},
 		{
-			"file": "testLinearMPC.py",
+			"file": "transpile.py",
 			"settings":
 			{
-				"buffer_size": 3597,
+				"buffer_size": 454,
 				"encoding": "UTF-8",
-				"line_ending": "Unix"
+				"line_ending": "Unix",
+				"name": "transpile.py"
 			}
 		},
 		{
 			"file": "polypy/Index.py",
 			"settings":
 			{
-				"buffer_size": 3388,
+				"buffer_size": 3713,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -631,7 +623,7 @@
 			"file": "examples/myproblem.hpp",
 			"settings":
 			{
-				"buffer_size": 7882,
+				"buffer_size": 16569,
 				"line_ending": "Unix"
 			}
 		},
@@ -657,7 +649,7 @@
 			"file": "polypy/__init__.py",
 			"settings":
 			{
-				"buffer_size": 1168,
+				"buffer_size": 1209,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -684,9 +676,19 @@
 			"file": "polypy/generator.py",
 			"settings":
 			{
-				"buffer_size": 8266,
+				"buffer_size": 8284,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "polypy/generator_eigen.py",
+			"settings":
+			{
+				"buffer_size": 639,
+				"encoding": "UTF-8",
+				"line_ending": "Unix",
+				"name": "generator_eigen.py"
 			}
 		},
 		{
@@ -755,7 +757,7 @@
 			"file": "polypy/nlp.py",
 			"settings":
 			{
-				"buffer_size": 26050,
+				"buffer_size": 26164,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -1110,6 +1112,16 @@
 			}
 		},
 		{
+			"contents": "Traceback (most recent call last):\n  File \"testLinearMPC.py\", line 101, in <module>\n    with opt.add():\nTypeError: add() missing 1 required positional argument: 'constraints'\n[Finished in 0.2s with exit code 1]\n[shell_cmd: /Users/cnjones/.pyenv/shims/python testLinearMPC.py]\n[dir: /Users/cnjones/git/lampc]\n[path: /Users/cnjones/.pyenv/shims:/Users/cnjones/.pyenv/bin:/usr/local/opt/python/libexec/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Library/TeX/texbin:/Library/Apple/usr/bin]",
+			"settings":
+			{
+				"buffer_size": 491,
+				"line_ending": "Unix",
+				"name": "Build output",
+				"scratch": true
+			}
+		},
+		{
 			"contents": "+(@(A, sys(xss, sys(xss, xss, uss), uss)), @(4, uss))\n==========================\nEigen::Matrix<scalar_t, 3, 1> tmp4;\nEigen::Matrix<scalar_t, 3, 1> tmp0;\nsys((xss), (xss), (uss), tmp0);\nsys((xss), (tmp0), (uss), tmp4);\nout = (A) * (tmp4) + (4) * (uss);\n\n\n==========================\nEigen::Matrix<scalar_t, 3, 1> tmp4;\nEigen::Matrix<scalar_t, 3, 3> Jtmp5;\nEigen::Matrix<scalar_t, 3, 3> Jtmp6;\nEigen::Matrix<scalar_t, 3, 2> Jtmp7;\nEigen::Matrix<scalar_t, 3, 1> tmp0;\nEigen::Matrix<scalar_t, 3, 3> Jtmp1;\nEigen::Matrix<scalar_t, 3, 3> Jtmp2;\nEigen::Matrix<scalar_t, 3, 2> Jtmp3;\nsys((xss), (xss), (uss), tmp0, Jtmp1, Jtmp2, Jtmp3);\nsys((xss), (tmp0), (uss), tmp4, Jtmp5, Jtmp6, Jtmp7);\nout = (A) * (tmp4) + (4) * (uss);\nout = (A) * ((Jtmp6) * (Jtmp3) + Jtmp7) + 4;\n[Finished in 0.2s]",
 			"settings":
 			{
@@ -1328,6 +1340,10 @@
 	],
 	"file_history":
 	[
+		"/Users/cnjones/git/lampc/polypy/expression.py",
+		"/Users/cnjones/git/lampc/testLinearMPC.py",
+		"/Users/cnjones/git/lampc/my_script.py",
+		"/Users/cnjones/git/test.bib",
 		"/Users/cnjones/git/lampc/todo",
 		"/Users/cnjones/git/lampc/examples/gen.cpp",
 		"/Users/cnjones/git/lampc/examples/gen.hpp",
@@ -1441,6 +1457,18 @@
 		"case_sensitive": true,
 		"find_history":
 		[
+			"fortran",
+			"generate_eigen",
+			"self",
+			"generate_class",
+			"preprint",
+			"eigen",
+			"pp.Index",
+			"pp.index",
+			"validate_name",
+			"index",
+			"Range",
+			"index_name",
 			"range",
 			"poly",
 			"Index",
@@ -1556,19 +1584,7 @@
 			"objective",
 			"hessian",
 			"make_jac",
-			"jacobian",
-			"func1",
-			"MatrixBase",
-			"_impl",
-			"typename variable_t",
-			"jac_g",
-			"addvalue",
-			"objectiv",
-			"call_array",
-			"\t\tstd::cout << hessian << std::endl;\n",
-			"map_t",
-			"sparse",
-			"o.args"
+			"jacobian"
 		],
 		"highlight": true,
 		"in_selection": false,
@@ -1588,70 +1604,32 @@
 	"groups":
 	[
 		{
-			"selected": 7,
+			"selected": 0,
 			"sheets":
 			[
 				{
 					"buffer": 0,
-					"file": "polypy/expression.py",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 39300,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								7677,
-								7677
-							]
-						],
-						"settings":
-						{
-							"WordCount":
-							{
-								"changes": -1,
-								"modified": true,
-								"selection": true,
-								"status": -1,
-								"syntax": "python"
-							},
-							"syntax": "Packages/Python/Python.sublime-syntax",
-							"tab_size": 4,
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 4069.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 6,
-					"type": "text"
-				},
-				{
-					"buffer": 1,
 					"file": "todo",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 2348,
+						"buffer_size": 2781,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								24,
-								48
+								530,
+								530
 							]
 						],
 						"settings":
 						{
 							"WordCount":
 							{
-								"changes": 140,
-								"count": 344,
+								"changes": 525,
+								"count": 404,
 								"modified": false,
 								"selection": false,
 								"status": -1,
@@ -1663,31 +1641,31 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 8,
+					"stack_index": 0,
 					"type": "text"
 				},
 				{
-					"buffer": 2,
+					"buffer": 1,
 					"file": "design",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 690,
+						"buffer_size": 693,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								497,
-								497
+								693,
+								693
 							]
 						],
 						"settings":
 						{
 							"WordCount":
 							{
-								"changes": 481,
+								"changes": 23,
 								"count": 65,
 								"modified": false,
 								"selection": false,
@@ -1697,14 +1675,14 @@
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
-						"translation.y": 0.0,
+						"translation.y": 421.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 9,
+					"stack_index": 3,
 					"type": "text"
 				},
 				{
-					"buffer": 3,
+					"buffer": 2,
 					"semi_transient": false,
 					"settings":
 					{
@@ -1721,6 +1699,14 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"auto_name": "",
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
@@ -1728,11 +1714,11 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 30,
+					"stack_index": 31,
 					"type": "text"
 				},
 				{
-					"buffer": 4,
+					"buffer": 3,
 					"file": "polypy/affineexpression.py",
 					"semi_transient": false,
 					"settings":
@@ -1759,11 +1745,11 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 55,
+					"stack_index": 56,
 					"type": "text"
 				},
 				{
-					"buffer": 5,
+					"buffer": 4,
 					"file": "testExpression.py",
 					"semi_transient": false,
 					"settings":
@@ -1775,8 +1761,8 @@
 						"selection":
 						[
 							[
-								271,
-								271
+								2278,
+								2278
 							]
 						],
 						"settings":
@@ -1796,62 +1782,62 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 12,
+					"stack_index": 1,
 					"type": "text"
 				},
 				{
-					"buffer": 6,
-					"file": "testLinearMPC.py",
+					"buffer": 5,
+					"file": "transpile.py",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 3597,
+						"buffer_size": 454,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								3032,
-								3032
+								279,
+								279
 							]
 						],
 						"settings":
 						{
 							"WordCount":
 							{
-								"changes": 0,
+								"changes": 24,
 								"count": 0,
 								"modified": true,
 								"selection": true,
 								"status": -1,
 								"syntax": "python"
 							},
-							"syntax": "Packages/Python/Python.sublime-syntax",
-							"translate_tabs_to_spaces": true
+							"auto_name": "transpile.py",
+							"syntax": "Packages/Python/Python.sublime-syntax"
 						},
 						"translation.x": 0.0,
-						"translation.y": 1541.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 1,
+					"stack_index": 2,
 					"type": "text"
 				},
 				{
-					"buffer": 7,
+					"buffer": 6,
 					"file": "polypy/Index.py",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 3388,
+						"buffer_size": 3713,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								377,
-								377
+								908,
+								922
 							]
 						],
 						"settings":
@@ -1869,14 +1855,14 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 40.0,
+						"translation.y": 280.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 0,
+					"stack_index": 9,
 					"type": "text"
 				},
 				{
-					"buffer": 8,
+					"buffer": 7,
 					"file": "polypy/poly.py",
 					"semi_transient": false,
 					"settings":
@@ -1910,11 +1896,11 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 4,
+					"stack_index": 11,
 					"type": "text"
 				},
 				{
-					"buffer": 9,
+					"buffer": 8,
 					"file": "lampc.sublime-project",
 					"semi_transient": false,
 					"settings":
@@ -1944,14 +1930,14 @@
 							"translate_tabs_to_spaces": false
 						},
 						"translation.x": 0.0,
-						"translation.y": 65.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 15,
+					"stack_index": 16,
 					"type": "text"
 				},
 				{
-					"buffer": 10,
+					"buffer": 9,
 					"file": "test_ipopt.py",
 					"semi_transient": false,
 					"settings":
@@ -1983,11 +1969,11 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 14,
+					"stack_index": 15,
 					"type": "text"
 				},
 				{
-					"buffer": 11,
+					"buffer": 10,
 					"file": "casadi_test.py",
 					"semi_transient": false,
 					"settings":
@@ -2012,34 +1998,34 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 40,
+					"stack_index": 41,
 					"type": "text"
 				},
 				{
-					"buffer": 12,
+					"buffer": 11,
 					"file": "examples/myproblem.hpp",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 7882,
+						"buffer_size": 16569,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								227,
-								227
+								13832,
+								13833
 							]
 						],
 						"settings":
 						{
 							"WordCount":
 							{
-								"changes": 2250,
-								"count": 1688,
-								"modified": true,
-								"selection": true,
+								"changes": 18,
+								"count": 1659,
+								"modified": false,
+								"selection": false,
 								"status": -1,
 								"syntax": "plain text"
 							},
@@ -2047,14 +2033,14 @@
 							"translate_tabs_to_spaces": false
 						},
 						"translation.x": 0.0,
-						"translation.y": 718.0,
+						"translation.y": 406.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 7,
+					"stack_index": 5,
 					"type": "text"
 				},
 				{
-					"buffer": 13,
+					"buffer": 12,
 					"file": "test.py",
 					"semi_transient": false,
 					"settings":
@@ -2086,11 +2072,11 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 63,
+					"stack_index": 64,
 					"type": "text"
 				},
 				{
-					"buffer": 14,
+					"buffer": 13,
 					"file": "testXX.hpp",
 					"semi_transient": false,
 					"settings":
@@ -2117,30 +2103,31 @@
 								"status": -1,
 								"syntax": "plain text"
 							},
-							"syntax": "Packages/C++/C++.sublime-syntax"
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"translate_tabs_to_spaces": false
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 59,
+					"stack_index": 60,
 					"type": "text"
 				},
 				{
-					"buffer": 15,
+					"buffer": 14,
 					"file": "polypy/__init__.py",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 1168,
+						"buffer_size": 1209,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								575,
-								579
+								1020,
+								1036
 							]
 						],
 						"settings":
@@ -2161,11 +2148,11 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 3,
+					"stack_index": 6,
 					"type": "text"
 				},
 				{
-					"buffer": 16,
+					"buffer": 15,
 					"file": "src/problemBase.hpp",
 					"semi_transient": false,
 					"settings":
@@ -2191,11 +2178,11 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 41,
+					"stack_index": 42,
 					"type": "text"
 				},
 				{
-					"buffer": 17,
+					"buffer": 16,
 					"file": "polypy/function.py",
 					"semi_transient": false,
 					"settings":
@@ -2223,30 +2210,31 @@
 							},
 							"auto_name": "function",
 							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 13,
+					"stack_index": 14,
 					"type": "text"
 				},
 				{
-					"buffer": 18,
+					"buffer": 17,
 					"file": "polypy/generator.py",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 8266,
+						"buffer_size": 8284,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								30,
-								30
+								4777,
+								4780
 							]
 						],
 						"settings":
@@ -2264,10 +2252,49 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
+						"translation.y": 2454.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 7,
+					"type": "text"
+				},
+				{
+					"buffer": 18,
+					"file": "polypy/generator_eigen.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 639,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								639,
+								639
+							]
+						],
+						"settings":
+						{
+							"WordCount":
+							{
+								"changes": 27,
+								"count": 0,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "python"
+							},
+							"auto_name": "generator_eigen.py",
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 2,
+					"stack_index": 4,
 					"type": "text"
 				},
 				{
@@ -2289,13 +2316,14 @@
 						],
 						"settings":
 						{
-							"syntax": "Packages/C++/C++.sublime-syntax"
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"translate_tabs_to_spaces": false
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 51,
+					"stack_index": 52,
 					"type": "text"
 				},
 				{
@@ -2324,7 +2352,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 50,
+					"stack_index": 51,
 					"type": "text"
 				},
 				{
@@ -2354,7 +2382,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 29,
+					"stack_index": 30,
 					"type": "text"
 				},
 				{
@@ -2389,10 +2417,10 @@
 							"translate_tabs_to_spaces": false
 						},
 						"translation.x": 0.0,
-						"translation.y": 8650.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 10,
+					"stack_index": 12,
 					"type": "text"
 				},
 				{
@@ -2422,7 +2450,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 31,
+					"stack_index": 32,
 					"type": "text"
 				},
 				{
@@ -2452,7 +2480,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 32,
+					"stack_index": 33,
 					"type": "text"
 				},
 				{
@@ -2482,7 +2510,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 19,
+					"stack_index": 20,
 					"type": "text"
 				},
 				{
@@ -2491,15 +2519,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 26050,
+						"buffer_size": 26164,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								18353,
-								18353
+								16585,
+								16585
 							]
 						],
 						"settings":
@@ -2517,10 +2545,10 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 8273.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 5,
+					"stack_index": 8,
 					"type": "text"
 				},
 				{
@@ -2557,7 +2585,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 35,
+					"stack_index": 36,
 					"type": "text"
 				},
 				{
@@ -2585,7 +2613,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 37,
+					"stack_index": 38,
 					"type": "text"
 				},
 				{
@@ -2613,7 +2641,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 33,
+					"stack_index": 34,
 					"type": "text"
 				},
 				{
@@ -2649,10 +2677,10 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 13032.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 11,
+					"stack_index": 13,
 					"type": "text"
 				},
 				{
@@ -2673,13 +2701,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/C++/C++.sublime-syntax"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 18,
+					"stack_index": 19,
 					"type": "text"
 				},
 				{
@@ -2708,7 +2744,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 21,
+					"stack_index": 22,
 					"type": "text"
 				},
 				{
@@ -2737,7 +2773,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 23,
+					"stack_index": 24,
 					"type": "text"
 				},
 				{
@@ -2765,7 +2801,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 20,
+					"stack_index": 21,
 					"type": "text"
 				},
 				{
@@ -2794,7 +2830,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 24,
+					"stack_index": 25,
 					"type": "text"
 				},
 				{
@@ -2823,7 +2859,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 25,
+					"stack_index": 26,
 					"type": "text"
 				},
 				{
@@ -2853,7 +2889,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 28,
+					"stack_index": 29,
 					"type": "text"
 				},
 				{
@@ -2882,7 +2918,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 27,
+					"stack_index": 28,
 					"type": "text"
 				},
 				{
@@ -2911,7 +2947,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 26,
+					"stack_index": 27,
 					"type": "text"
 				},
 				{
@@ -2933,6 +2969,14 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"auto_name": "#pragma once",
 							"syntax": "Packages/C++/C++.sublime-syntax",
 							"tab_size": 2,
@@ -2942,7 +2986,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 22,
+					"stack_index": 23,
 					"type": "text"
 				},
 				{
@@ -2964,19 +3008,20 @@
 						],
 						"settings":
 						{
-							"syntax": "Packages/C++/C++.sublime-syntax"
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"translate_tabs_to_spaces": false
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 49,
+					"stack_index": 50,
 					"type": "text"
 				}
 			]
 		},
 		{
-			"selected": 21,
+			"selected": 22,
 			"sheets":
 			[
 				{
@@ -2997,6 +3042,14 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"draw_centered": false,
 							"draw_indent_guides": true,
 							"draw_white_space": "selection",
@@ -3015,7 +3068,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 64,
+					"stack_index": 65,
 					"type": "text"
 				},
 				{
@@ -3036,13 +3089,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 62,
+					"stack_index": 63,
 					"type": "text"
 				},
 				{
@@ -3063,6 +3124,14 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage",
 							"word_wrap": false
 						},
@@ -3070,7 +3139,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 61,
+					"stack_index": 62,
 					"type": "text"
 				},
 				{
@@ -3091,13 +3160,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 60,
+					"stack_index": 61,
 					"type": "text"
 				},
 				{
@@ -3118,13 +3195,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 39,
+					"stack_index": 40,
 					"type": "text"
 				},
 				{
@@ -3145,13 +3230,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 57,
+					"stack_index": 58,
 					"type": "text"
 				},
 				{
@@ -3172,13 +3265,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 56,
+					"stack_index": 57,
 					"type": "text"
 				},
 				{
@@ -3199,13 +3300,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 54,
+					"stack_index": 55,
 					"type": "text"
 				},
 				{
@@ -3226,13 +3335,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 53,
+					"stack_index": 54,
 					"type": "text"
 				},
 				{
@@ -3253,13 +3370,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 52,
+					"stack_index": 53,
 					"type": "text"
 				},
 				{
@@ -3280,13 +3405,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 48,
+					"stack_index": 49,
 					"type": "text"
 				},
 				{
@@ -3307,13 +3440,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 47,
+					"stack_index": 48,
 					"type": "text"
 				},
 				{
@@ -3334,13 +3475,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 46,
+					"stack_index": 47,
 					"type": "text"
 				},
 				{
@@ -3361,13 +3510,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 45,
+					"stack_index": 46,
 					"type": "text"
 				},
 				{
@@ -3388,13 +3545,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 44,
+					"stack_index": 45,
 					"type": "text"
 				},
 				{
@@ -3415,13 +3580,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 43,
+					"stack_index": 44,
 					"type": "text"
 				},
 				{
@@ -3442,13 +3615,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 42,
+					"stack_index": 43,
 					"type": "text"
 				},
 				{
@@ -3469,13 +3650,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 38,
+					"stack_index": 39,
 					"type": "text"
 				},
 				{
@@ -3496,13 +3685,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 36,
+					"stack_index": 37,
 					"type": "text"
 				},
 				{
@@ -3523,13 +3720,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 34,
+					"stack_index": 35,
 					"type": "text"
 				},
 				{
@@ -3550,13 +3755,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 17,
+					"stack_index": 18,
 					"type": "text"
 				},
 				{
@@ -3592,11 +3805,47 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 16,
+					"stack_index": 17,
 					"type": "text"
 				},
 				{
 					"buffer": 64,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 491,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								491,
+								491
+							]
+						],
+						"settings":
+						{
+							"WordCount":
+							{
+								"changes": 100,
+								"count": 73,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
+							"syntax": "Packages/Text/Plain text.tmLanguage"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 10,
+					"type": "text"
+				},
+				{
+					"buffer": 65,
 					"semi_transient": false,
 					"settings":
 					{
@@ -3613,13 +3862,21 @@
 						],
 						"settings":
 						{
+							"WordCount":
+							{
+								"changes": -1,
+								"modified": true,
+								"selection": true,
+								"status": -1,
+								"syntax": "plain text"
+							},
 							"syntax": "Packages/Text/Plain text.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 58,
+					"stack_index": 59,
 					"type": "text"
 				}
 			]
@@ -3658,7 +3915,7 @@
 		"rows":
 		[
 			0.0,
-			0.592373047083,
+			0.693111053971,
 			1.0
 		]
 	},
@@ -3689,8 +3946,52 @@
 		"selected_items":
 		[
 			[
+				"expre",
+				"polypy/expression.py"
+			],
+			[
+				"",
+				"my_script.py"
+			],
+			[
+				"desi",
+				"design"
+			],
+			[
+				"mypr",
+				"examples/myproblem.hpp"
+			],
+			[
+				"_",
+				"polypy/__init__.py"
+			],
+			[
+				"gener",
+				"polypy/generator.py"
+			],
+			[
+				"genera",
+				"polypy/generator.py"
+			],
+			[
+				"__",
+				"polypy/__init__.py"
+			],
+			[
+				"nlp",
+				"polypy/nlp.py"
+			],
+			[
 				"ind",
 				"polypy/Index.py"
+			],
+			[
+				"inde",
+				"polypy/Index.py"
+			],
+			[
+				"todo",
+				"todo"
 			],
 			[
 				"testlin",
@@ -3713,32 +4014,12 @@
 				"polypy/Index.py"
 			],
 			[
-				"nlp",
-				"polypy/nlp.py"
-			],
-			[
-				"__",
-				"polypy/__init__.py"
-			],
-			[
-				"",
-				"testLinearMPC.py"
-			],
-			[
-				"inde",
-				"polypy/Index.py"
-			],
-			[
 				"test",
 				"testLinearMPC.py"
 			],
 			[
 				"my",
 				"examples/myproblem.hpp"
-			],
-			[
-				"expre",
-				"polypy/expression.py"
 			],
 			[
 				"expr",
@@ -3751,14 +4032,6 @@
 			[
 				"exp",
 				"polypy/expression.py"
-			],
-			[
-				"todo",
-				"todo"
-			],
-			[
-				"gener",
-				"polypy/generator.py"
 			],
 			[
 				"des",
@@ -3787,10 +4060,6 @@
 			[
 				"ex",
 				"polypy/expression.py"
-			],
-			[
-				"genera",
-				"polypy/generator.py"
 			],
 			[
 				"func",
@@ -3959,10 +4228,6 @@
 			[
 				"testi",
 				"test_ipopt.py"
-			],
-			[
-				"mypr",
-				"examples/myproblem.hpp"
 			],
 			[
 				"gene",
@@ -4185,20 +4450,12 @@
 				"testGen.py"
 			],
 			[
-				"desi",
-				"design"
-			],
-			[
 				"test3",
 				"examples/test3.cpp"
 			],
 			[
 				"test2",
 				"examples/test2.cpp"
-			],
-			[
-				"model.cpp",
-				"examples/model.cpp"
 			]
 		],
 		"width": 0.0

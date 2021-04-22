@@ -1,5 +1,5 @@
 from enum import Enum, auto
-# import polypy
+import polypy as pp
 # from polypy.poly import VariableSet
 import io
 from string import ascii_letters, digits
@@ -111,32 +111,35 @@ def validate_name(name):
             First character must be a letter or underscore.""")
 
 
-def print_buffer(op):
-    """Use the internal print buffer if one is not provided"""
+# def print_buffer(op):
+#     """Use the internal print buffer if one is not provided"""
 
-    def newOp(self, *args, **kwargs):
-        buffer = kwargs.pop("buffer", None)
-        if buffer is None:
-            buffer = self.p
-        kwargs['p'] = buffer
-        return op(self, *args, **kwargs)
-    return newOp
+#     def newOp(self, *args, **kwargs):
+#         buffer = kwargs.pop("buffer", None)
+#         if buffer is None:
+#             buffer = self.p
+#         kwargs['p'] = buffer
+#         return op(self, *args, **kwargs)
+#     return newOp
 
 
 class Generator:
-    # Generate a collection of functions in a class
+    """Abstract class to manage a generated file"""
 
-    def __init__(self, filename="gen.hpp"):
-        self._functions = []
-        self.variables = []
-
+    def __init__(self, filename):
         self.filename = filename
 
-        self.p = preprint()  # String buffer with indentation support
-        self.generate_preamble()
+        self.dependencies_p = defaultdict(lambda: PrePrint(""))  # String buffer for each type of dependency
+        # self.p = PrePrint("")  # Global string buffer
+        self.p = pp.generator_eigen.Eigen("")
+
+        try:
+            self.generate_preamble(self.p)
+        except AttributeError:
+            print("WARNING: No preamble generation function found for this class type")
 
     def __enter__(self):
-        return self
+        return self  # <- Return a Generator_Printer
 
     def __exit__(self, exc_type, exc_value, tb):
         # Write out the function
@@ -145,58 +148,36 @@ class Generator:
     def add_function(self, function):
         self._functions.append(function)
 
-    @property
-    def functions(self):
-        return set(self._functions).union(*[f.functions for f in self._functions])
-
-    @property
-    def parameters(self):
-        return set().union(*[f.parameters for f in self.functions])
+    # @property
+    # def functions(self):
+    #     return set(self._functions).union(*[f.functions for f in self._functions])
 
     # @property
-    # def constants(self):
-    #     return set().union(*[f.constants for f in self.functions])
+    # def parameters(self):
+    #     return set().union(*[f.parameters for f in self.functions])
 
-    @property
-    def constantMatrices(self):
-        # These are eigen matrices that need to be initialized
-        return set().union(*[f.constantMatrices for f in self.functions])
+    # @property
+    # def constantMatrices(self):
+    #     # These are eigen matrices that need to be initialized
+    #     return set().union(*[f.constantMatrices for f in self.functions])
 
-    @print_buffer
-    def generate_preamble(self, p=None):
-        p('#include <math.h>')
-        p('#include "Eigen/Dense"')
-        p('#include <Eigen/Sparse>')
-        p('#include "unsupported/Eigen/AutoDiff"')
-        p('')
-        p('#include "polygen_helper.hpp"')  # Generates Jacobians
-        p('')
-        p('using namespace Eigen;')
-        p('')
-
-    # @print_buffer
-    # def function_body(self, p=None, post_string=""):
-
-    #     class Body:
-    #         def __enter__(self):
-    #             p('{')
-    #             p.__enter__()
-    #             return self
-
-    #         def __exit__(self, exc_type, exc_value, tb):
-    #             p.__exit__(exc_type, exc_value, tb)
-    #             p('}' + post_string)
-    #             p("")
-
-    #     return Body()
+    def __call__(self, obj, **kwargs):
+        """Generate the given object"""
+        obj.generate_declaration(self.p, **kwargs)
+        try:
+            obj.generate_declaration(self.p, **kwargs)
+        except AttributeError:
+            print(f"ERROR: Could not generate code for {obj}")
 
     @contextmanager
     def generate_class(self, classname="LOpt"):
         self.classname = classname
+        # with self.new_class(classname) as p:
         self.p('template<typename scalar_t>')
         self.p(f'struct {self.classname}')
         self.p("{")
-        p = PrePrint("")  # Create new buffer for this class
+        # p = PrePrint("")
+        p = pp.generator_eigen.Eigen("")
         try:
             with p:
                 yield p  # Get user input on what they want in the class
@@ -250,3 +231,4 @@ class Generator:
         print(f"Writing to file {filename}")
         with open(filename, "w+") as f:
             f.write(str(self.p))
+

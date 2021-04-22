@@ -4,6 +4,35 @@ import polypy as pp
 import types
 import numpy as np
 
+#########################################
+# Public functions to create function 
+#########################################
+
+def function(f):
+    """Decorator to convert python function to polypy function
+
+    Used as:
+    @pp.function
+    def func(x: n, u: m):
+        expr = A @ x + B @ u
+        return expr
+
+    The sizes of the input variables must be specified in the function annotations.
+    """
+
+    # if not f.__annotations__:
+        
+
+    # Create polypy input variables of the right size
+    args = (pp.variable(key, val) for key, val in f.__annotations__.items())
+
+    # Create a polypy Function object
+    try:
+        return Function(f.__name__, args, f(*args))
+    except TypeError:
+        raise TypeError("Annotations must be added to all arguments to specify variable sizes") from None
+
+
 class Function:
 
     def __init__(self, name, inputs, expression):
@@ -24,7 +53,7 @@ class Function:
 
     def __str__(self):
         args = [str(x) for x in self.inputs]
-        return f"{self.output} = {self.name}({', '.join(args)})"
+        return f"{self.name}({', '.join(args)})"
 
     def __len__(self):
         return len(self.output)
@@ -37,6 +66,8 @@ class Function:
         # Assumptions: 
         #  - All parameters and constants have already been defined in the containing class
         #  - All functions that this function calls exist
+
+        print(f"GENERATING {self}")
 
         # Produce function signature
         p(f"template<typename T>")
