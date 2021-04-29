@@ -11,7 +11,7 @@ c = pp.matrix([[1], [2]], name='c')
 @pp.function
 def dynamics(x: n, u: m):
     vel = pp.matrix([1, 1]) @ pp.sin(x[0] + x[1])
-    xdot = A @ pp.vstack(vel, pp.cos(u), x[2]) + B @ u
+    xdot = A @ pp.vstack(vel, pp.cos(u), x[1]) + B @ u
     return xdot
 
 
@@ -29,28 +29,55 @@ def rk4(f, x, u):
 def sys_d(x: n, u: m):
     return rk4(dynamics, x, u)
 
-x0 = pp.matrix(np.zeros(n), name="x0")
-@pp.function
-def sys_0(u: m):
-    return sys_d(x0, u)
+# @pp.function
+# def sys_0(u: m):
+#     return sys_d(x0, u)
 
-x = pp.variable("x", n, num_vars=N)
-u = pp.variable("u", m, num_vars=N)
+opt = pp.NLP("MyProblem")
 
+x_lb = np.array([-1, -2e20]).T
+x = pp.variable("x", n, num_vars=N, lb=x_lb)
+u = pp.variable("u", m, num_vars=N - 1)
+xss = pp.variable('xss', n)
+uss = pp.variable('uss', m)
 
+x0 = pp.matrix(np.zeros(n), name="x0", constant=False)
+
+opt.add(x[1] == dynamics(x0, u[0]))
+opt.add(xss == dynamics(xss, uss))
+
+# opt.add(x[i + 1] == dynamics(x[i], u[i]) for i in pp.Range(1, N - 1))
+for i in range(1, N-1):
+    opt.add(x[i + 1] == dynamics(x[i], u[i]))
+
+# C = pp.matrix([1, 1]).T
+# for i in range(1, N - 1):
+#     opt.add(pp.Inequality(C @ x[i], lb=-1, ub=1))
+
+def stage_cost(x: n, u: m):
+    # Define stage cost
+    q = pp.matrix([1, 1], name="q", constant=False)
+    # return sum((q @ x) * x)
+    return q[0] * x[0] * x[0] + q[1] * x[1] * x[1] + u[0] * u[0]
+
+# print(sum(x[1]))
+
+# print(sum((x[1]) * x[1]))
+
+opt.minimize(pp.summation(*map(lambda y: stage_cost(y[0] - xss, y[1] - uss), zip(x, u))))
 
 with pp.EigenGenerator(filename="examples/myproblem.hpp") as generator:
     # generator.generate_dependencies(generator)
     with generator.generate_class('LOpt') as gen:  # <= generates class declaration at open
+        opt.generate(gen)
         # sys.generate_declaration(gen)
         # print(sys_d)
-        sys_d.generate_declaration(gen)
-        dynamics.generate_declaration(gen)
-        sys_0.generate_declaration(gen)
+        # sys_d.generate_declaration(gen)
+        # dynamics.generate_declaration(gen)
+        # sys_0.generate_declaration(gen)
 
-        sys_d(x[1], u[1]).generate(gen)
+        # sys_d(x0, u[1]).generate(gen)
 
-    #     gen("ehhlo")
         # gen(f, jacobian=True)  # <= shorthand for generate declaration
         # gen(A)
     # <= generates constructor at close

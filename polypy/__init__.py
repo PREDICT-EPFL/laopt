@@ -11,20 +11,19 @@ import math
 import numpy as np
 from collections import defaultdict
 
-from polypy.expression import matrix, variable, hstack, vstack
+from polypy.expression import matrix, variable, hstack, vstack, summation
 from polypy.expression import Scalar
 
 from polypy.generator_eigen import EigenGenerator
 
 from polypy.function import function, Function
 
-# from polypy.poly import NLP
 from polypy.Index import Range
 # from polypy.expression import variable, hstack, vstack, summation
 # from polypy.expression import Expression, Identity, ConstScalar, Matrix, Scalar, ConstMatrix
 # from polypy.function import Function, Jacobian, Hessian
 # from polypy.generator import preprint, Generator
-# from polypy.nlp import NLP, Inequality
+from polypy.nlp import NLP, Inequality
 # from polypy.generator_eigen import Eigen
 
 

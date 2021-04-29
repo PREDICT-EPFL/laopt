@@ -228,6 +228,8 @@ class Expression:
 
     def generate(self, p):
         """Produce language-specific code to evaluate this expression"""
+        self.freeze()
+
         arg_eval = [arg.generate(p) for arg in self.args]  # Generate all arguments
         for i, arg in enumerate(self.args):
             try:
@@ -278,6 +280,22 @@ class Expression:
         self._state = newState
         for arg in self.args:
             arg.state = newState
+
+    def freeze(self):
+        """Freeze the expression
+
+        Changes == to a comparison operator
+        """
+        self.state = Expression.State.Frozen
+        return self
+
+    def unfreeze(self):
+        """Freeze the expression
+
+        Changes == to a comparison operator
+        """
+        self.state = Expression.State.Construction
+        return self
 
     def get_by_property(self, property):
         # Return a set of nodes for which the property(node) returns true
@@ -577,7 +595,8 @@ class trigExpression(UnaryExpression):
         return f"{self.op}({args[0]})"
 
     def _generate(self, p, *args):
-        return f"{self.op}({args[0]})"
+        return p.evaluate_elementwise_expression(self.op, args[0])
+        # f"{self.op}({args[0]})"
 
 class absExpression(UnaryExpression):
     def __init__(self, *args):
@@ -1098,9 +1117,9 @@ class VariableSet:
     def eigen_get(self, var, **kwargs):
         """Return an eigen statement to access this variable as an offset into var"""
         if kwargs.get("columnwise", False):
-            return f"{str(self.name)}_get_matrix({var}).colwise()"
+            return f"{str(self.name)}.get_matrix({var}).colwise()"
         else:
-            return f"{str(self.name)}_get_matrix({var})"
+            return f"{str(self.name)}.get_matrix({var})"
 
 
 
@@ -1134,6 +1153,23 @@ class Variable(AtomicExpression):
         if self.var_set:
             return f"{self.var_set.name}[{str(self.ind)}]"
         return self._name
+
+    @property
+    def basename(self):
+        """Returns the var_set name if it exists, else name"""
+        if self.var_set:
+            return self.var_set.name
+        else:
+            return self._name
+
+    @property
+    def ind_str(self):
+        """Return the index as a string, or the empty string if there is no index"""
+        if self.ind:
+            return str(self.ind)
+        return ""
+
+    
 
     @property
     def lb(self):
@@ -1187,13 +1223,7 @@ class Variable(AtomicExpression):
     def eigen_get(self, var, **kwargs):
         """Return an eigen statement to access this variable as an offset into var"""
         if self.var_set:
-            return f"{str(self.var_set.name)}_get({var}, {self.ind})"
+            return f"{str(self.var_set.name)}.get({var}, {self.ind})"
         else:
-            return f"{str(self)}_get({var})"
+            return f"{str(self)}.get({var})"
 
-    def eigen_offset(self):
-        """Return an eigen statement to compute the offset of this variable via macro"""
-        if self.var_set:
-            return f"{str(self.var_set.name)}_o({self.ind})"
-        else:
-            return f"{str(self)}_o"

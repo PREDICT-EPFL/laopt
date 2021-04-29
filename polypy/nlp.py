@@ -42,7 +42,7 @@ class Constraint:
         vars = [pp.variable(f"var{i}_", len(arg)) for i, arg in enumerate(self.args)]
 
         # Create function
-        funcname = polypy._get_unique_name("func")
+        funcname = polypy._get_unique_name(basename="func")
         expr = expr.substitute(self.args, vars)        
         self.function = Function(funcname, vars, expr)
 
@@ -77,23 +77,41 @@ class Constraint:
         return str(self.original_expr)
 
     def __len__(self):
-        try:
-            return len(self.function) * self.index.num_iterations
-        except AttributeError:
-            return len(self.function)
+        # try:
+        #     return len(self.function) * self.index.num_iterations
+        # except AttributeError:
+        return len(self.function)
 
     @property    
     def shape(self):
-        return (len(self.function), self.function.num_inputs())
+        try:
+            return (len(self.function), self.index.num_iterations)
+        except AttributeError:
+            return (len(self.function), 1)
+        # return (len(self.function), self.function.num_inputs())
+
+    def freeze(self):
+        return self.expr.freeze()
+
+    def unfreeze(self):
+        return self.expr.unfreeze()
+
+    def generate_sparsity(self, p):
+        """Print expression to write sparsity structure for this constraint into p"""
+        vars = ", ".join(p.get_var_info(var) for var in self.args)
+        if self.index:
+            p(f"for(int i={self.index.start}, eq_ind=0; i<{self.index.stop}; i+={self.index.step}, eq_ind++)")
+            p(f"\tset_equation_sparsity(trip, {self.name}.info(eq_ind), {{{vars}}});")
+        else:
+            p(f"set_equation_sparsity(trip, {self.name}.info(), {{{vars}}});")
 
     @property
-    def state(self):
-        return self.expr.state
+    def nnz(self):
+        """Return the number of non-zeros in the constraint
 
-    @state.setter
-    def state(self, newState):
-        self.expr.state = newState
-
+        Note: This is one constraint, not the series of constraints if index is not None
+        """
+        return sum(len(var) for var in self.args) * len(self)
 
 class Equality(Constraint):
     # Describes an equality constraint lhs == rhs
@@ -143,12 +161,14 @@ class NLP:
     def freeze(self):
         # Freeze all expressions
         for x in self.constraints + self.variables + self.aux_functions:
-            x.state = polypy.Expression.State.Frozen
+            x.freeze()
+            # x.state = polypy.Expression.State.Frozen
 
     def unfreeze(self):
         # Freeze all expressions
         for x in self.constraints + self.variables + self.aux_functions:
-            x.state = polypy.Expression.State.Frozen
+            x.unfreeze()
+            # x.state = polypy.Expression.State.Frozen
 
     # def variable(self, name, shape, **kwargs):
     #     x = pp.variable(name, shape, **kwargs)
@@ -171,7 +191,8 @@ class NLP:
         # Return the number of nonzeros in the constraints jacobian
         nnz = 0
         for con in self.constraints:
-            nnz += con.shape[0] * con.shape[1]
+            nnz += con.nnz * con.shape[1]
+            # nnz += con.shape[0] * con.shape[1]xxxxx
         return nnz
 
     def add(self, constraints, name=None):
@@ -186,11 +207,11 @@ class NLP:
         for constraint in constraints:
             if name is None:
                 if isinstance(constraint, Equality):
-                    name = polypy._get_unique_name("eq")
+                    name = polypy._get_unique_name(basename="eq")
                 elif isinstance(constraint, Inequality):
-                    name = polypy._get_unique_name("ineq")
+                    name = polypy._get_unique_name(basename="ineq")
                 else:
-                    name = polypy._get_unique_name("con")
+                    name = polypy._get_unique_name(basename="con")
             constraint.name = name
 
             for eq in self.constraints:
@@ -202,6 +223,7 @@ class NLP:
     def minimize(self, expr):
         """Set objective function to minimize"""
         self.obj = Constraint(expr)
+        self.obj.name = "obj"
 
     def functions(self):
         # Return all functions that need to be generated for this nlp
@@ -218,7 +240,7 @@ class NLP:
 
         # Collect all Variables and compress into VariableSets (so we can get the contiguous ordering correct)
         compressed_vars = set()
-        for con in self.constraints:
+        for con in [*self.constraints, self.obj]:
             for var in con.original_expr.get_by_property(lambda n: isinstance(n, Variable)):
                 if var.var_set:
                     compressed_vars.add(var.var_set)
@@ -266,20 +288,21 @@ class NLP:
         for f in self.functions():
             p.add_dependency(f, "Function")
 
-        # with g.generate_class(classname):
-        p("// Define NLP sizes")
-        p("enum")
-        with p.function(post_string=";"):
-            p(f"NUM_VARS  = {sum(len(var) for var in self.variables)},")
-            p(f"NUM_CON   = {sum(len(eq) for eq in self.constraints)},")
-            # p(f"NUM_INEQ  = {sum(len(eq) for eq in self.inequalities)},")
-            # p(f"NUM_CON   = NUM_EQ + NUM_INEQ,")
-            # p(f"NUM_BOX   = 0,")
-            # p(f"DUAL_SIZE = NUM_EQ + NUM_INEQ + NUM_BOX,")
-            p(f"nnz_constraints_jacobian = {self.nnz_constraints_jacobian},")
+        # Create a language-specific generator
+        lang = p.get_nlp_generator(self)
+
+        p.comment("Define variable accessors and ordering")
+        lang.declare_variables(p, self.compressed_vars)
         p("")
 
-        p("// Short names to pass constant vectors and writable vectors")
+        p.comment("Define constraint accessors and ordering")
+        lang.declare_constraints(p, self.constraints)
+        p("")
+
+        p.comment("Define NLP sizes")
+        lang.declare_nlp_sizes(p)
+
+        p.comment("Short names to pass constant vectors and writable vectors")
         p("template<typename T, std::size_t n>")
         p("using cVec = const Eigen::Ref<const Eigen::Matrix<T, n, 1>>;")
         p("template<typename T, std::size_t n>")
@@ -287,7 +310,7 @@ class NLP:
         p("")
 
 
-        p("// NLP variable types")
+        p.comment("NLP variable types")
         p(f"using variable_t            = Matrix<scalar_t, NUM_VARS, 1>;")
         p(f"using constraint_t          = Matrix<scalar_t, NUM_CON, 1>;")
 
@@ -299,24 +322,36 @@ class NLP:
         # p(f"using dual_t       = Matrix<scalar_t, DUAL_SIZE, 1>;")
         p("")
 
-        p("// Define functions to access optimization variables")
-        offset = 0
-        for var in self.compressed_vars:
-            try:
-                p(f"DECLARE_VAR({var}, {offset}, {len(var)}, {var.num_vars})")
-                offset += len(var) * var.num_vars
-            except:
-                p(f"DECLARE_VAR({var}, {offset}, {len(var)})")
-                offset += len(var)
-        p("")
 
-        p("// Define functions to access constraints")
-        offset = 0
-        for con in self.constraints:
-            setattr(con, 'offset', offset)
-            p(f"DECLARE_CONSTRAINT({con.name}, {con.offset}, {len(con)})")
-            offset += len(con)
-        p("")
+        # p.comment("================= USER ACCESS FUNCTIONS =================")
+        # p("using variable_map_t = std::map<std::string, var_slow_t>;")
+        # p("variable_map_t variable_map = ")
+        # p("{")
+        # p(f", \n".join(f'\t{{"{var}", {var}}}' for var in self.compressed_vars))
+        # p("};")
+        # p("")
+        # p("using MatrixX = Eigen::Matrix<scalar_t, Eigen::Dynamic, Eigen::Dynamic>;")
+        # ("p")
+        # p("template<typename T>")
+        # p("auto get(T v, const Eigen::Ref<const variable_t>& var)")
+        # p("{")
+        # p("    return Eigen::Map<const MatrixX>(var.data() + v.offset, v.len, v.num_vars);")
+        # p("}")
+        # ("p")
+        # p("template<>")
+        # p("auto get<std::string>(std::string name, const Eigen::Ref<const variable_t>& var)")
+        # p("{")
+        # p("    variable_map_t::iterator it = variable_map.find(name);")
+        # p("    assert(it != variable_map.end());")
+        # p("    return get(it->second, var);")
+        # p("}   ")
+        # ("p")
+        # p("template<>")
+        # p("auto get<const char*>(const char* name, const Eigen::Ref<const variable_t>& var)")
+        # p("{")
+        # p("    return get(std::string(name), var);")
+        # p("}")
+        # p("")
 
         self._generate_constraints(p)
         p("")
@@ -333,8 +368,8 @@ class NLP:
     def _generate_bounds(self, p):
         # Generate variable bounds
 
-        p("// Evaluates the upper and lower bounds for the optimization variable into x_l and x_u")
-        p("// Can access the resulting bounds with the macros var_get(x_l), where var is the variable")
+        p.comment("Evaluates the upper and lower bounds for the optimization variable into x_l and x_u")
+        p.comment("Can access the resulting bounds with the macros var_get(x_l), where var is the variable")
         p("EIGEN_STRONG_INLINE void variable_bounds(Ref<variable_t> x_l, ")
         p("                                         Ref<variable_t> x_u) noexcept")
         with p.function():
@@ -370,21 +405,21 @@ class NLP:
                     pass
 
         p("")
-        p("// Evaluates the upper and lower bounds for the constraints variable into g_l and g_u")
-        p("// Can access the resulting bounds with the macros con_get(g_l), where con is the variable")
+        p.comment("Evaluates the upper and lower bounds for the constraints variable into g_l and g_u")
+        p.comment("Can access the resulting bounds with the macros con_get(g_l), where con is the variable")
         p("EIGEN_STRONG_INLINE void constraint_bounds(Ref<constraint_t> g_l, ")
         p("                                           Ref<constraint_t> g_u) noexcept")
         with p.function():
             for con in self.constraints:
                 try:
-                    p(f"{str(con)}_get(g_l).array() = {con.lb.generate_scalar(p)};")
+                    p(f"{str(con)}.get(g_l).array() = {con.lb.generate_scalar(p)};")
                 except AttributeError:
-                    p(f"{str(con)}_get(g_l) = {con.lb.generate(p)};")
+                    p(f"{str(con)}.get(g_l) = {con.lb.generate(p)};")
 
                 try:
-                    p(f"{str(con)}_get(g_u).array() = {con.ub.generate_scalar(p)};")
+                    p(f"{str(con)}.get(g_u).array() = {con.ub.generate_scalar(p)};")
                 except AttributeError:
-                    p(f"{str(con)}_get(g_u) = {con.ub.generate(p)};")
+                    p(f"{str(con)}.get(g_u) = {con.ub.generate(p)};")
 
 
 
@@ -407,17 +442,18 @@ class NLP:
 
         # Generate function to return the sparsity structure
         #
+        p.comment("Set non-zeros of J to match the sparsity structure of the constraint Jacobian")
         p("EIGEN_STRONG_INLINE void constraints_sparse_initialize(SparseMatrix<scalar_t>& J)")
-        p("{")
-        with p:
-            p("set_nonzero_blocks<scalar_t>(J, {BlockInfo")
-            blk_info = [f"{{{', '.join(str(i) for i in blk.shape)}}}" for blk in blocks.flatten() if blk]
-            blk_info = [", ".join(blk_info[i:i+6]) for i in range(0, len(blk_info), 6)]
-            p(",\n".join(blk_info))
-            p("});")
-        p("}\n")
+        with p.function():
+            p("std::vector<Eigen::Triplet<scalar_t>> trip;")
+            p("")
+            for con in self.constraints:
+                con.generate_sparsity(p)
+            p("")
+            p("J.setFromTriplets(trip.begin(), trip.end());")
+            p("J.makeCompressed();")
 
-        p("// Forwarding calls for dense and sparse jacobians. Will be moved to parent class later.")
+        p.comment("Forwarding calls for dense and sparse jacobians. Will be moved to parent class later.")
         p("EIGEN_STRONG_INLINE void constraints(const Ref<const variable_t>& var, Ref<constraint_t> constraints) noexcept")
         p("\t{this->template constraints_impl<int>(var, constraints, 0);}")
         p("EIGEN_STRONG_INLINE void constraints(const Ref<const variable_t>& var, Ref<constraint_t> constraints, Ref<constraint_jacobian_t> jacobian) noexcept")
@@ -433,15 +469,21 @@ class NLP:
         p("{")
         with p:
             for con in self.constraints:
+                print(f"Processing constraint {con}")
                 p.add_dependency(Jacobian(con.function), "Function")
+                # p.eval_constraint(con)
 
                 col_offset = []
                 for var in con.args:
+                    print(con)
+                    print(var)
+                    print("HERE")
+
                     iVar = self.variables.index(var)
                     iCon = self.constraints.index(con)
                     col_offset.append(sum([len(blk.con) for blk in blocks[:iCon, iVar] if blk]))
 
-                p(f"{con.function.name}({{{', '.join([arg.eigen_offset() for arg in con.args])}}}, {{{', '.join(str(i) for i in col_offset)}}}, {con.name}, var, constraints, jacobian);")
+                p(f"{con.function.name}({{{', '.join([p.get_var_offset(arg) for arg in con.args])}}}, {{{', '.join(str(i) for i in col_offset)}}}, {con.name}(), var, constraints, jacobian);")
         p("}")
 
     def _generate_objective(self, p):
@@ -530,7 +572,7 @@ class NLP:
         # p("\t{return this->template objective_impl<int, int>(var, 0, 0);}")
         # p("")
 
-        p("// Locations to store the computed hessians")
+        p.comment("Locations to store the computed hessians")
         for i, o in enumerate(obj_func):
             offset = np.zeros((len(o.args), len(o.args)), dtype=int)
             for iCol, col in enumerate(o.args):
@@ -552,7 +594,7 @@ class NLP:
 
             for i, o in enumerate(obj_func):
                 # var_offsets = "{" + ', '.join(str(var_pos[var]) for var in o.args) + "}"
-                var_offsets = "{" + ', '.join(var.eigen_offset() for var in o.args) + "}"
+                var_offsets = "{" + ', '.join(p.get_var_offset(var) for var in o.args) + "}"
                 p(f"val += {o.function.name}({var_offsets}, var);")
             p("return val;")
         p("")
@@ -566,7 +608,7 @@ class NLP:
 
             for i, o in enumerate(obj_func):
                 # var_offsets = "{" + ', '.join(str(var_pos[var]) for var in o.args) + "}"
-                var_offsets = "{" + ', '.join(var.eigen_offset() for var in o.args) + "}"
+                var_offsets = "{" + ', '.join(p.get_var_offset(var) for var in o.args) + "}"
                 p(f"val += {o.function.name}({var_offsets}, var, gradient, true);")
             p("return val;")
         p("")
@@ -577,12 +619,12 @@ class NLP:
         with p.function():
             p("scalar_t val = 0.0;")
             p("gradient.setZero();")
-            p("// Set non-zero elements of hessian to zero, but don't change nnz")
+            p.comment("Set non-zero elements of hessian to zero, but don't change nnz")
             p("Eigen::Map<Eigen::Matrix<scalar_t, Eigen::Dynamic, Eigen::Dynamic>> (hessian.valuePtr(), hessian.nonZeros(), 1).array() = 0.0;")
             p("")
 
             for i, o in enumerate(obj_func):
-                var_offsets = "{" + ', '.join(var.eigen_offset() for var in o.args) + "}"
+                var_offsets = "{" + ', '.join(p.get_var_offset(var) for var in o.args) + "}"
                 p(f"val += {o.function.name}({var_offsets}, "
                     + f"var, gradient, H_offset_{i}, hessian, true);")
             p("return val;")

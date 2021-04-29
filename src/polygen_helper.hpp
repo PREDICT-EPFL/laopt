@@ -10,6 +10,7 @@ using namespace Eigen;
 #include <array>
 #include <tuple>
 #include <type_traits>
+#include <utility>      // std::pair, std::make_pair
 
 /************************************************************************
     Optimizations / TODO
@@ -58,35 +59,6 @@ void type_args(Args... args)
     };
 }
 
-
-/**
- * Macro to declare a templated variable type
- */
-// #define DECLARE_VAR_TYPE(name, length) \
-//     static constexpr int name##_size = length; \
-//     template<typename T> using name = Eigen::Matrix<T, name##_size, 1>;
-
-/**
- * Macro to define a variable
- * 
- * Args:
- *  name - variable name
- *  offset - offset of the start of this variable into the 
- *  size - size of a vector of this variable type
- *  number [optional] - number of vectors
- */
-#define DECLARE_VAR3(name, offset, size) \
-    static constexpr auto name##_o = offset; /* Offset */ \
-    template<typename T> \
-    constexpr auto name##_get(T x) {return x.template segment<size>(offset);} /* Offset */ \
-    static constexpr int name##_len = size;
-
-// template<typename T, typename = std::enable_if_t<std::is_const<T>::value>>
-// constexpr auto _map_matrix(map_from x)
-// {
-//     return Eigen::Map<const Eigen::Matrix<scalar_t, name##_len, name##_numvecs>>((x.template segment<size>(offset)).data());} /* Matrix representation */
-// }
-
 // Helper function to reshape an eigen matrix while maintaining const'ness
 template <typename map_to, typename scalar_t>
 constexpr auto _map_matrix(const scalar_t* x) {
@@ -99,25 +71,368 @@ constexpr auto _map_matrix(scalar_t* x) {
 }
 
 
-#define DECLARE_VAR4(name, offset, size, number) \
-    static constexpr auto name##_mat_size = size*number; /* Size of the vectorized variable */ \
-    static constexpr auto name##_numvecs = number; /* Number of vectors */ \
-    static constexpr auto name##_o(int col) {return offset + size * col;} /* Offset */ \
-    static constexpr int name##_len = size; \
-    template <typename T> \
-    constexpr auto name##_get(T& x, int col) \
-        {return x.template segment<size>(offset + size * col);} /* Offset */ \
-    template <typename T> \
-    constexpr auto name##_get_matrix(T& x) \
-        {return _map_matrix<Eigen::Matrix<scalar_t, name##_len, name##_numvecs>>(x.template segment<size*number>(offset).data());}
+/**
+ * Information about a variable or constraint
+ */
+struct ZeroVariable_ // Fake type to indicate the start of the variable sequence
+{
+    static const std::size_t offset = 0;
+    static const std::size_t len = 0;
+    static const std::size_t num_vars = 0;
+    static const std::size_t next = 0;
 
-    // template<typename T> \
-    // constexpr auto name##_get_matrix(T& x) \
-    //     {return Eigen::Map<const Eigen::Matrix<scalar_t, name##_len, name##_numvecs>>((x.template segment<size>(offset)).data());} /* Matrix representation */ 
+    static constexpr std::size_t var_index = 0;
+};
+
+template<std::size_t _len, std::size_t _num_vars, 
+         typename Prev = ZeroVariable_> // Variable defined before this one (specifies ordering)
+struct var_t
+{
+    static constexpr std::size_t len      = _len;      // Length of a variable of this type
+    static constexpr std::size_t num_vars = _num_vars; // Number of variables in this set
+
+    // Location of this variable in the NLP optimizer
+    // var = [x1; x2; x3; ...]
+    // var[offset] = this variable
+    //
+    // var{0} = x1, var{1} = x2, var{2} = x3 ...
+    // var{index} = this variable
+
+    static constexpr std::size_t offset    = Prev::next;               // Offset into the main variable
+    static constexpr std::size_t next      = offset + len * num_vars;  // Offset where next variable should go
+    static constexpr std::size_t var_index = Prev::var_index + Prev::num_vars; // Variable index
+
+    // Get indexed offset
+    static constexpr std::size_t o(int ind = 0) 
+    {
+        assert(ind < num);
+        return offset + ind * len;
+    }
+
+    // Return ind variable segment of var
+    template<typename Var>
+    EIGEN_STRONG_INLINE constexpr auto operator()(Var& var, int ind) const
+    {
+        return var.template segment<len>(offset + ind * len);
+    }
+
+    template<typename Var>
+    EIGEN_STRONG_INLINE constexpr auto operator()(Var& var) const
+    {
+        return _map_matrix<Eigen::Matrix<typename Var::Scalar, len, num_vars>>(var.template segment<len * num_vars>(offset).data());
+    }
+
+    // Shorthand to return offset
+    EIGEN_STRONG_INLINE constexpr std::size_t operator()(int ind = 0) const
+    {
+        assert(ind < num);
+        return offset + ind * len;
+    }
+
+    // Return {offset, len} in a pair
+    EIGEN_STRONG_INLINE constexpr std::pair<int, int> info(int ind = 0) const
+    {
+        return std::make_pair(offset + ind * len, len);
+    }
+
+    template<typename Var>
+    EIGEN_STRONG_INLINE constexpr auto get(Var& var, int ind = 0) const
+    {
+        return var.template segment<len>(offset + ind * len);
+    }
+
+    template<typename Var>
+    EIGEN_STRONG_INLINE constexpr auto get_matrix(Var& var) const
+    {
+        return _map_matrix<Eigen::Matrix<typename Var::Scalar, len, num_vars>>(var.template segment<len * num_vars>(offset).data());
+    }
+};
+
+
+/**
+ * Information about a constraint
+ */
+struct ZeroConstraint_ // Fake type to indicate the start of the constraint sequence
+{
+    static const std::size_t offset = 0;
+    static const std::size_t len = 0;
+    static const std::size_t num_constraints = 0;
+    static const std::size_t next = 0;
+
+    static const std::size_t constraint_index = 0;
+};
+
+template<std::size_t len_, std::size_t num_constraints_, std::size_t nnz_,
+         typename Prev = ZeroConstraint_> // Constraint defined before this one (specifies ordering)
+struct con_t
+{
+    static constexpr std::size_t len      = len_;      // Length of a constraint of this type
+    static constexpr std::size_t num_constraints = num_constraints_; // Number of constraints in this set
+
+    static constexpr std::size_t nnz = nnz_; // Number of non-zeros in a single constraint of this type
+
+    // Location of this constraint in the NLP optimizer
+    // con = [x1; x2; x3; ...]
+    // con[offset] = this constraint
+    //
+    // con{0} = x1, con{1} = x2, con{2} = x3 ...
+    // con{index} = this constraint
+
+    static constexpr std::size_t offset = Prev::next;               // Offset into the main constraint
+    static constexpr std::size_t next = offset + len * num_constraints;  // Offset where next constraint should go
+    static constexpr std::size_t constraint_index = Prev::constraint_index + Prev::num_constraints; // Variable index
+
+    // Shorthand to return offset
+    EIGEN_STRONG_INLINE constexpr std::size_t operator()(int ind = 0) const
+    {
+        assert(ind < num);
+        return offset + ind * len;
+    }
+
+    // Return {offset, len} in a pair
+    EIGEN_STRONG_INLINE constexpr std::pair<int, int> info(int ind = 0) const
+    {
+        return std::make_pair(offset + ind * len, len);
+    }
+
+    template<typename Var>
+    EIGEN_STRONG_INLINE constexpr auto get(Var& var, int ind = 0) const
+    {
+        return var.template segment<len>(offset + ind * len);
+    }
+
+    template<typename Var>
+    EIGEN_STRONG_INLINE constexpr auto get_matrix(Var& var) const
+    {
+        return _map_matrix<Eigen::Matrix<typename Var::Scalar, len, num_constraints>>(var.template segment<len * num_constraints>(offset).data());
+
+        // using Matrix_ = Eigen::Matrix<typename Var::Scalar, len, num_constraints>;
+        // return Eigen::Map<const Matrix_>(var.template segment<len * num_constraints>(offset).data(), len, num_constraints);
+    }    
+};
+
+
+/*************************************************************************************
+ * User interface functions
+ *
+ * These are generally slower, but more convenient
+ *************************************************************************************/
+
+
+// A non-templated type containing the data about the variable in a runtime format
+struct var_slow_t
+{
+    int len;
+    int num_vars;
+    int offset;
+    int var_index;
+    // std::string name;
+
+    // template<typename T>
+    // var_slow_t(T var, std::string name) :
+    //     len(var.len), 
+    //     num_vars(var.num_vars), 
+    //     offset(var.offset), 
+    //     var_index(var.var_index), 
+    //     name(name)
+    //     {}
+
+    template<typename T>
+    var_slow_t(T var) :
+        len(var.len), 
+        num_vars(var.num_vars), 
+        offset(var.offset), 
+        var_index(var.var_index)
+        {}
+
+    template<typename scalar_t>
+    Eigen::Ref<Eigen::Matrix<scalar_t, Eigen::Dynamic, 1>> operator()(Eigen::Ref<Eigen::Matrix<scalar_t, Eigen::Dynamic, 1>> var, int ind = 0)
+    {
+        return var.segment(ind * len + offset, len);
+    }
+
+    // var_slow_t(const var_slow_t &v) {
+    //     len = v.len;
+    //     num_vars = v.num_vars;
+    //     offset = v.offset;
+    //     var_index = v.var_index;
+    // }
+};
+
+
+// A non-templated type containing the data about the constraint in a runtime format
+struct con_slow_t
+{
+    int len;
+    int num_constraints;
+    int offset;
+    int constraint_index;
+    std::string name;
+
+    template<typename T>
+    con_slow_t(T con, std::string name) :
+        len(con.len), 
+        num_constraints(con.num_constraints), 
+        offset(con.offset), 
+        constraint_index(con.constraint_index), 
+        name(name)
+        {}
+};
+
+
+// template<typename variable_t, typename... >
+// struct variables_tt
+
+
+/*
+ User interface to the variable list
+ */
+// template<typename scalar_t>
+// template<typename variable_t>
+// struct variables_t
+// {
+//     // Store the variables in a map
+//     using variable_map_t = std::map<std::string, var_slow_t>;
+//     variable_map_t var_map;
+
+//     using MatrixX = Eigen::Matrix<typename variable_t::Scalar, Eigen::Dynamic, Eigen::Dynamic>;
+
+//     // variables_t(std::initializer_list<std::pair<const std::string, var_slow_t>> var_map_) 
+//     //     : var_map(var_map_) {}
+
+//     variables_t(std::initializer_list<std::pair<const std::string, var_slow_t>> var_data) 
+//         : var_map(var_map_) {}
+
+//     // Set the variable_t that we're going to index into to return the variables
+//     variable_t* var;
+//     void set(const variable_t& var_)
+//     {
+//         var = &var_;
+//     }
+
+//     auto operator()(std::string name)
+//     {
+//         return get(name, &var);
+//     }
+
+//     template<typename T>
+//     auto get(T v, const Eigen::Ref<const variable_t>& var)
+//     {
+//         return Eigen::Map<const MatrixX>(var.data() + v.offset, v.len, v.num_vars);
+//     }
+
+//     template<>
+//     auto get<std::string>(std::string name, const Eigen::Ref<const variable_t>& var)
+//     {
+//         variable_map_t::iterator it = var_map.find(name);
+//         assert(it != var_map.end());
+//         return get(it->second, var);
+//     }   
+
+//     template<>
+//     auto get<const char*>(const char* name, const Eigen::Ref<const variable_t>& var)
+//     {
+//         return get(std::string(name), var);
+//     }        
+// };
+
+// using variable_map_t = std::map<std::string, var_slow_t>;
+// variable_map_t variable_map = 
+// {
+//     {"xss", xss}, 
+//     {"u", u}, 
+//     {"x", x}, 
+//     {"uss", uss}
+// };
+
+
+/*************************************************************************************
+ *************************************************************************************/
+
+
+
+
+// template<std::size_t _len,  // Size of one constraint
+//          std::size_t _num_constraints,  // Number of constraints
+//          std::size_t _nnz,  // Number of non-zers in a single constraint
+//          std::size_t _offset>  // Start of first constraint
+// struct con_t
+// {
+//     enum
+//     {
+//         len = _len,
+//         num_constraints = _num_constraints,
+//         offset = _offset,
+//         nnz_per_constraint = _nnz,
+//         nnz = _nnz * _num_constraints,
+//         next = _offset + _len * _num_constraints  // Offset where next constraint should go
+//     };
+
+//     // Shorthand to return offset
+//     constexpr std::size_t operator()(int ind = 0) const
+//     {
+//         return offset + ind * len;
+//     }
+
+//     // Return {offset, len} in a pair
+//     constexpr std::pair<int, int> info(int ind = 0) const
+//     {
+//         return std::make_pair(offset + ind * len, len);
+//     }
+// };
+
+
+// /**
+//  * Macro to declare a templated variable type
+//  */
+// // #define DECLARE_VAR_TYPE(name, length) \
+// //     static constexpr int name##_size = length; \
+// //     template<typename T> using name = Eigen::Matrix<T, name##_size, 1>;
+
+// /**
+//  * Macro to define a variable
+//  * 
+//  * Args:
+//  *  name - variable name
+//  *  offset - offset of the start of this variable into the 
+//  *  size - size of a vector of this variable type
+//  *  number [optional] - number of vectors
+//  */
+// #define DECLARE_VAR3(name, offset, size) \
+//     static constexpr auto name##_o = offset; /* Offset */ \
+//     template<typename T> \
+//     constexpr auto name##_get(T x) {return x.template segment<size>(offset);} /* Offset */ \
+//     static constexpr int name##_len = size; \
+//     static constexpr auto name##_info = std::make_pair(name##_o, name##_len);
+
+// // template<typename T, typename = std::enable_if_t<std::is_const<T>::value>>
+// // constexpr auto _map_matrix(map_from x)
+// // {
+// //     return Eigen::Map<const Eigen::Matrix<scalar_t, name##_len, name##_numvecs>>((x.template segment<size>(offset)).data());} /* Matrix representation */
+// // }
+
+
+
+// #define DECLARE_VAR4(name, offset, size, number) \
+//     static constexpr auto name##_mat_size = size*number; /* Size of the vectorized variable */ \
+//     static constexpr auto name##_numvecs = number; /* Number of vectors */ \
+//     static constexpr auto name##_o(int col) {return offset + size * col;} /* Offset */ \
+//     static constexpr int name##_len = size; \
+//     template <typename T> \
+//     constexpr auto name##_get(T& x, int col) \
+//         {return x.template segment<size>(offset + size * col);} /* Offset */ \
+//     template <typename T> \
+//     constexpr auto name##_get_matrix(T& x) \
+//         {return _map_matrix<Eigen::Matrix<scalar_t, name##_len, name##_numvecs>>(x.template segment<size*number>(offset).data());} \
+//     constexpr auto name##_info(int col) {return std::make_pair(name##_o(col), name##_len);}
+
+//     // template<typename T> \
+//     // constexpr auto name##_get_matrix(T& x) \
+//     //     {return Eigen::Map<const Eigen::Matrix<scalar_t, name##_len, name##_numvecs>>((x.template segment<size>(offset)).data());} /* Matrix representation */ 
 
 
 #define GET_MACRO(_1,_2,_3,_4,NAME,...) NAME
-#define DECLARE_VAR(...) GET_MACRO(__VA_ARGS__, DECLARE_VAR4, DECLARE_VAR3)(__VA_ARGS__)
+// #define DECLARE_VAR(...) GET_MACRO(__VA_ARGS__, DECLARE_VAR4, DECLARE_VAR3)(__VA_ARGS__)
 
 /**
  * Macro to define a constraint
@@ -132,13 +447,15 @@ constexpr auto _map_matrix(scalar_t* x) {
     static constexpr auto name##_len = size; \
     static constexpr auto name = offset; \
     template<typename T> \
-    constexpr auto name##_get(T g) {return g.template segment<name##_len>(name);};
+    constexpr auto name##_get(T g) {return g.template segment<name##_len>(name);}; \
+    static constexpr auto name##_info = std::make_pair(name, name##_len);
 
 #define DECLARE_CON4(name, offset, size, number) \
     static constexpr auto name##_len = size; \
     constexpr auto name(int ind) {return offset + size * ind;}; \
     template<typename T> \
-    constexpr auto name##_get(T g, int ind) {return g.template segment<name##_len>(name(ind));};
+    constexpr auto name##_get(T g, int ind) {return g.template segment<name##_len>(name(ind));}; \
+    constexpr auto name##_info(int col) {return std::make_pair(name(col), name##_len);}
 
 #define DECLARE_CONSTRAINT(...) GET_MACRO(__VA_ARGS__, DECLARE_CON4, DECLARE_CON3)(__VA_ARGS__)
 
@@ -752,7 +1069,7 @@ public:
             }
             row_offset += var_sizes[row];
         }
-        // monkey is the best
+        // monkey and Max are the bestests
 
         return val;
     }
@@ -1058,5 +1375,23 @@ void set_nonzero_blocks(Eigen::SparseMatrix<scalar_t>& J,
     J.makeCompressed();    
 }
 
-
-
+/*
+    Adds the non-zero elements to the triplet vector for the given equation
+*/
+using var_info_t = std::pair<int, int>;  // offset, len
+using eq_info_t = std::pair<int, int>;  // offset, len
+template<typename scalar_t>
+void set_equation_sparsity(std::vector<Eigen::Triplet<scalar_t>>& trip, 
+    eq_info_t eq_info, 
+    std::vector<var_info_t> vars)
+{
+    int row, col, num_rows, num_cols;
+    std::tie(row, num_rows) = eq_info;
+    for(auto var : vars)
+    {
+        std::tie(col, num_cols) = var;
+        for (int i=row; i<row + num_rows; i++)
+            for (int j=col; j<col + num_cols; j++)
+                trip.emplace_back(i, j, 1.0);    
+    }
+}

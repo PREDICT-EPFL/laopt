@@ -24,7 +24,7 @@ def function(f):
         
 
     # Create polypy input variables of the right size
-    args = (pp.variable(key, val) for key, val in f.__annotations__.items())
+    args = [pp.variable(key, val) for key, val in f.__annotations__.items()]
 
     # Create a polypy Function object
     try:
@@ -67,7 +67,14 @@ class Function:
         #  - All parameters and constants have already been defined in the containing class
         #  - All functions that this function calls exist
 
-        print(f"GENERATING {self}")
+        # self.expr.freeze()
+        if self in p.generated:
+            print(f">> Skipping generation of {self}, as it's already been generated")
+            return
+        else:
+            print(f">> Generating function {self}")
+            p.generated.add(self)
+
 
         # Produce function signature
         p(f"template<typename T>")
@@ -130,6 +137,8 @@ class Function:
         args = [pp.variable("var" + str(i), len(arg)) for i, arg in enumerate(self.inputs)]
         eval_self = self(*args)
         eval_other = other(*args)
+        eval_self.freeze()
+        eval_other.freeze()
         print(f"eval_self = {eval_self}")
         print(f"eval_other = {eval_other}")
         return eval_self.is_equal(eval_other)

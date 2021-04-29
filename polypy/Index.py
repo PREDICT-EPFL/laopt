@@ -23,6 +23,18 @@ class Range(Iterable):
         if self.index_name:
             validate_name(self.index_name)
 
+    @property
+    def start(self):
+        return self.rng.start
+    
+    @property
+    def stop(self):
+        return self.rng.stop
+
+    @property
+    def step(self):
+        return self.rng.step
+
     def __iter__(self):
         # We "iterate" here over ourselves
         return iter([self, ])

@@ -21,6 +21,8 @@ class PrePrint:
         self._options = dict()  # Options that can be queried during generation
         self._options['number_type'] = 'scalar_t'
 
+        self.generated = set()
+
     def __enter__(self):
         self.pre = self.pre + "\t"
         return self
@@ -68,6 +70,12 @@ class PrePrint:
         buf = io.StringIO()
         print(*args, **kwargs, file=buf)
         return print("\n".join([self.pre + ln for ln in buf.getvalue().splitlines()]), file=self.output, **kwargs)
+
+    def comment(self, *args, **kwargs):
+        """Print out the given text as a comment block"""
+        self.pre += self.comment_prepend + " "
+        self(*args, **kwargs)
+        self.pre = self.pre[:-len(self.comment_prepend + " ")]
 
     def __str__(self):
         # Dump our current output to a string

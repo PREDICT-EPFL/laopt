@@ -19,16 +19,6 @@
 using namespace Ipopt;
 using namespace Eigen;
 
-/*
-TODO:
-- variable bounds
-- bounds info
-
-- cost evaluation, jacobian and hessian
-- get starting point
-- finalize solution
-*/
-
 
 template<typename scalar_t, typename Prob>
 class NLP_Ipopt: public TNLP, public Prob
@@ -360,10 +350,10 @@ public:
 		std::cout << "========== Solution =========\n";
 		auto X = Eigen::Map<const variable_t>(x);
 
-		std::cout << "x = \n" << Prob::x_get_matrix(X).transpose() << std::endl;
-		std::cout << "u = \n" << Prob::u_get_matrix(X).transpose() << std::endl;
-		std::cout << "xss = " << Prob::xss_get(X).transpose() << std::endl;
-		std::cout << "uss = " << Prob::uss_get(X) << std::endl;
+		std::cout << "x = \n" << this->x(X).transpose() << std::endl;
+		std::cout << "u = \n" << this->u(X).transpose() << std::endl;
+		std::cout << "xss = " << this->xss(X).transpose() << std::endl;
+		std::cout << "uss = " << this->uss(X) << std::endl;
 
 		// typename Prob::constraint_t constraints;
 		// typename Prob::constraint_jacobian_t jacobian;
@@ -409,60 +399,20 @@ private:
 
 
 
-
-
-
-
-
-
-// template<typename _scalar_t>
-// struct Test
-// {
-// 	// typedef _scalar_t scalar_t;
-// 	using scalar_t = _scalar_t;
-
-//     Eigen::Matrix2d Q = {{2, 1}, {1, 4}};
-
-
-// 	template<typename T>
-// 	EIGEN_STRONG_INLINE void _cost(const Eigen::Ref<const Eigen::Matrix<T, 2, 1>> x1, 
-// 			  const Eigen::Ref<const Eigen::Matrix<T, 3, 1>> x2, 
-// 			  const Eigen::Ref<const Eigen::Matrix<T, 5, 1>> x3, 
-// 				T &y) const
-// 	{
-// 	    y = 0.5*x1.dot(Q.template cast<T>() * x1) + 4 * x2[0] * x3[1] * x2.sum() + 7 * x3.sum();
-// 	}
-//     MAKE_HESSIAN(Test, cost);
-//     costHessian<2,3,5> cost;
-
-// 	Test() : cost(this) {};
-// };
-
-
-
-
-
 int main(void)
 {
 	// using scalar_t = double;
 	// using OPT = LOpt<scalar_t>;
 	// OPT opt;
 
-	// Eigen::Matrix<scalar_t, 21, 1> var = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21};
+	// Eigen::Matrix<scalar_t, OPT::NUM_VARS, 1> var;
+	// for(int i=0; i<OPT::NUM_VARS; i++) 
+	// 	var[i] = i;
+	// std::cout << "var = " << var.transpose() << std::endl;
 
-	// scalar_t val;
-	// Eigen::Matrix<scalar_t, 1, 50> gradient;
-	// SparseMatrix<scalar_t> hessian(OPT::NUM_VARS, OPT::NUM_VARS);
-	// opt.objective_sparse_initialize(hessian);
-
-	// // val = opt.objective(var.template segment<OPT::NUM_VARS>(1));
-	// // val = opt.objective(var.template segment<OPT::NUM_VARS>(1), gradient.segment<OPT::NUM_VARS>(2));
-	// val = opt.objective(var.template segment<OPT::NUM_VARS>(1), gradient.segment<OPT::NUM_VARS>(2), hessian);
-
-
-	// std::cout << "val = " << val << std::endl;
-	// std::cout << "gradient = " << gradient << std::endl;
-	// std::cout << "hessian = \n" << hessian << std::endl;
+	// SparseMatrix<scalar_t> J(opt.NUM_CON, opt.NUM_VARS);
+	// opt.constraints_sparse_initialize(J);
+	// std::cout << "J = \n" << J << std::endl;
 
 
 #if 1
@@ -490,13 +440,9 @@ int main(void)
 
 
    // Ask Ipopt to solve the problem
-   mynlp->x_initial = {0,1};
-   mynlp->q = {0,1000};
-
-   std::cout << "x_initial = " << mynlp->x_initial << std::endl;
-   std::cout << "q = " << mynlp->q << std::endl;   
+   mynlp->x0 = {0,1};
+   std::cout << "x0 = " << mynlp->x0 << std::endl;
    status = app->OptimizeTNLP(mynlp);
-
 
    std::cout << "A = \n" << mynlp->A << std::endl;
    std::cout << "B = \n" << mynlp->B << std::endl;
