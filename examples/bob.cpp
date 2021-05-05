@@ -736,7 +736,7 @@ struct Opt
         // std::cout << "\nsJ = \n" << sJ << std::endl;
         constraints(p, var, con, sJ);
         // std::cout << "\nsJ = \n" << sJ << std::endl;
-
+ 
     }
 };
 
