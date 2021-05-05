@@ -106,3 +106,30 @@ preprint is then the "internal" buffers
 -> open/close function
 
 on final exit: close file
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=============================================
+
+C++ philosophy:
+
+- functions take inputs (non-contiguous) and return the value, jacobian and /or hessian (in a contiguour block)
+- variables are just compile-time offsets into the main variable
+- constraints know how to take the output from a function call and copy it into the right location (but don't know how to call the function)
+

@@ -398,12 +398,285 @@ private:
 };
 
 
+// template<int num_, typename Con_t>
+// struct ConArray_t
+// {
+// 	static constexpr int num = num_;
+// 	std::array<Con_t, num> cons;
+// };
+
+
+
+// template<typename scalar_t, int len_, int num_ = 1>
+// struct Con_t
+// {
+// 	static constexpr int len = len_;  // Length of one constraint
+// 	static constexpr int num_cons = num_;  // Number of constraints in this set
+
+// 	const int offset;  // Offset into the global constraint
+// 	const int index;   // Index into the global constraint
+
+// 	// Offset and index of the next constraint after this one
+// 	const int next_offset;
+// 	const int next_index;
+
+// 	// We want to be able to compute a dense representation of the jacobian
+// 	// for each variable in this constraint.
+// 	// 
+
+// 	// J_offsets(row, col) is the offset into the 
+// 	// jacobian.Values() vector where the jacobian for variable (row)
+// 	// starts for constraint (col)
+// 	// Eigen::Matrix<int, len, num> J_offsets;  
+
+// 	// J_stride(row, col) is the offset into the 
+// 	// jacobian.Values() vector where the jacobian for variable (row)
+// 	// starts for constraint (col)
+// 	// Eigen::Matrix<int, len, num> J_stride;  
+
+//     template<typename Con>
+//     EIGEN_STRONG_INLINE constexpr auto operator()(Con& con, int ind) const
+//     {
+//         return con.template segment<len>(offset + ind * len);
+//     }
+
+//     template<typename Con>
+//     EIGEN_STRONG_INLINE constexpr auto operator()(Con& con) const
+//     {
+//     	using target = Eigen::Matrix<typename Con::Scalar, len, num_cons>;
+//         return _map_matrix<target>(con.template segment<len * num_cons>(offset).data());
+//     }
+
+//     template<typename Prev>
+// 	constexpr Con_t(const Prev& prev): 
+// 		  offset(prev.next_offset), 
+// 		  index(prev.next_index),
+// 		  next_offset(offset + len * num_cons),
+// 		  next_index(index + num_cons)
+// 	{}
+
+// 	constexpr Con_t(): 
+// 		  offset(0),
+// 		  index(0),
+// 		  next_offset(offset + len * num_cons),
+// 		  next_index(index + num_cons)
+// 	{}
+// };
+
+
+// template<typename scalar_t, int len_, int num_ = 1>
+// struct Var_t
+// {
+// 	static constexpr int len = len_;  // Length of one variable
+// 	static constexpr int num_vars = num_;  // Number of variables in this set
+
+// 	const int offset;  // Offset into the global variable
+// 	const int index;   // Index into the global variable
+
+// 	// Offset and index of the next variable after this one
+// 	const int next_offset;
+// 	const int next_index;
+
+//     template<typename Var>
+//     EIGEN_STRONG_INLINE constexpr auto operator()(Var& var, int ind) const
+//     {
+//         return var.template segment<len>(offset + ind * len);
+//     }
+
+//     template<typename Var>
+//     EIGEN_STRONG_INLINE constexpr auto operator()(Var& var) const
+//     {
+//     	using target = Eigen::Matrix<typename Var::Scalar, len, num_vars>;
+//         return _map_matrix<target>(var.template segment<len * num_vars>(offset).data());
+//     }
+
+// 	// offset and index of this variable in the global variable
+// 	// offset and index are incremented upon return
+// 	// Var_t(int& offset_, int& index_): 
+// 	// 	  offset(offset_), index(index_) 
+// 	// {
+// 	// 	offset_ += len * num;
+// 	// 	index_ += num;
+// 	// }
+
+//     template<typename Prev>
+// 	constexpr Var_t(const Prev& prev): 
+// 		  offset(prev.next_offset), 
+// 		  index(prev.next_index),
+// 		  next_offset(offset + len * num_vars),
+// 		  next_index(index + num_vars)
+// 	{}
+
+// 	constexpr Var_t(): 
+// 		  offset(0),
+// 		  index(0),
+// 		  next_offset(offset + len * num_vars),
+// 		  next_index(index + num_vars)
+// 	{}
+// };
+
+
+// template<typename... VarTypes>
+// constexpr auto sum_length()
+// {
+//     int result = 0;
+//     for(auto s : { VarTypes::total_len... }) result += s;
+//     return result;
+// }
+
+
+// template<typename scalar_t>
+// struct Blah_t
+// {
+// 	// template<int len_>
+// 	// struct Var_t
+// 	// {
+// 	// 	static constexpr auto len = len_;
+// 	// 	static constexpr auto total_len = len;
+// 	// };
+
+// 	template<int len_, int num_ = 1>
+// 	struct Var_t
+// 	{
+// 		static constexpr auto len = len_;
+// 		static constexpr auto num = num_;
+
+// 		static constexpr auto total_len = len * num;
+
+// 		static constexpr auto offset = 
+// 	};
+
+
+// 	template<int len, // Number of outputs of the function
+// 			 typename... input_t> // Types of the inputs (Var_t)
+// 	struct Con_t
+// 	{
+// 		static constexpr auto num_inputs = sizeof...(input_t);
+
+// 		static constexpr std::array<int, num_inputs> input_sizes = {input_t::len...};
+
+// 		EIGEN_STRONG_INLINE auto operator()(Eigen::Ref<constraint_t> c)
+// 		{
+// 			return c.template segment<len>(offset);
+// 		}
+
+// 		template<typename constraint_t, int var_num>
+// 		EIGEN_STRONG_INLINE auto J(Eigen::Ref<constraint_jacobian_t> jac)
+// 		{
+// 			jac.template block<len, input_sizes[var_num]>(offset);
+// 		}
+
+
+// 	private:
+// 		int offset;
+// 	}
+
+
+// 	using x_t   = Var_t<3, 3>;
+// 	using u_t   = Var_t<x_t, 2, 2>;
+// 	using xss_t = Var_t<u_t, 3>;
+// 	using uss_t = Var_t<xss_t, 2>;
+
+// 	x_t x;
+// 	u_t u;
+// 	xss_t xss;
+// 	uss_t uss;
+
+// 	// ConArray_t<3, 3> x;
+// 	// ConArray_t<2, 2> u;
+// 	// Con_t<3> xss;
+// 	// Con_t<2> uss;
+
+// 	static constexpr int var_length = sum_length<x_t, u_t, xss_t, uss_t>();
+// 	static constexpr int con_length = sum_length<eq1_t, eq2_t, eq3_t>();
+
+// 	// NLP variable types
+// 	using variable_t            = Matrix<scalar_t, var_length, 1>;
+// 	using constraint_t          = Matrix<scalar_t, con_length, 1>;
+// 	using constraint_jacobian_t = Matrix<scalar_t, con_length,  var_length>;
+
+// 	void test()
+// 	{
+// 		Eigen::Matrix<double, x_t::len, 1> y;
+// 		std::cout << "y = " << y << std::endl;
+// 	}
+
+// 	// Blah_t()
+// 	// {
+// 	// 	set_variable_order(x, u, xss, uss);
+// 	// 	set_constraint_order()
+// 	// };
+
+// 	// static constexpr auto x   = Var_t<scalar_t, 3, 3>();
+// 	// static constexpr auto u   = Var_t<scalar_t, 2, 2>(x);
+// 	// static constexpr auto xss = Var_t<scalar_t, 3>(u);
+// 	// static constexpr auto uss = Var_t<scalar_t, 2>(xss);
+
+// 	// static const int var_length = uss.next_offset;  // Total length of all variables
+// 	// static const int num_vars   = uss.next_index;   // Number of vector variables
+
+// 	// static constexpr auto eq1 = Con_t<scalar_t, 2>();
+// 	// static constexpr auto eq2 = Con_t<scalar_t, 2, 5>(eq1);
+// 	// static constexpr auto eq3 = Con_t<scalar_t, 3>(eq2);
+
+// 	// Var_t<scalar_t, 4> t;
+
+// 	// std::array<int, decltype(t)::len> bob;
+
+// 	// ConArray_t<4, Con_t<scalar_t, 2>>();
+
+// 	// eq1(con) = func1(u(v_, 0), x(v_, 1), eq1(J, 0), eq1(J, 1));
+// 	// eq1(con) = func1(u(v_, 0), x(v_, 1));
+
+// };
+
+// template<typename T>
+// EIGEN_STRONG_INLINE void func(
+// 	const Eigen::Ref<const Eigen::Matrix<T, 2, 1>>& x,
+// 	const Eigen::Ref<const Eigen::Matrix<T, 1, 1>>& u,
+// 	Eigen::Ref<Eigen::Matrix<T, 2, 1>> out) noexcept
+// {
+// 	out = x;
+// }
+
 
 int main(void)
 {
 	// using scalar_t = double;
-	// using OPT = LOpt<scalar_t>;
-	// OPT opt;
+
+	// Blah_t<scalar_t> blah;
+
+	// blah.test();
+
+	// std::cout << "x   = " << blah.x.offset << ", " << blah.x.index << std::endl;
+	// std::cout << "u   = " << blah.u.offset << ", " << blah.u.index << std::endl;
+	// std::cout << "xss = " << blah.xss.offset << ", " << blah.xss.index << std::endl;
+	// std::cout << "uss = " << blah.uss.offset << ", " << blah.uss.index << std::endl;
+	// std::cout << std::endl;
+	// std::cout << "var_length = " << blah.var_length << std::endl;
+	// std::cout << "num_vars = " << blah.num_vars << std::endl;
+	// std::cout << std::endl;
+
+	// Eigen::Matrix<scalar_t, blah.var_length, 1> var;
+	// for(int i=0; i<blah.var_length; i++) 
+	// 	var[i] = i;
+	// std::cout << "var = " << var.transpose() << std::endl;
+
+	// for(int i=0; i<blah.x.num_vars; i++)
+	// 	std::cout << "x(" << i << ") = " << blah.x(var, i).transpose() << std::endl;
+	// std::cout << std::endl;
+	// std::cout << "x() = \n" << blah.x(var) << std::endl;
+
+	// for(int i=0; i<blah.u.num_vars; i++)
+	// 	std::cout << "u(" << i << ") = " << blah.u(var, i).transpose() << std::endl;
+	// std::cout << std::endl;
+	// std::cout << "u() = \n" << blah.u(var) << std::endl;
+
+
+
+	using scalar_t = double;
+	using OPT = LOpt<scalar_t>;
+	OPT opt;
 
 	// Eigen::Matrix<scalar_t, OPT::NUM_VARS, 1> var;
 	// for(int i=0; i<OPT::NUM_VARS; i++) 
@@ -415,7 +688,7 @@ int main(void)
 	// std::cout << "J = \n" << J << std::endl;
 
 
-#if 1
+#if 0
 	using myNLP = NLP_Ipopt<double, LOpt<double>>;
    SmartPtr<myNLP> mynlp = new myNLP();
    Ipopt::SmartPtr<Ipopt::IpoptApplication> app = new Ipopt::IpoptApplication();

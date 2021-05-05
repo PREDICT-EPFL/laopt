@@ -162,6 +162,8 @@ struct ZeroConstraint_ // Fake type to indicate the start of the constraint sequ
     static const std::size_t constraint_index = 0;
 };
 
+
+// template<typename FunctionTraits, std::size_t num_constraints_, typename Prev = ZeroConstraint_>
 template<std::size_t len_, std::size_t num_constraints_, std::size_t nnz_,
          typename Prev = ZeroConstraint_> // Constraint defined before this one (specifies ordering)
 struct con_t
@@ -171,12 +173,8 @@ struct con_t
 
     static constexpr std::size_t nnz = nnz_; // Number of non-zeros in a single constraint of this type
 
-    // Location of this constraint in the NLP optimizer
-    // con = [x1; x2; x3; ...]
-    // con[offset] = this constraint
-    //
-    // con{0} = x1, con{1} = x2, con{2} = x3 ...
-    // con{index} = this constraint
+    // // Offsets into the constraint jacobian for each input
+    // Eigen::Matrix<Eigen::Index, num_constraints, num_inputs> jacobian_offsets;
 
     static constexpr std::size_t offset = Prev::next;               // Offset into the main constraint
     static constexpr std::size_t next = offset + len * num_constraints;  // Offset where next constraint should go
@@ -556,6 +554,13 @@ constexpr std::array<T, sizeof...(Args)> make_array(Args... args)
 
  *************************************************************/
 
+template<typename scalar_t, int num_outputs, int num_inputs>
+struct func_return_t
+{
+    Eigen::Matrix<scalar_t, num_outputs, 1> val;
+    Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
+};
+
 template<template <int, int...> class _Functor, // Wrapped function from DECLARE_FUNCTION
         typename Object, // Object type of class that contains the wrapped function
         typename scalar_t,
@@ -573,6 +578,45 @@ struct Jacobian
     const Object* obj;
     template<typename T>
     Jacobian(const T *_obj) : obj(static_cast<const Object*>(_obj)) {}
+
+
+    using ret_t = func_return_t<scalar_t, num_outputs, num_inputs>;
+    EIGEN_STRONG_INLINE ret_t operator()(
+        const Ref<const Matrix<scalar_t, input_sizes, 1>>&... args) const noexcept
+    {
+        AD_output_t _out;
+
+        // Convert to AD variables for the inputs and call our function
+        seed_and_call(make_ad<input_sizes>(args)..., _out);
+
+        // Copy Jacobian into output variables
+        ret_t ret;
+        for(int i=0; i<num_outputs; i++)
+        {
+            ret.val(i) = _out[i].value();
+            ret.jacobian.row(i) = _out[i].derivatives();
+        }
+
+        return ret;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     // Call format:
     //   function(arg1, arg2, ..., argN, out)
