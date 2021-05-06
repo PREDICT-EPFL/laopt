@@ -447,44 +447,6 @@ struct con_t< Jacobian<Func, scalar_t_, param_t, num_outputs, input_sizes...>, n
         }
     }
 
-    // /*
-    //     Evaluate the constraint, its jacobian and hessian in dense format
-
-    //     The hessian is added into the hessian matrix multiplied by hessian_multiplier
-    //  */
-    // template<typename variable_t, typename constraint_t>
-    // EIGEN_STRONG_INLINE auto operator()(
-    //     const param_t& param,
-    //     const variable_t& var,
-    //     constraint_t& con,
-    //     Eigen::Ref<Eigen::Matrix<scalar_t, constraint_t::RowsAtCompileTime, variable_t::RowsAtCompileTime>> jac,
-    //     Eigen::Ref<Eigen::Matrix<scalar_t, variable_t::RowsAtCompileTime, variable_t::RowsAtCompileTime>> hessian,
-    //     scalar_t hessian_multiplier)
-    //     const noexcept
-    // {
-    //     for(int i=0; i<num_iterations; i++)
-    //     {
-    //         // Compute the function and its jacobian
-    //         auto ret = jacFunc::jac(param, Var_t::get(var, i)...);
-
-    //         // Write the function value into the constraint vector
-    //         con.template segment<num_outputs>(offset(i)) = ret.val;
-
-    //         // Write the jacobian into the dense jacobian matrix
-    //         int var_offset = 0;
-    //         (void)std::initializer_list<int>{ 
-    //             (
-    //                 jac.template block<num_outputs, input_sizes>(offset(i), Var_t::offset(i))
-    //                     = ret.jacobian.template block<num_outputs, input_sizes>(0, var_offset),
-    //                 // var_offset += Var_t::o(i),
-    //                 var_offset += input_sizes,
-    //                 0
-    //             )...
-    //         };
-    //     }
-    // }
-
-
     /*
         Evaluate the constraint, and its jacobian in sparse format
      */
@@ -517,6 +479,92 @@ struct con_t< Jacobian<Func, scalar_t_, param_t, num_outputs, input_sizes...>, n
                 )...
             };
         }
+    }
+
+    /*
+        Evaluate the constraint, its jacobian and hessian in dense format
+
+        The hessian is added into the hessian matrix multiplied by 
+        hessian_multiplier. (i.e., the Lagrange multipliers)
+     */
+    template<typename variable_t, typename constraint_t>
+    EIGEN_STRONG_INLINE auto operator()(
+        const param_t& param,
+        const variable_t& var,
+        constraint_t& con,
+        Eigen::Ref<Eigen::Matrix<scalar_t, constraint_t::RowsAtCompileTime, variable_t::RowsAtCompileTime>> jac,
+        Eigen::Ref<Eigen::Matrix<scalar_t, variable_t::RowsAtCompileTime, variable_t::RowsAtCompileTime>> hessian,
+        const Eigen::Ref<Eigen::Matrix<scalar_t, constraint_t::RowsAtCompileTime, 1>>& hessian_multiplier)
+        const noexcept
+    {
+        for(int i=0; i<num_iterations; i++)
+        {
+            // Compute the function, its jacobian and hessians
+            auto ret = jacFunc::hessian(param, Var_t::get(var, i)...);
+
+            // Write the function value into the constraint vector
+            con.template segment<num_outputs>(offset(i)) = ret.val;
+
+            // Write the jacobian into the dense jacobian matrix
+            int var_offset = 0;
+            (void)std::initializer_list<int>{ 
+                (
+                    jac.template block<num_outputs, input_sizes>(offset(i), Var_t::offset(i))
+                        = ret.jacobian.template block<num_outputs, input_sizes>(0, var_offset),
+                    var_offset += input_sizes,
+                    0
+                )...
+            };
+
+            // Write the hessian into the dense hessian matrix
+            for(int output_index=0; output_index<num_outputs; output_index++)
+            {
+                ret.hessian[output_index] *= hessian_multiplier(offset(i) + output_index);
+
+                int var_offset = 0;
+                (void)std::initializer_list<int>{ 
+                    (
+                        // copy_dense_hessian_blockrow<input_sizes, variable_t::RowsAtCompileTime>(
+                        copy_dense_hessian_blockrow(
+                            // Rows of the global hessian for this variable
+                            hessian.template block<input_sizes, variable_t::RowsAtCompileTime>(Var_t::offset(i), 0), 
+                            // Rows of the function hessian for this variable
+                            ret.hessian[output_index].template block<input_sizes, jacFunc::num_inputs>(var_offset, 0),
+                            i // Iteration number
+                        ),
+                        var_offset += input_sizes,
+                        0
+                    )...
+                };
+            }
+        }
+    }
+
+
+    /*
+        Copies a block-row of a dense hessian into the right location of the full hessian
+     */
+    template<typename target_t,   // Length of the variable row being copied
+             typename source_t> // Total number of variables in the target hessian
+    EIGEN_STRONG_INLINE void copy_dense_hessian_blockrow(
+        target_t&& target_hessian_row,
+        const source_t& source_hessian_row,
+        // Eigen::Ref<Eigen::Matrix<scalar_t, num_rows, num_inputs>> target_hessian_row,
+        // const Eigen::Ref<const Eigen::Matrix<scalar_t, num_rows, jacFunc::num_inputs>>& source_hessian_row,
+        const int iteration_number) const
+    {
+        constexpr auto num_rows = target_t::RowsAtCompileTime;
+
+        // Write the hessian into the dense hessian matrix
+        int var_offset = 0;
+        (void)std::initializer_list<int>{ 
+            (
+                target_hessian_row.template block<num_rows, input_sizes>(0, Var_t::offset(iteration_number))
+                    += source_hessian_row.template block<num_rows, input_sizes>(0, var_offset),
+                var_offset += input_sizes,
+                0
+            )...
+        };
     }
 
 
@@ -759,6 +807,29 @@ struct constraints_impl
         J.setFromTriplets(trip.begin(), trip.end());
         J.makeCompressed();
     }
+
+
+    /*
+        Evaluate all constraints and dense jacobians and hessians
+     */
+    template<typename param_t, typename variable_t, typename constraint_t>
+    EIGEN_STRONG_INLINE auto operator()(
+        const param_t& param,
+        const variable_t& var,
+        constraint_t& con,
+        Eigen::Ref<Eigen::Matrix<typename variable_t::Scalar, constraint_t::RowsAtCompileTime, variable_t::RowsAtCompileTime>> jac,
+        Eigen::Ref<Eigen::Matrix<typename variable_t::Scalar, variable_t::RowsAtCompileTime, variable_t::RowsAtCompileTime>> hessian,
+        Eigen::Ref<Eigen::Matrix<typename variable_t::Scalar, constraint_t::RowsAtCompileTime, 1>> hessian_multiplier)
+        const noexcept
+    {
+        (void)std::initializer_list<int>{ 
+            (
+                std::get<ind>(cons)(param, var, con, jac, hessian, hessian_multiplier),
+                0
+            )...
+        };
+    }
+
 
     // /*
     //     Set non-zeros of H to match the sparsity structure of the constraint Hessian
