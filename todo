@@ -2,6 +2,8 @@ Improvements in order:
 
 - iterators / for loops
 
+- add ability to define user-specified jacobians and hessians
+
 - change to "with" constraint specification format. 
 -- with nlp.constraints:
 ---  f(x,u) == bob

@@ -10,16 +10,16 @@ link_directories(/Users/cnjones/git/lampc /usr/local/Cellar/ipopt/3.13.4/lib/ /u
 
 add_definitions(-std=c++11 -DEIGEN_MATRIX_PLUGIN="Matrix_initializer_list.h" -DEIGEN_ARRAY_PLUGIN="Array_initializer_list.h")
 
-add_executable(test test.cpp myproblem.hpp /Users/cnjones/git/lampc/src/polygen_helper.hpp)
+# add_executable(test test.cpp myproblem.hpp /Users/cnjones/git/lampc/src/polygen_helper.hpp)
 # add_executable(model model.cpp gen.c)
-# add_executable(gen gen.cpp)
+add_executable(bob bob.cpp /Users/cnjones/git/lampc/src/lampc.hpp)
 # add_executable(test4 test4.cpp)
 # add_executable(test2 test2.cpp)
 
 
 link_directories(${CMAKE_SOURCE_DIR}/third_party/opencv/lib)
 
-target_link_libraries(test ipopt fmt)
+# target_link_libraries(test ipopt fmt)
 
 
 # target_link_libraries(model gen)
