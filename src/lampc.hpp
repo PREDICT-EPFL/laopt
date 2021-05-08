@@ -20,6 +20,12 @@ constexpr int sum_template() {
     return result;
 }
 
+// Build an array at compile time
+template <typename T, typename... Args>
+constexpr std::array<T, sizeof...(Args)> make_array(Args... args)
+{
+    return {args...};
+}
 
 // Helper function to reshape an eigen matrix while maintaining const'ness
 template <typename map_to, typename scalar_t>
@@ -390,11 +396,136 @@ struct con_t< Jacobian<Func, scalar_t_, param_t, num_outputs, input_sizes...>, n
     Eigen::Matrix<std::size_t, num_iterations, sizeof...(input_sizes)> jacobian_offsets;
 
     // Index into a compressed sparse hessian where each (variable, variable) block starts
-    Eigen::Matrix<std::size_t, num_iterations, (sizeof...(input_sizes) * sizeof...(input_sizes))> hessian_offsets;
+    using hessian_offset_t = Eigen::Matrix<std::size_t, sizeof...(input_sizes), sizeof...(input_sizes)>;
+    std::array<hessian_offset_t, num_iterations> hessian_offsets;
 
     con_t()
     {}
 
+private:
+    /*
+        Functions to copy the constraints, jacobian and hessian into the global
+        variables in dense and sparse formats
+     */
+    template<typename ret_t, typename constraint_t>
+    EIGEN_STRONG_INLINE void copy_to_constraint(int iteration, ret_t& ret, constraint_t& con) const noexcept
+    {
+        con.template segment<num_outputs>(offset(iteration)) = ret.val;
+    }
+
+    template<typename ret_t, typename jacobian_t>
+    EIGEN_STRONG_INLINE void copy_to_jacobian_dense(int iteration, ret_t& ret, jacobian_t& jac) const noexcept
+    {
+        // Write the jacobian into the dense jacobian matrix
+        int var_offset = 0;
+        (void)std::initializer_list<int>{ 
+            (
+                jac.template block<num_outputs, input_sizes>(offset(iteration), Var_t::offset(iteration))
+                    = ret.jacobian.template block<num_outputs, input_sizes>(0, var_offset),
+                var_offset += input_sizes,
+                0
+            )...
+        };
+    }
+
+    template<typename ret_t>
+    EIGEN_STRONG_INLINE void copy_to_jacobian_sparse(int iteration, ret_t& ret, Eigen::Ref<Eigen::SparseMatrix<scalar_t>> jac) const noexcept
+    {
+        // Write the jacobian into the sparse jacobian matrix
+        int var_offset = 0;
+        int var_num = 0;
+        (void)std::initializer_list<int>{ 
+            (
+                get_sparse_block<num_outputs, Var_t::var_len>(jac, Var_t::offset(iteration), jacobian_offsets(iteration, var_num))
+                    = ret.jacobian.template block<num_outputs, input_sizes>(0, var_offset),
+                var_num++,
+                var_offset += input_sizes,
+                0
+            )...
+        };
+    }
+
+    template<typename ret_t, typename hessian_t, typename hessian_multiplier_t>
+    EIGEN_STRONG_INLINE void copy_to_hessian_dense(int iteration, ret_t& ret, hessian_t& hessian, const hessian_multiplier_t& hessian_multiplier)
+     const noexcept
+    {
+        // static std::array<std::size_t, sizeof...(Var_t)> var_offsets = {Var_t::offset(iteration)...};
+        // static std::array<std::size_t, sizeof...(Var_t)> var_sizes = {Var_t::var_len...};
+
+        // // Write the hessian into the dense hessian matrix
+        // for(int output_index=0; output_index<num_outputs; output_index++)
+        // {
+        //     ret.hessian[output_index] *= hessian_multiplier(offset(iteration) + output_index);
+
+        //     std::size_t row_offset = 0;
+        //     for(int row=0; row<sizeof...(Var_t); row++)
+        //     {
+        //         std::size_t col_offset = 0;
+        //         for(int col=0; col<sizeof...(Var_t); col++)
+        //         {
+        //             hessian.block(var_offsets[row], var_offsets[col], var_sizes[row], var_sizes[col])
+        //                 += ret.hessian[output_index].block(row_offset, col_offset, var_sizes[row], var_sizes[col]);
+        //             col_offset += var_sizes[col];
+        //         }
+        //         row_offset += var_sizes[row];
+        //     }
+        // }
+
+
+
+        // Write the hessian into the dense hessian matrix
+        for(int output_index=0; output_index<num_outputs; output_index++)
+        {
+            ret.hessian[output_index] *= hessian_multiplier(offset(iteration) + output_index);
+
+            int var_offset = 0;
+            (void)std::initializer_list<int>{ 
+                (
+                    // copy_dense_hessian_blockrow<input_sizes, variable_t::RowsAtCompileTime>(
+                    copy_dense_hessian_blockrow(
+                        // Rows of the global hessian for this variable
+                        hessian.template block<input_sizes, hessian_t::ColsAtCompileTime>(Var_t::offset(iteration), 0), 
+                        // Rows of the function hessian for this variable
+                        ret.hessian[output_index].template block<input_sizes, jacFunc::num_inputs>(var_offset, 0),
+                        iteration // Iteration number
+                    ),
+                    var_offset += input_sizes,
+                    0
+                )...
+            };
+        }
+    }
+
+    template<typename ret_t, typename hessian_multiplier_t>
+    EIGEN_STRONG_INLINE void copy_to_hessian_sparse(int iteration, ret_t& ret, 
+                                                    Eigen::Ref<Eigen::SparseMatrix<scalar_t>> hessian, 
+                                                    const hessian_multiplier_t& hessian_multiplier) const noexcept
+    {
+        std::array<std::size_t, sizeof...(Var_t)> var_offsets = {Var_t::offset(iteration)...};
+        std::array<std::size_t, sizeof...(Var_t)> var_sizes = {Var_t::var_len...};
+
+        // Write the hessian into the sparse hessian matrix
+        for(int output_index=0; output_index<num_outputs; output_index++)
+        {
+            ret.hessian[output_index] *= hessian_multiplier(offset(iteration) + output_index);
+
+            std::size_t row_offset = 0;
+            for(int row=0; row<sizeof...(Var_t); row++)
+            {
+                std::size_t col_offset = 0;
+                for(int col=0; col<sizeof...(Var_t); col++)
+                {
+                     get_sparse_block_dynamic(hessian, var_sizes[row], var_sizes[col], var_offsets[col], hessian_offsets[iteration](row, col))
+                        += ret.hessian[output_index].block(row_offset, col_offset, var_sizes[row], var_sizes[col]);
+                    col_offset += var_sizes[col];
+                }
+                row_offset += var_sizes[row];
+            }
+        }
+    }
+
+
+public:
     /*
         Evaluate the constraint
      */
@@ -427,23 +558,9 @@ struct con_t< Jacobian<Func, scalar_t_, param_t, num_outputs, input_sizes...>, n
     {
         for(int i=0; i<num_iterations; i++)
         {
-            // Compute the function and its jacobian
             auto ret = jacFunc::jac(param, Var_t::get(var, i)...);
-
-            // Write the function value into the constraint vector
-            con.template segment<num_outputs>(offset(i)) = ret.val;
-
-            // Write the jacobian into the dense jacobian matrix
-            int var_offset = 0;
-            (void)std::initializer_list<int>{ 
-                (
-                    jac.template block<num_outputs, input_sizes>(offset(i), Var_t::offset(i))
-                        = ret.jacobian.template block<num_outputs, input_sizes>(0, var_offset),
-                    // var_offset += Var_t::o(i),
-                    var_offset += input_sizes,
-                    0
-                )...
-            };
+            copy_to_constraint(i, ret, con);
+            copy_to_jacobian_dense(i, ret, jac);
         }
     }
 
@@ -460,24 +577,9 @@ struct con_t< Jacobian<Func, scalar_t_, param_t, num_outputs, input_sizes...>, n
     {
         for(int i=0; i<num_iterations; i++)
         {
-            // Compute the function and its jacobian
             auto ret = jacFunc::jac(param, Var_t::get(var, i)...);
-
-            // Write the function value into the constraint vector
-            con.template segment<num_outputs>(offset(i)) = ret.val;
-
-            // Write the jacobian into the sparse jacobian matrix
-            int var_offset = 0;
-            int var_num = 0;
-            (void)std::initializer_list<int>{ 
-                (
-                    get_jacobian_block<Var_t::var_len>(jac, Var_t::offset(i), jacobian_offsets(i, var_num))
-                        = ret.jacobian.template block<num_outputs, input_sizes>(0, var_offset),
-                    var_num++,
-                    var_offset += input_sizes,
-                    0
-                )...
-            };
+            copy_to_constraint(i, ret, con);
+            copy_to_jacobian_sparse(i, ret, jac);
         }
     }
 
@@ -494,50 +596,240 @@ struct con_t< Jacobian<Func, scalar_t_, param_t, num_outputs, input_sizes...>, n
         constraint_t& con,
         Eigen::Ref<Eigen::Matrix<scalar_t, constraint_t::RowsAtCompileTime, variable_t::RowsAtCompileTime>> jac,
         Eigen::Ref<Eigen::Matrix<scalar_t, variable_t::RowsAtCompileTime, variable_t::RowsAtCompileTime>> hessian,
-        const Eigen::Ref<Eigen::Matrix<scalar_t, constraint_t::RowsAtCompileTime, 1>>& hessian_multiplier)
+        const Eigen::Ref<const Eigen::Matrix<scalar_t, constraint_t::RowsAtCompileTime, 1>>& hessian_multiplier)
         const noexcept
     {
         for(int i=0; i<num_iterations; i++)
         {
-            // Compute the function, its jacobian and hessians
             auto ret = jacFunc::hessian(param, Var_t::get(var, i)...);
+            copy_to_constraint(i, ret, con);
+            copy_to_jacobian_dense(i, ret, jac);
+            copy_to_hessian_dense(i, ret, hessian, hessian_multiplier);
+        }
+    }
 
-            // Write the function value into the constraint vector
-            con.template segment<num_outputs>(offset(i)) = ret.val;
+    /*
+        Evaluate the constraint, its jacobian and hessian in sparse format
 
-            // Write the jacobian into the dense jacobian matrix
-            int var_offset = 0;
+        The hessian is added into the hessian matrix multiplied by 
+        hessian_multiplier. (i.e., the Lagrange multipliers)
+     */
+    template<typename variable_t, typename constraint_t>
+    EIGEN_STRONG_INLINE auto operator()(
+        const param_t& param,
+        const variable_t& var,
+        constraint_t& con,
+        Eigen::Ref<Eigen::SparseMatrix<scalar_t>> jac,
+        Eigen::Ref<Eigen::SparseMatrix<scalar_t>> hessian,
+        const Eigen::Ref<const Eigen::Matrix<scalar_t, constraint_t::RowsAtCompileTime, 1>>& hessian_multiplier)
+        const noexcept
+    {
+        for(int i=0; i<num_iterations; i++)
+        {
+            auto ret = jacFunc::hessian(param, Var_t::get(var, i)...);
+            copy_to_constraint(i, ret, con);
+            copy_to_jacobian_sparse(i, ret, jac);
+            copy_to_hessian_sparse(i, ret, hessian, hessian_multiplier);
+        }
+    }
+
+
+
+
+
+    /*
+        Sets the offset, and returns the new offset
+     */
+    std::size_t set_offset(std::size_t offset_)
+    {
+        constraint_offset = offset_;
+        return constraint_offset + num_outputs * num_iterations;
+    }
+
+    /*
+        Return the offset into the constraint vector for the 
+        ind'th constraint
+     */
+    std::size_t offset(int ind = 0) const
+    {
+        return constraint_offset + ind * num_outputs;
+    }
+
+    /*
+        Adds the non-zero elements to the triplet vector for the given constraint
+    */
+    void jac_get_sparsity_triplet(std::vector<Eigen::Triplet<scalar_t>>& trip) const
+    {
+        for(int i=0; i<num_iterations; i++)
+        {
             (void)std::initializer_list<int>{ 
                 (
-                    jac.template block<num_outputs, input_sizes>(offset(i), Var_t::offset(i))
-                        = ret.jacobian.template block<num_outputs, input_sizes>(0, var_offset),
-                    var_offset += input_sizes,
+                    get_sparsity_triplet_block(trip, offset(i), num_outputs, Var_t::offset(i), Var_t::var_len),
                     0
                 )...
             };
-
-            // Write the hessian into the dense hessian matrix
-            for(int output_index=0; output_index<num_outputs; output_index++)
-            {
-                ret.hessian[output_index] *= hessian_multiplier(offset(i) + output_index);
-
-                int var_offset = 0;
-                (void)std::initializer_list<int>{ 
-                    (
-                        // copy_dense_hessian_blockrow<input_sizes, variable_t::RowsAtCompileTime>(
-                        copy_dense_hessian_blockrow(
-                            // Rows of the global hessian for this variable
-                            hessian.template block<input_sizes, variable_t::RowsAtCompileTime>(Var_t::offset(i), 0), 
-                            // Rows of the function hessian for this variable
-                            ret.hessian[output_index].template block<input_sizes, jacFunc::num_inputs>(var_offset, 0),
-                            i // Iteration number
-                        ),
-                        var_offset += input_sizes,
-                        0
-                    )...
-                };
-            }
         }
+    }
+
+    /*
+        Adds the non-zero elements to the triplet vector for the given constraint
+    */
+    void hessian_get_sparsity_triplet(std::vector<Eigen::Triplet<scalar_t>>& trip) const
+    {
+        for(int i=0; i<num_iterations; i++)
+        {
+            std::array<std::size_t, sizeof...(Var_t)> var_offsets = {Var_t::offset(i)...};
+            std::array<std::size_t, sizeof...(Var_t)> var_sizes = {Var_t::var_len...};
+
+            for(int row=0; row<sizeof...(Var_t); row++)
+                for(int col=0; col<sizeof...(Var_t); col++)
+                    get_sparsity_triplet_block(trip, var_offsets[row], var_sizes[row], var_offsets[col], var_sizes[col]);
+        }
+    }
+
+    /*
+        Set sparsity offsets. This can only be called once the global constraint structure is known 
+        from constraints_t
+
+        J is a compressed matrix whose structure was set by constraints_impl.initialize_sparse_jacobian
+
+        !! This function is only called from the constraints constructor !!
+     */
+    void jac_set_sparsity_offsets(Eigen::SparseMatrix<scalar_t>& J)
+    {
+        for(int i=0; i<num_iterations; i++)
+        {
+            // Get the index at the start of each constraint / variable block
+            int var_ind = 0;
+            (void)std::initializer_list<int>{ 
+                (
+                    jacobian_offsets(i, var_ind) = J.coeff(offset(i), Var_t::offset(i)),
+                    var_ind++,
+                    0
+                )...
+            };
+        }
+    }
+
+    /*
+        Set sparsity offsets. This can only be called once the global constraint structure is known 
+        from constraints_t
+
+        H is a compressed matrix whose structure was set by constraints_impl.initialize_sparse_hessian
+
+        !! This function is only called from the constraints constructor !!
+     */
+    void hessian_set_sparsity_offsets(Eigen::SparseMatrix<scalar_t>& H)
+    {
+        for(int i=0; i<num_iterations; i++)
+        {
+            std::array<std::size_t, sizeof...(Var_t)> var_offsets = {Var_t::offset(i)...};
+
+            // Get the index at the start of each constraint / variable block
+            for(int row=0; row<sizeof...(Var_t); row++)
+                for(int col=0; col<sizeof...(Var_t); col++)
+                {
+                    hessian_offsets[i](row, col) = H.coeff(var_offsets[row], var_offsets[col]);
+                }
+        }
+    }
+
+    /*
+        Print out the elements of the jacobian that this constraint 
+        will impact for debugging
+     */
+    void jac_print_sparsity_structure(Eigen::SparseMatrix<scalar_t>& J)
+    {
+        scalar_t* values = J.valuePtr();
+        for(int i=0; i<J.nonZeros(); i++)
+            values[i] = -1.0;
+
+        for(int i=0; i<num_iterations; i++)
+        {
+            // Write the jacobian into the sparse jacobian matrix
+            int var_num = 0;
+            (void)std::initializer_list<int>{ 
+                (
+                    get_sparse_block<num_outputs, Var_t::var_len>(J, Var_t::offset(i), jacobian_offsets(i, var_num)).array()
+                        = (double)i + (double)(var_num+1) / 10.0,
+                    var_num++,
+                    0
+                )...
+            };
+        }
+    }
+
+
+private:
+    void get_sparsity_triplet_block(std::vector<Eigen::Triplet<scalar_t>>& trip, int start_row, int row_len, int start_col, int col_len) const
+    {
+        for(int row=start_row; row<start_row + row_len; row++)
+            for(int col=start_col; col<start_col + col_len; col++)
+                trip.emplace_back(row, col, 1.0);
+    }
+
+    /*
+        Returns a dense map to a block of the hessian for a particular pair of variables
+     */
+    template<std::size_t row_len, std::size_t col_len>
+    Eigen::Map<Eigen::Matrix<scalar_t, row_len, col_len>, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>>
+         get_sparse_block(Eigen::Ref<Eigen::SparseMatrix<scalar_t>> sparse_matrix,
+                            int col, int valueStart) const
+    {
+        using Map_t = Eigen::Map<Eigen::Matrix<scalar_t, row_len, col_len>, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>>;
+        using Stride_t = Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>;
+
+        int nnz = sparse_matrix.outerIndexPtr()[col+1] - sparse_matrix.outerIndexPtr()[col];
+        scalar_t* data = sparse_matrix.valuePtr() + valueStart;
+
+        // Terrible fix: Eigen seems to mixup inner and outer strides for row vectors
+        int outerStride, innerStride;
+        if(row_len == 1)
+        {
+            outerStride = 1;
+            innerStride = nnz;
+        } else
+        {
+            innerStride = 1;
+            outerStride = nnz;
+        }
+
+        // return Map_t(data, Stride_t(nnz, 2));
+        return Map_t(data, Stride_t(outerStride, innerStride));
+    }
+
+    Eigen::Map<Eigen::Matrix<scalar_t, Eigen::Dynamic, Eigen::Dynamic>, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>>
+         get_sparse_block_dynamic(Eigen::Ref<Eigen::SparseMatrix<scalar_t>> sparse_matrix,
+                            std::size_t row_len, std::size_t col_len, int col, int valueStart) const
+    {
+        using Map_t = Eigen::Map<Eigen::Matrix<scalar_t, Eigen::Dynamic, Eigen::Dynamic>, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>>;
+        using Stride_t = Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>;
+
+        int nnz = sparse_matrix.outerIndexPtr()[col+1] - sparse_matrix.outerIndexPtr()[col];
+        scalar_t* data = sparse_matrix.valuePtr() + valueStart;
+
+        // Terrible fix: Eigen seems to mixup inner and outer strides for row vectors
+        int outerStride, innerStride;
+        // if(row_len == 1)
+        // {
+        //     outerStride = 1;
+        //     innerStride = nnz;
+        // } else
+        // {
+            innerStride = 1;
+            outerStride = nnz;
+        // }
+
+        // return Map_t(data, Stride_t(nnz, 2));
+        // if(row_len == 1)
+        // {
+            // std::cout << "------------------------ get_sparse_block_dynamic ---------------------\n";
+            // std::cout << "Map = \n" << Map_t(data, row_len, col_len, Stride_t(outerStride, innerStride)) << std::endl;
+            // std::cout << "row_len = " << row_len << " col_len = " << col_len << " col = " << col << " nnz = " << nnz << " valueStart = " << valueStart << std::endl;
+            // std::cout << Eigen::MatrixXd(sparse_matrix) << std::endl;
+            // std::cout << "------------------------ ------------------------ ---------------------\n";
+        // }
+        return Map_t(data, row_len, col_len, Stride_t(outerStride, innerStride));
     }
 
 
@@ -564,132 +856,7 @@ struct con_t< Jacobian<Func, scalar_t_, param_t, num_outputs, input_sizes...>, n
                 var_offset += input_sizes,
                 0
             )...
-        };
-    }
-
-
-    /*
-        Sets the offset, and returns the new offset
-     */
-    std::size_t set_offset(std::size_t offset_)
-    {
-        constraint_offset = offset_;
-        return constraint_offset + num_outputs * num_iterations;
-    }
-
-    /*
-        Return the offset into the constraint vector for the 
-        ind'th constraint
-     */
-    std::size_t offset(int ind = 0) const
-    {
-        return constraint_offset + ind * num_outputs;
-    }
-
-    /*
-        Adds the non-zero elements to the triplet vector for the given constraint
-    */
-    void get_sparsity_triplet(std::vector<Eigen::Triplet<scalar_t>>& trip) const
-    {
-        for(int i=0; i<num_iterations; i++)
-        {
-            (void)std::initializer_list<int>{ 
-                (
-                    get_sparsity_triplet_block(trip, offset(i), num_outputs, Var_t::offset(i), Var_t::var_len),
-                    0
-                )...
-            };
-        }
-    }
-
-    /*
-        Set sparsity offsets. This can only be called once the global constraint structure is known 
-        from constraints_t
-
-        J is a compressed matrix whose structure was set by constraints_impl.initialize_sparse_jacobian
-        and whose J.values() = {0,1,2,3,4,5...}
-     */
-    void set_sparsity_offsets(Eigen::SparseMatrix<scalar_t>& J)
-    {
-        for(int i=0; i<num_iterations; i++)
-        {
-            // Get the index at the start of each constraint / variable block
-            int var_ind = 0;
-            (void)std::initializer_list<int>{ 
-                (
-                    jacobian_offsets(i, var_ind) = J.coeff(offset(i), Var_t::offset(i)),
-                    var_ind++,
-                    0
-                )...
-            };
-        }
-    }
-
-
-    /*
-        Print out the elements of the jacobian that this constraint 
-        will impact for debugging
-     */
-    void print_sparsity_structure(Eigen::SparseMatrix<scalar_t>& J)
-    {
-        scalar_t* values = J.valuePtr();
-        for(int i=0; i<J.nonZeros(); i++)
-            values[i] = -1.0;
-
-        for(int i=0; i<num_iterations; i++)
-        {
-            // Write the jacobian into the sparse jacobian matrix
-            int var_num = 0;
-            (void)std::initializer_list<int>{ 
-                (
-                    get_jacobian_block<Var_t::var_len>(J, Var_t::offset(i), jacobian_offsets(i, var_num)).array()
-                        = (double)i + (double)(var_num+1) / 10.0,
-                    var_num++,
-                    0
-                )...
-            };
-        }
-    }
-
-
-private:
-    void get_sparsity_triplet_block(std::vector<Eigen::Triplet<scalar_t>>& trip, int start_row, int row_len, int start_col, int col_len) const
-    {
-        for(int row=start_row; row<start_row + row_len; row++)
-            for(int col=start_col; col<start_col + col_len; col++)
-                trip.emplace_back(row, col, 1.0);
-    }
-
-    /*
-        Returns a dense map to a block of the jacobian for a particular constraint and variable
-     */
-    template<std::size_t var_len>
-    Eigen::Map<Eigen::Matrix<scalar_t, num_outputs, var_len>, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>>
-         get_jacobian_block(Eigen::Ref<Eigen::SparseMatrix<scalar_t>> jacobian,
-                            int col, int valueStart) const
-    {
-        // using Map_t = Eigen::Map<Eigen::Matrix<scalar_t, num_outputs, var_len>, 0, Eigen::Stride<Eigen::Dynamic, 1>>;
-
-        using Map_t = Eigen::Map<Eigen::Matrix<scalar_t, num_outputs, var_len>, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>>;
-        using Stride_t = Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>;
-
-        int nnz = jacobian.outerIndexPtr()[col+1] - jacobian.outerIndexPtr()[col];
-        scalar_t* data = jacobian.valuePtr() + valueStart;
-
-        // Terrible fix: Eigen seems to mixup inner and outer strides for row vectors
-        int outerStride, innerStride;
-        if(num_outputs == 1)
-        {
-            outerStride = 1;
-            innerStride = nnz;
-        } else
-        {
-            innerStride = 1;
-            outerStride = nnz;
-        }
-
-        // return Map_t(data, Stride_t(nnz, 2));
-        return Map_t(data, Stride_t(outerStride, innerStride));
+        };        
     }
 
 };
@@ -718,17 +885,33 @@ struct constraints_impl
             )...
         };
 
+        // Store the offset locations for each block of the jacobian
         SparseMatrix<scalar_t> J(constraint_vector_length(), num_variables);
         initialize_sparse_jacobian(J);
 
-        // Set the offset sequence so we can find the offset of any coefficient
         scalar_t* values = J.valuePtr();
         for(int i=0; i<J.nonZeros(); i++)
             values[i] = i;
 
         (void)std::initializer_list<int>{ 
             (
-                std::get<ind>(cons).set_sparsity_offsets(J),
+                std::get<ind>(cons).jac_set_sparsity_offsets(J),
+                0
+            )...
+        };
+
+
+        // Store the offset locations for each block of the hessian
+        SparseMatrix<scalar_t> H(num_variables, num_variables);
+        initialize_sparse_hessian(H);
+
+        values = H.valuePtr();
+        for(int i=0; i<H.nonZeros(); i++)
+            values[i] = i;
+
+        (void)std::initializer_list<int>{ 
+            (
+                std::get<ind>(cons).hessian_set_sparsity_offsets(H),
                 0
             )...
         };
@@ -799,13 +982,31 @@ struct constraints_impl
 
         (void)std::initializer_list<int>{ 
             (
-                std::get<ind>(cons).get_sparsity_triplet(trip),
+                std::get<ind>(cons).jac_get_sparsity_triplet(trip),
                 0
             )...
         };
 
         J.setFromTriplets(trip.begin(), trip.end());
         J.makeCompressed();
+    }
+
+    /*
+        Set non-zeros of H to match the sparsity structure of the constraint Jacobian
+     */
+    EIGEN_STRONG_INLINE void initialize_sparse_hessian(SparseMatrix<scalar_t>& H)
+    {
+        std::vector<Eigen::Triplet<scalar_t>> trip;
+
+        (void)std::initializer_list<int>{ 
+            (
+                std::get<ind>(cons).hessian_get_sparsity_triplet(trip),
+                0
+            )...
+        };
+
+        H.setFromTriplets(trip.begin(), trip.end());
+        H.makeCompressed();
     }
 
 
@@ -819,9 +1020,10 @@ struct constraints_impl
         constraint_t& con,
         Eigen::Ref<Eigen::Matrix<typename variable_t::Scalar, constraint_t::RowsAtCompileTime, variable_t::RowsAtCompileTime>> jac,
         Eigen::Ref<Eigen::Matrix<typename variable_t::Scalar, variable_t::RowsAtCompileTime, variable_t::RowsAtCompileTime>> hessian,
-        Eigen::Ref<Eigen::Matrix<typename variable_t::Scalar, constraint_t::RowsAtCompileTime, 1>> hessian_multiplier)
+        const Eigen::Ref<Eigen::Matrix<typename variable_t::Scalar, constraint_t::RowsAtCompileTime, 1>> hessian_multiplier)
         const noexcept
     {
+        hessian.array() = 0.0;
         (void)std::initializer_list<int>{ 
             (
                 std::get<ind>(cons)(param, var, con, jac, hessian, hessian_multiplier),
@@ -830,24 +1032,30 @@ struct constraints_impl
         };
     }
 
+    /*
+        Evaluate all constraints and sparse jacobians and hessians
+     */
+    template<typename param_t, typename variable_t, typename constraint_t>
+    EIGEN_STRONG_INLINE auto operator()(
+        const param_t& param,
+        const variable_t& var,
+        constraint_t& con,
+        Eigen::Ref<Eigen::SparseMatrix<scalar_t>> jac,
+        Eigen::Ref<Eigen::SparseMatrix<scalar_t>> hessian,
+        const Eigen::Ref<Eigen::Matrix<typename variable_t::Scalar, constraint_t::RowsAtCompileTime, 1>> hessian_multiplier)
+        const noexcept
+    {
+        scalar_t* data = hessian.valuePtr();
+        for(std::size_t i=0; i<hessian.nonZeros(); i++)
+            data[i] = 0.0;
 
-    // /*
-    //     Set non-zeros of H to match the sparsity structure of the constraint Hessian
-    //  */
-    // EIGEN_STRONG_INLINE void initialize_sparse_hessian(SparseMatrix<scalar_t>& J)
-    // {
-    //     std::vector<Eigen::Triplet<scalar_t>> trip;
-
-    //     (void)std::initializer_list<int>{ 
-    //         (
-    //             std::get<ind>(cons).get_sparsity_triplet(trip),
-    //             0
-    //         )...
-    //     };
-
-    //     J.setFromTriplets(trip.begin(), trip.end());
-    //     J.makeCompressed();
-    // }
+        (void)std::initializer_list<int>{ 
+            (
+                std::get<ind>(cons)(param, var, con, jac, hessian, hessian_multiplier),
+                0
+            )...
+        };
+    }
 
 
     /****************************************************

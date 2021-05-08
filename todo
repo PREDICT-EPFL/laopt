@@ -1,23 +1,9 @@
 Improvements in order:
 
-- iterators / for loops
-
 - add ability to define user-specified jacobians and hessians
+- add estimation of jacobians and hessians via finite-difference for validation
+- add compile-time checks on variable overruns to the iterator and con_t classes
 
-- change to "with" constraint specification format. 
--- with nlp.constraints:
----  f(x,u) == bob
----  g(x) <= 3
---- all expressions are frozen by default, and inside context we unfreeze then to generate constraints
-
-
-- modify the whole structure to move to static functions
--- one class with all the functions in static form, with scalar template types
--- another class containing the writable parameters
--- pass a reference to the parameter set to the functions during evaluation
-
-
-- add options to decide on generation (sparse, etc)
 - seperate out generation types (eigen, python, etc)
 
 

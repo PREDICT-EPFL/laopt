@@ -37,7 +37,8 @@ struct Opt
         static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 2> out, cVec<T, 2>& x, cVec<T, 1>& u) noexcept
         {
             out = p.A.template cast<T>() * x + p.B.template cast<T>() * u;
-            out = (out.array() + x(0)*x(1)*u(0)).matrix();
+            out(0) += x(0)*x(1)*u(0);
+            out(1) += x(0)*10*u(0);
         }
     };
     using dynamics = Jacobian<dynamics_, scalar_t, param_t, 2, 2, 1>;
@@ -91,9 +92,9 @@ struct Opt
         make_constraints<
             num_variables,
             con_t<func1, 1, iterator<u,0,0>, iterator<x,0,0>>,  // dynamics(x(0), u(0)) == x(1)
-            con_t<func3, N-1, iterator<u,1,1>, iterator<x,1,1>, iterator<x,2,1>>, // dynamics(u(i), x(i)) == x(i+1) for i in range(0, N-1)
+            con_t<func3, N-2, iterator<u,1,1>, iterator<x,1,1>, iterator<x,2,1>>, // dynamics(u(i), x(i)) == x(i+1) for i in range(0, N-1)
             con_t<func2, 1, iterator<uss>, iterator<xss>>,  // dynamics(xss, uss) == xss
-            con_t<stage_cost, N-1, iterator<x,0,1>, iterator<u,0,1>>  // x(i)'*Q*x(i) + u(i)'*R*u(i) for i in range(0, N-1)
+            con_t<stage_cost, N-2, iterator<x,0,1>, iterator<u,0,1>>  // x(i)'*Q*x(i) + u(i)'*R*u(i) for i in range(0, N-1)
         >;
     static constexpr std::size_t num_constraints = constraints_t::constraint_vector_length();
     constraints_t constraints;
@@ -114,31 +115,31 @@ int main()
     using Opt = Opt<scalar_t>;
     Opt opt;
 
-    {
-        std::cout << "\n\n===Test direct computation of functions===\n";
+    // {
+    //     std::cout << "\n\n===Test direct computation of functions===\n";
         
-        Eigen::Matrix<scalar_t, 2, 1> x = {1, 2};
-        Eigen::Matrix<scalar_t, 1, 1> u = {3};
+    //     Eigen::Matrix<scalar_t, 2, 1> x = {1, 2};
+    //     Eigen::Matrix<scalar_t, 1, 1> u = {3};
 
-        std::cout << "stage_cost::eval(opt.p, x, u) = " << Opt::stage_cost::eval(opt.p, x, u).transpose() << std::endl;
-        std::cout << "\n\n";
+    //     std::cout << "stage_cost::eval(opt.p, x, u) = " << Opt::stage_cost::eval(opt.p, x, u).transpose() << std::endl;
+    //     std::cout << "\n\n";
 
-        std::cout << "jac = stage_cost::jac(opt.p, x, u)" << std::endl;
-        auto jac = Opt::stage_cost::jac(opt.p, x, u);
-        std::cout << "jac.val = " << jac.val.transpose() << std::endl;
-        std::cout << "jac.jacobian = \n" << jac.jacobian << std::endl;
-        std::cout << "\n\n";
+    //     std::cout << "jac = stage_cost::jac(opt.p, x, u)" << std::endl;
+    //     auto jac = Opt::stage_cost::jac(opt.p, x, u);
+    //     std::cout << "jac.val = " << jac.val.transpose() << std::endl;
+    //     std::cout << "jac.jacobian = \n" << jac.jacobian << std::endl;
+    //     std::cout << "\n\n";
 
-        std::cout << "hessian = stage_cost::hessian(opt.p, x, u) = " << Opt::stage_cost::eval(opt.p, x, u).transpose() << std::endl;
-        auto hessian = Opt::stage_cost::hessian(opt.p, x, u);
-        std::cout << "hessian.val = " << hessian.val.transpose() << std::endl;
-        std::cout << "hessian.jacobian = \n" << hessian.jacobian << std::endl;
-        for(int i=0; i<Opt::stage_cost::num_outputs; i++)
-        {
-            std::cout << "hessian.hessian(" << i << ")\n";
-            std::cout << hessian.hessian[i] << std::endl;
-        }        
-    }
+    //     std::cout << "hessian = stage_cost::hessian(opt.p, x, u) = " << Opt::stage_cost::eval(opt.p, x, u).transpose() << std::endl;
+    //     auto hessian = Opt::stage_cost::hessian(opt.p, x, u);
+    //     std::cout << "hessian.val = " << hessian.val.transpose() << std::endl;
+    //     std::cout << "hessian.jacobian = \n" << hessian.jacobian << std::endl;
+    //     for(int i=0; i<Opt::stage_cost::num_outputs; i++)
+    //     {
+    //         std::cout << "hessian.hessian(" << i << ")\n";
+    //         std::cout << hessian.hessian[i] << std::endl;
+    //     }        
+    // }
 
 
     {
@@ -146,8 +147,8 @@ int main()
         std::cout << "===Test computation of constraints and objective function===\n";
         std::cout << "============================================================\n";
 
-        std::cout << "num_variables = " << opt.num_variables << std::endl;
-        std::cout << "num_constraints = " << opt.num_constraints << std::endl;
+        // std::cout << "num_variables = " << opt.num_variables << std::endl;
+        // std::cout << "num_constraints = " << opt.num_constraints << std::endl;
 
         Eigen::Matrix<scalar_t, Opt::num_variables, 1> var;
         for(int i=0; i<Opt::num_variables; i++) var[i] = i;
@@ -162,6 +163,12 @@ int main()
 
         Eigen::Matrix<scalar_t, Opt::num_variables, Opt::num_variables> H;
         H.setZero();
+        Eigen::SparseMatrix<scalar_t> sH(Opt::num_variables, Opt::num_variables);
+        opt.constraints.initialize_sparse_hessian(sH);
+
+        std::cout << "Hessian sparsity" << std::endl;
+        std::cout << sH << std::endl;
+
         Eigen::Matrix<scalar_t, Opt::num_constraints, 1> hessian_multiplier;
         hessian_multiplier.array() = 1.0;
 
@@ -185,17 +192,16 @@ int main()
         std::cout << "\n\n";
 
         std::cout << "==> Computing sparse jacobian <==\n";
-        opt.constraints(opt.p, var, con, sJ);
         std::cout << "con = " << con.transpose() << std::endl;
         std::cout << "sJ = \n" << Eigen::MatrixXd(sJ) << std::endl;
         std::cout << "\n\n";
 
-        // std::cout << "==> Computing sparse hessian <==\n";
-        // opt.constraints(opt.p, var, con, sJ, sH);
-        // std::cout << "con = " << con.transpose() << std::endl;
-        // std::cout << "sJ = \n" << Eigen::MatrixXd(sJ) << std::endl;
-        // std::cout << "sH = \n" << Eigen::MatrixXd(sH) << std::endl;
-        // std::cout << "\n\n";
+        std::cout << "==> Computing sparse hessian <==\n";
+        opt.constraints(opt.p, var, con, sJ, sH, hessian_multiplier);
+        std::cout << "con = " << con.transpose() << std::endl;
+        std::cout << "sJ = \n" << Eigen::MatrixXd(sJ) << std::endl;
+        std::cout << "sH = \n" << Eigen::MatrixXd(sH) << std::endl;
+        std::cout << "\n\n";
 
     }
 
