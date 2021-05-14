@@ -4,9 +4,10 @@
 #include "IpIpoptApplication.hpp"
 #include "IpTNLP.hpp"
 
+// using namespace Ipopt;
 
 template<typename scalar_t, typename Prob>
-class NLP_Ipopt: public TNLP, public Prob
+class NLP_Ipopt : public Ipopt::TNLP, public Prob
 {
 public:
 	using typename Prob::variable_t;
@@ -16,25 +17,25 @@ public:
 	using typename Prob::obj_hessian_t;
 	using typename Prob::obj_t;
 
-
-	using Prob::NUM_VARS;
-	using Prob::NUM_CON;
+	using Prob::num_variables;
+	using Prob::num_constraints;
 	using Prob::nnz_constraints_jacobian;
 
-	variable_t x0;  // Initial iterate
 
-	NLP_Ipopt() :
-		jac_g(Prob::NUM_CON, Prob::NUM_VARS),
-		hessian_g(Prob::NUM_VARS, Prob::NUM_VARS)
-		{
-		this->constraints_sparse_initialize(jac_g);  // Compute sparsity structure of constraints
-		for(int i=0; i<NUM_VARS; i++)
-			x0[i] = 0.0;
-	};
+	variable_t x0;  // Initial iterate
 
 	// Sparsity structures
 	Eigen::SparseMatrix<scalar_t> jac_g;
 	Eigen::SparseMatrix<scalar_t> hessian_g;
+
+	NLP_Ipopt() :
+		jac_g(Prob::num_constraints, Prob::num_variables),
+		hessian_g(Prob::num_variables, Prob::num_variables)
+	{
+        this->constraints.initialize_sparse_jacobian(jac_g);
+        this->constraints.initialize_sparse_hessian(hessian_g);
+		x0.array() = 0.0;
+	};
 
 	bool get_nlp_info(
 		Ipopt::Index&          n,
@@ -44,26 +45,26 @@ public:
 		IndexStyleEnum&        index_style
 	)
 	{
-		n = NUM_VARS;
-		m = NUM_CON;
-		nnz_jac_g = nnz_constraints_jacobian;
-		nnz_h_lag = 10; // Number of nonzero entries in the Hessian
+		n = num_variables;
+		m = num_constraints;
+		nnz_jac_g = this->constraints.nnz_jacobian;
+		nnz_h_lag = this->objective.nnz_hessian;
 		index_style = TNLP::C_STYLE;
 		return true;
 	};
 
 	bool get_bounds_info(
 		Ipopt::Index   n,
-		Number* x_l,
-		Number* x_u,
+		Ipopt::Number* x_l,
+		Ipopt::Number* x_u,
 		Ipopt::Index   m,
-		Number* g_l,
-		Number* g_u
+		Ipopt::Number* g_l,
+		Ipopt::Number* g_u
 	)
 	{
 		// n and m are whatever we set in get_nlp_info
-		assert(n == NUM_VARS);
-		assert(m == NUM_CON);
+		assert(n == num_variables);
+		assert(m == num_constraints);
 
 		this->variable_bounds(Eigen::Map<variable_t>(x_l), Eigen::Map<variable_t>(x_u));
 		this->constraint_bounds(Eigen::Map<constraint_t>(g_l), Eigen::Map<constraint_t>(g_u));
@@ -82,13 +83,13 @@ public:
 	bool get_starting_point(
 		Ipopt::Index   n,
 		bool    init_x,
-		Number* x,
+		Ipopt::Number* x,
 		bool    init_z,
-		Number* z_L,
-		Number* z_U,
+		Ipopt::Number* z_L,
+		Ipopt::Number* z_U,
 		Ipopt::Index   m,
 		bool    init_lambda,
-		Number* lambda
+		Ipopt::Number* lambda
 	)
 	{
 		assert(init_x == true);  // We provide initial primal
@@ -103,38 +104,38 @@ public:
 
 	bool eval_f(
 		Ipopt::Index         n,
-		const Number* x,
+		const Ipopt::Number* x,
 		bool          new_x,
-		Number&       obj_value
+		Ipopt::Number&       obj_value
 	)
 	{
-		assert(n == NUM_VARS);		
+		assert(n == num_variables);		
 		obj_value = this->objective(Eigen::Map<const variable_t>(x));
 		return true;
 	}
 
 	bool eval_grad_f(
 		Ipopt::Index         n,
-		const Number* x,
+		const Ipopt::Number* x,
 		bool          new_x,
-		Number*       grad_f
+		Ipopt::Number*       grad_f
 	)
 	{
-		assert(n == NUM_VARS);
+		assert(n == num_variables);
 		this->objective(Eigen::Map<const variable_t>(x), Eigen::Map<obj_gradient_t>(grad_f));
 		return true;
 	}
 
 	bool eval_g(
 		Ipopt::Index         n,
-		const Number* x,
+		const Ipopt::Number* x,
 		bool          new_x,
 		Ipopt::Index         m,
-		Number*       g
+		Ipopt::Number*       g
 	)
 	{
-		assert(n == NUM_VARS);
-		assert(m == NUM_CON);
+		assert(n == num_variables);
+		assert(m == num_constraints);
 
 		Eigen::Map<const variable_t > var(x);
 		Eigen::Map<constraint_t > constraints(g);
@@ -149,13 +150,13 @@ public:
     */
 	bool eval_jac_g(
 		Ipopt::Index         n,
-		const Number* x,
+		const Ipopt::Number* x,
 		bool          new_x,
 		Ipopt::Index         m,
 		Ipopt::Index         nele_jac,
 		Ipopt::Index*        iRow,
 		Ipopt::Index*        jCol,
-		Number*       values
+		Ipopt::Number*       values
 	)
 	{
 		assert( n == 4 );
@@ -195,16 +196,16 @@ public:
     */
 	bool eval_h(
 		Ipopt::Index         n,
-		const Number* x,
+		const Ipopt::Number* x,
 		bool          new_x,
-		Number        obj_factor,
+		Ipopt::Number        obj_factor,
 		Ipopt::Index         m,
-		const Number* lambda,
+		const Ipopt::Number* lambda,
 		bool          new_lambda,
 		Ipopt::Index         nele_hess,
 		Ipopt::Index*        iRow,
 		Ipopt::Index*        jCol,
-		Number*       values
+		Ipopt::Number*       values
 	)
 	{
 		return false;
@@ -289,17 +290,17 @@ public:
 
    /** This method is called when the algorithm is complete so the TNLP can store/write the solution */
 	void finalize_solution(
-		SolverReturn               status,
+		Ipopt::SolverReturn               status,
 		Ipopt::Index                      n,
-		const Number*              x,
-		const Number*              z_L,
-		const Number*              z_U,
+		const Ipopt::Number*              x,
+		const Ipopt::Number*              z_L,
+		const Ipopt::Number*              z_U,
 		Ipopt::Index                      m,
-		const Number*              g,
-		const Number*              lambda,
-		Number                     obj_value,
-		const IpoptData*           ip_data,
-		IpoptCalculatedQuantities* ip_cq
+		const Ipopt::Number*              g,
+		const Ipopt::Number*              lambda,
+		Ipopt::Number                     obj_value,
+		const Ipopt::IpoptData*           ip_data,
+		Ipopt::IpoptCalculatedQuantities* ip_cq
 	)
 	{
 		// here is where we would store the solution to variables, or write to a file, etc
