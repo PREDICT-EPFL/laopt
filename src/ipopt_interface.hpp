@@ -6,34 +6,50 @@
 
 // using namespace Ipopt;
 
-template<typename scalar_t, typename Prob>
-class NLP_Ipopt : public Ipopt::TNLP, public Prob
+template<typename Prob>
+class NLP_Ipopt : public Ipopt::TNLP, Prob
 {
 public:
-	using typename Prob::variable_t;
-	using typename Prob::constraint_t;
-	using typename Prob::constraint_jacobian_t;
-	using typename Prob::obj_gradient_t;
-	using typename Prob::obj_hessian_t;
-	using typename Prob::obj_t;
+	using scalar_t = typename Prob::scalar_t;
+	using param_t = typename Prob::param_t;
+	using variable_t = typename Prob::variable_t;
+	using constraint_t = typename Prob::constraint_t;
+	using constraint_jacobian_t = typename Prob::constraint_jacobian_t;
+	using obj_gradient_t = typename Prob::obj_gradient_t;
+	using obj_hessian_t = typename Prob::obj_hessian_t;
+	using obj_t = typename Prob::obj_t;
 
-	using Prob::num_variables;
-	using Prob::num_constraints;
-	using Prob::nnz_constraints_jacobian;
-
+    static constexpr std::size_t num_variables = Prob::num_variables;
+    static constexpr std::size_t num_constraints = Prob::num_constraints;
 
 	variable_t x0;  // Initial iterate
 
+	// Parameter struct - owned outside this class
+	param_t& param;
+
 	// Sparsity structures
 	Eigen::SparseMatrix<scalar_t> jac_g;
-	Eigen::SparseMatrix<scalar_t> hessian_g;
+	Eigen::SparseMatrix<scalar_t> hessian_lagrangian;
 
-	NLP_Ipopt() :
+	struct sol_t
+	{
+		variable_t primal;
+		constraint_t dual_g;
+		variable_t dual_x;
+		obj_t obj;
+		// obj_gradient_t obj_gradient;
+		// obj_hessian_t obj_hessian;
+	};
+	sol_t sol;
+
+
+	NLP_Ipopt(param_t& param_) :
+		param(param_),
 		jac_g(Prob::num_constraints, Prob::num_variables),
-		hessian_g(Prob::num_variables, Prob::num_variables)
+		hessian_lagrangian(Prob::num_variables, Prob::num_variables)
 	{
         this->constraints.initialize_sparse_jacobian(jac_g);
-        this->constraints.initialize_sparse_hessian(hessian_g);
+        this->lagrangian.initialize_sparse_hessian(hessian_lagrangian);
 		x0.array() = 0.0;
 	};
 
@@ -48,8 +64,10 @@ public:
 		n = num_variables;
 		m = num_constraints;
 		nnz_jac_g = this->constraints.nnz_jacobian;
-		nnz_h_lag = this->objective.nnz_hessian;
+		nnz_h_lag = this->lagrangian.nnz_hessian;
 		index_style = TNLP::C_STYLE;
+
+		std::cout << "nnz_h_lag = " << nnz_h_lag << std::endl;
 		return true;
 	};
 
@@ -66,16 +84,8 @@ public:
 		assert(n == num_variables);
 		assert(m == num_constraints);
 
-		this->variable_bounds(Eigen::Map<variable_t>(x_l), Eigen::Map<variable_t>(x_u));
-		this->constraint_bounds(Eigen::Map<constraint_t>(g_l), Eigen::Map<constraint_t>(g_u));
-
-		std::cout << "============ TEST ===========\n";
-		// auto Xl = Eigen::Map<variable_t>(x_l);
-		// std::cout << "x_lb = \n" << Prob::x_get_matrix(Xl) << std::endl;
-		// Eigen::Matrix<scalar_t, 2, 1> tmp1 = {1,2};
-		// std::cout << "Prob::x_get_matrix(Xl).rows = " << Prob::x_get_matrix(Xl).rows() << std::endl;
-		// // Prob::x_get_matrix(Xl).colwise() = tmp1;
-		// std::cout << "x_lb = \n" << Prob::x_get_matrix(Xl) << std::endl;
+		this->variables.get_bounds(param, Eigen::Map<variable_t>(x_l), Eigen::Map<variable_t>(x_u));
+		this->constraints.get_bounds(param, Eigen::Map<constraint_t>(g_l), Eigen::Map<constraint_t>(g_u));
 
 		return true;	
 	}
@@ -110,7 +120,7 @@ public:
 	)
 	{
 		assert(n == num_variables);		
-		obj_value = this->objective(Eigen::Map<const variable_t>(x));
+		obj_value = this->objective(param, Eigen::Map<const variable_t>(x));
 		return true;
 	}
 
@@ -122,7 +132,7 @@ public:
 	)
 	{
 		assert(n == num_variables);
-		this->objective(Eigen::Map<const variable_t>(x), Eigen::Map<obj_gradient_t>(grad_f));
+		this->objective(param, Eigen::Map<const variable_t>(x), Eigen::Map<obj_gradient_t>(grad_f));
 		return true;
 	}
 
@@ -139,7 +149,7 @@ public:
 
 		Eigen::Map<const variable_t > var(x);
 		Eigen::Map<constraint_t > constraints(g);
-		this->constraints(var, constraints);
+		this->constraints(param, var, constraints);
 
 		return true;   	
 	}
@@ -159,8 +169,8 @@ public:
 		Ipopt::Number*       values
 	)
 	{
-		assert( n == 4 );
-		assert( m == 2 );
+		assert(n == num_variables);
+		assert(m == num_constraints);
 
 		if( values == NULL )
 		{
@@ -184,7 +194,7 @@ public:
 													    jac_g.outerIndexPtr(), jac_g.innerIndexPtr(),
 													    values);
 			constraint_t tmp;
-			this->constraints(var, tmp, J); 
+			this->constraints(param, var, tmp, J); 
 		}
 
 		return true;
@@ -208,85 +218,118 @@ public:
 		Ipopt::Number*       values
 	)
 	{
-		return false;
-		// assert(n == 4);
-		// assert(m == 2);
+		// std::cout << "Evaluating hessian\n";
 
-		// if( values == NULL )
-		// {
-		// 	// return the structure. This is a symmetric matrix, fill the lower left
-		// 	// triangle only.
+		assert(n == num_variables);
+		assert(m == num_constraints);
 
-		// 	// the hessian for this problem is actually dense
-		// 	Ipopt::Index idx = 0;
-		// 	for( Ipopt::Index row = 0; row < 4; row++ )
-		// 	{
-		// 		for( Ipopt::Index col = 0; col <= row; col++ )
-		// 		{
-		// 			iRow[idx] = row;
-		// 			jCol[idx] = col;
-		// 			idx++;
-		// 		}
-		// 	}
+		if( values == NULL )
+		{
+			// return the structure. This is a symmetric matrix, fill the lower left
+			// triangle only.
 
-		// 	assert(idx == nele_hess);
-		// }
-		// else
-		// {
-		// 	// return the values. This is a symmetric matrix, fill the lower left
-		// 	// triangle only
+			// Copy the pre-computed hessian structure into the Ipopt variables
+			int ind = 0;
+		    for (int k=0; k < hessian_lagrangian.outerSize(); ++k)
+		    {
+		        for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(hessian_lagrangian, k); it; ++it, ind++)
+		        {
+					iRow[ind] = it.row();
+					jCol[ind] = it.col();
+		        }
+		    }
 
-		// 	// fill the objective portion
-		// 	values[0] = obj_factor * (2 * x[3]); // 0,0
+			// // the hessian for this problem is actually dense
+			// Ipopt::Index idx = 0;
+			// for( Ipopt::Index row = 0; row < 4; row++ )
+			// {
+			// 	for( Ipopt::Index col = 0; col <= row; col++ )
+			// 	{
+			// 		iRow[idx] = row;
+			// 		jCol[idx] = col;
+			// 		idx++;
+			// 	}
+			// }
 
-		// 	values[1] = obj_factor * (x[3]);     // 1,0
-		// 	values[2] = 0.;                      // 1,1
+			assert(ind == nele_hess);
+		}
+		else
+		{
+			// return the values. This is a symmetric matrix, fill the lower left
+			// triangle only
 
-		// 	values[3] = obj_factor * (x[3]);     // 2,0
-		// 	values[4] = 0.;                      // 2,1
-		// 	values[5] = 0.;                      // 2,2
+			Eigen::Map<const variable_t> var(x);
 
-		// 	values[6] = obj_factor * (2 * x[0] + x[1] + x[2]); // 3,0
-		// 	values[7] = obj_factor * (x[0]);                   // 3,1
-		// 	values[8] = obj_factor * (x[0]);                   // 3,2
-		// 	values[9] = 0.;                                    // 3,3
+			// Map the Ipopt values vectors into our pre-computed sparse matrix structure
+			Eigen::Map<Eigen::SparseMatrix<scalar_t>> H(hessian_lagrangian.rows(), hessian_lagrangian.rows(), hessian_lagrangian.nonZeros(), 
+													    hessian_lagrangian.outerIndexPtr(), hessian_lagrangian.innerIndexPtr(),
+													    values);
 
-		// 	// add the portion for the first constraint
-		// 	values[1] += lambda[0] * (x[2] * x[3]); // 1,0
+			// // Map the Ipopt values vectors into our pre-computed sparse matrix structure
+			// Eigen::Map<Eigen::SparseMatrix<scalar_t>> J(jac_g.rows(), jac_g.rows(), jac_g.nonZeros(), 
+			// 										    jac_g.outerIndexPtr(), jac_g.innerIndexPtr(),
+			// 										    values);
 
-		// 	values[3] += lambda[0] * (x[1] * x[3]); // 2,0
-		// 	values[4] += lambda[0] * (x[0] * x[3]); // 2,1
+			Eigen::Map<const constraint_t> dual(lambda);
+			this->lagrangian.w.template tail<num_constraints>() = dual;
 
-		// 	values[6] += lambda[0] * (x[1] * x[2]); // 3,0
-		// 	values[7] += lambda[0] * (x[0] * x[2]); // 3,1
-		// 	values[8] += lambda[0] * (x[0] * x[1]); // 3,2
+			variable_t tmp_grad;
+			this->lagrangian(param, var, tmp_grad, H); 
 
-		// 	// add the portion for the second constraint
-		// 	values[0] += lambda[1] * 2; // 0,0
+			// std::cout << "H = \n" << H << std::endl;
 
-		// 	values[2] += lambda[1] * 2; // 1,1
 
-		// 	values[5] += lambda[1] * 2; // 2,2
+			// // fill the objective portion
+			// values[0] = obj_factor * (2 * x[3]); // 0,0
 
-		// 	values[9] += lambda[1] * 2; // 3,3
-		// }
+			// values[1] = obj_factor * (x[3]);     // 1,0
+			// values[2] = 0.;                      // 1,1
 
-		// return true;
+			// values[3] = obj_factor * (x[3]);     // 2,0
+			// values[4] = 0.;                      // 2,1
+			// values[5] = 0.;                      // 2,2
+
+			// values[6] = obj_factor * (2 * x[0] + x[1] + x[2]); // 3,0
+			// values[7] = obj_factor * (x[0]);                   // 3,1
+			// values[8] = obj_factor * (x[0]);                   // 3,2
+			// values[9] = 0.;                                    // 3,3
+
+			// // add the portion for the first constraint
+			// values[1] += lambda[0] * (x[2] * x[3]); // 1,0
+
+			// values[3] += lambda[0] * (x[1] * x[3]); // 2,0
+			// values[4] += lambda[0] * (x[0] * x[3]); // 2,1
+
+			// values[6] += lambda[0] * (x[1] * x[2]); // 3,0
+			// values[7] += lambda[0] * (x[0] * x[2]); // 3,1
+			// values[8] += lambda[0] * (x[0] * x[1]); // 3,2
+
+			// // add the portion for the second constraint
+			// values[0] += lambda[1] * 2; // 0,0
+
+			// values[2] += lambda[1] * 2; // 1,1
+
+			// values[5] += lambda[1] * 2; // 2,2
+
+			// values[9] += lambda[1] * 2; // 3,3
+		}
+
+		return true;
 	}   
 
-	// template <class T,
-	//          typename std::enable_if_t<std::is_const<T>::value == true>* = nullptr>
-	// constexpr auto test_const(T& x) {
-	// 	std::cout << "In const" << std::endl;
- //        return Eigen::Map<const Eigen::Matrix<scalar_t, 2, 5>>((x).data());
-	// }
+	// // template <class T,
+	// //          typename std::enable_if_t<std::is_const<T>::value == true>* = nullptr>
+	// // constexpr auto test_const(T& x) {
+	// // 	std::cout << "In const" << std::endl;
+ // //        return Eigen::Map<const Eigen::Matrix<scalar_t, 2, 5>>((x).data());
+	// // }
 
-	// template <class T,
-	//          typename std::enable_if_t<std::is_const<T>::value == false>* = nullptr>
-	// constexpr auto test_const(T& x) {
-	// 	std::cout << "In non-const" << std::endl;
- //        return Eigen::Map<Eigen::Matrix<scalar_t, 2, 5>>((x).data());
-	// }
+	// // template <class T,
+	// //          typename std::enable_if_t<std::is_const<T>::value == false>* = nullptr>
+	// // constexpr auto test_const(T& x) {
+	// // 	std::cout << "In non-const" << std::endl;
+ // //        return Eigen::Map<Eigen::Matrix<scalar_t, 2, 5>>((x).data());
+	// // }
 
    /** This method is called when the algorithm is complete so the TNLP can store/write the solution */
 	void finalize_solution(
@@ -303,53 +346,9 @@ public:
 		Ipopt::IpoptCalculatedQuantities* ip_cq
 	)
 	{
-		// here is where we would store the solution to variables, or write to a file, etc
-		// so we could use the solution.
+		sol.primal = Eigen::Map<const variable_t>(x);
 
-		// // For this example, we write the solution to the console
-		// std::cout << std::endl << std::endl << "Solution of the primal variables, x" << std::endl;
-		// for( Ipopt::Index i = 0; i < n; i++ )
-		// {
-		// 	std::cout << "x[" << i << "] = " << x[i] << std::endl;
-		// }
-
-		// std::cout << std::endl << std::endl << "Solution of the bound multipliers, z_L and z_U" << std::endl;
-		// for( Ipopt::Index i = 0; i < n; i++ )
-		// {
-		// 	std::cout << "z_L[" << i << "] = " << z_L[i] << std::endl;
-		// }
-		// for( Ipopt::Index i = 0; i < n; i++ )
-		// {
-		// 	std::cout << "z_U[" << i << "] = " << z_U[i] << std::endl;
-		// }
-
-		std::cout << std::endl << std::endl << "Objective value" << std::endl;
-		std::cout << "f(x*) = " << obj_value << std::endl;
-
-		// std::cout << std::endl << "Final value of the constraints:" << std::endl;
-		// for( Ipopt::Index i = 0; i < m; i++ )
-		// {
-		// 	std::cout << "g(" << i << ") = " << g[i] << std::endl;
-		// }
-
-
-		std::cout << "========== Solution =========\n";
-		auto X = Eigen::Map<const variable_t>(x);
-
-		std::cout << "x = \n" << this->x(X).transpose() << std::endl;
-		std::cout << "u = \n" << this->u(X).transpose() << std::endl;
-		std::cout << "xss = " << this->xss(X).transpose() << std::endl;
-		std::cout << "uss = " << this->uss(X) << std::endl;
-
-		// typename Prob::constraint_t constraints;
-		// typename Prob::constraint_jacobian_t jacobian;
-		// jacobian.setZero();
-		// this->constraints(X, constraints, jacobian);
-
-		// std::cout << "Constraints at optimality:\n";
-		// std::cout << constraints.transpose() << std::endl;
-		// std::cout << jacobian << std::endl;
-
+		// TODO: Fill in the rest of the solution struct
 	}
 
 private:

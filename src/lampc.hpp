@@ -282,7 +282,8 @@ struct ZeroVariable_ // Fake type to indicate the start of the variable sequence
     static constexpr std::size_t var_index = 0;
 };
 
-template<std::size_t _len, std::size_t _num_vars, 
+template<typename BndFunc, 
+         std::size_t _len, std::size_t _num_vars, 
          typename Prev = ZeroVariable_> // Variable defined before this one (specifies ordering)
 struct var_t
 {
@@ -330,6 +331,17 @@ struct var_t
     {
         return _map_matrix<Eigen::Matrix<typename Var::Scalar, len, num_vars>>(var.template segment<len * num_vars>(offset).data());
     }
+
+
+    /*
+        Get the upper and lower bounds for this variable
+     */
+    template<typename param_t, typename Var>
+    static EIGEN_STRONG_INLINE void get_bounds(const param_t& param, Var& lb, Var& ub) noexcept
+    {
+        for(int i=0; i<num_vars; i++)
+            BndFunc::eval(param, i, get(lb, i), get(ub, i));
+    }
 };
 
 // Represents an iterator over a var_t
@@ -351,15 +363,34 @@ struct iterator
     }
 };
 
-// Sum the inputs to get total number of inputs
-template<typename... Var>
-constexpr std::size_t sum_variable_size() {
-    int sum = 0;
-    for(std::size_t num : { Var::len * Var::num_vars... })
-        sum += num;
-    return sum;
-}
+// // Sum the inputs to get total number of inputs
+// template<typename... Var>
+// constexpr std::size_t sum_variable_size() {
+//     int sum = 0;
+//     for(std::size_t num : { Var::len * Var::num_vars... })
+//         sum += num;
+//     return sum;
+// }
 
+// List of variables
+template<typename scalar_t, typename... Vars>
+struct VariableList_t
+{
+    static constexpr std::size_t num_variables = sum_template<Vars::len * Vars::num_vars...>();
+    using variable_t = Eigen::Matrix<scalar_t, num_variables, 1>;
+
+    template<typename param_t>
+    static EIGEN_STRONG_INLINE void get_bounds(const param_t& param, 
+                Eigen::Ref<variable_t> lb, Eigen::Ref<variable_t> ub) noexcept
+    {
+        (void)std::initializer_list<int>{ 
+            (
+                Vars::get_bounds(param, lb, ub),
+                0
+            )...
+        };
+    }
+};
 
 
 /*************************************************************
@@ -371,19 +402,21 @@ constexpr std::size_t sum_variable_size() {
     A collection is a constraint that's calling the same function 
     with the same variable sets, but with diffent indices
  *************************************************************/
-template<typename, int, typename...>
+template<typename, typename, int, typename...>
 struct con_t;
 
-template<typename Func,      // The function to be called
+template<typename BndFunc,   // Function returning the upper and lower bounds
+         typename Func,      // The function to be called
          typename scalar_t_,
-         typename param_t, 
+         typename param_t_, 
          int num_outputs,    // Output size of the function
          int... input_sizes, // Input sizes of the function
          int num_iterations, // Number of iterations in the constraint collection
          typename... Var_t>  // Variable Index's (i.e., range objects)
-struct con_t< Jacobian<Func, scalar_t_, param_t, num_outputs, input_sizes...>, num_iterations, Var_t...>
+struct con_t<BndFunc, Jacobian<Func, scalar_t_, param_t_, num_outputs, input_sizes...>, num_iterations, Var_t...>
 {
     using scalar_t = scalar_t_;
+    using param_t = param_t_;
     using jacFunc = Jacobian<Func, scalar_t, param_t, num_outputs, input_sizes...>;
 
     // Total vector length required to store this constraint collection
@@ -404,6 +437,24 @@ struct con_t< Jacobian<Func, scalar_t_, param_t, num_outputs, input_sizes...>, n
 
     con_t()
     {}
+
+
+    /*
+        Get the upper and lower bounds for this constraint
+     */
+    template<typename constraint_t>
+    EIGEN_STRONG_INLINE void get_bounds(const param_t& param, constraint_t& lb, constraint_t& ub) const noexcept
+    {
+        for(int i=0; i<num_iterations; i++)
+        {
+            BndFunc::eval(
+                param, 
+                i,
+                lb.template segment<num_outputs>(offset(i)),
+                ub.template segment<num_outputs>(offset(i)));
+        }
+    }
+
 
 private:
     /*
@@ -666,7 +717,7 @@ public:
         const variable_t& var,
         const constraint_t& weights,
         Eigen::Ref<Eigen::Matrix<scalar_t, variable_t::RowsAtCompileTime, 1>> gradient,
-        Eigen::SparseMatrix<scalar_t>& hessian)
+        Eigen::Ref<Eigen::SparseMatrix<scalar_t>> hessian)
         const noexcept
     {
         scalar_t out = 0;        
@@ -906,14 +957,13 @@ template<std::size_t num_variables,
          std::size_t... ind>  // Index of length(cons_t)
 struct constraintset_base
 {
-    // Number of constraint collections. NOT the length of the constraint vector.
-    // static const std::size_t num_constraints = std::tuple_size<cons_t>::value; 
-
     cons_t cons; // Tuple of constraints
 
     using scalar_t = typename std::tuple_element_t<0, cons_t>::scalar_t;
-    std::size_t nnz_hessian;
+    using param_t = typename std::tuple_element_t<0, cons_t>::param_t;
     static constexpr std::size_t num_constraints = sum_template<std::tuple_element_t<ind, cons_t>::constraint_vector_length...>();
+
+    std::size_t nnz_hessian;
 
     constraintset_base() : cons()
     {
@@ -1019,6 +1069,7 @@ struct constraints_impl<num_variables, cons_t, std::integer_sequence<std::size_t
     using typename base_t::scalar_t;
     using base_t::cons;
     using base_t::num_constraints;
+    using typename base_t::param_t;
 
     using variable_t = typename Eigen::Matrix<scalar_t, num_variables, 1>;
     using constraint_t = typename Eigen::Matrix<scalar_t, num_constraints, 1>;
@@ -1029,7 +1080,6 @@ struct constraints_impl<num_variables, cons_t, std::integer_sequence<std::size_t
     /*
         Evaluate all constraints
      */
-    template<typename param_t>
     EIGEN_STRONG_INLINE void operator()(
         const param_t& param,
         const Eigen::Ref<const variable_t> var,
@@ -1047,7 +1097,6 @@ struct constraints_impl<num_variables, cons_t, std::integer_sequence<std::size_t
     /*
         Evaluate all constraints and dense jacobians
      */
-    template<typename param_t>
     EIGEN_STRONG_INLINE auto operator()(
         const param_t& param,
         const Eigen::Ref<const variable_t> var,
@@ -1066,12 +1115,11 @@ struct constraints_impl<num_variables, cons_t, std::integer_sequence<std::size_t
     /*
         Evaluate all constraints and their jacobian in sparse format
      */
-    template<typename param_t>
     EIGEN_STRONG_INLINE auto operator()(
         const param_t& param,
         const Eigen::Ref<const variable_t> var,
         Eigen::Ref<constraint_t> con,
-        Eigen::SparseMatrix<scalar_t>& jac)
+        Eigen::Ref<Eigen::SparseMatrix<scalar_t>> jac)
         const noexcept
     {
         (void)std::initializer_list<int>{ 
@@ -1081,30 +1129,21 @@ struct constraints_impl<num_variables, cons_t, std::integer_sequence<std::size_t
             )...
         };
     }
+
+    /*
+        Get the lower and upper bounds for this constraint
+     */
+    EIGEN_STRONG_INLINE void get_bounds(const param_t& param, Eigen::Ref<constraint_t> lb, Eigen::Ref<constraint_t> ub)
+    {
+        (void)std::initializer_list<int>{ 
+            (
+                std::get<ind>(cons).get_bounds(param, lb, ub),
+                0
+            )...
+        };
+    }
 };
 
-// template<typename ... input_t>
-// using tuple_cat_t=
-// decltype(std::tuple_cat(
-//     std::declval<input_t>()...
-// ));
-//
-// or...
-//
-// template <class, class>
-// struct Cat;
-// template <class... First, class... Second>
-// struct Cat<std::tuple<First...>, std::tuple<Second...>> {
-//     using type = std::tuple<First..., Second...>;
-// };
-
-// template<typename tup, 
-
-// template<typename tup>
-// tup init_tuple()
-// {
-//     reutrn {std::tuple_element_t<ind, cons_t>()...}
-// }
 
 
 /****************************************************************
@@ -1125,6 +1164,7 @@ struct objective_impl<num_variables, F_t, std::integer_sequence<std::size_t, ind
     using typename base_t::scalar_t;
     using base_t::cons;
     using base_t::num_constraints;
+    using typename base_t::param_t;
 
     using variable_t = typename Eigen::Matrix<scalar_t, num_variables, 1>;
 
@@ -1139,7 +1179,6 @@ struct objective_impl<num_variables, F_t, std::integer_sequence<std::size_t, ind
     /*
         Evaluate objective
      */
-    template<typename param_t>
     EIGEN_STRONG_INLINE scalar_t operator()(
         const param_t& param,
         const variable_t& var)
@@ -1158,7 +1197,6 @@ struct objective_impl<num_variables, F_t, std::integer_sequence<std::size_t, ind
     /*
         Evaluate objective and gradient
      */
-    template<typename param_t>
     EIGEN_STRONG_INLINE scalar_t operator()(
         const param_t& param,
         const variable_t& var,
@@ -1179,7 +1217,6 @@ struct objective_impl<num_variables, F_t, std::integer_sequence<std::size_t, ind
     /*
         Evaluate objective, gradient and hessian in dense form
      */
-    template<typename param_t>
     EIGEN_STRONG_INLINE auto operator()(
         const param_t& param,
         const variable_t& var,
@@ -1202,16 +1239,15 @@ struct objective_impl<num_variables, F_t, std::integer_sequence<std::size_t, ind
     /*
         Evaluate objective, gradient and sparse hessian
      */
-    template<typename param_t>
     EIGEN_STRONG_INLINE auto operator()(
         const param_t& param,
         const variable_t& var,
         Eigen::Ref<Eigen::Matrix<scalar_t, num_variables, 1>> gradient,
-        Eigen::SparseMatrix<scalar_t>& hessian)
+        Eigen::Ref<Eigen::SparseMatrix<scalar_t>> hessian)
         const noexcept
     {
         auto ptr = hessian.valuePtr();
-        for(int i=0; i<hessian.nonZeros(); i++) ptr[i] = -1;
+        for(int i=0; i<hessian.nonZeros(); i++) ptr[i] = 0;
         gradient.array() = 0;
         scalar_t out = 0;
 
@@ -1225,80 +1261,57 @@ struct objective_impl<num_variables, F_t, std::integer_sequence<std::size_t, ind
         };
         return out;
     }
-
-
-    // /*
-    //     Evaluate all constraints and dense jacobians and hessians
-    //  */
-    // template<typename param_t, typename variable_t, typename constraint_t>
-    // EIGEN_STRONG_INLINE auto operator()(
-    //     const param_t& param,
-    //     const variable_t& var,
-    //     constraint_t& con,
-    //     Eigen::Ref<Eigen::Matrix<typename variable_t::Scalar, constraint_t::RowsAtCompileTime, variable_t::RowsAtCompileTime>> jac,
-    //     Eigen::Ref<Eigen::Matrix<typename variable_t::Scalar, variable_t::RowsAtCompileTime, variable_t::RowsAtCompileTime>> hessian,
-    //     const Eigen::Ref<Eigen::Matrix<typename variable_t::Scalar, constraint_t::RowsAtCompileTime, 1>> hessian_multiplier)
-    //     const noexcept
-    // {
-    //     hessian.array() = 0.0;
-    //     (void)std::initializer_list<int>{ 
-    //         (
-    //             std::get<ind>(cons)(param, var, con, jac, hessian, hessian_multiplier),
-    //             0
-    //         )...
-    //     };
-    // }
-
-    // /*
-    //     Evaluate all constraints and sparse jacobians and hessians
-    //  */
-    // template<typename param_t, typename variable_t, typename constraint_t>
-    // EIGEN_STRONG_INLINE auto operator()(
-    //     const param_t& param,
-    //     const variable_t& var,
-    //     constraint_t& con,
-    //     Eigen::Ref<Eigen::SparseMatrix<scalar_t>> jac,
-    //     Eigen::Ref<Eigen::SparseMatrix<scalar_t>> hessian,
-    //     const Eigen::Ref<Eigen::Matrix<typename variable_t::Scalar, constraint_t::RowsAtCompileTime, 1>> hessian_multiplier)
-    //     const noexcept
-    // {
-    //     scalar_t* data = hessian.valuePtr();
-    //     for(std::size_t i=0; i<hessian.nonZeros(); i++)
-    //         data[i] = 0.0;
-
-    //     (void)std::initializer_list<int>{ 
-    //         (
-    //             std::get<ind>(cons)(param, var, con, jac, hessian, hessian_multiplier),
-    //             0
-    //         )...
-    //     };
-    // }
-
 };
+
+
+
+//
+// or...
+//
+// template <class, class>
+// struct Cat;
+// template <class... First, class... Second>
+// struct Cat<std::tuple<First...>, std::tuple<Second...>> {
+//     using type = std::tuple<First..., Second...>;
+// };
+
+// template<typename tup, 
+
+// template<typename tup>
+// tup init_tuple()
+// {
+//     reutrn {std::tuple_element_t<ind, cons_t>()...}
+// }
 
 
 /****************************************************************
     A problem description containint constraints and objective
  ****************************************************************/
-template<std::size_t num_variables_, typename cons_tuple, typename obj_tuple>
+template<typename variables_t, typename cons_tuple, typename obj_tuple>
 struct make_problem
 {
-    static constexpr std::size_t num_variables = num_variables_;
+private:
+    // Lagrangian is the weighted sum of objective and constraints
+    using lag_tuple = decltype(std::tuple_cat(cons_tuple(), obj_tuple()));
 
+    // Index sequences to run through the constraints and objective functions
     using cons_index = std::make_integer_sequence<std::size_t, std::tuple_size<cons_tuple>::value>;
-    using constraints_t = constraints_impl<num_variables, cons_tuple, cons_index>;
-
     using obj_index = std::make_integer_sequence<std::size_t, std::tuple_size<obj_tuple>::value>;
+    using lag_index = std::make_integer_sequence<std::size_t, std::tuple_size<lag_tuple>::value>;
+
+public:
+    static constexpr std::size_t num_variables = variables_t::num_variables;
+
+    using constraints_t = constraints_impl<num_variables, cons_tuple, cons_index>;
     using objective_t = objective_impl<num_variables, obj_tuple, obj_index>;
+    using lagrangian_t = objective_impl<num_variables, lag_tuple, lag_index>;
 
-    // constraints_impl<num_variables, obj_tuple, index...> objective;
-
+    variables_t variables;
     constraints_t constraints;
     objective_t objective;
+    lagrangian_t lagrangian;
 
-    make_problem() : constraints(), objective()
-        // objective(objective_t::make_object()),
-        // lagrangian(lagrangian_t::make_object())
+    make_problem() : variables(), constraints(), objective(), lagrangian()
     {}
 
     // Expose required constants
@@ -1310,10 +1323,9 @@ struct make_problem
     using variable_t            = Matrix<scalar_t, num_variables, 1>;
     using constraint_t          = Matrix<scalar_t, num_constraints, 1>;
     using constraint_jacobian_t = Matrix<scalar_t, num_constraints,  num_variables>;
-    using obj_gradient_t        = Matrix<scalar_t, 1, num_variables>;
+    using obj_gradient_t        = Matrix<scalar_t, num_variables, 1>;
     using obj_hessian_t         = Matrix<scalar_t, num_variables, num_variables>;
     using obj_t                 = scalar_t;
 
-// private:
-//     constraints_t<num_variables, tuple_cat<cons_tuple, obj_tuple>, index...> lagrangian;
+    using param_t = typename constraints_t::param_t;
 };

@@ -3,6 +3,7 @@ Improvements in order:
 - add ability to define user-specified jacobians and hessians
 - add estimation of jacobians and hessians via finite-difference for validation
 - add compile-time checks on variable overruns to the iterator and con_t classes
+- compute num_constraints in make_problem, and pass this to all the con_t's
 
 - seperate out generation types (eigen, python, etc)
 

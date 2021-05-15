@@ -19,7 +19,9 @@ add_executable(bob bob.cpp /Users/cnjones/git/lampc/src/lampc.hpp)
 
 link_directories(${CMAKE_SOURCE_DIR}/third_party/opencv/lib)
 
-# target_link_libraries(test ipopt fmt)
+target_link_libraries(bob ipopt)
+
+# target_link_libraries(test ipopt)
 
 
 # target_link_libraries(model gen)
