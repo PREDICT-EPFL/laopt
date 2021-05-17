@@ -38,6 +38,28 @@ constexpr auto _map_matrix(scalar_t* x) {
     return Eigen::Map<map_to>(x);
 }
 
+template <typename T>
+constexpr auto type_name() noexcept {
+  std::string_view name = "Error: unsupported compiler", prefix, suffix;
+#ifdef __clang__
+  name = __PRETTY_FUNCTION__;
+  prefix = "auto type_name() [T = ";
+  suffix = "]";
+#elif defined(__GNUC__)
+  name = __PRETTY_FUNCTION__;
+  prefix = "constexpr auto type_name() [with T = ";
+  suffix = "]";
+#elif defined(_MSC_VER)
+  name = __FUNCSIG__;
+  prefix = "auto __cdecl type_name<";
+  suffix = ">(void) noexcept";
+#endif
+  name.remove_prefix(prefix.size());
+  name.remove_suffix(suffix.size());
+  return name;
+}
+
+
 
 /*************************************************************
    Short names to pass constant vectors and writable vectors
@@ -304,7 +326,7 @@ struct var_t
     // Get indexed offset
     static constexpr std::size_t o(int ind = 0) 
     {
-        assert(ind < num);
+//        assert(ind < num);
         return offset + ind * len;
     }
 
@@ -965,6 +987,9 @@ struct constraintset_base
 
     std::size_t nnz_hessian;
 
+    // // Offset into the value vector in each column where the first elemtent of the lower-triangular part of the matrix is stored
+    // Eigen::Matrix<Eigen::Index, num_variables, 1> hessian_lower_triangular_offsets; 
+
     constraintset_base() : cons()
     {
         // Set the offsets / ordering
@@ -1292,7 +1317,7 @@ struct make_problem
 {
 private:
     // Lagrangian is the weighted sum of objective and constraints
-    using lag_tuple = decltype(std::tuple_cat(cons_tuple(), obj_tuple()));
+    using lag_tuple = decltype(std::tuple_cat(obj_tuple(), cons_tuple()));
 
     // Index sequences to run through the constraints and objective functions
     using cons_index = std::make_integer_sequence<std::size_t, std::tuple_size<cons_tuple>::value>;

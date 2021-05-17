@@ -10,6 +10,8 @@ template<typename Prob>
 class NLP_Ipopt : public Ipopt::TNLP, Prob
 {
 public:
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
 	using scalar_t = typename Prob::scalar_t;
 	using param_t = typename Prob::param_t;
 	using variable_t = typename Prob::variable_t;
@@ -44,6 +46,7 @@ public:
 
 
 	NLP_Ipopt(param_t& param_) :
+		x0(),
 		param(param_),
 		jac_g(Prob::num_constraints, Prob::num_variables),
 		hessian_lagrangian(Prob::num_variables, Prob::num_variables)
@@ -66,6 +69,23 @@ public:
 		nnz_jac_g = this->constraints.nnz_jacobian;
 		nnz_h_lag = this->lagrangian.nnz_hessian;
 		index_style = TNLP::C_STYLE;
+
+
+		// Compute nnz in the lower-triangular part of the hessian
+		int ind = 0;
+	    for (int k=0; k < hessian_lagrangian.outerSize(); ++k)
+	    {
+	        for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(hessian_lagrangian, k); it; ++it)
+	        {
+	        	if(it.row() >= it.col())  // Store only the lower triangular part
+	        	{
+					// iRow[ind] = it.row();
+					// jCol[ind] = it.col();
+					ind++;
+	        	}
+	        }
+	    }
+		nnz_h_lag = ind;
 
 		std::cout << "nnz_h_lag = " << nnz_h_lag << std::endl;
 		return true;
@@ -232,86 +252,54 @@ public:
 			int ind = 0;
 		    for (int k=0; k < hessian_lagrangian.outerSize(); ++k)
 		    {
-		        for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(hessian_lagrangian, k); it; ++it, ind++)
+		        for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(hessian_lagrangian, k); it; ++it)
 		        {
-					iRow[ind] = it.row();
-					jCol[ind] = it.col();
+		        	if(it.row() <= it.col())  // Store only the lower triangular part
+		        	{
+						iRow[ind] = it.row();
+						jCol[ind] = it.col();
+						ind++;
+
+		        	}
 		        }
 		    }
-
-			// // the hessian for this problem is actually dense
-			// Ipopt::Index idx = 0;
-			// for( Ipopt::Index row = 0; row < 4; row++ )
-			// {
-			// 	for( Ipopt::Index col = 0; col <= row; col++ )
-			// 	{
-			// 		iRow[idx] = row;
-			// 		jCol[idx] = col;
-			// 		idx++;
-			// 	}
-			// }
 
 			assert(ind == nele_hess);
 		}
 		else
 		{
-			// return the values. This is a symmetric matrix, fill the lower left
-			// triangle only
+			// // return the values. This is a symmetric matrix, fill the lower left
+			// // triangle only
 
 			Eigen::Map<const variable_t> var(x);
 
-			// Map the Ipopt values vectors into our pre-computed sparse matrix structure
-			Eigen::Map<Eigen::SparseMatrix<scalar_t>> H(hessian_lagrangian.rows(), hessian_lagrangian.rows(), hessian_lagrangian.nonZeros(), 
-													    hessian_lagrangian.outerIndexPtr(), hessian_lagrangian.innerIndexPtr(),
-													    values);
-
 			// // Map the Ipopt values vectors into our pre-computed sparse matrix structure
-			// Eigen::Map<Eigen::SparseMatrix<scalar_t>> J(jac_g.rows(), jac_g.rows(), jac_g.nonZeros(), 
-			// 										    jac_g.outerIndexPtr(), jac_g.innerIndexPtr(),
+			// Eigen::Map<Eigen::SparseMatrix<scalar_t>> H(hessian_lagrangian.rows(), hessian_lagrangian.rows(), hessian_lagrangian.nonZeros(), 
+			// 										    hessian_lagrangian.outerIndexPtr(), hessian_lagrangian.innerIndexPtr(),
 			// 										    values);
 
-			Eigen::Map<const constraint_t> dual(lambda);
-			this->lagrangian.w.template tail<num_constraints>() = dual;
+			this->lagrangian.w.template tail<num_constraints>() = Eigen::Map<const constraint_t>(lambda);
+			this->lagrangian.w.template head<Prob::objective_t::num_constraints>().array() = obj_factor;
+
+			// this->lagrangian.w = {1,0,0};
+			// std::cout << "w = " << this->lagrangian.w.transpose() << std::endl;
 
 			variable_t tmp_grad;
-			this->lagrangian(param, var, tmp_grad, H); 
+			this->lagrangian(param, var, tmp_grad, hessian_lagrangian); 
 
-			// std::cout << "H = \n" << H << std::endl;
-
-
-			// // fill the objective portion
-			// values[0] = obj_factor * (2 * x[3]); // 0,0
-
-			// values[1] = obj_factor * (x[3]);     // 1,0
-			// values[2] = 0.;                      // 1,1
-
-			// values[3] = obj_factor * (x[3]);     // 2,0
-			// values[4] = 0.;                      // 2,1
-			// values[5] = 0.;                      // 2,2
-
-			// values[6] = obj_factor * (2 * x[0] + x[1] + x[2]); // 3,0
-			// values[7] = obj_factor * (x[0]);                   // 3,1
-			// values[8] = obj_factor * (x[0]);                   // 3,2
-			// values[9] = 0.;                                    // 3,3
-
-			// // add the portion for the first constraint
-			// values[1] += lambda[0] * (x[2] * x[3]); // 1,0
-
-			// values[3] += lambda[0] * (x[1] * x[3]); // 2,0
-			// values[4] += lambda[0] * (x[0] * x[3]); // 2,1
-
-			// values[6] += lambda[0] * (x[1] * x[2]); // 3,0
-			// values[7] += lambda[0] * (x[0] * x[2]); // 3,1
-			// values[8] += lambda[0] * (x[0] * x[1]); // 3,2
-
-			// // add the portion for the second constraint
-			// values[0] += lambda[1] * 2; // 0,0
-
-			// values[2] += lambda[1] * 2; // 1,1
-
-			// values[5] += lambda[1] * 2; // 2,2
-
-			// values[9] += lambda[1] * 2; // 3,3
+			// Copy the lower-triangular part of the hessian
+			int ind = 0;
+		    for (int k=0; k < hessian_lagrangian.outerSize(); ++k)
+		    {
+		        for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(hessian_lagrangian, k); it; ++it)
+		        {
+		        	if(it.row() <= it.col())  // Store only the lower triangular part
+		        	{
+		        		values[ind] = it.value();
+						ind++;
+		        	}
+		        }
+		    }
 		}
 
 		return true;
