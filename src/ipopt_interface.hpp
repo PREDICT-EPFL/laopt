@@ -1,3 +1,6 @@
+#ifndef IPOPT_INTERFACE_HPP
+#define IPOPT_INTERFACE_HPP
+
 #include "Eigen/Dense"
 #include "unsupported/Eigen/AutoDiff"
 
@@ -14,15 +17,15 @@ public:
 
 	using scalar_t = typename Prob::scalar_t;
 	using param_t = typename Prob::param_t;
-	using variable_t = typename Prob::variable_t;
-	using constraint_t = typename Prob::constraint_t;
-	using constraint_jacobian_t = typename Prob::constraint_jacobian_t;
-	using obj_gradient_t = typename Prob::obj_gradient_t;
-	using obj_hessian_t = typename Prob::obj_hessian_t;
-	using obj_t = typename Prob::obj_t;
+	using variable_t = typename Prob::variable_vec;
+	using constraint_t = typename Prob::constraints_vec;
+	using constraint_jacobian_t = typename Prob::constraints_jacobian_mat;
+	using obj_gradient_t = typename Prob::obj_gradient_vec;
+	using obj_hessian_t = typename Prob::obj_hessian_mat;
+	using obj_t = typename Prob::obj_vec;
 
     static constexpr std::size_t num_variables = Prob::num_variables;
-    static constexpr std::size_t num_constraints = Prob::num_constraints;
+    static constexpr std::size_t num_constraints = Prob::constraints_t::num_constraints;
 
 	variable_t x0;  // Initial iterate
 
@@ -48,8 +51,8 @@ public:
 	NLP_Ipopt(param_t& param_) :
 		x0(),
 		param(param_),
-		jac_g(Prob::num_constraints, Prob::num_variables),
-		hessian_lagrangian(Prob::num_variables, Prob::num_variables)
+		jac_g(num_constraints, num_variables),
+		hessian_lagrangian(num_variables, num_variables)
 	{
         this->constraints.initialize_sparse_jacobian(jac_g);
         this->lagrangian.initialize_sparse_hessian(hessian_lagrangian);
@@ -67,7 +70,7 @@ public:
 		n = num_variables;
 		m = num_constraints;
 		nnz_jac_g = this->constraints.nnz_jacobian;
-		nnz_h_lag = this->lagrangian.nnz_hessian;
+		nnz_h_lag = this->lagrangian.nnz_hessian();
 		index_style = TNLP::C_STYLE;
 
 
@@ -271,21 +274,24 @@ public:
 			// // return the values. This is a symmetric matrix, fill the lower left
 			// // triangle only
 
-			Eigen::Map<const variable_t> var(x);
-
 			// // Map the Ipopt values vectors into our pre-computed sparse matrix structure
 			// Eigen::Map<Eigen::SparseMatrix<scalar_t>> H(hessian_lagrangian.rows(), hessian_lagrangian.rows(), hessian_lagrangian.nonZeros(), 
 			// 										    hessian_lagrangian.outerIndexPtr(), hessian_lagrangian.innerIndexPtr(),
 			// 										    values);
 
-			this->lagrangian.w.template tail<num_constraints>() = Eigen::Map<const constraint_t>(lambda);
-			this->lagrangian.w.template head<Prob::objective_t::num_constraints>().array() = obj_factor;
+			Eigen::Map<const variable_t> var(x);
+			Eigen::Map<const typename Prob::equalities_vec> dual_eq(lambda);
+			Eigen::Map<const typename Prob::inequalities_vec> dual_ineq(lambda + Prob::num_equalities);
+			// Eigen::Map<const constraint_t> lam(lambda);
 
-			// this->lagrangian.w = {1,0,0};
-			// std::cout << "w = " << this->lagrangian.w.transpose() << std::endl;
+			variable_t dual_var = variable_t::Ones();
 
 			variable_t tmp_grad;
-			this->lagrangian(param, var, tmp_grad, hessian_lagrangian); 
+		    this->lagrangian(param, var, obj_factor,
+		    							 dual_eq,
+		                                 dual_ineq,
+		                                 dual_var,
+		                                 tmp_grad, hessian_lagrangian);
 
 			// Copy the lower-triangular part of the hessian
 			int ind = 0;
@@ -369,3 +375,5 @@ private:
    // Number* a_;
    // //@}
 };
+
+#endif

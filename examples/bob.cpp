@@ -1,5 +1,8 @@
 #include "lampc.hpp"
 #include "ipopt_interface.hpp"
+#include "polympc_interface.hpp"
+
+#include <iomanip>
 
 /***********************************************************
     Code generated from Python or from user
@@ -195,7 +198,7 @@ struct Opt_t
 
     using variables = VariableList_t<scalar_t, xss, uss, x, u>;
 
-    using constraints = std::tuple
+    using equalities = std::tuple
     <
         // x(0) == x0
         con_t<bnd_zero<2>, initial_state, 1, iterator<x,0,0>>,
@@ -205,9 +208,10 @@ struct Opt_t
 
         // dynamics(xss, uss) == xss
         con_t<bnd_zero<2>, func2, 1, iterator<uss>, iterator<xss>>
+    >;
 
-        // // -1 <= u(i) <= 5*i
-        // con_t<bnd_u, u_constraint, N-1, iterator<u,0,1>>
+    using inequalities = std::tuple<
+        con_t<uss_bnd, u_constraint, 1, iterator<uss>>
     >;
 
     using objective = std::tuple
@@ -220,7 +224,7 @@ struct Opt_t
     >;
 
     // Create our NLP
-    using problem_t = make_problem<variables, constraints, objective>;
+    using problem_t = make_problem<variables, equalities, inequalities, objective>;
 };
 
 
@@ -230,9 +234,9 @@ struct Opt_t
 int main()
 {
     using scalar_t = double;
-    using MatrixX = Eigen::Matrix<scalar_t, Eigen::Dynamic, Eigen::Dynamic>;
 
     // {
+    //     using MatrixX = Eigen::Matrix<scalar_t, Eigen::Dynamic, Eigen::Dynamic>;
     //     std::cout << "\n\n===Test direct computation of functions===\n";
         
     //     Opt::param_t p;
@@ -371,40 +375,81 @@ int main()
     //     std::cout << "hessian = \n" << MatrixX(l_hessian) << std::endl;
     // }
 
-    using prob_t = Opt_t<scalar_t>::problem_t;
-    using myNLP = NLP_Ipopt<prob_t>;
-    prob_t::param_t p;
-
-    Ipopt::SmartPtr<myNLP> mynlp = new myNLP(p);
-    Ipopt::SmartPtr<Ipopt::IpoptApplication> app = new Ipopt::IpoptApplication();
-
-    app->Options()->SetNumericValue("tol", 1e-7);
-    app->Options()->SetStringValue("mu_strategy", "adaptive");
-    app->Options()->SetStringValue("output_file", "ipopt.out");
-    app->Options()->SetStringValue("hessian_approximation", "limited-memory");
-
-    Ipopt::ApplicationReturnStatus status;
-    status = app->Initialize();
-    if( status != Ipopt::Solve_Succeeded )
     {
-        std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl;
-        return (int) status;
+        using prob_t = Opt_t<scalar_t>::problem_t;
+        using myNLP = NLP_Ipopt<prob_t>;
+        prob_t::param_t p;
+
+        Ipopt::SmartPtr<myNLP> mynlp = new myNLP(p);
+        Ipopt::SmartPtr<Ipopt::IpoptApplication> app = new Ipopt::IpoptApplication();
+
+        app->Options()->SetNumericValue("tol", 1e-7);
+        app->Options()->SetStringValue("mu_strategy", "adaptive");
+        app->Options()->SetStringValue("output_file", "ipopt.out");
+        // app->Options()->SetStringValue("hessian_approximation", "limited-memory");
+
+        Ipopt::ApplicationReturnStatus status;
+        status = app->Initialize();
+        if( status != Ipopt::Solve_Succeeded )
+        {
+            std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl;
+            return (int) status;
+        }
+
+        const std::size_t NUM_EXP = 1;
+        polympc::time_point start = polympc::get_time();
+        for(int i = 0; i < NUM_EXP; ++i)
+        {
+            mynlp->x0.array() = 0;
+            status = app->OptimizeTNLP(mynlp);
+        }
+        polympc::time_point stop = polympc::get_time();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+        std::cout << "\n\n\n\n===================== IPOPT SOLUTION =====================\n";
+        std::cout << "IPOPT time " << std::setprecision(9)
+                  << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
+        myNLP::sol_t &sol = mynlp->sol;
+        std::cout << "x = \n" << Opt_t<scalar_t>::x()(sol.primal).transpose() << std::endl;
+        std::cout << "u = \n" << Opt_t<scalar_t>::u()(sol.primal).transpose() << std::endl;
+        std::cout << "xss = \n" << Opt_t<scalar_t>::xss()(sol.primal) << std::endl;
+        std::cout << "uss = \n" << Opt_t<scalar_t>::uss()(sol.primal) << std::endl;
+        std::cout << "\n\n\n\n";
     }
 
-    // Ask Ipopt to solve the problem
-    mynlp->x0.array() = 0;
-    std::cout << "x0 = " << mynlp->x0.transpose() << std::endl;
-    status = app->OptimizeTNLP(mynlp);
+    {
+        using prob_t = Opt_t<scalar_t>::problem_t;
+        using Solver = SQPSolver<LAProblemBase<prob_t>>;
 
-    std::cout << "solution = " << mynlp->sol.primal.transpose() << std::endl;
+        Solver solver;
+        solver.problem.setBounds(solver);
 
-    myNLP::sol_t &sol = mynlp->sol;
-    std::cout << "x = \n" << Opt_t<scalar_t>::x()(sol.primal).transpose() << std::endl;
-    std::cout << "u = \n" << Opt_t<scalar_t>::u()(sol.primal).transpose() << std::endl;
-    std::cout << "xss = \n" << Opt_t<scalar_t>::xss()(sol.primal) << std::endl;
-    std::cout << "uss = \n" << Opt_t<scalar_t>::uss()(sol.primal) << std::endl;
+        Solver::nlp_variable_t x0, x;
+        Solver::nlp_dual_t y0;
 
-    // std::cout << "A = \n" << mynlp->param.A << std::endl;
-    // std::cout << "B = \n" << mynlp->param.B << std::endl;
-    // return (int) status;
+        solver.settings().max_iter = 50;
+        solver.settings().line_search_max_iter = 5;
+
+        const std::size_t NUM_EXP = 1;
+        polympc::time_point start = polympc::get_time();
+        for(int i = 0; i < NUM_EXP; ++i)
+        {
+            x0.array() = 0;
+            y0.array() = 0;
+            solver.solve(x0, y0);
+        }
+        polympc::time_point stop = polympc::get_time();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+        x = solver.primal_solution();
+
+        std::cout << "\n\n\n\n===================== POLYMPC SOLUTION =====================\n";
+        std::cout << "polympc time " << std::setprecision(9)
+                  << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
+        std::cout << "x = \n" << Opt_t<scalar_t>::x()(x).transpose() << std::endl;
+        std::cout << "u = \n" << Opt_t<scalar_t>::u()(x).transpose() << std::endl;
+        std::cout << "xss = \n" << Opt_t<scalar_t>::xss()(x) << std::endl;
+        std::cout << "uss = \n" << Opt_t<scalar_t>::uss()(x) << std::endl;
+        std::cout << "\n\n\n\n";
+    }
 }

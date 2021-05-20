@@ -88,6 +88,8 @@ using Vec = Eigen::Ref<Eigen::Matrix<T, n, 1>>;
 template<typename scalar_t, int num_outputs, int num_inputs>
 struct jacobian_return_t
 {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     Eigen::Matrix<scalar_t, num_outputs, 1> val;
     Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
 };
@@ -95,6 +97,8 @@ struct jacobian_return_t
 template<typename scalar_t, int num_outputs, int num_inputs>
 struct hessian_return_t
 {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     Eigen::Matrix<scalar_t, num_outputs, 1> val;
     Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
     using hessian_t = Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
@@ -1172,7 +1176,7 @@ struct constraints_impl<num_variables, cons_t, std::integer_sequence<std::size_t
 
 
 /****************************************************************
-    Objective function (or lagrangian)
+    Objective function
 
     Takes the form w' * f(x)
     Represents f as the vector-valued constraint_impl
@@ -1194,19 +1198,18 @@ struct objective_impl<num_variables, F_t, std::integer_sequence<std::size_t, ind
     using variable_t = typename Eigen::Matrix<scalar_t, num_variables, 1>;
 
     // Weights
-    Eigen::Matrix<scalar_t, num_constraints, 1> w;
+    using weight_t = Eigen::Matrix<scalar_t, num_constraints, 1>;
+    weight_t w = weight_t::Ones();
 
     objective_impl() : base_t()
-    {
-        w.array() = 1.0;
-    }
+    {}
 
     /*
         Evaluate objective
      */
     EIGEN_STRONG_INLINE scalar_t operator()(
         const param_t& param,
-        const variable_t& var)
+        const Eigen::Ref<const variable_t> var)
         const noexcept
     {
         scalar_t out = 0;
@@ -1224,9 +1227,9 @@ struct objective_impl<num_variables, F_t, std::integer_sequence<std::size_t, ind
      */
     EIGEN_STRONG_INLINE scalar_t operator()(
         const param_t& param,
-        const variable_t& var,
-        Eigen::Ref<Eigen::Matrix<scalar_t, num_variables, 1>> gradient)
-        noexcept
+        const Eigen::Ref<const variable_t> var,
+        Eigen::Ref<variable_t> gradient)
+        const noexcept
     {
         gradient.array() = 0;
         scalar_t out = 0;
@@ -1242,9 +1245,9 @@ struct objective_impl<num_variables, F_t, std::integer_sequence<std::size_t, ind
     /*
         Evaluate objective, gradient and hessian in dense form
      */
-    EIGEN_STRONG_INLINE auto operator()(
+    EIGEN_STRONG_INLINE scalar_t operator()(
         const param_t& param,
-        const variable_t& var,
+        const Eigen::Ref<const variable_t> var,
         Eigen::Ref<Eigen::Matrix<scalar_t, num_variables, 1>> gradient,
         Eigen::Ref<Eigen::Matrix<scalar_t, num_variables, num_variables>> hessian)
         const noexcept
@@ -1266,7 +1269,7 @@ struct objective_impl<num_variables, F_t, std::integer_sequence<std::size_t, ind
      */
     EIGEN_STRONG_INLINE auto operator()(
         const param_t& param,
-        const variable_t& var,
+        const Eigen::Ref<const variable_t> var,
         Eigen::Ref<Eigen::Matrix<scalar_t, num_variables, 1>> gradient,
         Eigen::Ref<Eigen::SparseMatrix<scalar_t>> hessian)
         const noexcept
@@ -1288,69 +1291,247 @@ struct objective_impl<num_variables, F_t, std::integer_sequence<std::size_t, ind
     }
 };
 
+/****************************************************************
+    Lagrangian
 
+    L = obj + lam_ineq' * ineq + lam_eq' * eq + lam_var' * var
+ ****************************************************************/
+template<typename variables_t, typename obj_tuple, std::size_t num_obj_, 
+                               typename eq_tuple, std::size_t num_eq_,
+                               typename ineq_tuple, std::size_t num_ineq_>
+struct lagrangian_impl
+{
+    // TODO: Buffer bounds computation somewhere
 
-//
-// or...
-//
-// template <class, class>
-// struct Cat;
-// template <class... First, class... Second>
-// struct Cat<std::tuple<First...>, std::tuple<Second...>> {
-//     using type = std::tuple<First..., Second...>;
-// };
+    // The full list of functions in the lagrangian
+    using lag_tuple = decltype(std::tuple_cat<obj_tuple, eq_tuple, ineq_tuple>(
+            std::declval<obj_tuple>(),
+            std::declval<eq_tuple>(),
+            std::declval<ineq_tuple>()));
 
-// template<typename tup, 
+    static constexpr std::size_t num_obj = num_obj_;
+    static constexpr std::size_t num_eq = num_eq_;
+    static constexpr std::size_t num_ineq = num_ineq_;
 
-// template<typename tup>
-// tup init_tuple()
-// {
-//     reutrn {std::tuple_element_t<ind, cons_t>()...}
-// }
+    // Reference to the variables
+    variables_t& variables;
+
+    // Weighted sum representation of the lagrangian
+    using lag_index = std::make_integer_sequence<std::size_t, std::tuple_size<lag_tuple>::value>;
+    using lagrangian_t = objective_impl<variables_t::num_variables, lag_tuple, lag_index>;
+    lagrangian_t lagrangian;
+
+    lagrangian_impl(variables_t& variables_) : variables(variables_), lagrangian()
+    {}
+
+    // Input types
+    using scalar_t = typename lagrangian_t::scalar_t;
+    using param_t = typename lagrangian_t::param_t;
+
+    using variable_vec = typename Eigen::Matrix<scalar_t, variables_t::num_variables, 1>;
+    using eq_dual_vec   = typename Eigen::Matrix<scalar_t, num_eq, 1>;
+    using ineq_dual_vec = typename Eigen::Matrix<scalar_t, num_ineq, 1>;
+    using var_dual_vec  = typename Eigen::Matrix<scalar_t, variables_t::num_variables, 1>;
+
+    EIGEN_STRONG_INLINE std::size_t nnz_hessian()
+    {
+        return lagrangian.nnz_hessian;
+    }
+
+    /*
+        Evaluate lagrangian
+     */
+    EIGEN_STRONG_INLINE scalar_t operator()(
+        const param_t& param,
+        const Eigen::Ref<const variable_vec> var,
+        const scalar_t obj_factor,
+        const Eigen::Ref<const eq_dual_vec> eq_dual,
+        const Eigen::Ref<const ineq_dual_vec> ineq_dual,
+        const Eigen::Ref<const var_dual_vec> var_dual)
+        noexcept
+    {
+        variable_vec lb; 
+        variable_vec ub;
+        variables.get_bounds(param, lb, ub);
+
+        lagrangian.w.template head<num_obj>().array() = obj_factor;
+        lagrangian.w.template segment<num_eq>(num_obj) = eq_dual;
+        lagrangian.w.template tail<num_ineq>() = ineq_dual;
+
+        return lagrangian(param, var) 
+                + var.dot(var_dual) - var_dual.array().min(0).matrix().dot(lb) + var_dual.array().max(0).matrix().dot(ub);
+    }
+
+    /*
+        Evaluate objective and gradient
+     */
+    EIGEN_STRONG_INLINE scalar_t operator()(
+        const param_t& param,
+        const Eigen::Ref<const variable_vec> var,
+        const scalar_t obj_factor,
+        const Eigen::Ref<const eq_dual_vec> eq_dual,
+        const Eigen::Ref<const ineq_dual_vec> ineq_dual,
+        const Eigen::Ref<const var_dual_vec> var_dual,
+        Eigen::Ref<variable_vec> gradient)
+        noexcept
+    {
+        variable_vec lb; 
+        variable_vec ub;
+        variables.get_bounds(param, lb, ub);
+
+        lagrangian.w.template head<num_obj>().array() = obj_factor;
+        lagrangian.w.template segment<num_eq>(num_obj) = eq_dual;
+        lagrangian.w.template tail<num_ineq>() = ineq_dual;
+
+        return lagrangian(param, var, gradient) 
+                + var.dot(var_dual) - var_dual.array().min(0).matrix().dot(lb) + var_dual.array().max(0).matrix().dot(ub);
+    }
+
+    /*
+        Evaluate objective, gradient and hessian in dense form
+     */
+    EIGEN_STRONG_INLINE scalar_t operator()(
+        const param_t& param,
+        const Eigen::Ref<const variable_vec> var,
+        const scalar_t obj_factor,
+        const Eigen::Ref<const eq_dual_vec> eq_dual,
+        const Eigen::Ref<const ineq_dual_vec> ineq_dual,
+        const Eigen::Ref<const var_dual_vec> var_dual,
+        Eigen::Ref<variable_vec> gradient,
+        Eigen::Ref<Eigen::Matrix<scalar_t, variables_t::num_variables, variables_t::num_variables>> hessian)
+        noexcept
+    {
+        variable_vec lb; 
+        variable_vec ub;
+        variables.get_bounds(param, lb, ub);
+
+        lagrangian.w.template head<num_obj>().array() = obj_factor;
+        lagrangian.w.template segment<num_eq>(num_obj) = eq_dual;
+        lagrangian.w.template tail<num_ineq>() = ineq_dual;
+
+        return lagrangian(param, var, gradient, hessian) 
+                + var.dot(var_dual) - var_dual.array().min(0).matrix().dot(lb) + var_dual.array().max(0).matrix().dot(ub);
+
+    }
+
+    /*
+        Evaluate objective, gradient and sparse hessian
+     */
+    EIGEN_STRONG_INLINE scalar_t operator()(
+        const param_t& param,
+        const Eigen::Ref<const variable_vec> var,
+        const scalar_t obj_factor,
+        const Eigen::Ref<const eq_dual_vec> eq_dual,
+        const Eigen::Ref<const ineq_dual_vec> ineq_dual,
+        const Eigen::Ref<const var_dual_vec> var_dual,
+        Eigen::Ref<variable_vec> gradient,
+        Eigen::Ref<Eigen::SparseMatrix<scalar_t>> hessian)
+        noexcept
+    {
+        variable_vec lb; 
+        variable_vec ub;
+        variables.get_bounds(param, lb, ub);
+
+        lagrangian.w.template head<num_obj>().array() = obj_factor;
+        lagrangian.w.template segment<num_eq>(num_obj) = eq_dual;
+        lagrangian.w.template tail<num_ineq>() = ineq_dual;
+
+        return lagrangian(param, var, gradient, hessian) 
+                + var.dot(var_dual) - var_dual.array().min(0).matrix().dot(lb) + var_dual.array().max(0).matrix().dot(ub);
+    }
+
+    /*
+        Set non-zeros of H to match the sparsity structure of the lagrangian Hessian
+     */
+    static constexpr void initialize_sparse_hessian(SparseMatrix<scalar_t>& H)
+    {
+        lagrangian_t::initialize_sparse_hessian(H);
+    }
+};
 
 
 /****************************************************************
     A problem description containint constraints and objective
  ****************************************************************/
-template<typename variables_t, typename cons_tuple, typename obj_tuple>
+template<typename variables_t, typename eq_tuple, typename ineq_tuple, typename obj_tuple>
 struct make_problem
 {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    // TODO: deal with empty constraints
+
 private:
-    // Lagrangian is the weighted sum of objective and constraints
-    using lag_tuple = decltype(std::tuple_cat(obj_tuple(), cons_tuple()));
+    static constexpr std::size_t num_obj = std::tuple_size<obj_tuple>::value;
+    static constexpr std::size_t num_eq = std::tuple_size<eq_tuple>::value;
+    static constexpr std::size_t num_ineq = std::tuple_size<ineq_tuple>::value;
 
     // Index sequences to run through the constraints and objective functions
-    using cons_index = std::make_integer_sequence<std::size_t, std::tuple_size<cons_tuple>::value>;
-    using obj_index = std::make_integer_sequence<std::size_t, std::tuple_size<obj_tuple>::value>;
-    using lag_index = std::make_integer_sequence<std::size_t, std::tuple_size<lag_tuple>::value>;
+    using eq_index = std::make_integer_sequence<std::size_t, num_eq>;
+    using ineq_index = std::make_integer_sequence<std::size_t, num_ineq>;
+    using obj_index = std::make_integer_sequence<std::size_t, num_obj>;
+
+    // Eq + ineq
+    using con_tuple = decltype(std::tuple_cat<eq_tuple, ineq_tuple>(
+            std::declval<eq_tuple>(),
+            std::declval<ineq_tuple>()));
+    using con_index = std::make_integer_sequence<std::size_t, num_eq + num_ineq>;
+
 
 public:
     static constexpr std::size_t num_variables = variables_t::num_variables;
 
-    using constraints_t = constraints_impl<num_variables, cons_tuple, cons_index>;
+    using equalities_t = constraints_impl<num_variables, eq_tuple, eq_index>;
+    using inequalities_t = constraints_impl<num_variables, ineq_tuple, ineq_index>;
+    using constraints_t = constraints_impl<variables_t::num_variables, con_tuple, con_index>;
     using objective_t = objective_impl<num_variables, obj_tuple, obj_index>;
-    using lagrangian_t = objective_impl<num_variables, lag_tuple, lag_index>;
 
-    variables_t variables;
-    constraints_t constraints;
-    objective_t objective;
-    lagrangian_t lagrangian;
+    // Lagrangian
+    using lag_eq_t = objective_impl<num_variables, eq_tuple, eq_index>;
+    using lag_ineq_t = objective_impl<num_variables, ineq_tuple, ineq_index>;
+    using lagrangian_t = lagrangian_impl<variables_t, 
+                                         obj_tuple, objective_t::num_constraints,
+                                         eq_tuple, equalities_t::num_constraints,
+                                         ineq_tuple, inequalities_t::num_constraints>;
 
-    make_problem() : variables(), constraints(), objective(), lagrangian()
+    variables_t    variables;
+    objective_t    objective;
+    equalities_t   equalities;
+    inequalities_t inequalities;
+    constraints_t  constraints;
+    lagrangian_t   lagrangian;
+
+    make_problem() : variables(), objective(), equalities(), inequalities(), constraints(),
+                     lagrangian(variables)
     {}
 
     // Expose required constants
-    using scalar_t = typename constraints_t::scalar_t;
-    static constexpr std::size_t num_constraints = constraints_t::num_constraints;
-    static constexpr std::size_t nnz_constraints_jacobian = constraints_t::nnz_jacobian;
+    using scalar_t = typename objective_t::scalar_t;
+
+    static constexpr std::size_t num_equalities = equalities_t::num_constraints;
+    static constexpr std::size_t nnz_equalities_jacobian = equalities_t::nnz_jacobian;
+
+    static constexpr std::size_t num_inequalities = inequalities_t::num_constraints;
+    static constexpr std::size_t nnz_inequalities_jacobian = inequalities_t::nnz_jacobian;
 
     // NLP variable types
-    using variable_t            = Matrix<scalar_t, num_variables, 1>;
-    using constraint_t          = Matrix<scalar_t, num_constraints, 1>;
-    using constraint_jacobian_t = Matrix<scalar_t, num_constraints,  num_variables>;
-    using obj_gradient_t        = Matrix<scalar_t, num_variables, 1>;
-    using obj_hessian_t         = Matrix<scalar_t, num_variables, num_variables>;
-    using obj_t                 = scalar_t;
+    using variable_vec              = Matrix<scalar_t, num_variables, 1>;
+    using equalities_vec            = Matrix<scalar_t, num_equalities, 1>;
+    using equalities_jacobian_mat   = Matrix<scalar_t, num_equalities,  num_variables>;
+    using inequalities_vec          = Matrix<scalar_t, num_inequalities, 1>;
+    using inequalities_jacobian_mat = Matrix<scalar_t, num_inequalities,  num_variables>;
+    using constraints_vec           = Matrix<scalar_t, num_equalities + num_inequalities, 1>;
+    using constraints_jacobian_mat  = Matrix<scalar_t, num_equalities + num_inequalities,  num_variables>;
+    using obj_gradient_vec          = Matrix<scalar_t, num_variables, 1>;
+    using obj_hessian_mat           = Matrix<scalar_t, num_variables, num_variables>;
+    using obj_vec                   = scalar_t;
 
-    using param_t = typename constraints_t::param_t;
+    using param_t = typename objective_t::param_t;
+
+    EIGEN_STRONG_INLINE void setBounds(param_t param,
+                                       Eigen::Ref<variable_vec> lb_x, Eigen::Ref<variable_vec> ub_x,
+                                       Eigen::Ref<inequalities_vec> lb_g, Eigen::Ref<inequalities_vec> ub_g)
+    {
+        inequalities.get_bounds(param, lb_g, ub_g);
+        variables.get_bounds(param, lb_x, ub_x);
+    }
 };
