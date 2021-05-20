@@ -190,6 +190,7 @@ struct LAProblemBase
                                                  Eigen::Ref<nlp_variable_t> lag_gradient, Eigen::Ref<nlp_variable_t> cost_gradient,
                                                  Eigen::Ref<nlp_constraints_t> g, Eigen::Ref<nlp_jacobian_t> jac_g) noexcept
     {
+        // TODO: We're computing the jacobian anyway - use it to avoid re-computation in the lagrangian
         _lagrangian = problem.lagrangian(param, var, 1.0,
                                          lam.template head<NUM_EQ>(),
                                          lam.template segment<NUM_INEQ>(NUM_EQ),

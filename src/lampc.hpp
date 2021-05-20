@@ -1115,6 +1115,7 @@ struct constraints_impl<num_variables, cons_t, std::integer_sequence<std::size_t
         Eigen::Ref<constraint_t> con)
         const noexcept
     {
+        con.array() = 0;        
         (void)std::initializer_list<int>{ 
             (
                 std::get<ind>(cons)(param, var, con),
@@ -1133,6 +1134,8 @@ struct constraints_impl<num_variables, cons_t, std::integer_sequence<std::size_t
         Eigen::Ref<Eigen::Matrix<scalar_t, num_constraints, num_variables>> jac)
         const noexcept
     {
+        con.array() = 0;
+        jac.array() = 0;
         (void)std::initializer_list<int>{ 
             (
                 std::get<ind>(cons)(param, var, con, jac),
@@ -1151,6 +1154,10 @@ struct constraints_impl<num_variables, cons_t, std::integer_sequence<std::size_t
         Eigen::Ref<Eigen::SparseMatrix<scalar_t>> jac)
         const noexcept
     {
+        con.array() = 0;
+        auto ptr = jac.valuePtr();
+        for(int i=0; i<jac.nonZeros(); i++) ptr[i] = 0;
+
         (void)std::initializer_list<int>{ 
             (
                 std::get<ind>(cons)(param, var, con, jac),

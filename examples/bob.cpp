@@ -3,6 +3,7 @@
 #include "polympc_interface.hpp"
 
 #include <iomanip>
+#include <Eigen/Eigenvalues> 
 
 /***********************************************************
     Code generated from Python or from user
@@ -190,7 +191,7 @@ struct Opt_t
     };
 
     // Define variable accessors and ordering
-    static constexpr int N = 20;
+    static constexpr int N = 25;
     using xss = var_t<xss_bnd, 2, 1>;
     using uss = var_t<uss_bnd, 1, 1, xss>;
     using x   = var_t<x_bnd,   2, N+1, uss>;
@@ -430,6 +431,43 @@ int main()
         solver.settings().max_iter = 50;
         solver.settings().line_search_max_iter = 5;
 
+        // const Solver::parameter_t p;
+        // const Solver::nlp_dual_t lam = y0;
+        // Solver::nlp_variable_t cost_grad;
+        // Solver::nlp_hessian_t lag_hessian;
+        // Solver::nlp_jacobian_t A;
+        // Solver::nlp_constraints_t b;
+
+        // std::cout << type_name<decltype(A)>() << std::endl;
+        // solver.linearisation(x, p, lam, cost_grad, lag_hessian, A, b);
+
+        // std::cout << "A = \n" << A << std::endl;
+        // std::cout << "b = " << b.transpose() << std::endl;
+
+        // {
+        //     scalar_t lagrangian;
+        //     Solver::nlp_variable_t lag_gradient;
+        //     Solver::nlp_hessian_t lag_hessian;
+        //     Solver::nlp_variable_t cost_gradient;
+        //     Solver::nlp_constraints_t g;
+        //     Solver::nlp_jacobian_t jac_g;
+
+        //     solver.problem.lagrangian_gradient_hessian(x, p, lam, lagrangian, lag_gradient, lag_hessian, cost_gradient, g, jac_g);
+
+        //     // std::cout << "jac_g = \n" << jac_g << std::endl;
+        //     // std::cout << "g = " << g.transpose() << std::endl;
+        //     std::cout << "lag_hessian = \n" << lag_hessian << std::endl;
+
+        //     std::cout << "eigenvalues(hessian) = ";
+        //     Eigen::EigenSolver<Solver::nlp_hessian_t> eigensolver(lag_hessian);
+        //     for (int i = 0; i < eigensolver.eigenvalues().rows(); i++) {
+        //       double v = eigensolver.eigenvalues()(i).real();
+        //       std::cout << v << ", ";
+        //     }
+        //     std::cout << std::endl;
+        // }
+
+
         const std::size_t NUM_EXP = 1;
         polympc::time_point start = polympc::get_time();
         for(int i = 0; i < NUM_EXP; ++i)
@@ -440,6 +478,13 @@ int main()
         }
         polympc::time_point stop = polympc::get_time();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+        auto info = solver.info();
+        std::cout << "---- solution status ----\n";
+        std::cout << "iter = " << info.iter << std::endl;
+        std::cout << "qp_solver_iter = " << info.qp_solver_iter << std::endl;
+        // std::cout << "status = " << info.status << std::endl;
+
 
         x = solver.primal_solution();
 
