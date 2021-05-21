@@ -14,5 +14,7 @@ target_link_libraries(bob ipopt Eigen3::Eigen)
 add_executable(polybob polybob.cpp /Users/cnjones/git/lampc/src/lampc.hpp)
 target_link_libraries(polybob ipopt Eigen3::Eigen)
 
+add_executable(qp_test qp_test.cpp /Users/cnjones/git/lampc/src/lampc.hpp)
+target_link_libraries(qp_test ipopt Eigen3::Eigen)
 
 # link_directories(${CMAKE_SOURCE_DIR}/third_party/opencv/lib)

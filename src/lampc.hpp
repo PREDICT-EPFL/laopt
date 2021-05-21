@@ -1390,8 +1390,11 @@ struct lagrangian_impl
         lagrangian.w.template segment<num_eq>(num_obj) = eq_dual;
         lagrangian.w.template tail<num_ineq>() = ineq_dual;
 
-        return lagrangian(param, var, gradient) 
-                + var.dot(var_dual) - var_dual.array().min(0).matrix().dot(lb) + var_dual.array().max(0).matrix().dot(ub);
+        scalar_t lag = lagrangian(param, var, gradient) 
+                        + var.dot(var_dual) - var_dual.array().min(0).matrix().dot(lb) + var_dual.array().max(0).matrix().dot(ub);
+
+        gradient += var_dual;
+        return lag;
     }
 
     /*
@@ -1416,9 +1419,11 @@ struct lagrangian_impl
         lagrangian.w.template segment<num_eq>(num_obj) = eq_dual;
         lagrangian.w.template tail<num_ineq>() = ineq_dual;
 
-        return lagrangian(param, var, gradient, hessian) 
-                + var.dot(var_dual) - var_dual.array().min(0).matrix().dot(lb) + var_dual.array().max(0).matrix().dot(ub);
+        scalar_t lag = lagrangian(param, var, gradient, hessian) 
+                        + var.dot(var_dual) - var_dual.array().min(0).matrix().dot(lb) + var_dual.array().max(0).matrix().dot(ub);
 
+        gradient += var_dual;
+        return lag;
     }
 
     /*
@@ -1443,8 +1448,11 @@ struct lagrangian_impl
         lagrangian.w.template segment<num_eq>(num_obj) = eq_dual;
         lagrangian.w.template tail<num_ineq>() = ineq_dual;
 
-        return lagrangian(param, var, gradient, hessian) 
-                + var.dot(var_dual) - var_dual.array().min(0).matrix().dot(lb) + var_dual.array().max(0).matrix().dot(ub);
+        scalar_t lag = lagrangian(param, var, gradient, hessian) 
+                        + var.dot(var_dual) - var_dual.array().min(0).matrix().dot(lb) + var_dual.array().max(0).matrix().dot(ub);
+
+        gradient += var_dual;
+        return lag;
     }
 
     /*

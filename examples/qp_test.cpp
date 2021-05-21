@@ -7,7 +7,18 @@
 #include <type_traits>
 
 /***********************************************************
-    Code generated from Python or from user
+    Simple QP
+
+    min  0.5 * (x - 10)^2 + 0.5 * y0^2 + 2 * y1^2
+    s.t. 
+         x + y(0) + y(1) = 1
+
+         -1 <= x + y(0) <= 1
+         -1 <= 3*x + y(0) + 2*y(1) <= 1
+
+         1 <= x <= 5
+         -2 <= y <= 6
+
  ***********************************************************/
 
 template<typename scalar_t_>
@@ -18,212 +29,104 @@ struct Opt_t
 
     struct param_t
     {
-        Eigen::Matrix<scalar_t, 2, 1> x0 = {-1, -2};
-        const Eigen::Matrix<scalar_t, 2, 2> A = {{1.0, 0.0}, {0.1, 1.0}};
-        Eigen::Matrix<scalar_t, 2, 1> B = {0.1, 0.005};
-        Eigen::Matrix<scalar_t, 1, 1> ref = {3};
-
-        Eigen::Matrix<scalar_t, 2, 1> q = {0, 1e3}; // Stage-cost weights
-        Eigen::Matrix<scalar_t, 1, 1> r = {1e-2}; // Stage-cost weights
     };
 
-    struct func1_
+    struct g_ineq_
     {
         template<typename T>
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 2> out, cVec<T, 1>& var0_, cVec<T, 2>& var1_) noexcept
+        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 2> out, cVec<T, 1>& x, cVec<T, 2>& y) noexcept
         {
-            Eigen::Matrix<T, 2, 1> tmp1;
-            dynamics_::template eval<T>(p, tmp1, p.x0.template cast<T>(), var0_);
-            out = var1_ - tmp1;
+            out << x(0) + y(0), 
+                   T(3) * x(0) + y(0) + T(2) * y(1);
         }
     };
-    using func1 = Jacobian<func1_, scalar_t, param_t, 2, 1, 2>;
+    using g_ineq = Jacobian<g_ineq_, scalar_t, param_t, 2, 1, 2>;
 
-    struct initial_state_
+    struct g_eq_
     {
         template<typename T>
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 2> out, cVec<T, 2>& x0) noexcept
+        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 1> out, cVec<T, 1>& x, cVec<T, 2>& y) noexcept
         {
-            out = x0 - p.x0.template cast<T>();
+            out << x(0) + y(0) + y(1);
         }
     };
-    using initial_state = Jacobian<initial_state_, scalar_t, param_t, 2, 2>;
+    using g_eq = Jacobian<g_eq_, scalar_t, param_t, 1, 1, 2>;
 
-    struct dynamics_
+    struct cost_
     {
         template<typename T>
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 2> out, cVec<T, 2>& x, cVec<T, 1>& u) noexcept
+        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 1> out, cVec<T, 1>& x, cVec<T, 2>& y) noexcept
         {
-            out = p.A.template cast<T>() * x + p.B.template cast<T>() * u;
-            // out(0) += x(0)*x(1)*u(0);
-            // out(1) += x(0)*10*u(0);
+            out(0) = T(0.5) * (x(0) - T(10.0))*(x(0) - T(10.0)) + T(0.5) * y(0) * y(0) + T(2.0) * y(1) * y(1);
         }
     };
-    using dynamics = Jacobian<dynamics_, scalar_t, param_t, 2, 2, 1>;
-
-    struct func3_
-    {
-        template<typename T>
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 2> out, cVec<T, 1>& var0_, cVec<T, 2>& var1_, cVec<T, 2>& var2_) noexcept
-        {
-            Matrix<T, 2, 1> tmp2;
-            dynamics_::template eval<T>(p, tmp2, var1_, var0_);
-            out = var2_ - tmp2;
-        }
-    };
-    using func3 = Jacobian<func3_, scalar_t, param_t, 2, 1, 2, 2>;
-
-    struct func2_
-    {
-        template<typename T>
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 2> out, cVec<T, 1>& var0_, cVec<T, 2>& var1_) noexcept
-        {
-            Matrix<T, 2, 1> tmp3;
-            dynamics_::template eval<T>(p, tmp3, var1_, var0_);
-            out = var1_ - tmp3;
-        }
-    };
-    using func2 = Jacobian<func2_, scalar_t, param_t, 2, 1, 2>;
-
-    struct stage_cost_
-    {
-        template<typename T>
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 1> out, 
-                cVec<T, 2>& x, cVec<T, 1>& u, cVec<T, 2>& xss, cVec<T, 1>& uss) noexcept
-        {
-            Eigen::Matrix<T, 2, 1> x_err = x - xss;
-            Eigen::Matrix<T, 1, 1> u_err = u - uss;
-
-            out(0) = x_err.cwiseProduct(p.q.template cast<T>()).dot(x_err) + u_err.cwiseProduct(p.r.template cast<T>()).dot(u_err);
-        }
-    };
-    using stage_cost = Jacobian<stage_cost_, scalar_t, param_t, 1, 2, 1, 2, 1>;
-
-    struct terminal_cost_
-    {
-        template<typename T>
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 1> out, cVec<T, 2>& xss, cVec<T, 1>& uss) noexcept
-        {
-            Eigen::Matrix<T, 2, 1> x_err;
-            x_err(0) = xss(0);
-            x_err(1) = xss(1) - (p.ref.template cast<T>())(0);
-
-            out(0) = 1e3*(x_err.cwiseProduct(p.q.template cast<T>()).dot(x_err) + uss.cwiseProduct(p.r.template cast<T>()).dot(uss));
-        }
-    };
-    using terminal_cost = Jacobian<terminal_cost_, scalar_t, param_t, 1, 2, 1>;
-
-
-    struct u_constraint_
-    {
-        template<typename T>
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 1> out, cVec<T, 1>& u) noexcept
-        {
-            out = u;
-        }
-    };
-    using u_constraint = Jacobian<u_constraint_, scalar_t, param_t, 1, 1>;
-
+    using cost = Jacobian<cost_, scalar_t, param_t, 1, 1, 2>;
 
     /*
         Constraint bounds
      */
-    template<std::size_t len>
-    struct bnd_zero
+    struct bnd_ineq
     {
         static EIGEN_STRONG_INLINE void eval(const param_t& p, const int iteration, 
-                                             Vec<scalar_t, len> lb, Vec<scalar_t, len> ub) noexcept
+                                             Vec<scalar_t, 2> lb, Vec<scalar_t, 2> ub) noexcept
+        {
+            lb.array() = -1;
+            ub.array() = 1;
+        }
+    };
+
+    struct bnd_eq
+    {
+        static EIGEN_STRONG_INLINE void eval(const param_t& p, const int iteration, 
+                                             Vec<scalar_t, 1> lb, Vec<scalar_t, 1> ub) noexcept
         {
             lb.array() = 0;
             ub.array() = 0;
         }
     };
 
-    struct bnd_u
-    {
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, const int iteration, 
-                                             Vec<scalar_t, 1> lb, Vec<scalar_t, 1> ub) noexcept
-        {
-            lb.array() = -1;
-            ub.array() = 5*iteration;
-        }
-    };
 
     /*
         Variable bounds
      */
-    struct xss_bnd
-    {
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, const int iteration, 
-                                             Vec<scalar_t, 2> lb, Vec<scalar_t, 2> ub) noexcept
-        {
-            lb.array() = -INF;
-            ub.array() = INF;
-        }
-    };
-
-    struct uss_bnd
+    struct x_bnd
     {
         static EIGEN_STRONG_INLINE void eval(const param_t& p, const int iteration, 
                                              Vec<scalar_t, 1> lb, Vec<scalar_t, 1> ub) noexcept
         {
-            lb.array() = -INF;
-            ub.array() = INF;
-        }
-    };
-
-    struct x_bnd
-    {
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, const int iteration, 
-                                             Vec<scalar_t, 2> lb, Vec<scalar_t, 2> ub) noexcept
-        {
-            lb.array() = -5;
+            lb.array() = 1;
             ub.array() = 5;
         }
     };
 
-    struct u_bnd
+    struct y_bnd
     {
         static EIGEN_STRONG_INLINE void eval(const param_t& p, const int iteration, 
-                                             Vec<scalar_t, 1> lb, Vec<scalar_t, 1> ub) noexcept
+                                             Vec<scalar_t, 2> lb, Vec<scalar_t, 2> ub) noexcept
         {
-            lb.array() = -20;
-            ub.array() = 20;
+            lb.array() = -2;
+            ub.array() = 6;
         }
     };
 
     // Define variable accessors and ordering
-    static constexpr int N = 25;
-    using xss = var_t<xss_bnd, 2, 1>;
-    using uss = var_t<uss_bnd, 1, 1, xss>;
-    using x   = var_t<x_bnd,   2, N+1, uss>;
-    using u   = var_t<u_bnd,   1, N , x>;
+    using x = var_t<x_bnd, 1, 1>;
+    using y = var_t<y_bnd, 2, 1, x>;
 
-    using variables = VariableList_t<scalar_t, xss, uss, x, u>;
+    using variables = VariableList_t<scalar_t, x, y>;
 
     using equalities = std::tuple
     <
-        // x(0) == x0
-        con_t<bnd_zero<2>, initial_state, 1, iterator<x,0,0>>,
-
-        // dynamics(u(i), x(i)) == x(i+1) for i in range(0, N-1)
-        con_t<bnd_zero<2>, func3, N, iterator<u,0,1>, iterator<x,0,1>, iterator<x,1,1>>, 
-
-        // dynamics(xss, uss) == xss
-        con_t<bnd_zero<2>, func2, 1, iterator<uss>, iterator<xss>>
+        con_t<bnd_eq, g_eq, 1, iterator<x,0,0>, iterator<y,0,0>>
     >;
 
     using inequalities = std::tuple<
-        con_t<uss_bnd, u_constraint, 1, iterator<uss>>
+        con_t<bnd_ineq, g_ineq, 1, iterator<x,0,0>, iterator<y,0,0>>
     >;
 
     using objective = std::tuple
     <
-        // x(i)'*Q*x(i) + u(i)'*R*u(i) for i in range(0, N-1)
-        con_t<bnd_zero<1>, stage_cost, N-2, iterator<x,0,1>, iterator<u,0,1>, iterator<xss,0,0>, iterator<uss,0,0>>,
-
-        // (xss(0); xss(1)-ref)'*Q*(xss(0); xss(1)-ref) + uss*R*uss
-        con_t<bnd_zero<1>, terminal_cost, 1, iterator<xss,0,0>, iterator<uss,0,0>>
+        con_t<bnd_eq, cost, 1, iterator<x,0,0>, iterator<y,0,0>>
     >;
 
     // Create our NLP
@@ -378,47 +281,45 @@ int main()
     //     std::cout << "hessian = \n" << MatrixX(l_hessian) << std::endl;
     // }
 
-    {
-        using prob_t = Opt_t<scalar_t>::problem_t;
-        using myNLP = NLP_Ipopt<prob_t>;
-        prob_t::param_t p;
+    // {
+    //     using prob_t = Opt_t<scalar_t>::problem_t;
+    //     using myNLP = NLP_Ipopt<prob_t>;
+    //     prob_t::param_t p;
 
-        Ipopt::SmartPtr<myNLP> mynlp = new myNLP(p);
-        Ipopt::SmartPtr<Ipopt::IpoptApplication> app = new Ipopt::IpoptApplication();
+    //     Ipopt::SmartPtr<myNLP> mynlp = new myNLP(p);
+    //     Ipopt::SmartPtr<Ipopt::IpoptApplication> app = new Ipopt::IpoptApplication();
 
-        app->Options()->SetNumericValue("tol", 1e-7);
-        app->Options()->SetStringValue("mu_strategy", "adaptive");
-        app->Options()->SetStringValue("output_file", "ipopt.out");
-        // app->Options()->SetStringValue("hessian_approximation", "limited-memory");
+    //     app->Options()->SetNumericValue("tol", 1e-7);
+    //     app->Options()->SetStringValue("mu_strategy", "adaptive");
+    //     app->Options()->SetStringValue("output_file", "ipopt.out");
+    //     // app->Options()->SetStringValue("hessian_approximation", "limited-memory");
 
-        Ipopt::ApplicationReturnStatus status;
-        status = app->Initialize();
-        if( status != Ipopt::Solve_Succeeded )
-        {
-            std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl;
-            return (int) status;
-        }
+    //     Ipopt::ApplicationReturnStatus status;
+    //     status = app->Initialize();
+    //     if( status != Ipopt::Solve_Succeeded )
+    //     {
+    //         std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl;
+    //         return (int) status;
+    //     }
 
-        const std::size_t NUM_EXP = 1;
-        polympc::time_point start = polympc::get_time();
-        for(int i = 0; i < NUM_EXP; ++i)
-        {
-            mynlp->x0.array() = 0;
-            status = app->OptimizeTNLP(mynlp);
-        }
-        polympc::time_point stop = polympc::get_time();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    //     const std::size_t NUM_EXP = 1;
+    //     polympc::time_point start = polympc::get_time();
+    //     for(int i = 0; i < NUM_EXP; ++i)
+    //     {
+    //         mynlp->x0.array() = 0;
+    //         status = app->OptimizeTNLP(mynlp);
+    //     }
+    //     polympc::time_point stop = polympc::get_time();
+    //     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-        std::cout << "\n\n\n\n===================== IPOPT SOLUTION =====================\n";
-        std::cout << "IPOPT time " << std::setprecision(9)
-                  << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
-        myNLP::sol_t &sol = mynlp->sol;
-        std::cout << "x = \n" << Opt_t<scalar_t>::x()(sol.primal).transpose() << std::endl;
-        std::cout << "u = \n" << Opt_t<scalar_t>::u()(sol.primal).transpose() << std::endl;
-        std::cout << "xss = \n" << Opt_t<scalar_t>::xss()(sol.primal) << std::endl;
-        std::cout << "uss = \n" << Opt_t<scalar_t>::uss()(sol.primal) << std::endl;
-        std::cout << "\n\n\n\n";
-    }
+    //     std::cout << "\n\n\n\n===================== IPOPT SOLUTION =====================\n";
+    //     std::cout << "IPOPT time " << std::setprecision(9)
+    //               << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
+    //     myNLP::sol_t &sol = mynlp->sol;
+    //     std::cout << "x = \n" << Opt_t<scalar_t>::x()(sol).transpose() << std::endl;
+    //     std::cout << "y = \n" << Opt_t<scalar_t>::y()(sol).transpose() << std::endl;
+    //     std::cout << "\n\n\n\n";
+    // }
 
     {
         using prob_t = Opt_t<scalar_t>::problem_t;
@@ -432,22 +333,30 @@ int main()
 
         solver.settings().max_iter = 50;
         solver.settings().line_search_max_iter = 5;
-        // solver.qp_settings().eps_abs = 1e-6;
-        // solver.qp_settings().eps_rel = 1e-6;
-        // solver.qp_settings().max_iter = 1000;
 
-        // const Solver::parameter_t p;
-        // const Solver::nlp_dual_t lam = y0;
-        // Solver::nlp_variable_t cost_grad;
-        // Solver::nlp_hessian_t lag_hessian;
-        // Solver::nlp_jacobian_t A;
-        // Solver::nlp_constraints_t b;
+    //     const Solver::parameter_t p;
+    //     const Solver::nlp_dual_t lam = y0;
+    //     Solver::nlp_variable_t m_H;
+    //     Solver::nlp_hessian_t m_H;
+    //     Solver::nlp_jacobian_t m_A;
+    //     Solver::nlp_constraints_t m_al;
 
-        // std::cout << type_name<decltype(A)>() << std::endl;
-        // solver.linearisation(x, p, lam, cost_grad, lag_hessian, A, b);
+    //     std::cout << type_name<decltype(A)>() << std::endl;
+    //     solver.linearisation(x, p, lam, m_H, m_H, m_A, m_al);
 
-        // std::cout << "A = \n" << A << std::endl;
-        // std::cout << "b = " << b.transpose() << std::endl;
+    //     m_al = -m_al;
+    //     m_au =  m_al;
+    //     m_al.template tail<NUM_INEQ>() += m_lbg;
+    //     m_au.template tail<NUM_INEQ>() += m_ubg;
+    //     m_lx.noalias() = m_lbx - m_x;
+    //     m_ux.noalias() = m_ubx - m_x;
+
+
+    // qp_status = m_qp_solver.solve(m_H, m_h, m_A, m_al, m_au, m_lx, m_ux);
+
+
+    //     std::cout << "A = \n" << A << std::endl;
+    //     std::cout << "b = " << b.transpose() << std::endl;
 
         // {
         //     scalar_t lagrangian;
@@ -471,7 +380,6 @@ int main()
         //     }
         //     std::cout << std::endl;
         // }
-
 
         const std::size_t NUM_EXP = 100;
         polympc::time_point start = polympc::get_time();
@@ -497,9 +405,7 @@ int main()
         std::cout << "polympc time " << std::setprecision(9)
                   << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
         std::cout << "x = \n" << Opt_t<scalar_t>::x()(x).transpose() << std::endl;
-        std::cout << "u = \n" << Opt_t<scalar_t>::u()(x).transpose() << std::endl;
-        std::cout << "xss = \n" << Opt_t<scalar_t>::xss()(x) << std::endl;
-        std::cout << "uss = \n" << Opt_t<scalar_t>::uss()(x) << std::endl;
+        std::cout << "y = \n" << Opt_t<scalar_t>::y()(x).transpose() << std::endl;
         std::cout << "\n\n\n\n";
     }
 }

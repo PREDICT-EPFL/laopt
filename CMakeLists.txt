@@ -8,7 +8,8 @@ endif()
 # Show message stating path to Eigen3
 message(STATUS "Using Eigen3 library found at ${EIGEN3_INCLUDE_DIR}")
 
-add_definitions(-DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB - For both Windows and UNIX
+add_definitions(-DEIGEN_STACK_ALLOCATION_LIMIT=5000000) # 1 MB - For both Windows and UNIX
+# add_definitions(-DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB - For both Windows and UNIX
 include_directories(submodules/polympc/src)
 
 
