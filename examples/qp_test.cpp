@@ -331,8 +331,11 @@ int main()
         Solver::nlp_variable_t x0, x;
         Solver::nlp_dual_t y0;
 
-        solver.settings().max_iter = 50;
+        solver.settings().max_iter = 1;
         solver.settings().line_search_max_iter = 5;
+        solver.qp_settings().eps_abs = 1e-6;
+        solver.qp_settings().eps_rel = 1e-6;
+        solver.qp_settings().max_iter = 1000;
 
     //     const Solver::parameter_t p;
     //     const Solver::nlp_dual_t lam = y0;
@@ -381,7 +384,7 @@ int main()
         //     std::cout << std::endl;
         // }
 
-        const std::size_t NUM_EXP = 100;
+        const std::size_t NUM_EXP = 1;
         polympc::time_point start = polympc::get_time();
         for(int i = 0; i < NUM_EXP; ++i)
         {

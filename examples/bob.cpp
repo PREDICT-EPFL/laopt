@@ -23,8 +23,8 @@ struct Opt_t
         Eigen::Matrix<scalar_t, 2, 1> B = {0.1, 0.005};
         Eigen::Matrix<scalar_t, 1, 1> ref = {3};
 
-        Eigen::Matrix<scalar_t, 2, 1> q = {0, 1e3}; // Stage-cost weights
-        Eigen::Matrix<scalar_t, 1, 1> r = {1e-2}; // Stage-cost weights
+        Eigen::Matrix<scalar_t, 2, 1> q = {100, 1e3}; // Stage-cost weights
+        Eigen::Matrix<scalar_t, 1, 1> r = {1}; // Stage-cost weights
     };
 
     struct func1_
@@ -193,7 +193,7 @@ struct Opt_t
     };
 
     // Define variable accessors and ordering
-    static constexpr int N = 25;
+    static constexpr int N = 15;
     using xss = var_t<xss_bnd, 2, 1>;
     using uss = var_t<uss_bnd, 1, 1, xss>;
     using x   = var_t<x_bnd,   2, N+1, uss>;
@@ -473,7 +473,7 @@ int main()
         // }
 
 
-        const std::size_t NUM_EXP = 100;
+        const std::size_t NUM_EXP = 1;
         polympc::time_point start = polympc::get_time();
         for(int i = 0; i < NUM_EXP; ++i)
         {
