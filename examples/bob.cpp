@@ -2,19 +2,43 @@
 #include "ipopt_interface.hpp"
 #include "polympc_interface.hpp"
 
+#include "map.hpp"
+
 #include <iomanip>
 #include <Eigen/Eigenvalues> 
 #include <type_traits>
 
+#include <qpmad/solver.h>
+#include "solvers/box_ADMM.hpp"
+
 /***********************************************************
     Code generated from Python or from user
  ***********************************************************/
+
+
+#define really_unparen(...) __VA_ARGS__
+
+#define DECL_VAR(ind, name, type) \
+    really_unparen type
+#define DECL_VAR_PAIR(pair) \
+    DECL_VAR pair
+#define GET_VAR(ind, name, type) \
+    using name = typename variables::template get_by_index<ind>;
+#define GET_VAR_PAIR(pair) \
+    GET_VAR pair
+#define Make_Variables(scalar_t, param_t, ...) \
+    typename make_variables<scalar_t, param_t, \
+    MAP_LIST(DECL_VAR_PAIR, __VA_ARGS__) \
+    >::type; \
+    MAP(GET_VAR_PAIR, __VA_ARGS__) \
+
 
 template<typename scalar_t_>
 struct Opt_t
 {
     using scalar_t = scalar_t_;
     static constexpr auto INF = std::numeric_limits<scalar_t>::infinity();
+    // static constexpr auto INF = 1e5;
 
     struct param_t
     {
@@ -23,8 +47,8 @@ struct Opt_t
         Eigen::Matrix<scalar_t, 2, 1> B = {0.1, 0.005};
         Eigen::Matrix<scalar_t, 1, 1> ref = {3};
 
-        Eigen::Matrix<scalar_t, 2, 1> q = {100, 1e3}; // Stage-cost weights
-        Eigen::Matrix<scalar_t, 1, 1> r = {1}; // Stage-cost weights
+        Eigen::Matrix<scalar_t, 2, 1> q = {1, 1e3}; // Stage-cost weights
+        Eigen::Matrix<scalar_t, 1, 1> r = {1e-3}; // Stage-cost weights
     };
 
     struct func1_
@@ -192,14 +216,13 @@ struct Opt_t
         }
     };
 
-    // Define variable accessors and ordering
-    static constexpr int N = 15;
-    using xss = var_t<xss_bnd, 2, 1>;
-    using uss = var_t<uss_bnd, 1, 1, xss>;
-    using x   = var_t<x_bnd,   2, N+1, uss>;
-    using u   = var_t<u_bnd,   1, N , x>;
+    static constexpr int N = 20;
+    using variables = Make_Variables(scalar_t, param_t,
+        (0, xss, (var_t<xss_bnd, 2, 1>)), 
+        (1, uss, (var_t<uss_bnd, 1, 1>)), 
+        (2,   x, (var_t<x_bnd, 2, N+1>)),
+        (3,   u, (var_t<u_bnd, 1, N>)));
 
-    using variables = VariableList_t<scalar_t, xss, uss, x, u>;
 
     using equalities = std::tuple
     <
@@ -231,36 +254,42 @@ struct Opt_t
 };
 
 
+
+
 /***********************************************************
     Implementation
  ***********************************************************/
 int main()
 {
+
     using scalar_t = double;
+    using opt = Opt_t<scalar_t>;
 
     // {
     //     using MatrixX = Eigen::Matrix<scalar_t, Eigen::Dynamic, Eigen::Dynamic>;
     //     std::cout << "\n\n===Test direct computation of functions===\n";
         
-    //     Opt::param_t p;
+    //     opt::param_t p;
 
     //     Eigen::Matrix<scalar_t, 2, 1> x = {1, 2};
     //     Eigen::Matrix<scalar_t, 1, 1> u = {3};
+    //     Eigen::Matrix<scalar_t, 2, 1> xss = {2, 3};
+    //     Eigen::Matrix<scalar_t, 1, 1> uss = {4};
 
-    //     std::cout << "stage_cost::eval(p, x, u) = " << Opt::stage_cost::eval(p, x, u).transpose() << std::endl;
+    //     std::cout << "stage_cost::eval(p, x, u, xss, uss) = " << opt::stage_cost::eval(p, x, u, xss, uss).transpose() << std::endl;
     //     std::cout << "\n\n";
 
     //     std::cout << "jac = stage_cost::jac(p, x, u)" << std::endl;
-    //     auto jac = Opt::stage_cost::jac(p, x, u);
+    //     auto jac = opt::stage_cost::jac(p, x, u, xss, uss);
     //     std::cout << "jac.val = " << jac.val.transpose() << std::endl;
     //     std::cout << "jac.jacobian = \n" << jac.jacobian << std::endl;
     //     std::cout << "\n\n";
 
-    //     std::cout << "hessian = stage_cost::hessian(p, x, u) = " << Opt::stage_cost::eval(p, x, u).transpose() << std::endl;
-    //     auto hessian = Opt::stage_cost::hessian(p, x, u);
+    //     std::cout << "hessian = stage_cost::hessian(p, x, u) = " << opt::stage_cost::eval(p, x, u, xss, uss).transpose() << std::endl;
+    //     auto hessian = opt::stage_cost::hessian(p, x, u, xss, uss);
     //     std::cout << "hessian.val = " << hessian.val.transpose() << std::endl;
     //     std::cout << "hessian.jacobian = \n" << hessian.jacobian << std::endl;
-    //     for(int i=0; i<Opt::stage_cost::num_outputs; i++)
+    //     for(int i=0; i<opt::stage_cost::num_outputs; i++)
     //     {
     //         std::cout << "hessian.hessian(" << i << ")\n";
     //         std::cout << hessian.hessian[i] << std::endl;
@@ -269,6 +298,7 @@ int main()
 
 
     // {
+    //     using MatrixX = Eigen::Matrix<scalar_t, Eigen::Dynamic, Eigen::Dynamic>;
     //     using Problem = Opt_t<scalar_t>::problem_t;
     //     Problem prob;
 
@@ -276,17 +306,17 @@ int main()
     //     param_t p;
 
     //     std::cout << "num_variables = " << prob.num_variables << std::endl;
-    //     std::cout << "num_constraints = " << prob.num_constraints << std::endl;
+    //     std::cout << "num_constraints = " << prob.constraints.num_constraints << std::endl;
 
-    //     Problem::variable_t var;
+    //     Problem::variable_vec var;
     //     for(int i=0; i<Problem::num_variables; i++) var[i] = i;
-    //     Problem::constraint_t con;
-    //     for(int i=0; i<Problem::num_constraints; i++) con[i] = 0;
+    //     Problem::constraints_vec con;
+    //     for(int i=0; i<Problem::constraints_t::num_constraints; i++) con[i] = 0;
 
-    //     Problem::constraint_t w;
+    //     Problem::constraints_vec w;
     //     for(int i=0; i<Problem::num_constraints; i++) w[i] = i;
 
-    //     Problem::constraint_jacobian_t J;
+    //     Problem::constraints_jacobian_mat J;
     //     J.setZero();
 
     //     Eigen::SparseMatrix<scalar_t> sJ(Problem::num_constraints, Problem::num_variables);
@@ -295,12 +325,12 @@ int main()
     //     Eigen::Matrix<scalar_t, Problem::num_variables, Problem::num_variables> H;
     //     H.setZero();
 
-    //     Problem::constraint_t lb;
-    //     Problem::constraint_t ub;
+    //     Problem::constraints_vec lb;
+    //     Problem::constraints_vec ub;
     //     lb.array() = -100.0;
     //     ub.array() = -100.0;
 
-    //     Problem::variable_t x_lb; Problem::variable_t x_ub;
+    //     Problem::variable_vec x_lb; Problem::variable_vec x_ub;
     //     x_lb.array() = -100.0; x_ub.array() = -100.0;
 
     //     std::cout << "\n\n";
@@ -341,13 +371,13 @@ int main()
     //     for(int i=0; i<Problem::num_variables; i++) var[i] = 1;
     //     std::cout << "obj = " << prob.objective(p, var) << std::endl;
 
-    //     Problem::variable_t grad;
+    //     Problem::variable_vec grad;
     //     auto val = prob.objective(p, var, grad);
     //     std::cout << "obj = " << val << std::endl;
     //     std::cout << "gradient = " << grad.transpose() << std::endl;
 
     //     std::cout << "\n\n ---------- DENSE HESSIAN ----------\n\n";
-    //     Problem::obj_hessian_t hessian;
+    //     Problem::obj_hessian_mat hessian;
     //     val = prob.objective(p, var, grad, hessian);
     //     std::cout << "obj = " << val << std::endl;
     //     std::cout << "gradient = " << grad.transpose() << std::endl;
@@ -367,12 +397,18 @@ int main()
     //     std::cout << "===Test computation of lagrangian ===\n";
     //     std::cout << "=====================================\n";
 
-    //     std::cout << "dual variables = " << prob.lagrangian.w.template tail<Problem::num_constraints>().transpose() << std::endl;
-
     //     Eigen::SparseMatrix<scalar_t> l_hessian(Problem::num_variables, Problem::num_variables);
     //     prob.lagrangian.initialize_sparse_hessian(l_hessian);
 
-    //     val = prob.lagrangian(p, var, grad, l_hessian);
+    //     Problem::lagrangian_t::eq_dual_vec eq_dual;
+    //     Problem::lagrangian_t::ineq_dual_vec ineq_dual;
+    //     Problem::lagrangian_t::var_dual_vec var_dual;
+
+    //     eq_dual.array() = 1.0;
+    //     ineq_dual.array() = 2.0;
+    //     var_dual.array() = 3.0;
+
+    //     val = prob.lagrangian(p, var, 1.0, eq_dual, ineq_dual, var_dual, grad, l_hessian);
     //     std::cout << "obj = " << val << std::endl;
     //     std::cout << "gradient = " << grad.transpose() << std::endl;
     //     std::cout << "hessian = \n" << MatrixX(l_hessian) << std::endl;
@@ -392,17 +428,17 @@ int main()
         // app->Options()->SetStringValue("hessian_approximation", "limited-memory");
 
         Ipopt::ApplicationReturnStatus status;
-        status = app->Initialize();
-        if( status != Ipopt::Solve_Succeeded )
-        {
-            std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl;
-            return (int) status;
-        }
 
         const std::size_t NUM_EXP = 1;
         polympc::time_point start = polympc::get_time();
         for(int i = 0; i < NUM_EXP; ++i)
         {
+            status = app->Initialize();
+            if( status != Ipopt::Solve_Succeeded )
+            {
+                std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl;
+                return (int) status;
+            }
             mynlp->x0.array() = 0;
             status = app->OptimizeTNLP(mynlp);
         }
@@ -420,8 +456,9 @@ int main()
         std::cout << "\n\n\n\n";
     }
 
-    {
+    {        
         using prob_t = Opt_t<scalar_t>::problem_t;
+        using Problem = LAProblemBase<prob_t>;
         using Solver = SQPSolver<LAProblemBase<prob_t>>;
 
         Solver solver;
@@ -434,11 +471,11 @@ int main()
         solver.settings().line_search_max_iter = 5;
         // solver.qp_settings().eps_abs = 1e-6;
         // solver.qp_settings().eps_rel = 1e-6;
-        // solver.qp_settings().max_iter = 1000;
+        // solver.qp_settings().max_iter = 5000;
 
         // const Solver::parameter_t p;
         // const Solver::nlp_dual_t lam = y0;
-        // Solver::nlp_variable_t cost_grad;
+        // Solver::nlp_variable_vec cost_grad;
         // Solver::nlp_hessian_t lag_hessian;
         // Solver::nlp_jacobian_t A;
         // Solver::nlp_constraints_t b;
@@ -451,9 +488,9 @@ int main()
 
         // {
         //     scalar_t lagrangian;
-        //     Solver::nlp_variable_t lag_gradient;
+        //     Solver::nlp_variable_vec lag_gradient;
         //     Solver::nlp_hessian_t lag_hessian;
-        //     Solver::nlp_variable_t cost_gradient;
+        //     Solver::nlp_variable_vec cost_gradient;
         //     Solver::nlp_constraints_t g;
         //     Solver::nlp_jacobian_t jac_g;
 
@@ -484,17 +521,19 @@ int main()
         polympc::time_point stop = polympc::get_time();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-        auto info = solver.info();
-        std::cout << "---- solution status ----\n";
-        std::cout << "iter = " << info.iter << std::endl;
-        std::cout << "qp_solver_iter = " << info.qp_solver_iter << std::endl;
-        // std::cout << "status = " << info.status << std::endl;
 
 
         x = solver.primal_solution();
 
         std::cout << "\n\n\n\n===================== POLYMPC SOLUTION =====================\n";
-        std::cout << "polympc time " << std::setprecision(9)
+
+        auto info = solver.info();
+        std::cout << "\n---- solution status ----\n";
+        std::cout << "iter = " << info.iter << std::endl;
+        std::cout << "qp_solver_iter = " << info.qp_solver_iter << std::endl;
+        // std::cout << "status = " << info.status << std::endl;
+
+        std::cout << "\npolympc time " << std::setprecision(9)
                   << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
         std::cout << "x = \n" << Opt_t<scalar_t>::x()(x).transpose() << std::endl;
         std::cout << "u = \n" << Opt_t<scalar_t>::u()(x).transpose() << std::endl;
@@ -502,4 +541,132 @@ int main()
         std::cout << "uss = \n" << Opt_t<scalar_t>::uss()(x) << std::endl;
         std::cout << "\n\n\n\n";
     }
-}
+
+    {
+        using prob_t = Opt_t<scalar_t>::problem_t;        
+        prob_t::variable_vec x;
+        x = prob_t::variable_vec::Zero();
+        prob_t::obj_hessian_mat H;
+        prob_t::obj_gradient_vec h;
+        prob_t::variable_vec lb;
+        prob_t::variable_vec ub;
+        prob_t::constraints_jacobian_mat A;
+        prob_t::constraints_vec Alb;
+        prob_t::constraints_vec Aub;
+
+        prob_t prob;
+        prob_t::param_t param;
+
+        prob.objective(param, x, h, H);
+        H.diagonal().array() += 1e-6;
+
+        // lb <= c(x) <= ub
+        // lb <= A*(x - x0) + c(x0) <= ub
+        // lb + A*x0 - c(x) <= A*x <= ub + A*x0 - c(x0)
+        prob_t::constraints_vec con;
+        prob.constraints(param, x, con, A);
+
+        prob_t::constraints_vec nl_lb;
+        prob_t::constraints_vec nl_ub;
+        prob.constraints.get_bounds(param, nl_lb, nl_ub);
+        Alb = nl_lb + A*x - con;
+        Aub = nl_ub + A*x - con;
+
+        prob.variables.get_bounds(param, lb, ub);
+
+        qpmad::Solver solver;
+        const std::size_t NUM_EXP = 1;
+        qpmad::Solver::ReturnStatus status;
+        polympc::time_point start = polympc::get_time();
+        for(int i = 0; i < NUM_EXP; ++i)
+        {
+            status = solver.solve(x, H, h, lb, ub, A, Alb, Aub);
+        }
+        polympc::time_point stop = polympc::get_time();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+        if (status != qpmad::Solver::OK)
+        {
+            std::cerr << "Error" << std::endl;
+        }
+
+        std::cout << "\n\n\n\n===================== QPMAD SOLUTION =====================\n";
+
+        std::cout << "\nqpmad time " << std::setprecision(9)
+                  << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
+        std::cout << "x = \n" << Opt_t<scalar_t>::x()(x).transpose() << std::endl;
+        std::cout << "u = \n" << Opt_t<scalar_t>::u()(x).transpose() << std::endl;
+        std::cout << "xss = \n" << Opt_t<scalar_t>::xss()(x) << std::endl;
+        std::cout << "uss = \n" << Opt_t<scalar_t>::uss()(x) << std::endl;
+        std::cout << "\n\n\n\n";
+
+        // std::cout << "qpmad solution = " << x.transpose() << std::endl;
+    }
+
+
+    {
+        using prob_t = Opt_t<scalar_t>::problem_t;        
+        prob_t::variable_vec x0;
+        x0 = prob_t::variable_vec::Zero();
+        prob_t::obj_hessian_mat H;
+        prob_t::obj_gradient_vec h;
+        prob_t::variable_vec lb;
+        prob_t::variable_vec ub;
+        prob_t::constraints_jacobian_mat A;
+        prob_t::constraints_vec Alb;
+        prob_t::constraints_vec Aub;
+
+        prob_t prob;
+        prob_t::param_t param;
+
+        prob.objective(param, x0, h, H);
+        H.diagonal().array() += 1e-6;
+
+        // lb <= c(x) <= ub
+        // lb <= A*(x - x0) + c(x0) <= ub
+        // lb + A*x0 - c(x) <= A*x <= ub + A*x0 - c(x0)
+        prob_t::constraints_vec con;
+        prob.constraints(param, x0, con, A);
+
+        prob_t::constraints_vec nl_lb;
+        prob_t::constraints_vec nl_ub;
+        prob.constraints.get_bounds(param, nl_lb, nl_ub);
+
+        Alb = nl_lb + A*x0 - con;
+        Aub = nl_ub + A*x0 - con;
+
+        prob.variables.get_bounds(param, lb, ub);
+
+        using Solver = boxADMM<prob_t::num_variables, prob_t::constraints_t::num_constraints>;
+        Solver solver;
+        solver.m_x.array() = 0;
+        solver.m_y.array() = 0;
+
+        const std::size_t NUM_EXP = 1;
+        status_t status;
+        polympc::time_point start = polympc::get_time();
+        for(int i = 0; i < NUM_EXP; ++i)
+        {
+            status = solver.solve(H, h, A, Alb, Aub, lb, ub);
+        }
+        polympc::time_point stop = polympc::get_time();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+        // std::cout << "status = " << status << std::endl;
+
+        auto x = solver.m_x;
+
+        std::cout << "\n\n\n\n===================== ADMM SOLUTION =====================\n";
+
+        std::cout << "\nadmm time " << std::setprecision(9)
+                  << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
+        std::cout << "x = \n" << Opt_t<scalar_t>::x()(x).transpose() << std::endl;
+        std::cout << "u = \n" << Opt_t<scalar_t>::u()(x).transpose() << std::endl;
+        std::cout << "xss = \n" << Opt_t<scalar_t>::xss()(x) << std::endl;
+        std::cout << "uss = \n" << Opt_t<scalar_t>::uss()(x) << std::endl;
+        std::cout << "\n\n\n\n";
+
+
+        // std::cout << "qpmad solution = " << x.transpose() << std::endl;
+    }
+    }

@@ -46,9 +46,9 @@ x0 = pp.matrix(np.zeros(n), name="x0", constant=False)
 opt.add(x[1] == dynamics(x0, u[0]))
 opt.add(xss == dynamics(xss, uss))
 
-# opt.add(x[i + 1] == dynamics(x[i], u[i]) for i in pp.Range(1, N - 1))
-for i in range(1, N-1):
-    opt.add(x[i + 1] == dynamics(x[i], u[i]))
+opt.add(x[i + 1] == dynamics(x[i], u[i]) for i in pp.Range(1, N - 1))
+# for i in range(1, N-1):
+#     opt.add(x[i + 1] == dynamics(x[i], u[i]))
 
 # C = pp.matrix([1, 1]).T
 # for i in range(1, N - 1):

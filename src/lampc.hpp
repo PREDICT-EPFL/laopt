@@ -298,23 +298,31 @@ private:
    Variables
  *************************************************************/
 
-struct ZeroVariable_ // Fake type to indicate the start of the variable sequence
-{
-    static const std::size_t offset = 0;
-    static const std::size_t len = 0;
-    static const std::size_t num_vars = 0;
-    static const std::size_t next = 0;
+// struct ZeroVariable_ // Fake type to indicate the start of the variable sequence
+// {
+//     static const std::size_t offset = 0;
+//     static const std::size_t len = 0;
+//     static const std::size_t num_vars = 0;
+//     static const std::size_t next = 0;
 
-    static constexpr std::size_t var_index = 0;
-};
+//     static constexpr std::size_t var_index = 0;
+// };
 
-template<typename BndFunc, 
-         std::size_t _len, std::size_t _num_vars, 
-         typename Prev = ZeroVariable_> // Variable defined before this one (specifies ordering)
-struct var_t
+template<typename param_t, int num_variables, typename scalar_t, 
+         typename BndFunc, 
+         std::size_t _len, std::size_t _num_vars,
+         int offset_>  // Offset into the main variable
+         // typename Prev = ZeroVariable_> // Variable defined before this one (specifies ordering)
+struct var_t_
 {
     static constexpr std::size_t len      = _len;      // Length of a variable of this type
     static constexpr std::size_t num_vars = _num_vars; // Number of variables in this set
+
+    static constexpr std::size_t offset = offset_;
+
+    using variable_t = Eigen::Matrix<scalar_t, num_variables, 1>;
+    using vec_t = Eigen::Matrix<scalar_t, len, 1>;
+    using mat_t = Eigen::Matrix<scalar_t, len, num_vars>;
 
     // Location of this variable in the NLP optimizer
     // var = [x1; x2; x3; ...]
@@ -323,9 +331,9 @@ struct var_t
     // var{0} = x1, var{1} = x2, var{2} = x3 ...
     // var{index} = this variable
 
-    static constexpr std::size_t offset    = Prev::next;               // Offset into the main variable
-    static constexpr std::size_t next      = offset + len * num_vars;  // Offset where next variable should go
-    static constexpr std::size_t var_index = Prev::var_index + Prev::num_vars; // Variable index
+    // static constexpr std::size_t offset    = Prev::next;               // Offset into the main variable
+    // static constexpr std::size_t next      = offset + len * num_vars;  // Offset where next variable should go
+    // static constexpr std::size_t var_index = Prev::var_index + Prev::num_vars; // Variable index
 
     // Get indexed offset
     static constexpr std::size_t o(int ind = 0) 
@@ -337,8 +345,14 @@ struct var_t
     // Static programatic interface
 
     // Return ind variable segment of var
-    template<typename Var>
-    static EIGEN_STRONG_INLINE constexpr auto get(Var& var, int ind = 0)
+    static EIGEN_STRONG_INLINE constexpr Eigen::Ref<vec_t> get(
+        Eigen::Ref<variable_t> var, const int ind = 0)
+    {
+        return var.template segment<len>(offset + ind * len);
+    }
+
+    static EIGEN_STRONG_INLINE constexpr const Eigen::Ref<const vec_t> get(
+        const Eigen::Ref<const variable_t> var, const int ind = 0)
     {
         return var.template segment<len>(offset + ind * len);
     }
@@ -346,31 +360,30 @@ struct var_t
     // User convenience interface
 
     // Return ind variable segment of var
-    template<typename Var>
-    EIGEN_STRONG_INLINE constexpr auto operator()(Var& var, int ind) const
+    EIGEN_STRONG_INLINE Eigen::Ref<Eigen::Matrix<scalar_t, len, 1>> 
+        operator()(Eigen::Ref<variable_t> var, int ind) const
     {
         return var.template segment<len>(offset + ind * len);
     }
 
-    template<typename Var>
-    EIGEN_STRONG_INLINE constexpr auto operator()(Var& var) const
+    EIGEN_STRONG_INLINE Eigen::Ref<Eigen::Matrix<scalar_t, len, num_vars>> 
+        operator()(Eigen::Ref<variable_t> var) const
     {
-        return _map_matrix<Eigen::Matrix<typename Var::Scalar, len, num_vars>>(var.template segment<len * num_vars>(offset).data());
+        return _map_matrix<Eigen::Matrix<scalar_t, len, num_vars>>(var.template segment<len * num_vars>(offset).data());
     }
-
 
     /*
         Get the upper and lower bounds for this variable
      */
-    template<typename param_t, typename Var>
-    static EIGEN_STRONG_INLINE void get_bounds(const param_t& param, Var& lb, Var& ub) noexcept
+    static EIGEN_STRONG_INLINE void get_bounds(const param_t& param, 
+        Eigen::Ref<variable_t> lb, Eigen::Ref<variable_t> ub) noexcept
     {
         for(int i=0; i<num_vars; i++)
             BndFunc::eval(param, i, get(lb, i), get(ub, i));
     }
 };
 
-// Represents an iterator over a var_t
+// Represents an iterator over a variable_t
 template<typename variable_set, int start=0, int step=0>
 struct iterator
 {
@@ -389,33 +402,121 @@ struct iterator
     }
 };
 
-// // Sum the inputs to get total number of inputs
-// template<typename... Var>
-// constexpr std::size_t sum_variable_size() {
-//     int sum = 0;
-//     for(std::size_t num : { Var::len * Var::num_vars... })
-//         sum += num;
-//     return sum;
-// }
 
 // List of variables
-template<typename scalar_t, typename... Vars>
-struct VariableList_t
+template<typename scalar_t, typename param_t, std::size_t num_variables_, typename var_tuple, typename Index>
+struct VariableList_t;
+
+template<typename scalar_t, typename param_t, std::size_t num_variables_, typename var_tuple, std::size_t... ind>
+struct VariableList_t<scalar_t, param_t, num_variables_, var_tuple, std::integer_sequence<std::size_t, ind...>>
 {
-    static constexpr std::size_t num_variables = sum_template<Vars::len * Vars::num_vars...>();
+    // static constexpr std::size_t num_variables = sum_template<Vars::len * Vars::num_vars...>();
+    static constexpr std::size_t num_variables = num_variables_;
     using variable_t = Eigen::Matrix<scalar_t, num_variables, 1>;
 
-    template<typename param_t>
+    template<int i>
+    static constexpr auto get()
+    {
+        return var_tuple::template get<i>();
+    }
+
     static EIGEN_STRONG_INLINE void get_bounds(const param_t& param, 
                 Eigen::Ref<variable_t> lb, Eigen::Ref<variable_t> ub) noexcept
     {
         (void)std::initializer_list<int>{ 
             (
-                Vars::get_bounds(param, lb, ub),
+                std::tuple_element<ind, var_tuple>::type::get_bounds(param, lb, ub),
                 0
             )...
         };
     }
+
+    template<int i>
+    using get_by_index = typename std::remove_reference<decltype(std::get<i>(var_tuple()))>::type;
+    // std::tuple_element<i, var_tuple>;
+};
+
+
+
+// User-interface type used to construct variable list
+template<typename BndFunc_, std::size_t _len, std::size_t _num_vars>
+struct var_t
+{
+    using BndFunc = BndFunc_;
+    static constexpr std::size_t len = _len;
+    static constexpr std::size_t num_vars = _num_vars;
+};
+
+
+// Returns a VariableList_t type
+template<typename scalar_t, typename param_t,
+         typename... Vars> // List of var_t
+struct make_variables
+{
+
+    static constexpr std::size_t num_variables = sum_template<Vars::len * Vars::num_vars...>();
+    using variable_t = Eigen::Matrix<scalar_t, num_variables, 1>;
+
+    static constexpr std::array<std::size_t, sizeof...(Vars)+1> cumulative_sum(std::size_t seed = 0) 
+    { 
+        return{ {0, seed += Vars::len * Vars::num_vars ... } };
+    }
+
+    static constexpr std::array<std::size_t, sizeof...(Vars) + 1> a = cumulative_sum();
+
+    // Convert array into a tuple
+    template<typename Array, std::size_t... I>
+    static constexpr auto a2t_impl(const Array& a, std::index_sequence<I...>)
+    {
+        return std::make_tuple(a[I]...);
+    }
+
+    template<typename T, std::size_t N, typename Indices = std::make_index_sequence<N - 1>>
+    static constexpr auto a2t(const std::array<T, N>& a)
+    {
+        return a2t_impl(a, Indices{});
+    }
+
+    static constexpr auto offsets = a2t(cumulative_sum());
+
+    // Helper to convert var_t to variable_t
+    template<std::size_t... ind>
+    static constexpr auto make_variable_tuple(std::index_sequence<ind...>)
+    {
+        return std::make_tuple(
+                    var_t_<param_t, num_variables, scalar_t, 
+                           typename Vars::BndFunc,
+                           Vars::len,
+                           Vars::num_vars,
+                           std::get<ind>(offsets)>()
+                ...);
+    }
+
+    using index = std::make_integer_sequence<std::size_t, sizeof...(Vars)>;
+    static constexpr auto variable_tup = make_variable_tuple(index{});
+
+    template<std::size_t... ind>
+    static void show_offsets_impl(std::index_sequence<ind...>)
+    {
+        std::cout << "num_variables = " << num_variables << std::endl;
+        (void)std::initializer_list<int>{ 
+            (
+                std::cout << "offset = " << std::get<ind>(offsets),
+                std::cout << " len = " << Vars::len,
+                std::cout << " num_vars = " << Vars::num_vars,
+                std::cout << std::endl,
+                0
+            )...
+        };
+    }
+
+    static void show_offsets()
+    {
+        show_offsets_impl(index{});
+    }
+
+
+    using type = VariableList_t<scalar_t, param_t, num_variables, decltype(variable_tup), index>;
 };
 
 
@@ -1527,6 +1628,9 @@ public:
 
     static constexpr std::size_t num_inequalities = inequalities_t::num_constraints;
     static constexpr std::size_t nnz_inequalities_jacobian = inequalities_t::nnz_jacobian;
+
+    static constexpr std::size_t num_constraints = constraints_t::num_constraints;
+    static constexpr std::size_t nnz_constraints_jacobian = constraints_t::nnz_jacobian;
 
     // NLP variable types
     using variable_vec              = Matrix<scalar_t, num_variables, 1>;
