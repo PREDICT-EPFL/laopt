@@ -24,13 +24,13 @@ struct MyOpt
 
     struct param_t
     {
-        Eigen::Matrix<scalar_t, 2, 1> x0 = {-1, -2};
-        const Eigen::Matrix<scalar_t, 2, 2> A = {{1.0, 0.0}, {0.1, 1.0}};
-        Eigen::Matrix<scalar_t, 2, 1> B = {0.1, 0.005};
-        Eigen::Matrix<scalar_t, 1, 1> ref = {3};
+        Eigen::Matrix<scalar_t, 2, 1> x0 {-1, -2};
+        const Eigen::Matrix<scalar_t, 2, 2> A {{1.0, 0.0}, {0.1, 1.0}};
+        Eigen::Matrix<scalar_t, 2, 1> B {0.1, 0.005};
+        Eigen::Matrix<scalar_t, 1, 1> ref {3};
 
-        Eigen::Matrix<scalar_t, 2, 1> q = {1, 1e3}; // Stage-cost weights
-        Eigen::Matrix<scalar_t, 1, 1> r = {1e-3}; // Stage-cost weights
+        Eigen::Matrix<scalar_t, 2, 1> q {1, 1e3}; // Stage-cost weights
+        Eigen::Matrix<scalar_t, 1, 1> r {1e-3}; // Stage-cost weights
     };
 
 
@@ -50,7 +50,6 @@ struct MyOpt
         dynamics::template impl<T>(p, tmp, x, u);
         out = tmp - xplus;
     }
-
 
     FUNCTION(steady_state, (out, 2), (xss, 2), (uss, 1))
     {
@@ -215,10 +214,10 @@ struct Bob
         
         param_t p;
 
-        Eigen::Matrix<scalar_t, 2, 1> x = {1, 2};
-        Eigen::Matrix<scalar_t, 1, 1> u = {3};
-        Eigen::Matrix<scalar_t, 2, 1> xss = {2, 3};
-        Eigen::Matrix<scalar_t, 1, 1> uss = {4};
+        Eigen::Matrix<scalar_t, 2, 1> x {1, 2};
+        Eigen::Matrix<scalar_t, 1, 1> u {3};
+        Eigen::Matrix<scalar_t, 2, 1> xss {2, 3};
+        Eigen::Matrix<scalar_t, 1, 1> uss {4};
 
         std::cout << "stage_cost::eval(p, x, u, xss, uss) = " << opt::stage_cost::eval(p, x, u, xss, uss).transpose() << std::endl;
         std::cout << "\n\n";
@@ -625,8 +624,8 @@ int main()
 {
     Bob bob;
     
-    // bob.test_function_computation();
-    // bob.test_problem_evaluation();
+    bob.test_function_computation();
+    bob.test_problem_evaluation();
 
     bob.solve_ipopt();
     bob.solve_polympc();
