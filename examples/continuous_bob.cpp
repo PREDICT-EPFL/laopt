@@ -4,6 +4,9 @@
 #include "ipopt_interface.hpp"
 #include "polympc_interface.hpp"
 
+#include "polynomials/ebyshev.hpp"
+#include "polynomials/splines.hpp"
+
 #include <iomanip>
 #include <Eigen/Eigenvalues> 
 #include <type_traits>
@@ -11,74 +14,109 @@
 #include <qpmad/solver.h>
 #include "solvers/box_ADMM.hpp"
 
-/***********************************************************
-    Code generated from Python or from user
- ***********************************************************/
-
 using namespace lampc;
+
+
+#define test_POLY_ORDER 7
+#define test_NUM_SEG    1
+#define test_NUM_EXP    1
+
+/** benchmark the new collocation class */
+using Polynomial = polympc::Chebyshev<test_POLY_ORDER, polympc::GAUSS_LOBATTO, double>;
+using Approximation = polympc::Spline<Polynomial, test_NUM_SEG>;
+
+
 
 template<typename scalar_t>
 struct MyOpt
 {
+    enum
+    {
+        /** Collocation dimensions */
+        NUM_NODES    = Approximation::NUM_NODES,
+        POLY_ORDER   = Approximation::POLY_ORDER,
+        NUM_SEGMENTS = Approximation::NUM_SEGMENTS,
+
+        NX = 3,
+        NU = 2
+    };
+
+    template<typename T>
+    using state_t = Eigen::Matrix<T, NX, 1>;
+    template<typename T>
+    using control_t = Eigen::Matrix<T, NU, 1>;
+
     static constexpr auto INF = lampc::INF<scalar_t>;
+    using time_t   = typename Eigen::Matrix<scalar_t, NUM_NODES, 1>;
 
     struct param_t
     {
-        Eigen::Matrix<scalar_t, 2, 1> x0 = {-1, -2};
-        const Eigen::Matrix<scalar_t, 2, 2> A = {{1.0, 0.0}, {0.1, 1.0}};
-        Eigen::Matrix<scalar_t, 2, 1> B = {0.1, 0.005};
-        Eigen::Matrix<scalar_t, 1, 1> ref = {3};
+        Eigen::DiagonalMatrix<scalar_t, 3> Q{1,1,1};
+        Eigen::DiagonalMatrix<scalar_t, 2> R{1,1};
+        Eigen::DiagonalMatrix<scalar_t, 3> QN{1,1,1};
 
-        Eigen::Matrix<scalar_t, 2, 1> q = {1, 1e3}; // Stage-cost weights
-        Eigen::Matrix<scalar_t, 1, 1> r = {1e-3}; // Stage-cost weights
+        scalar_t d = 2.0;
+
+        /** compute collocation parameters */
+        const typename Approximation::diff_mat_t  m_D     = Approximation::compute_diff_matrix();
+        const typename Approximation::nodes_t     m_nodes = Approximation::compute_nodes();
+        const typename Approximation::q_weights_t m_quad_weights = Approximation::compute_int_weights();
+        time_t time_nodes = time_t::Zero();
+
+        Eigen::Matrix<scalar_t, NX, 1> x0{1, 2, 3};
+
+        scalar_t t_start{0};
+        scalar_t t_stop{5};
     };
 
-
-    FUNCTION(initial_state, (out, 2), (x0, 2))
+    FUNCTION(dynamics, (xdot, NX), (x, NX), (u, NU), (pp, 2))
     {
-        out = x0 - p.x0.template cast<T>();
+        xdot(0) = u(0) * cos(x(2)) * cos(u(1)) + pp(0);
+        xdot(1) = u(0) * sin(x(2)) * cos(u(1)) + pp(1);
+        xdot(2) = u(0) * sin(u(1)) / T(p.d);
     }
 
-    FUNCTION(dynamics, (xplus, 2), (x, 2), (u, 1))
+    FUNCTION(colloc, (out, NX * NUM_NODES), (x, NX * NUM_NODES), (u, NU * NUM_NODES), (pp, 2))
     {
-        xplus = p.A.template cast<T>() * x + p.B.template cast<T>() * u;
+        const T t_scale = T((p.t_stop - p.t_start) / (2 * NUM_SEGMENTS));
+
+        Eigen::Map<const Eigen::Matrix<T, NX, NUM_NODES>> X(x.data());
+        Eigen::Map<const Eigen::Matrix<T, NU, NUM_NODES>> U(u.data());
+
+        Eigen::Map<Eigen::Matrix<T, NUM_NODES, NX>> constraint(out.data());
+        constraint = p.m_D.template cast<T>() * (X.transpose());
+
+        Eigen::Matrix<T, NX, 1> tmp; tmp.setZero(); // Temporary to store the evaluation of the dynamics
+
+        for(int k = 0; k < NUM_NODES; k++)
+        {
+            dynamics::template impl<T>(p, tmp, X.col(k), U.col(k), pp);
+            constraint.row(k) -= (t_scale * tmp).transpose();
+        }
+
+        // std::cout << "constraint = " << constraint << std::endl;
     }
 
-    FUNCTION(dynamics_eq, (out, 2), (xplus, 2), (x, 2), (u, 1))
+    FUNCTION(initial_state, (out, NX), (x, NX * NUM_NODES))
     {
-        Matrix<T, 2, 1> tmp;
-        dynamics::template impl<T>(p, tmp, x, u);
-        out = tmp - xplus;
+        Eigen::Map<const Eigen::Matrix<T, NX, NUM_NODES>> X(x.data());
+        out = X.template rightCols<1>() - p.x0.template cast<T>();
     }
 
+    // FUNCTION(mayer_term_impl, (mayer, 1), (x, 3), (u, 2))
+    // {
+    //     Eigen::Matrix<T,3,3> Qm = Q.toDenseMatrix().template cast<T>();
+    //     mayer << x.dot(Qm * x);
+    // }
 
-    FUNCTION(steady_state, (out, 2), (xss, 2), (uss, 1))
-    {
-        Matrix<T, 2, 1> xplus;
-        dynamics::template impl<T>(p, xplus, xss, uss);
-        out = xss - xplus;
-    }
-
-    FUNCTION(stage_cost, (val, 1), (x, 2), (u, 1), (xss, 2), (uss, 1))
-    {
-        Eigen::Matrix<T, 2, 1> x_err = x - xss;
-        Eigen::Matrix<T, 1, 1> u_err = u - uss;
-
-        val(0) = x_err.cwiseProduct(p.q.template cast<T>()).dot(x_err) + u_err.cwiseProduct(p.r.template cast<T>()).dot(u_err);
-    }
-
-    FUNCTION(terminal_cost, (val, 1), (xss, 2), (uss, 1))
-    {
-        Eigen::Matrix<T, 2, 1> x_err;
-        x_err(0) = xss(0);
-        x_err(1) = xss(1) - (p.ref.template cast<T>())(0);
-
-        val(0) = 1e3*(x_err.cwiseProduct(p.q.template cast<T>()).dot(x_err) + uss.cwiseProduct(p.r.template cast<T>()).dot(uss));
-    }
-
-    FUNCTION(u_constraint, (val, 1), (u, 1))
+    FUNCTION(u_constraint, (val, NU * NUM_NODES), (u, NU * NUM_NODES))
     {
         val = u;
+    }
+
+    FUNCTION(stage_cost, (val, 1), (x, NX * NUM_NODES), (u, NU * NUM_NODES), (pp, 2))
+    {
+        val(0) = x.dot(x) + u.dot(u) + pp.dot(pp);
     }
 
     // CONSTANT_FUNCTION(...)
@@ -108,7 +146,7 @@ struct MyOpt
     struct bnd_u
     {
         static EIGEN_STRONG_INLINE void eval(const param_t& p, const int iteration, 
-                                             Vec<scalar_t, 1> lb, Vec<scalar_t, 1> ub) noexcept
+                                             Vec<scalar_t, NU * NUM_NODES> lb, Vec<scalar_t, NU * NUM_NODES> ub) noexcept
         {
             lb.array() = -1;
             ub.array() = 5*iteration;
@@ -118,30 +156,10 @@ struct MyOpt
     /*
         Variable bounds
      */
-    struct xss_bnd
-    {
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, const int iteration, 
-                                             Vec<scalar_t, 2> lb, Vec<scalar_t, 2> ub) noexcept
-        {
-            lb.array() = -INF;
-            ub.array() = INF;
-        }
-    };
-
-    struct uss_bnd
-    {
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, const int iteration, 
-                                             Vec<scalar_t, 1> lb, Vec<scalar_t, 1> ub) noexcept
-        {
-            lb.array() = -INF;
-            ub.array() = INF;
-        }
-    };
-
     struct x_bnd
     {
         static EIGEN_STRONG_INLINE void eval(const param_t& p, const int iteration, 
-                                             Vec<scalar_t, 2> lb, Vec<scalar_t, 2> ub) noexcept
+                                             Vec<scalar_t, NX * NUM_NODES> lb, Vec<scalar_t, NX * NUM_NODES> ub) noexcept
         {
             lb.array() = -5;
             ub.array() = 5;
@@ -151,44 +169,46 @@ struct MyOpt
     struct u_bnd
     {
         static EIGEN_STRONG_INLINE void eval(const param_t& p, const int iteration, 
-                                             Vec<scalar_t, 1> lb, Vec<scalar_t, 1> ub) noexcept
+                                             Vec<scalar_t, NU * NUM_NODES> lb, Vec<scalar_t, NU * NUM_NODES> ub) noexcept
         {
             lb.array() = -20;
             ub.array() = 20;
         }
     };
 
-    static constexpr int N = 5;
+    struct pp_bnd
+    {
+        static EIGEN_STRONG_INLINE void eval(const param_t& p, const int iteration, 
+                                             Vec<scalar_t, 2> lb, Vec<scalar_t, 2> ub) noexcept
+        {
+            lb.array() = -2;
+            ub.array() = 2;
+        }
+    };
+
     using variables = Make_Variables(scalar_t, param_t,
-        (0, xss, (var_t<xss_bnd, 2, 1>)), 
-        (1, uss, (var_t<uss_bnd, 1, 1>)), 
-        (2,   x, (var_t<x_bnd, 2, N+1>)),
-        (3,   u, (var_t<u_bnd, 1, N>)));
+        (0, x, (var_t<x_bnd, NX * NUM_NODES, 1>)),
+        (1, u, (var_t<u_bnd, NU * NUM_NODES, 1>)),
+        (2, pp, (var_t<pp_bnd, 2, 1>)));
 
 
     using equalities = std::tuple
     <
         // x(0) == x0
-        con_t<bnd_zero<2>, initial_state, 1, iterator<x,0,0>>,
+        con_t<bnd_zero<NX>, initial_state, 1, iterator<x,0,0>>,
 
-        // // dynamics(u(i), x(i)) == x(i+1) for i in range(0, N-1)
-        con_t<bnd_zero<2>, dynamics_eq, N, iterator<x,1,1>, iterator<x,0,1>, iterator<u,0,1>>, 
-
-        // dynamics(xss, uss) == xss
-        con_t<bnd_zero<2>, steady_state, 1, iterator<xss>, iterator<uss>>
+        // dot x = f(x, u, p)
+        con_t<bnd_zero<NX * NUM_NODES>, colloc, 1, iterator<x,0,0>, iterator<u,0,0>, iterator<pp,0,0>>
     >;
 
     using inequalities = std::tuple<
-        con_t<uss_bnd, u_constraint, 1, iterator<uss>>
+        con_t<u_bnd, u_constraint, 1, iterator<u,0,0>>
     >;
 
     using objective = std::tuple
     <
-        // // x(i)'*Q*x(i) + u(i)'*R*u(i) for i in range(0, N-1)
-        con_t<bnd_zero<1>, stage_cost, N-2, iterator<x,0,1>, iterator<u,0,1>, iterator<xss,0,0>, iterator<uss,0,0>>,
-
-        // (xss(0); xss(1)-ref)'*Q*(xss(0); xss(1)-ref) + uss*R*uss
-        con_t<bnd_zero<1>, terminal_cost, 1, iterator<xss,0,0>, iterator<uss,0,0>>
+        // x(i)'*Q*x(i) + u(i)'*R*u(i) for i in range(0, N-1)
+        con_t<bnd_zero<1>, stage_cost, 1, iterator<x,0,0>, iterator<u,0,0>, iterator<pp,0,0>>
     >;
 
     // Create our NLP
@@ -215,29 +235,37 @@ struct Bob
         
         param_t p;
 
-        Eigen::Matrix<scalar_t, 2, 1> x = {1, 2};
-        Eigen::Matrix<scalar_t, 1, 1> u = {3};
-        Eigen::Matrix<scalar_t, 2, 1> xss = {2, 3};
-        Eigen::Matrix<scalar_t, 1, 1> uss = {4};
+        Eigen::Matrix<scalar_t, opt::NX * opt::NUM_NODES, 1> x;
+        x.array() = 1.0;
+        Eigen::Matrix<scalar_t, opt::NU * opt::NUM_NODES, 1> u;
+        u.array() = 2.0;
+        Eigen::Matrix<scalar_t, 2, 1> pp = {6, 7};
 
-        std::cout << "stage_cost::eval(p, x, u, xss, uss) = " << opt::stage_cost::eval(p, x, u, xss, uss).transpose() << std::endl;
+        std::cout << "stage_cost::eval(p, x, u, pp) = " << opt::stage_cost::eval(p, x, u, pp).transpose() << std::endl;
         std::cout << "\n\n";
 
+        auto tmp = opt::colloc::eval(p, x, u, pp);
+        Eigen::Map<const Eigen::Matrix<scalar_t, opt::NX, opt::NUM_NODES>> X_con(tmp.data());
+        std::cout << "X_con = \n" << X_con << std::endl;
+
+        auto J_ret = opt::colloc::jac(p, x, u, pp);
+        std::cout << "J_ret.jacobian = \n" << J_ret.jacobian << std::endl;
+
         std::cout << "jac = stage_cost::jac(p, x, u)" << std::endl;
-        auto jac = opt::stage_cost::jac(p, x, u, xss, uss);
+        auto jac = opt::stage_cost::jac(p, x, u, pp);
         std::cout << "jac.val = " << jac.val.transpose() << std::endl;
         std::cout << "jac.jacobian = \n" << jac.jacobian << std::endl;
         std::cout << "\n\n";
 
-        std::cout << "hessian = stage_cost::hessian(p, x, u) = " << opt::stage_cost::eval(p, x, u, xss, uss).transpose() << std::endl;
-        auto hessian = opt::stage_cost::hessian(p, x, u, xss, uss);
+        std::cout << "hessian = stage_cost::hessian(p, x, u)\n";
+        auto hessian = opt::stage_cost::hessian(p, x, u, pp);
         std::cout << "hessian.val = " << hessian.val.transpose() << std::endl;
         std::cout << "hessian.jacobian = \n" << hessian.jacobian << std::endl;
         for(int i=0; i<opt::stage_cost::num_outputs; i++)
         {
             std::cout << "hessian.hessian(" << i << ")\n";
             std::cout << hessian.hessian[i] << std::endl;
-        }        
+        }
     }
 
 
@@ -300,11 +328,11 @@ struct Bob
 
         std::cout << "==> Computing lower and upper bounds <==\n";
         prob.constraints.get_bounds(p, lb, ub);
-        std::cout << "lb = " << lb.transpose() << " ub = " << ub.transpose() << std::endl;
+        std::cout << "lb = " << lb.transpose() << "\nub = " << ub.transpose() << std::endl;
 
         std::cout << "==> Computing variable bounds <==\n";
         prob.variables.get_bounds(p, x_lb, x_ub);
-        std::cout << "x_lb = " << x_lb.transpose() << " x_ub = " << x_ub.transpose() << std::endl;
+        std::cout << "x_lb = " << x_lb.transpose() << "\nx_ub = " << x_ub.transpose() << std::endl;
 
         std::cout << "\n\n";
         std::cout << "====================================\n";
@@ -394,10 +422,13 @@ struct Bob
         std::cout << "IPOPT time " << std::setprecision(9)
                   << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
         myNLP::sol_t &sol = mynlp->sol;
-        std::cout << "x = \n" << opt::x()(sol.primal).transpose() << std::endl;
-        std::cout << "u = \n" << opt::u()(sol.primal).transpose() << std::endl;
-        std::cout << "xss = \n" << opt::xss()(sol.primal) << std::endl;
-        std::cout << "uss = \n" << opt::uss()(sol.primal) << std::endl;
+
+        Eigen::Map<const Eigen::Matrix<scalar_t, opt::NX, opt::NUM_NODES>> X(opt::x()(sol.primal).data());
+        Eigen::Map<const Eigen::Matrix<scalar_t, opt::NU, opt::NUM_NODES>> U(opt::u()(sol.primal).data());
+
+        std::cout << "X = \n" << X << std::endl;
+        std::cout << "U = \n" << U << std::endl;
+        std::cout << "pp = " << opt::pp()(sol.primal) << std::endl;
         std::cout << "\n\n\n\n";
     }
 
@@ -482,141 +513,143 @@ struct Bob
 
         std::cout << "\npolympc time " << std::setprecision(9)
                   << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
-        std::cout << "x = \n" << opt::x()(x).transpose() << std::endl;
-        std::cout << "u = \n" << opt::u()(x).transpose() << std::endl;
-        std::cout << "xss = \n" << opt::xss()(x) << std::endl;
-        std::cout << "uss = \n" << opt::uss()(x) << std::endl;
+        Eigen::Map<const Eigen::Matrix<scalar_t, opt::NX, opt::NUM_NODES>> X(opt::x()(x).data());
+        Eigen::Map<const Eigen::Matrix<scalar_t, opt::NU, opt::NUM_NODES>> U(opt::u()(x).data());
+
+        std::cout << "X = \n" << X << std::endl;
+        std::cout << "U = \n" << U << std::endl;
+        std::cout << "pp = " << opt::pp()(x) << std::endl;
         std::cout << "\n\n\n\n";
     }
 
-    void solve_qpmad()
-    {
-        using prob_t = opt::problem_t;
-        prob_t::variable_vec x;
-        x = prob_t::variable_vec::Zero();
-        prob_t::obj_hessian_mat H;
-        prob_t::obj_gradient_vec h;
-        prob_t::variable_vec lb;
-        prob_t::variable_vec ub;
-        prob_t::constraints_jacobian_mat A;
-        prob_t::constraints_vec Alb;
-        prob_t::constraints_vec Aub;
+    // void solve_qpmad()
+    // {
+    //     using prob_t = opt::problem_t;
+    //     prob_t::variable_vec x;
+    //     x = prob_t::variable_vec::Zero();
+    //     prob_t::obj_hessian_mat H;
+    //     prob_t::obj_gradient_vec h;
+    //     prob_t::variable_vec lb;
+    //     prob_t::variable_vec ub;
+    //     prob_t::constraints_jacobian_mat A;
+    //     prob_t::constraints_vec Alb;
+    //     prob_t::constraints_vec Aub;
 
-        prob_t prob;
-        prob_t::param_t param;
+    //     prob_t prob;
+    //     prob_t::param_t param;
 
-        prob.objective(param, x, h, H);
-        H.diagonal().array() += 1e-6;
+    //     prob.objective(param, x, h, H);
+    //     H.diagonal().array() += 1e-6;
 
-        // lb <= c(x) <= ub
-        // lb <= A*(x - x0) + c(x0) <= ub
-        // lb + A*x0 - c(x) <= A*x <= ub + A*x0 - c(x0)
-        prob_t::constraints_vec con;
-        prob.constraints(param, x, con, A);
+    //     // lb <= c(x) <= ub
+    //     // lb <= A*(x - x0) + c(x0) <= ub
+    //     // lb + A*x0 - c(x) <= A*x <= ub + A*x0 - c(x0)
+    //     prob_t::constraints_vec con;
+    //     prob.constraints(param, x, con, A);
 
-        prob_t::constraints_vec nl_lb;
-        prob_t::constraints_vec nl_ub;
-        prob.constraints.get_bounds(param, nl_lb, nl_ub);
-        Alb = nl_lb + A*x - con;
-        Aub = nl_ub + A*x - con;
+    //     prob_t::constraints_vec nl_lb;
+    //     prob_t::constraints_vec nl_ub;
+    //     prob.constraints.get_bounds(param, nl_lb, nl_ub);
+    //     Alb = nl_lb + A*x - con;
+    //     Aub = nl_ub + A*x - con;
 
-        prob.variables.get_bounds(param, lb, ub);
+    //     prob.variables.get_bounds(param, lb, ub);
 
-        qpmad::Solver solver;
-        const std::size_t NUM_EXP = 1;
-        qpmad::Solver::ReturnStatus status;
-        polympc::time_point start = polympc::get_time();
-        for(int i = 0; i < NUM_EXP; ++i)
-        {
-            status = solver.solve(x, H, h, lb, ub, A, Alb, Aub);
-        }
-        polympc::time_point stop = polympc::get_time();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    //     qpmad::Solver solver;
+    //     const std::size_t NUM_EXP = 1;
+    //     qpmad::Solver::ReturnStatus status;
+    //     polympc::time_point start = polympc::get_time();
+    //     for(int i = 0; i < NUM_EXP; ++i)
+    //     {
+    //         status = solver.solve(x, H, h, lb, ub, A, Alb, Aub);
+    //     }
+    //     polympc::time_point stop = polympc::get_time();
+    //     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-        if (status != qpmad::Solver::OK)
-        {
-            std::cerr << "Error" << std::endl;
-        }
+    //     if (status != qpmad::Solver::OK)
+    //     {
+    //         std::cerr << "Error" << std::endl;
+    //     }
 
-        std::cout << "\n\n\n\n===================== QPMAD SOLUTION =====================\n";
+    //     std::cout << "\n\n\n\n===================== QPMAD SOLUTION =====================\n";
 
-        std::cout << "\nqpmad time " << std::setprecision(9)
-                  << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
-        std::cout << "x = \n" << opt::x()(x).transpose() << std::endl;
-        std::cout << "u = \n" << opt::u()(x).transpose() << std::endl;
-        std::cout << "xss = \n" << opt::xss()(x) << std::endl;
-        std::cout << "uss = \n" << opt::uss()(x) << std::endl;
-        std::cout << "\n\n\n\n";
+    //     std::cout << "\nqpmad time " << std::setprecision(9)
+    //               << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
+    //     std::cout << "x = \n" << opt::x()(x).transpose() << std::endl;
+    //     std::cout << "u = \n" << opt::u()(x).transpose() << std::endl;
+    //     std::cout << "xss = \n" << opt::xss()(x) << std::endl;
+    //     std::cout << "uss = \n" << opt::uss()(x) << std::endl;
+    //     std::cout << "\n\n\n\n";
 
-        // std::cout << "qpmad solution = " << x.transpose() << std::endl;
-    }
+    //     // std::cout << "qpmad solution = " << x.transpose() << std::endl;
+    // }
 
-    void solve_admm()
-    {
-        using prob_t = opt::problem_t;
-        prob_t::variable_vec x0;
-        x0 = prob_t::variable_vec::Zero();
-        prob_t::obj_hessian_mat H;
-        prob_t::obj_gradient_vec h;
-        prob_t::variable_vec lb;
-        prob_t::variable_vec ub;
-        prob_t::constraints_jacobian_mat A;
-        prob_t::constraints_vec Alb;
-        prob_t::constraints_vec Aub;
+    // void solve_admm()
+    // {
+    //     using prob_t = opt::problem_t;
+    //     prob_t::variable_vec x0;
+    //     x0 = prob_t::variable_vec::Zero();
+    //     prob_t::obj_hessian_mat H;
+    //     prob_t::obj_gradient_vec h;
+    //     prob_t::variable_vec lb;
+    //     prob_t::variable_vec ub;
+    //     prob_t::constraints_jacobian_mat A;
+    //     prob_t::constraints_vec Alb;
+    //     prob_t::constraints_vec Aub;
 
-        prob_t prob;
-        prob_t::param_t param;
+    //     prob_t prob;
+    //     prob_t::param_t param;
 
-        prob.objective(param, x0, h, H);
-        H.diagonal().array() += 1e-6;
+    //     prob.objective(param, x0, h, H);
+    //     H.diagonal().array() += 1e-6;
 
-        // lb <= c(x) <= ub
-        // lb <= A*(x - x0) + c(x0) <= ub
-        // lb + A*x0 - c(x) <= A*x <= ub + A*x0 - c(x0)
-        prob_t::constraints_vec con;
-        prob.constraints(param, x0, con, A);
+    //     // lb <= c(x) <= ub
+    //     // lb <= A*(x - x0) + c(x0) <= ub
+    //     // lb + A*x0 - c(x) <= A*x <= ub + A*x0 - c(x0)
+    //     prob_t::constraints_vec con;
+    //     prob.constraints(param, x0, con, A);
 
-        prob_t::constraints_vec nl_lb;
-        prob_t::constraints_vec nl_ub;
-        prob.constraints.get_bounds(param, nl_lb, nl_ub);
+    //     prob_t::constraints_vec nl_lb;
+    //     prob_t::constraints_vec nl_ub;
+    //     prob.constraints.get_bounds(param, nl_lb, nl_ub);
 
-        Alb = nl_lb + A*x0 - con;
-        Aub = nl_ub + A*x0 - con;
+    //     Alb = nl_lb + A*x0 - con;
+    //     Aub = nl_ub + A*x0 - con;
 
-        prob.variables.get_bounds(param, lb, ub);
+    //     prob.variables.get_bounds(param, lb, ub);
 
-        using Solver = boxADMM<prob_t::num_variables, prob_t::constraints_t::num_constraints>;
-        Solver solver;
-        solver.m_x.array() = 0;
-        solver.m_y.array() = 0;
+    //     using Solver = boxADMM<prob_t::num_variables, prob_t::constraints_t::num_constraints>;
+    //     Solver solver;
+    //     solver.m_x.array() = 0;
+    //     solver.m_y.array() = 0;
 
-        const std::size_t NUM_EXP = 1;
-        status_t status;
-        polympc::time_point start = polympc::get_time();
-        for(int i = 0; i < NUM_EXP; ++i)
-        {
-            status = solver.solve(H, h, A, Alb, Aub, lb, ub);
-        }
-        polympc::time_point stop = polympc::get_time();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    //     const std::size_t NUM_EXP = 1;
+    //     status_t status;
+    //     polympc::time_point start = polympc::get_time();
+    //     for(int i = 0; i < NUM_EXP; ++i)
+    //     {
+    //         status = solver.solve(H, h, A, Alb, Aub, lb, ub);
+    //     }
+    //     polympc::time_point stop = polympc::get_time();
+    //     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-        // std::cout << "status = " << status << std::endl;
+    //     // std::cout << "status = " << status << std::endl;
 
-        auto x = solver.m_x;
+    //     auto x = solver.m_x;
 
-        std::cout << "\n\n\n\n===================== ADMM SOLUTION =====================\n";
+    //     std::cout << "\n\n\n\n===================== ADMM SOLUTION =====================\n";
 
-        std::cout << "\nadmm time " << std::setprecision(9)
-                  << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
-        std::cout << "x = \n" << opt::x()(x).transpose() << std::endl;
-        std::cout << "u = \n" << opt::u()(x).transpose() << std::endl;
-        std::cout << "xss = \n" << opt::xss()(x) << std::endl;
-        std::cout << "uss = \n" << opt::uss()(x) << std::endl;
-        std::cout << "\n\n\n\n";
+    //     std::cout << "\nadmm time " << std::setprecision(9)
+    //               << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
+    //     std::cout << "x = \n" << opt::x()(x).transpose() << std::endl;
+    //     std::cout << "u = \n" << opt::u()(x).transpose() << std::endl;
+    //     std::cout << "xss = \n" << opt::xss()(x) << std::endl;
+    //     std::cout << "uss = \n" << opt::uss()(x) << std::endl;
+    //     std::cout << "\n\n\n\n";
 
 
-        // std::cout << "qpmad solution = " << x.transpose() << std::endl;
-    }
+    //     // std::cout << "qpmad solution = " << x.transpose() << std::endl;
+    // }
 };
 
 
@@ -624,12 +657,12 @@ struct Bob
 int main()
 {
     Bob bob;
-    
+
     // bob.test_function_computation();
     // bob.test_problem_evaluation();
 
     bob.solve_ipopt();
     bob.solve_polympc();
-    bob.solve_qpmad();
-    bob.solve_admm();
+    // bob.solve_qpmad();
+    // bob.solve_admm();
 }

@@ -6,6 +6,8 @@
 #include <Eigen/Eigenvalues> 
 #include <type_traits>
 
+#include <qpmad/solver.h>
+
 /***********************************************************
     Simple QP
 
@@ -31,36 +33,21 @@ struct Opt_t
     {
     };
 
-    struct g_ineq_
+    FUNCTION(g_ineq, (out, 2), (x, 1), (y, 2))
     {
-        template<typename T>
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 2> out, cVec<T, 1>& x, cVec<T, 2>& y) noexcept
-        {
-            out << x(0) + y(0), 
-                   T(3) * x(0) + y(0) + T(2) * y(1);
-        }
-    };
-    using g_ineq = Jacobian<g_ineq_, scalar_t, param_t, 2, 1, 2>;
+        out << x(0) + y(0), 
+               T(3) * x(0) + y(0) + T(2) * y(1);
+    }
 
-    struct g_eq_
+    FUNCTION(g_eq, (out, 1), (x, 1), (y, 2))
     {
-        template<typename T>
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 1> out, cVec<T, 1>& x, cVec<T, 2>& y) noexcept
-        {
-            out << x(0) + y(0) + y(1);
-        }
-    };
-    using g_eq = Jacobian<g_eq_, scalar_t, param_t, 1, 1, 2>;
+        out << x(0) + y(0) + y(1);
+    }
 
-    struct cost_
+    FUNCTION(cost, (out, 1), (x, 1), (y, 2))
     {
-        template<typename T>
-        static EIGEN_STRONG_INLINE void eval(const param_t& p, Vec<T, 1> out, cVec<T, 1>& x, cVec<T, 2>& y) noexcept
-        {
-            out(0) = T(0.5) * (x(0) - T(10.0))*(x(0) - T(10.0)) + T(0.5) * y(0) * y(0) + T(2.0) * y(1) * y(1);
-        }
-    };
-    using cost = Jacobian<cost_, scalar_t, param_t, 1, 1, 2>;
+        out(0) = T(0.5) * (x(0) - T(10.0))*(x(0) - T(10.0)) + T(0.5) * y(0) * y(0) + T(2.0) * y(1) * y(1);
+    }
 
     /*
         Constraint bounds
@@ -109,11 +96,9 @@ struct Opt_t
         }
     };
 
-    // Define variable accessors and ordering
-    using x = var_t<x_bnd, 1, 1>;
-    using y = var_t<y_bnd, 2, 1, x>;
-
-    using variables = VariableList_t<scalar_t, x, y>;
+    using variables = Make_Variables(scalar_t, param_t,
+        (0, x, (var_t<x_bnd, 1, 1>)), 
+        (1, y, (var_t<y_bnd, 2, 1>)));
 
     using equalities = std::tuple
     <
@@ -331,11 +316,11 @@ int main()
         Solver::nlp_variable_t x0, x;
         Solver::nlp_dual_t y0;
 
-        solver.settings().max_iter = 1;
+        solver.settings().max_iter = 10;
         solver.settings().line_search_max_iter = 5;
-        solver.qp_settings().eps_abs = 1e-6;
-        solver.qp_settings().eps_rel = 1e-6;
-        solver.qp_settings().max_iter = 1000;
+        // solver.qp_settings().eps_abs = 1e-6;
+        // solver.qp_settings().eps_rel = 1e-6;
+        // solver.qp_settings().max_iter = 1000;
 
     //     const Solver::parameter_t p;
     //     const Solver::nlp_dual_t lam = y0;
@@ -406,6 +391,62 @@ int main()
 
         std::cout << "\n\n\n\n===================== POLYMPC SOLUTION =====================\n";
         std::cout << "polympc time " << std::setprecision(9)
+                  << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
+        std::cout << "x = \n" << Opt_t<scalar_t>::x()(x).transpose() << std::endl;
+        std::cout << "y = \n" << Opt_t<scalar_t>::y()(x).transpose() << std::endl;
+        std::cout << "\n\n\n\n";
+    }
+
+
+    {
+        using prob_t = Opt_t<scalar_t>::problem_t;        
+        prob_t::variable_vec x;
+        x << 0, 0, 0;
+        prob_t::obj_hessian_mat H;
+        prob_t::obj_gradient_vec h;
+        prob_t::variable_vec lb;
+        prob_t::variable_vec ub;
+        prob_t::constraints_jacobian_mat A;
+        prob_t::constraints_vec Alb;
+        prob_t::constraints_vec Aub;
+
+        prob_t prob;
+        prob_t::param_t param;
+
+        prob.objective(param, x, h, H);
+
+        // lb <= c(x) <= ub
+        // lb <= A*(x - x0) + c(x0) <= ub
+        // lb + A*x0 - c(x) <= A*x <= ub + A*x0 - c(x0)
+        prob_t::constraints_vec con;
+        prob.constraints(param, x, con, A);
+
+        prob_t::constraints_vec nl_lb;
+        prob_t::constraints_vec nl_ub;
+        prob.constraints.get_bounds(param, nl_lb, nl_ub);
+        Alb = nl_lb + A*x - con;
+        Aub = nl_ub + A*x - con;
+
+        prob.variables.get_bounds(param, lb, ub);
+
+        qpmad::Solver solver;
+
+        const std::size_t NUM_EXP = 1;
+        qpmad::Solver::ReturnStatus status;
+        polympc::time_point start = polympc::get_time();
+        for(int i = 0; i < NUM_EXP; ++i)
+        {
+            status = solver.solve(x, H, h, lb, ub, A, Alb, Aub);
+        }
+        polympc::time_point stop = polympc::get_time();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+        if (status != qpmad::Solver::OK)
+        {
+            std::cerr << "Error" << std::endl;
+        }
+        std::cout << "\n\n\n\n===================== QPMAD SOLUTION =====================\n";
+        std::cout << "qpmad time " << std::setprecision(9)
                   << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
         std::cout << "x = \n" << Opt_t<scalar_t>::x()(x).transpose() << std::endl;
         std::cout << "y = \n" << Opt_t<scalar_t>::y()(x).transpose() << std::endl;

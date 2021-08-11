@@ -245,8 +245,9 @@ struct LAProblemBase
 /** create solver */
 template<typename Problem> class SQPSolver;
 template<typename Problem>
-class SQPSolver : public SQPBase<SQPSolver<Problem>, Problem, 
-                                QPMAD<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ, typename Problem::scalar_t>>
+class SQPSolver : public SQPBase<SQPSolver<Problem>, Problem>
+// , 
+//                                 QPMAD<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ, typename Problem::scalar_t>>
                                 // boxADMM<Problem::VAR_SIZE, Problem::NUM_EQ + Problem::NUM_INEQ, typename Problem::scalar_t>>
 {};
 

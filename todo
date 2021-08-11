@@ -5,6 +5,12 @@ Improvements in order:
 - add compile-time checks on variable overruns to the iterator and con_t classes
 - compute num_constraints in make_problem, and pass this to all the con_t's
 
+-- Collocation
+- add time-varying dynamics to the collocation code
+- add piecewise constant inputs and collocated inputs
+
+- form a dense matrix from the jacobian (dense or sparse) and pass to the Jacobian to fill in
+
 - seperate out generation types (eigen, python, etc)
 
 

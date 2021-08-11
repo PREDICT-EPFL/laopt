@@ -1,8 +1,5 @@
-#include <iostream>
 #include <tuple>
 #include <array>
-
-#include "map.hpp"
 
 #include "Eigen/Dense"
 #include <Eigen/Sparse>
@@ -61,31 +58,9 @@ constexpr auto type_name() noexcept {
   return name;
 }
 
-
-
-/*************************************************************
-   Short names to pass constant vectors and writable vectors
- *************************************************************/
-template<typename T, std::size_t n>
-using cVec = const Eigen::Ref<const Eigen::Matrix<T, n, 1>>;
-
-template<typename T, std::size_t n>
-using Vec = Eigen::Ref<Eigen::Matrix<T, n, 1>>;
-
-
 /*************************************************************
    Jacobian computation
  *************************************************************/
-
-// template<typename func,
-//       typename scalar_t,
-//       typename param_t, 
-//       int num_outputs_, 
-//       int... input_sizes>
-// struct FunctionTraits
-// {
-//  static const auto num_outputs = num_outputs_;
-// };
 
 template<typename scalar_t, int num_outputs, int num_inputs>
 struct jacobian_return_t
@@ -107,260 +82,9 @@ struct hessian_return_t
     std::array<hessian_t, num_outputs> hessian;
 };
 
-// User macro to define a differentiable function
-#define really_unparen(...) __VA_ARGS__
-
-#define GET_VAR_SIZE(name, len) len
-#define GET_VAR_SIZE_PAIR(pair) GET_VAR_SIZE pair
-#define GET_VAR_NAME(name, len) name
-#define GET_VAR_NAME_PAIR(pair) GET_VAR_NAME pair
-#define GET_OUT_SIZE(name, len) len
-#define GET_OUT_SIZE_PAIR(pair) GET_OUT_SIZE pair
-#define GET_VAR_LIST(name, len) const Eigen::Ref<const Eigen::Matrix<T, len, 1>> name
-#define GET_VAR_LIST_PAIR(pair) GET_VAR_LIST pair
-
-#define FUNCTION(func_name, out_pair, ...) \
-    struct func_name##_ \
-    { \
-        template<typename T> \
-        static EIGEN_STRONG_INLINE void impl(const param_t& p,\
-        Eigen::Ref<Eigen::Matrix<T, GET_VAR_SIZE_PAIR(out_pair), 1>> GET_VAR_NAME_PAIR(out_pair), \
-        MAP_LIST(GET_VAR_LIST_PAIR, __VA_ARGS__) \
-        ) noexcept \
-        { \
-            func_name##_impl<T>(p, GET_VAR_NAME_PAIR(out_pair), MAP_LIST(GET_VAR_NAME_PAIR, __VA_ARGS__)); \
-        } \
-    }; \
-    using func_name = Jacobian<func_name##_, scalar_t, param_t, \
-    GET_VAR_SIZE_PAIR(out_pair), \
-    MAP_LIST(GET_VAR_SIZE_PAIR, __VA_ARGS__) \
-    >; \
-    template<typename T> \
-    static EIGEN_STRONG_INLINE void func_name##_impl(const param_t& p,\
-    Eigen::Ref<Eigen::Matrix<T, GET_VAR_SIZE_PAIR(out_pair), 1>> GET_VAR_NAME_PAIR(out_pair), \
-    MAP_LIST(GET_VAR_LIST_PAIR, __VA_ARGS__) \
-    ) noexcept
-
-
-template<typename Func, typename scalar_t, typename param_t, int num_outputs_, int... input_sizes>
-struct Jacobian // < FunctionTraits<Func, scalar_t, param_t, num_outputs, input_sizes...> >
-{
-    static constexpr int num_inputs = sum_template<input_sizes...>();  // Total number of inputs
-    static constexpr int num_input_vars = sizeof...(input_sizes);  // Number of input vector variables
-    static constexpr int num_outputs = num_outputs_;
-
-    // First order derivative
-    using AD_scalar = Eigen::AutoDiffScalar<Eigen::Matrix<scalar_t, num_inputs, 1>>;
-    using AD_output_t = Eigen::Matrix<AD_scalar, num_outputs, 1>;  
-
-    // Second order derivative
-    using outerDerivatives = Eigen::Matrix<AD_scalar, num_inputs, 1>;
-    using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
-    using outerAD_t = Eigen::Matrix<outerADScalar, num_outputs, 1>;  
-
-    /*
-        Evaluate the function with scalar type
-     */
-    template<typename T>
-    static EIGEN_STRONG_INLINE void impl(
-        const param_t& param,
-        Eigen::Ref<Eigen::Matrix<T, num_outputs, 1>> out, 
-        const Eigen::Ref<const Eigen::Matrix<T, input_sizes, 1>>&... args) 
-        noexcept
-    {
-        Func::template impl<T>(param, out, args...);
-    }
-
-
-    /*
-        Evaluate the function
-     */
-    static EIGEN_STRONG_INLINE auto eval(
-        const param_t& param,
-        const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>&... args) 
-        noexcept
-    {
-        Eigen::Matrix<scalar_t, num_outputs, 1> out;
-        Func::template impl<scalar_t>(param, out, args...);
-        return out;
-    }
-
-    /*
-        Evaluate the function, and its jacobian
-     */
-    static EIGEN_STRONG_INLINE auto jac(
-        const param_t& param,
-        const Ref<const Matrix<scalar_t, input_sizes, 1>>&... args) 
-        noexcept
-    {
-        AD_output_t _out;
-
-        // Convert to AD variables for the inputs and call our function
-        seed_and_call(make_ad<input_sizes>(args)..., _out, param);
-
-        // Copy Jacobian into output variables
-        jacobian_return_t<scalar_t, num_outputs, num_inputs> ret;
-        for(int i=0; i<num_outputs; i++)
-        {
-            ret.val(i) = _out[i].value();
-            ret.jacobian.row(i) = _out[i].derivatives();
-        }
-
-        return ret;
-    }
-
-    /*
-        Evaluate the function, its jacobian and hessian
-     */
-    static EIGEN_STRONG_INLINE auto hessian(
-        const param_t& param,
-        const Ref<const Matrix<scalar_t, input_sizes, 1>>&... args) 
-        noexcept
-    {
-        outerAD_t _out;
-
-        // Convert to AD variables for the inputs and call our function
-        seed_and_call2(make_ad2<input_sizes>(args)..., _out, param);
-
-        // Copy Hessian into output variables
-        hessian_return_t<scalar_t, num_outputs, num_inputs> ret;
-        for(int i=0; i<num_outputs; i++)
-        {
-            ret.val(i) = _out[i].value().value();
-            ret.jacobian.row(i) = _out[i].value().derivatives();
-            for (int j = 0; j < num_inputs; j++) {
-                ret.hessian[i].template middleRows<1>(j) = _out[i].derivatives()(j).derivatives().transpose();
-            }
-        }
-
-        return ret;
-    }
-
-
-private:
-
-    /*********
-     Jacobians 
-     *********/
-
-    // Take a vector input and return a AD version of the vector
-    template<int n>
-    static EIGEN_STRONG_INLINE Matrix<AD_scalar, n, 1> 
-        make_ad(const Ref<const Matrix<scalar_t, n, 1>> x)
-    {
-        Matrix<AD_scalar, n, 1> y;
-        y = x;
-        for (int i=0; i<y.rows(); i++) {
-            y[i].derivatives().setZero();
-        }
-        return y;
-    }
-
-    static EIGEN_STRONG_INLINE void seed_and_call(
-            Matrix<AD_scalar, input_sizes, 1>... args,
-            Eigen::Ref<Eigen::Matrix<AD_scalar, num_outputs, 1>> out,
-            const param_t& param)
-    {
-        // Set derivative equal to identity
-        int offset = 0;
-        (void)std::initializer_list<int>{ 
-            (
-                offset = AD_Seed(args, offset), // Set to unit vectors
-                0
-            )...
-        };
-
-        // Call our function
-        Func::template impl<AD_scalar>(param, out, args...);
-    }
-
-    // Sets the input derivatives to the identity. 
-    // Assumes that the derivative matrix is initially zero
-    template <typename vec>
-    static constexpr int AD_Seed(vec &x, int offset)
-    {
-        for (int i=0; i<x.rows(); i++)
-            x[i].derivatives().coeffRef(i + offset) = 1;
-        return offset + x.rows();
-    }
-
-
-    /********
-     Hessians 
-     ********/
-
-    // Take a vector input and return a AD version of the vector
-    template<int n>
-    static EIGEN_STRONG_INLINE Eigen::Matrix<outerADScalar, n, 1> 
-        make_ad2(const Eigen::Ref<const Eigen::Matrix<scalar_t, n, 1>> x)
-    {
-        Eigen::Matrix<outerADScalar, n, 1> y;
-        // y = x;
-        for (int i=0; i<n; i++) {
-            y(i).value().value() = x(i);
-            y(i).value().derivatives().setZero();
-            y(i).derivatives().setZero();
-            for (int j = 0; j < n; j++) {
-                y(i).derivatives()(j).derivatives().setZero();
-            }
-        }
-        return y;
-    }
-
-    // Sets the input derivatives to the identity. 
-    // Assumes that the derivative matrix is initially zero
-    template <typename vec>
-    static constexpr int AD_Seed2(vec &x, int offset)
-    {
-        for (int i=0; i<x.rows(); i++)
-        {
-            x(i).value().derivatives().coeffRef(i + offset) = 1;
-            x(i).derivatives().coeffRef(i + offset) = 1;
-        }
-
-        return offset + x.rows();
-    }
-
-    static EIGEN_STRONG_INLINE void seed_and_call2(
-        Eigen::Matrix<outerADScalar, input_sizes, 1>... args,
-        Eigen::Ref<outerAD_t> out,
-        const param_t& param)
-    {
-        // Set derivative equal to identity
-        int offset = 0;
-        (void)std::initializer_list<int>{ 
-            (
-                offset = AD_Seed2(args, offset), // Set to unit vectors
-                0
-            )...
-        };
-
-        // Call our function
-        Func::template impl<outerADScalar>(param, out, args...);
-    }
-
-};
-
-
 /*************************************************************
    Variables
  *************************************************************/
-
-// User macro to define a list of variables and their order
-#define DECL_VAR(ind, name, type) \
-    really_unparen type
-#define DECL_VAR_PAIR(pair) \
-    DECL_VAR pair
-#define GET_VAR(ind, name, type) \
-    using name = typename variables::template get_by_index<ind>;
-#define GET_VAR_PAIR(pair) \
-    GET_VAR pair
-#define Make_Variables(scalar_t, param_t, ...) \
-    typename make_variables<scalar_t, param_t, \
-    MAP_LIST(DECL_VAR_PAIR, __VA_ARGS__) \
-    >::type; \
-    MAP(GET_VAR_PAIR, __VA_ARGS__) \
-
 
 template<typename param_t, int num_variables, typename scalar_t, 
          typename BndFunc, 
@@ -437,142 +161,6 @@ struct var_t_
     }
 };
 
-// Represents an iterator over a variable_t
-template<typename variable_set, int start=0, int step=0>
-struct iterator
-{
-    static constexpr std::size_t var_len = variable_set::len;
-
-    // Return ind variable segment of var
-    template<typename Var>
-    static EIGEN_STRONG_INLINE constexpr auto get(Var& var, int ind = 0)
-    {
-        return variable_set::get(var, start + ind * step);
-    }
-
-    static EIGEN_STRONG_INLINE constexpr std::size_t offset(int ind = 0)
-    {
-        return variable_set::o(start + ind * step);
-    }
-};
-
-
-// List of variables
-template<typename scalar_t, typename param_t, std::size_t num_variables_, typename var_tuple, typename Index>
-struct VariableList_t;
-
-template<typename scalar_t, typename param_t, std::size_t num_variables_, typename var_tuple, std::size_t... ind>
-struct VariableList_t<scalar_t, param_t, num_variables_, var_tuple, std::integer_sequence<std::size_t, ind...>>
-{
-    // static constexpr std::size_t num_variables = sum_template<Vars::len * Vars::num_vars...>();
-    static constexpr std::size_t num_variables = num_variables_;
-    using variable_t = Eigen::Matrix<scalar_t, num_variables, 1>;
-
-    template<int i>
-    static constexpr auto get()
-    {
-        return var_tuple::template get<i>();
-    }
-
-    static EIGEN_STRONG_INLINE void get_bounds(const param_t& param, 
-                Eigen::Ref<variable_t> lb, Eigen::Ref<variable_t> ub) noexcept
-    {
-        (void)std::initializer_list<int>{ 
-            (
-                std::tuple_element<ind, var_tuple>::type::get_bounds(param, lb, ub),
-                0
-            )...
-        };
-    }
-
-    template<int i>
-    using get_by_index = typename std::remove_reference<decltype(std::get<i>(var_tuple()))>::type;
-    // std::tuple_element<i, var_tuple>;
-};
-
-
-
-// User-interface type used to construct variable list
-template<typename BndFunc_, std::size_t _len, std::size_t _num_vars>
-struct var_t
-{
-    using BndFunc = BndFunc_;
-    static constexpr std::size_t len = _len;
-    static constexpr std::size_t num_vars = _num_vars;
-};
-
-
-// Returns a VariableList_t type
-template<typename scalar_t, typename param_t,
-         typename... Vars> // List of var_t
-struct make_variables
-{
-
-    static constexpr std::size_t num_variables = sum_template<Vars::len * Vars::num_vars...>();
-    using variable_t = Eigen::Matrix<scalar_t, num_variables, 1>;
-
-    static constexpr std::array<std::size_t, sizeof...(Vars)+1> cumulative_sum(std::size_t seed = 0) 
-    { 
-        return{ {0, seed += Vars::len * Vars::num_vars ... } };
-    }
-
-    static constexpr std::array<std::size_t, sizeof...(Vars) + 1> a = cumulative_sum();
-
-    // Convert array into a tuple
-    template<typename Array, std::size_t... I>
-    static constexpr auto a2t_impl(const Array& a, std::index_sequence<I...>)
-    {
-        return std::make_tuple(a[I]...);
-    }
-
-    template<typename T, std::size_t N, typename Indices = std::make_index_sequence<N - 1>>
-    static constexpr auto a2t(const std::array<T, N>& a)
-    {
-        return a2t_impl(a, Indices{});
-    }
-
-    static constexpr auto offsets = a2t(cumulative_sum());
-
-    // Helper to convert var_t to variable_t
-    template<std::size_t... ind>
-    static constexpr auto make_variable_tuple(std::index_sequence<ind...>)
-    {
-        return std::make_tuple(
-                    var_t_<param_t, num_variables, scalar_t, 
-                           typename Vars::BndFunc,
-                           Vars::len,
-                           Vars::num_vars,
-                           std::get<ind>(offsets)>()
-                ...);
-    }
-
-    using index = std::make_integer_sequence<std::size_t, sizeof...(Vars)>;
-    static constexpr auto variable_tup = make_variable_tuple(index{});
-
-    template<std::size_t... ind>
-    static void show_offsets_impl(std::index_sequence<ind...>)
-    {
-        std::cout << "num_variables = " << num_variables << std::endl;
-        (void)std::initializer_list<int>{ 
-            (
-                std::cout << "offset = " << std::get<ind>(offsets),
-                std::cout << " len = " << Vars::len,
-                std::cout << " num_vars = " << Vars::num_vars,
-                std::cout << std::endl,
-                0
-            )...
-        };
-    }
-
-    static void show_offsets()
-    {
-        show_offsets_impl(index{});
-    }
-
-
-    using type = VariableList_t<scalar_t, param_t, num_variables, decltype(variable_tup), index>;
-};
-
 
 /*************************************************************
    Constraints
@@ -596,8 +184,8 @@ template<typename BndFunc,   // Function returning the upper and lower bounds
          typename... Var_t>  // Variable Index's (i.e., range objects)
 struct con_t<BndFunc, Jacobian<Func, scalar_t_, param_t_, num_outputs, input_sizes...>, num_iterations, Var_t...>
 {
-    using param_t = param_t_;
     using scalar_t = scalar_t_;
+    using param_t = param_t_;
     using jacFunc = Jacobian<Func, scalar_t, param_t, num_outputs, input_sizes...>;
 
     // Total vector length required to store this constraint collection
@@ -694,7 +282,7 @@ public:
     {
         for(int i=0; i<num_iterations; i++)
         {
-            Func::template impl<scalar_t>(
+            Func::template eval<scalar_t>(
                 param, 
                 con.template segment<num_outputs>(offset(i)), // Output
                 Var_t::get(var, i) ...);  // Inputs
@@ -836,7 +424,7 @@ public:
         scalar_t out = 0;
         for(int i=0; i<num_iterations; i++)
         {
-            Func::template impl<scalar_t>(
+            Func::template eval<scalar_t>(
                 param, 
                 tmp, // Output
                 Var_t::get(var, i) ...);  // Inputs
