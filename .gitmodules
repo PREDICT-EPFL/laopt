@@ -4,3 +4,6 @@
 [submodule "qpmad"]
 	path = qpmad
 	url = https://github.com/asherikov/qpmad.git
+[submodule "polympc"]
+	path = polympc
+	url = git@gitlab.epfl.ch:listov/polympc.git
