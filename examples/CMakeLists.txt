@@ -21,6 +21,15 @@ target_link_libraries(qp_test ipopt Eigen3::Eigen)
 add_executable(cstr cstr.cpp /Users/cnjones/git/lampc/src/lampc.hpp)
 target_link_libraries(cstr ipopt Eigen3::Eigen)
 
+# add_executable(size_test size_test.cpp /Users/cnjones/git/lampc/src/lampc.hpp)
+# target_link_libraries(size_test Eigen3::Eigen)
+
+add_executable(size_test size_test.cpp)
+# target_link_libraries(size_test)
+
+add_executable(bstest bstest.cpp)
+add_executable(index_test index_test.cpp)
+
 # add_executable(double_integrator double_integrator.cpp /Users/cnjones/git/lampc/src/lampc.hpp)
 # target_link_libraries(double_integrator ipopt Eigen3::Eigen)
 
