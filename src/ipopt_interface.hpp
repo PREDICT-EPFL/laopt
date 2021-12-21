@@ -24,8 +24,8 @@ public:
 	using obj_hessian_t = typename Prob::obj_hessian_mat;
 	using obj_t = typename Prob::obj_vec;
 
-    static constexpr std::size_t num_variables = Prob::num_variables;
-    static constexpr std::size_t num_constraints = Prob::constraints_t::num_constraints;
+	static constexpr std::size_t num_variables = Prob::num_variables;
+	static constexpr std::size_t num_constraints = Prob::constraints_t::num_constraints;
 
 	variable_t x0;  // Initial iterate
 

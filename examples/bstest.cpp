@@ -27,12 +27,12 @@ struct BSTest<Scalar, N, std::integer_sequence<std::size_t, ind...>>
 
     FUNCTION(dynamics, Scalar, param_t, (xplus, 2), (x, 2), (u, 1))
     {
-        xplus = p.A.template cast<T>() * x + p.B.template cast<T>() * u;
+        xplus = p.A.template cast<T>() * x + x(0) * p.B.template cast<T>() * u;
     }
 
     FUNCTION(dynamics_eq, Scalar, param_t, (out, 2), (xplus, 2), (x, 2), (u, 1))
     {
-        Matrix<T, 2, 1> tmp;
+        Eigen::Matrix<T, 2, 1> tmp;
         dynamics::template impl<T>(p, tmp, x, u);
         out = tmp - xplus;
     }
@@ -46,12 +46,18 @@ struct BSTest<Scalar, N, std::integer_sequence<std::size_t, ind...>>
 
 	using variables = std::tuple<u<ind>..., x<ind>..., x<N>>;
 
+	// template<int i>
+	// struct con_dynamics : DenseConstraint<2, x<i+1>, x<i>, u<i>> {};
+
 	template<int i>
-	struct con_dynamics : DenseConstraint<2, x<i+1>, x<i>, u<i>> {};
+	struct con_dynamics : FunctionConstraint<dynamics_eq, x<i+1>, x<i>, u<i>> {};
+
 
 	using constraints = std::tuple<con_dynamics<ind>...>;
 
-	BSMatrix<double, BSTest::constraints, BSTest::variables> mat;
+
+	using Matrix = BSMatrix<double, BSTest::constraints, BSTest::variables>;
+	Matrix mat;
 
 	BSTest()
 	{
@@ -87,7 +93,7 @@ struct BSTest<Scalar, N, std::integer_sequence<std::size_t, ind...>>
 
 int main()
 {
-	const std::size_t N = 20;
+	const std::size_t N = 5;
 
 	using Test = BSTest<double, N, std::make_integer_sequence<std::size_t, N>>;
 	Test test;
@@ -103,12 +109,16 @@ int main()
 	x << 1, 2;
 	u << 3;
 
-	auto ret = Test::dynamics_eq::jac(param, xp, x, u);
-	std::cout << "ret.jacobian = \n" << ret.jacobian << std::endl;
+	struct Data
+	{
+		Eigen::Vector<double, Test::Matrix::ColsAtCompileTime> var;
+		Test::param_t param;
+	};
+	Data data;
+	for(int i=0; i<Test::Matrix::ColsAtCompileTime; i++)
+		data.var[i] = i;
 
-	test.mat.template set<Test::con_dynamics<1>, Test::x<2>>(ret.jacobian.block(0, 0, 2, 2));
-	test.mat.template set<Test::con_dynamics<1>, Test::x<1>>(ret.jacobian.block(0, 2, 2, 2));
-	test.mat.template set<Test::con_dynamics<1>, Test::u<1>>(ret.jacobian.block(0, 4, 2, 1));
+	test.mat.update(data);
 
 	std::cout << "mat = \n" << Eigen::MatrixX<double>(test.mat) << std::endl;
 

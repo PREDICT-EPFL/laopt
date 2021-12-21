@@ -3,84 +3,13 @@
 
 #include "Eigen/Dense"
 #include <Eigen/Sparse>
-#include "unsupported/Eigen/AutoDiff"
+
+#include "lampc.hpp"
 
 using namespace Eigen;
 
-/*************************************************************
-    Meta-programming helper functions
- *************************************************************/
-
-// Sum the inputs to get total number of inputs
-template<int... S>
-constexpr int sum_template() {
-    int result = 0;
-    for(auto s : { S... }) result += s;
-    return result;
-}
-
-// Build an array at compile time
-template <typename T, typename... Args>
-constexpr std::array<T, sizeof...(Args)> make_array(Args... args)
+namespace lampc
 {
-    return {args...};
-}
-
-// Helper function to reshape an eigen matrix while maintaining const'ness
-template <typename map_to, typename scalar_t>
-constexpr auto _map_matrix(const scalar_t* x) {
-    return Eigen::Map<const map_to>(x);
-}
-
-template <typename map_to, typename scalar_t>
-constexpr auto _map_matrix(scalar_t* x) {
-    return Eigen::Map<map_to>(x);
-}
-
-template <typename T>
-constexpr auto type_name() noexcept {
-  std::string_view name = "Error: unsupported compiler", prefix, suffix;
-#ifdef __clang__
-  name = __PRETTY_FUNCTION__;
-  prefix = "auto type_name() [T = ";
-  suffix = "]";
-#elif defined(__GNUC__)
-  name = __PRETTY_FUNCTION__;
-  prefix = "constexpr auto type_name() [with T = ";
-  suffix = "]";
-#elif defined(_MSC_VER)
-  name = __FUNCSIG__;
-  prefix = "auto __cdecl type_name<";
-  suffix = ">(void) noexcept";
-#endif
-  name.remove_prefix(prefix.size());
-  name.remove_suffix(suffix.size());
-  return name;
-}
-
-/*************************************************************
-   Jacobian computation
- *************************************************************/
-
-template<typename scalar_t, int num_outputs, int num_inputs>
-struct jacobian_return_t
-{
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-    Eigen::Matrix<scalar_t, num_outputs, 1> val;
-    Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
-};
-
-template<typename scalar_t, int num_outputs, int num_inputs>
-struct hessian_return_t
-{
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-    Eigen::Matrix<scalar_t, num_outputs, 1> val;
-    Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
-    using hessian_t = Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
-    std::array<hessian_t, num_outputs> hessian;
-};
 
 /*************************************************************
    Variables
@@ -1295,4 +1224,6 @@ public:
         inequalities.get_bounds(param, lb_g, ub_g);
         variables.get_bounds(param, lb_x, ub_x);
     }
+};
+
 };

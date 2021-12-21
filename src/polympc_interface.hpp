@@ -41,22 +41,16 @@ struct LAProblemBase
     using scalar_t = typename problem_t::scalar_t;
 
     /** NLP variables */
-    using nlp_variable_t         = typename dense_matrix_type_selector<scalar_t, VAR_SIZE, 1>::type;
-    using nlp_eq_constraints_t   = typename dense_matrix_type_selector<scalar_t, NUM_EQ, 1>::type;
-    using nlp_ineq_constraints_t = typename dense_matrix_type_selector<scalar_t, NUM_INEQ, 1>::type;
-    using nlp_constraints_t      = typename dense_matrix_type_selector<scalar_t, NUM_EQ + NUM_INEQ, 1>::type;
+    using nlp_variable_t         = typename problem_t::var_types::variable_vec;
+    using nlp_eq_constraints_t   = typename problem_t::var_types::equalities_vec;
+    using nlp_ineq_constraints_t = typename problem_t::var_types::inequalities_vec;
+    using nlp_constraints_t      = typename problem_t::var_types::constraints_vec;
 
-    // choose to allocate sparse or dense jacoabian and hessian
-    using nlp_eq_jacobian_t      = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
-                                   typename dense_matrix_type_selector<scalar_t, NUM_EQ, VAR_SIZE>::type>::type;
-    using nlp_ineq_jacobian_t    = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
-                                   typename dense_matrix_type_selector<scalar_t, NUM_INEQ, VAR_SIZE>::type>::type;
-
-    using nlp_jacobian_t         = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
-                                   typename dense_matrix_type_selector<scalar_t, NUM_EQ + NUM_INEQ, VAR_SIZE>::type>::type;
-
-    using nlp_hessian_t          = typename std::conditional<is_sparse, Eigen::SparseMatrix<scalar_t>,
-                                   typename dense_matrix_type_selector<scalar_t, VAR_SIZE, VAR_SIZE>::type>::type;
+    using nlp_eq_jacobian_t      = typename problem_t::var_types::equalities_jacobian_mat;
+    using nlp_ineq_jacobian_t    = typename problem_t::var_types::inequalities_jacobian_mat;
+    using nlp_jacobian_t         = typename problem_t::var_types::constraints_jacobian_mat;
+    using nlp_hessian_t          = typename problem_t::var_types::obj_hessian_mat;
+    
     using nlp_cost_t             = scalar_t;
     using nlp_dual_t             = typename dense_matrix_type_selector<scalar_t, DUAL_SIZE, 1>::type;
     using static_parameter_t     = typename dense_matrix_type_selector<scalar_t, 0, 1>::type;
