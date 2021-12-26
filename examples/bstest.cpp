@@ -1,10 +1,66 @@
-/** Static memory implementation of a variable block-matrix type.
+/**
+ * Unit test for the construction and computation of LAMPC functions.
  */
 
 #include "bsmatrix.hpp"
+#include "bsmaker.hpp"
 #include "lampc_function.hpp"
 
+// #include <iostream>
+#include <Eigen/Eigenvalues> 
+#include <type_traits>
+
 using namespace lampc;
+
+typedef std::chrono::time_point<std::chrono::system_clock> time_point;
+static time_point get_time()
+{
+    /** OS dependent */
+#ifdef __APPLE__
+    return std::chrono::system_clock::now();
+#elif defined _WIN32 || defined _WIN64 || defined _MSC_VER
+    return std::chrono::system_clock::now();
+#else
+    return std::chrono::high_resolution_clock::now();
+#endif
+}
+
+// #include "gtest/gtest.h"
+
+
+// TEST(BSTest, FunctionMatrix) {
+
+template<int size_>
+struct Variable
+{
+	static constexpr int size = size_;
+};
+
+template<int size_, typename... vars>
+struct Constraint
+{
+	static constexpr int size = size_;
+	using varTuple = std::tuple<vars...>;
+
+	// Total number of scalar variables
+	static constexpr std::size_t totalVariables = BS::detail::sum_int_template<vars::size...>();
+
+	// Number of variable blocks
+	static constexpr std::size_t numVariables = sizeof...(vars);
+
+	// Convert the variables into indices into the Variables list
+	template<typename Variables>
+	static constexpr Eigen::Vector<int, sizeof...(vars)> get_indices()
+	{
+		Eigen::Vector<int, sizeof...(vars)> indices;
+		int i=0;
+		auto l = {(
+			indices[i++] = BS::detail::get_index<vars>(Variables()),
+			0
+			)...};
+		return indices;
+	}
+};
 
 
 template<typename Scalar, std::size_t N, typename range>
@@ -16,8 +72,8 @@ struct BSTest<Scalar, N, std::integer_sequence<std::size_t, ind...>>
     struct param_t
     {
         Eigen::Matrix<Scalar, 2, 1> x0 {-1, -2};
-        const Eigen::Matrix<Scalar, 2, 2> A {{1.0, 0.0}, {0.1, 1.0}};
-        Eigen::Matrix<Scalar, 2, 1> B {0.1, 0.005};
+        const Eigen::Matrix<Scalar, 2, 2> A {{1.0, 2.0}, {3.0, 4.0}};
+        Eigen::Matrix<Scalar, 2, 1> B {10, 20};
         Eigen::Matrix<Scalar, 1, 1> ref {3};
 
         Eigen::Matrix<Scalar, 2, 1> q {1, 1e3}; // Stage-cost weights
@@ -27,7 +83,7 @@ struct BSTest<Scalar, N, std::integer_sequence<std::size_t, ind...>>
 
     FUNCTION(dynamics, Scalar, param_t, (xplus, 2), (x, 2), (u, 1))
     {
-        xplus = p.A.template cast<T>() * x + x(0) * p.B.template cast<T>() * u;
+        xplus = p.A.template cast<T>() * x + p.B.template cast<T>() * u;
     }
 
     FUNCTION(dynamics_eq, Scalar, param_t, (out, 2), (xplus, 2), (x, 2), (u, 1))
@@ -37,110 +93,105 @@ struct BSTest<Scalar, N, std::integer_sequence<std::size_t, ind...>>
         out = tmp - xplus;
     }
 
-
-	template<int i>
-	struct x : Variable<2> {static constexpr const char* name="x";};
-
-	template<int i>
-	struct u : Variable<1> {static constexpr const char* name="u";};
-
-	using variables = std::tuple<u<ind>..., x<ind>..., x<N>>;
-
-	// template<int i>
-	// struct con_dynamics : DenseConstraint<2, x<i+1>, x<i>, u<i>> {};
-
-	template<int i>
-	struct con_dynamics : FunctionConstraint<dynamics_eq, x<i+1>, x<i>, u<i>> {};
+    FUNCTION(test_func, Scalar, param_t, (out, 2), (x, 2), (u, 1))
+    {
+        out << x(0) + x(1) + u(0), 
+        	   2*x(0) + 3*x(1) + 4*u(0);
+        // out << x(0)*x(1)+x(0)*x(0)*10.0,
+        //     u(0)*x(0)*x(1)+u(0)*x(0)*x(0)*10.0;
+    }
 
 
-	using constraints = std::tuple<con_dynamics<ind>...>;
+    template<int i>
+    struct x : Variable<2> {static constexpr const char* name="x";};
 
+    template<int i>
+    struct u : Variable<1> {static constexpr const char* name="u";};
 
-	using Matrix = BSMatrix<double, BSTest::constraints, BSTest::variables>;
-	Matrix mat;
+    using variables = std::tuple<x<ind>..., u<ind>..., x<N>>;
 
-	BSTest()
-	{
-		mat.finalize();
+    template<int i>
+    struct con_dynamics : Constraint<dynamics_eq::num_outputs, x<i+1>, x<i>, u<i>> {using Function = dynamics_eq;};
+    // struct con_dynamics : Constraint<2> {static constexpr const char* name="dynamics";};
+    // struct con_dynamics : BS::FunctionConstraint<dynamics_eq, x<i+1>, x<i>, u<i>> {};
 
-		std::cout << "mat = \n" << Eigen::MatrixX<double>(mat) << std::endl;
+    // struct con_test : BS::FunctionConstraint<test_func, x<1>, u<3>> {};
+    template<int i>
+    struct con_test : Constraint<test_func::num_outputs, x<i+3>, u<i+1>> {using Function = test_func;};
 
-		// Eigen::Matrix<double, con2::size, z::size> B;
-		// B.array() = 1;
-
-		// Eigen::Matrix<double, con1<1>::size, x<1>::size> B1;
-		// B1.array() = 2;
-		
-  //   	time_point start = get_time();
-		// for(int i=0; i<1000000; i++)
-		// {
-		// 	// B.array() += i;
-		// 	mat.template set<con2, z>(B);
-		// 	mat.template set<con1<1>, x<1>>(B1);
-		// 	// B.array() -= i;
-		// }
-	 //    time_point stop = get_time();
-
-	 //    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-
-	 //    std::cout << "Time " << std::setprecision(9)
-	 //              << static_cast<double>(duration.count()) / 1000000 << " [microseconds]" << "\n";
-
-		// std::cout << "mat = \n" << Eigen::MatrixX<double>(mat) << std::endl;
-
-	}
+    using constraints = std::tuple<con_test<0>, con_dynamics<ind>..., con_test<1>, con_test<7>, con_test<2>>;
 };
 
-int main()
+
+
+int main() 
 {
-	const std::size_t N = 5;
+    using Scalar = double;
+    const std::size_t N = 10;
 
-	using Test = BSTest<double, N, std::make_integer_sequence<std::size_t, N>>;
-	Test test;
+    using Test = BSTest<Scalar, N, std::make_integer_sequence<std::size_t, N>>;
+    using param_t = Test::param_t;
+
+	param_t param;
+
+ //    auto M = BS::BSMatrixFactory<double, Test::constraints, Test::variables>::make();
+
+ //    std::cout << type_name<decltype(M)>() << std::endl;
+
+ //    int k=0;
+	// for(int c=0; c<decltype(M)::numBlockColumns; c++)
+	// 	for(int r=0; r<decltype(M)::numBlockRows; r++)
+ //    		if(M.isNonzero(r, c))
+ //    		{
+ //    			Eigen::MatrixX<Scalar> B(M.rowSizes[r], M.columnSizes[c]);
+ //    			B.array() = ++k;
+	// 		    M.setBlock(r,c,B);
+ //    		}
+
+ //    const IOFormat fmt(2);
+ //    std::cout << "S = \n" << Eigen::MatrixX<Scalar>(M.S).format(fmt) << std::endl;
 
 
 
-	Test::param_t param;
-	Eigen::Vector<double, 2> xp;
-	Eigen::Vector<double, 2> x;
-	Eigen::Vector<double, 1> u;
+    auto f = BS::FunctionFactory<Scalar, param_t, Test::constraints, Test::variables>::make();
 
-	xp << 4, 5;
-	x << 1, 2;
-	u << 3;
+    decltype(f)::variable_t x;
+    decltype(f)::output_t out;
 
-	struct Data
-	{
-		Eigen::Vector<double, Test::Matrix::ColsAtCompileTime> var;
-		Test::param_t param;
-	};
-	Data data;
-	for(int i=0; i<Test::Matrix::ColsAtCompileTime; i++)
-		data.var[i] = i;
+    x.array() = 1;
+    x.segment(4,2).array() = 2;
 
-	test.mat.update(data);
 
-	std::cout << "mat = \n" << Eigen::MatrixX<double>(test.mat) << std::endl;
+    const std::size_t NUM_EXP = 1000000;
+    time_point start = get_time();
+    for(int i = 0; i < NUM_EXP; ++i)
+    {
+	    f.eval(param, x, out);
+    }
+    time_point stop = get_time();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-	// std::cout << "BS::is_member<int, int, float> = " << BS::is_member<int, int, float>() << std::endl;
-	// std::cout << "BS::is_member<bool, int, float> = " << BS::is_member<bool, int, float>() << std::endl;
+    std::cout << "Eval time " << std::setprecision(9)
+              << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
 
-	// BSTest test;
 
-	// struct x : Variable<3> {};
-	// struct y : Variable<5> {};
+    std::cout << "x = " << x.transpose() << std::endl;
+    std::cout << "out = " << out.transpose() << std::endl;
 
-	// Block<x> blk;
-	// for(int i=0; i<x::size; i++)
-	// 	blk.column_length[i] = i;
-	
-	// for(int i=0; i<x::size; i++)
-	// 	std::cout << "blk.getColumnNonZeros<x>(" << i << ") = "
-	// 			  << blk.getColumnNonZeros<x>(i) << std::endl;
+    start = get_time();
+    for(int i = 0; i < NUM_EXP; ++i)
+    {
+	    f.jacobian(param, x, out);
+    }
+    stop = get_time();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-	// for(int i=0; i<y::size; i++)
-	// 	std::cout << "blk.getColumnNonZeros<y>(" << i << ") = "
-	// 			  << blk.getColumnNonZeros<y>(i) << std::endl;
+    std::cout << "Jacobian eval time " << std::setprecision(9)
+              << static_cast<double>(duration.count()) / NUM_EXP << " [microseconds]" << "\n";
 
-	return 0;
+	IOFormat CleanFmt(2, 0, " ", "\n", "", "");
+    std::cout << "f.jacobian = \n" << Eigen::MatrixX<Scalar>(f.get_jacobian()).format(CleanFmt) << std::endl;
+
+    return 0;
 }
+// }

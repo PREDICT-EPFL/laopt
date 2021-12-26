@@ -119,9 +119,12 @@ namespace detail
 	};
 };
 
-template<typename Func, typename scalar_t, typename param_t, int num_outputs_, int... input_sizes>
+template<typename Func, typename scalar_t_, typename param_t_, int num_outputs_, int... input_sizes>
 struct Jacobian // < FunctionTraits<Func, scalar_t, param_t, num_outputs, input_sizes...> >
 {
+	using param_t = param_t_;
+	using scalar_t = scalar_t_;
+
 	static constexpr int num_inputs = meta::sum_template<input_sizes...>();  // Total number of inputs
 	static constexpr int num_input_vars = sizeof...(input_sizes);  // Number of input vector variables
 	static constexpr int num_outputs = num_outputs_;
