@@ -36,7 +36,6 @@ class BSMatrixFactory<Scalar, std::tuple<Constraints...>, std::tuple<Variables..
   														 nnzBlockColumns,
   														 nnzEstimate>;
 
-
 	template<typename... Ts>
 	static constexpr Eigen::Vector<int, sizeof...(Ts)> makeSizeArray()
 	{
@@ -355,8 +354,50 @@ public:
   	type f(argInfo, J);
   	return f;
   }
-
 };
+
+
+/**
+ * The compiled problem class.
+ * 
+ * eq_t, ineq_t, obj_t are all FunctionSets
+ * 
+ */
+template<typename equalities_t_, typename inequalities_t_, typename objective_t_>
+class Problem
+{
+public:
+	using equalities_t = equalities_t_;
+	using inequalities_t = inequalities_t_;
+	using objective_t = objective_t_;
+
+	equalities_t equalities;
+	inequalities_t inequalities;
+	objective_t objective;
+
+	Problem(equalities_t equalities_, inequalities_t inequalities_, objective_t objective_)
+	: equalities(equalities_), inequalities(inequalities_), objective(objective_)
+	{}
+};
+
+
+template<typename scalar_t, typename param_t, 
+				 typename variables_tuple, typename eq_tuple, typename ineq_tuple, typename obj_tuple>
+class ProblemCompiler
+{
+    using eq_factory = FunctionFactory<scalar_t, param_t, eq_tuple, variables_tuple>;
+    using ineq_factory = FunctionFactory<scalar_t, param_t, ineq_tuple, variables_tuple>;
+    using obj_factory = FunctionFactory<scalar_t, param_t, obj_tuple, variables_tuple>;
+
+public:
+    using problem_t = Problem<typename eq_factory::type, typename ineq_factory::type, typename obj_factory::type>;
+
+    static problem_t make()
+    {
+    	return problem_t(eq_factory::make(), ineq_factory::make(), obj_factory::make());
+    }
+};
+
 
 };
 

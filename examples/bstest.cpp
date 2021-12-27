@@ -63,11 +63,8 @@ struct Constraint
 };
 
 
-template<typename Scalar, std::size_t N, typename range>
-struct BSTest;
-
-template<typename Scalar, std::size_t N, std::size_t... ind>
-struct BSTest<Scalar, N, std::integer_sequence<std::size_t, ind...>>
+template<typename Scalar>
+struct Functions
 {
     struct param_t
     {
@@ -79,7 +76,6 @@ struct BSTest<Scalar, N, std::integer_sequence<std::size_t, ind...>>
         Eigen::Matrix<Scalar, 2, 1> q {1, 1e3}; // Stage-cost weights
         Eigen::Matrix<Scalar, 1, 1> r {1e-3}; // Stage-cost weights
     };
-
 
     FUNCTION(dynamics, Scalar, param_t, (xplus, 2), (x, 2), (u, 1))
     {
@@ -100,6 +96,33 @@ struct BSTest<Scalar, N, std::integer_sequence<std::size_t, ind...>>
         // out << x(0)*x(1)+x(0)*x(0)*10.0,
         //     u(0)*x(0)*x(1)+u(0)*x(0)*x(0)*10.0;
     }
+};
+
+template<typename Scalar, std::size_t N, typename range>
+struct BSTest;
+
+template<typename Scalar, std::size_t N, std::size_t... ind>
+struct BSTest<Scalar, N, std::integer_sequence<std::size_t, ind...>>
+{
+ 	using param_t = typename Functions<Scalar>::param_t;
+ 	using dynamics_eq = typename Functions<Scalar>::dynamics_eq;
+ 	using test_func = typename Functions<Scalar>::test_func;
+
+ 	Variables var;
+ 	x = var.add(Variable("x", 2, N));  // <- Geneates indices
+ 	xss = var.add(Variable("xss", 2));
+
+
+ 	Constraints eq;
+ 	for(i=0; i<N-1; i++)
+ 	{
+ 		eq.add(function<dynamics_eq>(), x(i), x(i+1), u(i));
+ 		eq.add(function<steady_state>(), xss, u(i));
+ 	}
+
+ 	Constraints inequalities;
+ 	for(i=0; i<N-1; i++)
+ 		inequalities.add(function<dynamics_eq>(), x(i), x(i+1), u(i), lb, ub);
 
 
     template<int i>
@@ -112,14 +135,15 @@ struct BSTest<Scalar, N, std::integer_sequence<std::size_t, ind...>>
 
     template<int i>
     struct con_dynamics : Constraint<dynamics_eq::num_outputs, x<i+1>, x<i>, u<i>> {using Function = dynamics_eq;};
-    // struct con_dynamics : Constraint<2> {static constexpr const char* name="dynamics";};
-    // struct con_dynamics : BS::FunctionConstraint<dynamics_eq, x<i+1>, x<i>, u<i>> {};
-
-    // struct con_test : BS::FunctionConstraint<test_func, x<1>, u<3>> {};
     template<int i>
     struct con_test : Constraint<test_func::num_outputs, x<i+3>, u<i+1>> {using Function = test_func;};
 
-    using constraints = std::tuple<con_test<0>, con_dynamics<ind>..., con_test<1>, con_test<7>, con_test<2>>;
+    using eq = std::tuple<con_test<0>, con_dynamics<ind>..., con_test<1>, con_test<7>, con_test<2>>;
+    using ineq = std::tuple<con_test<3>, con_test<4>>;
+    using obj = std::tuple<con_test<3>, con_dynamics<2>, con_test<4>>;
+
+	using problemMaker = typename BS::ProblemCompiler<Scalar, param_t, variables, eq, ineq, obj>;
+	using problem = typename problemMaker::problem_t;
 };
 
 
@@ -134,26 +158,7 @@ int main()
 
 	param_t param;
 
- //    auto M = BS::BSMatrixFactory<double, Test::constraints, Test::variables>::make();
-
- //    std::cout << type_name<decltype(M)>() << std::endl;
-
- //    int k=0;
-	// for(int c=0; c<decltype(M)::numBlockColumns; c++)
-	// 	for(int r=0; r<decltype(M)::numBlockRows; r++)
- //    		if(M.isNonzero(r, c))
- //    		{
- //    			Eigen::MatrixX<Scalar> B(M.rowSizes[r], M.columnSizes[c]);
- //    			B.array() = ++k;
-	// 		    M.setBlock(r,c,B);
- //    		}
-
- //    const IOFormat fmt(2);
- //    std::cout << "S = \n" << Eigen::MatrixX<Scalar>(M.S).format(fmt) << std::endl;
-
-
-
-    auto f = BS::FunctionFactory<Scalar, param_t, Test::constraints, Test::variables>::make();
+    auto f = BS::FunctionFactory<Scalar, param_t, Test::eq, Test::variables>::make();
 
     decltype(f)::variable_t x;
     decltype(f)::output_t out;
@@ -192,6 +197,23 @@ int main()
 	IOFormat CleanFmt(2, 0, " ", "\n", "", "");
     std::cout << "f.jacobian = \n" << Eigen::MatrixX<Scalar>(f.get_jacobian()).format(CleanFmt) << std::endl;
 
+
+    // std::cout << "type(f) = " << type_name<decltype(f)>() << std::endl;
+
+
+{
+	using Problem = Test::problem;
+    Problem prob = Test::problemMaker::make();
+
+    Problem::equalities_t::output_t eq;
+    prob.equalities.eval(param, x, eq);
+
+    std::cout << "eq = " << eq.transpose() << std::endl;
+
+    std::cout << type_name<Test::x<0>>() << std::endl;
+
+    // std::cout << "type(equalities) = " << type_name<Problem::equalities_t>() << std::endl;
     return 0;
+};
 }
 // }
