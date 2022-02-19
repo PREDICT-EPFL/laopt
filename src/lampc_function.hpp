@@ -72,6 +72,7 @@ namespace lampc {
  #define FUNCTION(func_name, scalar_t, param_t, out_pair, ...) \
 	struct func_name##_ \
 	{ \
+		static constexpr const char* name=#func_name;\
 		template<typename T> \
 		static EIGEN_STRONG_INLINE void impl(const param_t& p,\
 		Eigen::Ref<Eigen::Matrix<T, GET_VAR_SIZE_PAIR(out_pair), 1>> GET_VAR_NAME_PAIR(out_pair), \
@@ -119,15 +120,36 @@ namespace detail
 	};
 };
 
-template<typename Func, typename scalar_t_, typename param_t_, int num_outputs_, int... input_sizes>
+template<typename Func_, typename scalar_t_, typename param_t_, int num_outputs_, int... input_sizes>
 struct Jacobian // < FunctionTraits<Func, scalar_t, param_t, num_outputs, input_sizes...> >
 {
+	using Func = Func_;
 	using param_t = param_t_;
 	using scalar_t = scalar_t_;
+
+	static constexpr const char* name = Func::name;
 
 	static constexpr int num_inputs = meta::sum_template<input_sizes...>();  // Total number of inputs
 	static constexpr int num_input_vars = sizeof...(input_sizes);  // Number of input vector variables
 	static constexpr int num_outputs = num_outputs_;
+
+	/**
+	 * Return the number of nonzeros in the jacobian
+	 * 
+	 * Default implementation assumes dense jacobians.
+	 * Oveload in child class for sparse.
+	 */
+	static constexpr int nnzJacobian()
+	{
+		int nnz = 0;
+		auto l = {(
+			nnz += input_sizes * num_outputs_,
+			0
+			)...};
+		return nnz;
+	}
+
+
 
 	// First order derivative
 	using AD_scalar = Eigen::AutoDiffScalar<Eigen::Matrix<scalar_t, num_inputs, 1>>;

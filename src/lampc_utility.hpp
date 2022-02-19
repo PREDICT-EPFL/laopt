@@ -2,6 +2,7 @@
 #define LAMPC_UTILITY
 
 #include <limits>
+#include "Eigen/Dense"
 
 namespace lampc
 {

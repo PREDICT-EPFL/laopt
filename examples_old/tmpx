@@ -1,0 +1,225 @@
+
+
+
+mat.set<SparseMatrix>(block_row, block_col, block_mat);
+mat.set<MatrixX>(block_row, block_col, block_mat);
+mat.set<MatrixX>(block_row, block_col, block_mat);
+
+mat.set<MatrixX>(con1, x, block_mat);
+
+All reduce to
+
+constraints[block_row][block_col].set<MatrixType>(this.valuePtr(), block_mat)
+
+
+What does a Block have to do?
+
+- nonZeros
+- given 
+
+
+What does it not have to do?
+
+- know its location in the larger matrix
+
+
+
+BSMatrix finalize process:
+
+1. Compute nonZeros - Sparse/Dense passed in
+1. Iterate over Constraints
+1b. Iteratoe over blocks
+
+
+
+BSMatrix IS a Sparse/Dense matrix (maybe block-sparse one day)
+All we're building is a set of accessors to read/write blocks
+
+
+What is a block?
+- Knows how to read/write from a sparse or dense block into the right place of BSMatrix
+- Block needs to know if the output is going to be sparse or dense
+- Block data:
+-- ColumnOffsetVector
+
+
+
+
+// struct BaseBlock;
+
+// struct Variable
+// {
+// 	int len;
+// 	std::string name;
+
+// 	Variable(std::string name_, int len_ = Eigen::Dynamic) 
+// 		: name(name_), len(len_)
+// 	{}
+
+// 	// // Blocks in this column
+// 	// std::vector<BaseBlock*> blocks;
+// };
+
+// /** Represents a block row
+//  */
+// template<int RowsAtCompileTime_ = Eigen::Dynamic>
+// struct Constraint
+// {
+// 	static constexpr int RowsAtCompileTime = RowsAtCompileTime_;
+// 	int rows;
+
+// 	std::vector<shared_ptr<Variable>> variables;
+
+// 	Constraint(std::vector<shared_ptr<Variable>> variables_, int rows_ = RowsAtCompileTime)
+// 		: variables(variables_)
+// 	{
+// 	}
+
+// 	void test()
+// 	{
+// 	}
+
+// 	// Constraint(std::vector<Variable*> variables_, int rows_ = RowsAtCompileTime)
+// 	// 	// : variables(variables_)
+// 	// {
+// 	// 	std::cout << "rows_ = " << rows_ << std::endl;
+// 	// }
+
+// 	// std::vector<BaseBlock*> blks;
+// };
+
+
+
+// // struct BaseBlock
+// // {
+// // 	const Variable& var;
+// // 	const Constraint& con;
+
+// // 	BaseBlock(const Variable& var_, const Constraint& con_) : con(con_), var(var_) {}
+// // };
+
+// // template<typename Scalar, 
+// // 		 int RowsAtCompileTime = Eigen::Dynamic,
+// // 		 int ColsAtCompileTime = Eigen::Dynamic>
+// // struct DenseBlock final : BaseBlock
+// // {
+// // 	Eigen::Matrix<Scalar, RowsAtCompileTime, ColsAtCompileTime> m_matrix;
+// // 	using BaseBlock::con;
+// // 	using BaseBlock::var;
+
+// // 	DenseBlock(const Constraint& con_, const Variable& var_)
+// // 		: BaseBlock(con_, var_)
+// // 	{
+// // 		assert(con.len == RowsAtCompileTime && "Rows of static DenseBlock does not match row");
+// // 		assert(column.len == ColsAtCompileTime && "Columns of static DenseBlock does not match column");
+
+// // 		if(row.len != Eigen::Dynamic && column.len != Eigen::Dynamic)
+// // 			resize();
+
+// // 		// // Add ourselves to row and column
+// // 		// row.setBlock(this);
+// // 		// column.setBlock(this);
+// // 	}
+
+// // 	/** Called if column or row is resized
+// // 	 */
+// // 	void resize()
+// // 	{
+// // 		// Will fail if static memory
+// // 		m_matrix.resize(row.len, column.len);
+// // 	}
+
+// // 	void print()
+// // 	{
+// // 		std::cout << "DenseBlock of size " << row.len << " x " << column.len;
+// // 		std::cout << " compile time size " << RowsAtCompileTime << " x " << ColsAtCompileTime << std::endl;
+// // 	}
+// // };
+
+
+
+// // template<typename... Vars>
+// // auto make_constraint(int rows_, Vars&... vars)
+// // {
+// // 	Constraint<Eigen::Dynamic> c<Vars...>(rows_, vars...);
+// // 	return c;
+// // }
+
+// // struct BSMatrix
+// // {
+// // 	std::vector<RowBase> rows;
+// // };
+
+// template<typename Scalar, int N>
+// struct BSTest
+// {	
+// 	auto x = std::make_shared(new Variable{"x", 2});
+// 	auto y = std::make_shared(new Variable{"y", 3});
+// 	auto z = std::make_shared(new Variable{"z", 4});
+
+// 	auto Constraint<> con1{{x, y}, 2};
+// 	auto Constraint<> con2{{y}};
+// 	auto Constraint<3> con3{{z, x}};
+
+// 	// Variable q{5};
+// 	// auto con4 = make_constraint(2, )
+// 	// Constraint<> con4{{&q}, 2};
+
+
+// 	// BSTest()
+// 	// {
+// 	// 	std::cout << "BSTest::q = " << &q << std::endl;
+// 	// }
+
+// 	// struct con1 : RowType<Scalar, 3, x, y> {};
+// 	// struct con2 : RowType<Scalar, 2, x> {};
+// 	// struct con3 : RowType<Scalar, 4, z, y> {};
+
+
+// 	// DenseBlock<Scalar, 2, 3> A;
+// 	// DenseBlock<Scalar, 5, 3> B;
+// 	// DenseBlock<Scalar, 6, 3> C;
+// 	// DenseBlock<Scalar> D;
+
+// 	// BSMatrix<N> bs;
+
+// 	// BSTest()
+// 	// {
+// 	// 	bs.blks[0] = &A;
+// 	// 	bs.blks[1] = &B;
+// 	// 	bs.blks[2] = &C;
+// 	// 	bs.blks[3] = &D;
+
+// 	// 	D.resize(10, 10);
+
+// 	// 	// std::for_each(blks.begin(), blks.end(), [](auto& blk){blk.resize(2, 3);});
+// 	// }
+
+// 	void test()
+// 	{
+// 		con1.test();
+
+// 		// DenseBlock<Scalar> con1_x(con1, x);
+
+// 		// con1_x.print();
+
+// 		// DenseBlock<Scalar> con2_x(con2, x);
+// 		// con2.
+
+// 		// con2_x.print();
+
+
+// 		// int acc = std::accumulate(bs.blks.begin(), bs.blks.end(), 0,
+// 		// 	[](int prev, auto blk){return prev + blk->rows;}
+// 		// 	);
+// 		// std::cout << "Total rows = " << acc << std::endl;
+// 	}
+// };
+
+// int main()
+// {
+// 	BSTest<double, 4> test;
+
+// 	test.test();
+// 	return 0;
+// }
