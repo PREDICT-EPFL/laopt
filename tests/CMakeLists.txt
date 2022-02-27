@@ -34,15 +34,15 @@ target_link_libraries(
 #  ipopt
 #  Eigen3::Eigen
 
-# add_executable(
-#   bs_test
-#   bs_test.cpp
-# )
-# target_link_libraries(
-#   bs_test
-#   gtest_main
-#   gtest
-# )
+add_executable(
+  bs_test
+  bs_test.cpp
+)
+target_link_libraries(
+  bs_test
+  gtest_main
+  gtest
+)
 
 # add_executable(
 #   con_test

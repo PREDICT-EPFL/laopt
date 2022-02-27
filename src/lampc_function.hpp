@@ -149,6 +149,18 @@ struct Jacobian // < FunctionTraits<Func, scalar_t, param_t, num_outputs, input_
 		return nnz;
 	}
 
+	/**
+	 * Returns the sparsity structure of the jacobian of this function
+	 * 
+	 * S = [J_var1 J_var2 ...]
+	 */
+	static Eigen::SparseMatrix<int> jacobianStructure()
+	{
+		// Default is just a dense matrix
+		Eigen::MatrixX<int> S(num_outputs, num_inputs);
+		S.array() = 1;
+		return S.sparseView();
+	}
 
 
 	// First order derivative

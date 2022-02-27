@@ -5,6 +5,9 @@ if(NOT DEFINED EIGEN3_INCLUDE_DIR)
     find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 endif()
 
+# find_package(fmt)
+ 
+
 # Show message stating path to Eigen3
 message(STATUS "Using Eigen3 library found at ${EIGEN3_INCLUDE_DIR}")
 

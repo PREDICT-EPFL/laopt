@@ -27,6 +27,13 @@ struct MyFunctions
         out = tmp - xplus;
     }
 
+    FUNCTION(dynamics_0, scalar_t, param_t, (out, 2), (x1, 2), (u0, 1))
+    {
+        Eigen::Matrix<T, 2, 1> tmp;
+        dynamics::template impl<T>(p, tmp, p.x0.template cast<T>(), u0);
+        out = tmp - x1;
+    }
+
     FUNCTION(dynamics_ss, scalar_t, param_t, (out, 2), (x, 2), (u, 1))
     {
         Eigen::Matrix<T, 2, 1> tmp;
