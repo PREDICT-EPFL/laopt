@@ -34,6 +34,7 @@ endif()
 
 include_directories(src bsmatrix src/examples /usr/local/include/)
 
+add_subdirectory(src     )
 add_subdirectory(examples)
 add_subdirectory(polympc)
 add_subdirectory(qpmad  )

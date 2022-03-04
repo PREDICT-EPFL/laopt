@@ -97,5 +97,27 @@ inline void setJ(out_t &out, jacobian_t &jacobian, // Values to write into
 }
 
 
+/** 
+ * Copy the LAMPC_Function output into the gradient
+ */
+template<int len, typename scalar_t, typename gradient_t, typename weight_t, typename jacobian_output_t>
+inline void setGrad(scalar_t &val, gradient_t &grad, 
+			  const sparseblock_info<int> *var_info, int num_vars, // Offsets of the vars into grad
+			  const weight_t &w, 
+			  const jacobian_output_t &J)
+{
+	std::cout << "J.val = " << J.val.transpose() << std::endl;
+	std::cout << "w = " << w.transpose() << std::endl;
 
+	// val += w.dot(J.val);
+	// auto g = w.transpose() * J.jacobian;
+	// int offset = 0;
+	// int varlen = 0;
+	// for(int i=0; i<num_vars; i++)
+	// {
+	// 	varlen = var_info[i].block_length;
+	// 	grad.segment(var_info[i].target_index, varlen) += g.segment(offset, varlen);
+	// 	offset += varlen;
+	// }
+}
 #endif // __LAMPC__HPP

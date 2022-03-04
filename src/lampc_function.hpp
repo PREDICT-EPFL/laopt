@@ -133,6 +133,11 @@ struct Jacobian // < FunctionTraits<Func, scalar_t, param_t, num_outputs, input_
 	static constexpr int num_input_vars = sizeof...(input_sizes);  // Number of input vector variables
 	static constexpr int num_outputs = num_outputs_;
 
+	static std::vector<int> get_input_sizes()
+	{
+		return std::vector<int>{input_sizes...};
+	}
+
 	/**
 	 * Return the number of nonzeros in the jacobian
 	 * 
@@ -160,6 +165,17 @@ struct Jacobian // < FunctionTraits<Func, scalar_t, param_t, num_outputs, input_
 		Eigen::MatrixX<int> S(num_outputs, num_inputs);
 		S.array() = 1;
 		return S.sparseView();
+	}
+
+	/**
+	 * Returns the sparsity structure of the hessian of the i'th output of this function
+	 */
+	static Eigen::SparseMatrix<int> hessianStructure(int output_index)
+	{
+		// Default is just a dense matrix
+		Eigen::MatrixX<int> H(num_inputs, num_inputs);
+		H.array() = 1;
+		return H.sparseView();
 	}
 
 

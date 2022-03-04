@@ -13,7 +13,7 @@
 int main()
 {
     QP::variable_t x;
-    x.array() = 0;
+    x.array() = 1;
 
     QP::param_t param;
     QP::equalities::out_t eq;
@@ -30,25 +30,31 @@ int main()
 
     std::cout << "J = \n" << Eigen::MatrixX<double>(J) << std::endl;
 
-// typedef Eigen::Triplet<double> T;
-// std::array<T,3> tripletList = {T{1,1,4},{2,2,5},{3,3,6}};
-// // tripletList[0] = T(1,1,4);
-// // tripletList[1] = T(2,2,5);
-// // tripletList[2] = T(3,3,6);
+    QP::objective::weight_t w;
+    w.array() = 1;
+    x.array() = 1;
+    std::cout << "objective = " << QP::objective::eval(param, w, x) << std::endl;
 
-// // tripletList.reserve(10);
-// // tripletList.push_back(T(1,1,4));
-// // tripletList.push_back(T(2,2,5));
-// // tripletList.push_back(T(3,3,6));
+    QP::variable_t z;
+    z.array() = 0;
+    QP::x(z, 2)[0] = 1;
+    QP::x(z, 2)[1] = 2;
 
-// Eigen::SparseMatrix<double> mat(10,10);
-// mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    std::cout << "z = " << z.transpose() << std::endl;
+    std::cout << "QP::x = \n" << QP::x(z) << std::endl;
 
-// std::cout << "mat = \n" << Eigen::MatrixX<double>(mat) << std::endl;
+    QP::objective::gradient_t grad;
+    w.array() = 1;
+    x.array() = 1;
+    QP::xss(x).array() = 10;
+    QP::uss(x).array() = 10;
+    std::cout << "objective = " << QP::objective::eval(param, w, x, grad) << std::endl;
+    std::cout << "gradient  = " << grad.transpose() << std::endl;
 
-    // eq.eval_jacobian(param, x, con_eq);
-    // std::cout << "con_eq = " << con_eq.transpose() << std::endl;
-    // std::cout << "eq.jacobian = \n" << Eigen::MatrixX<double>(eq.jacobian) << std::endl;
+
+    // QP::equalities::hessian_t H;
+    // QP::equalities::initialize_hessian(H);
+    // std::cout << "H = \n" << Eigen::MatrixX<double>(H) << std::endl;
 
     return 1;
 }

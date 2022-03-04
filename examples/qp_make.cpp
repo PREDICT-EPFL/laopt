@@ -2,11 +2,15 @@
  * Use polyMPC and LACompiler to solve a simple QP
  */
 #include <sstream>
+#include <fstream>
+
 
 #include "lampc.hpp"
 #include "la_compiler.hpp"
 
 #include "qp_functions.hpp"
+
+
 
 int main()
 {
@@ -19,7 +23,7 @@ int main()
 	const int n = param.B.rows();
 	const int m = param.B.cols();
 
-	LACompiler<Functions> prob("QP");
+	LACompiler prob("QP", std::string(type_name<param_t>()), std::string(type_name<scalar_t>()));
 
 	// Order of creation of variables defines their order in the compiled problem
 	auto x = prob.variable("x", 2, N);
@@ -27,15 +31,41 @@ int main()
 	auto xss = prob.variable("xss", 2);
 	auto uss = prob.variable("uss", 1);
 
+	std::cout << "variable x[0] = " << x[0] << std::endl;
+	std::cout << "variable u = " << u << std::endl;
+	std::cout << "prob.vars = " << prob.variables << std::endl;
+
+	// Add the list of callables automatically
+    auto dynamics = prob.callable(callable_info(Functions::dynamics()));
+    auto dynamics_eq = prob.callable(callable_info(Functions::dynamics_eq()));
+    auto dynamics_ss = prob.callable(callable_info(Functions::dynamics_ss()));
+    auto stage_cost = prob.callable(callable_info(Functions::stage_cost()));
+
+    std::cout << prob.callables << std::endl;
+
 	auto equalities = prob.function("equalities");
-	equalities->add(Functions::dynamics_0(), {x[1], u[0]});
+	equalities->call(dynamics, {x[1], u[0]});
 	for(int i=0; i<N-1; i++)
-		equalities->add(Functions::dynamics_eq(), {x[i+1], x[i], u[i]});
+		equalities->call(dynamics_eq, {x[i+1], x[i], u[i]});
 
 	// equalities->add_iterator(Functions::dynamics_eq(), {it(x,i+1), it(x,i), it(u,i), x[N], u[0]});
 
-	equalities->add(Functions::dynamics_ss(), {xss, uss});
+	equalities->call(dynamics_ss, {xss, uss});
 
+	std::cout << equalities << std::endl;
+
+	// std::cout << "equalities.jacobianStructure = \n" << Eigen::MatrixX<int>(equalities->jacobianStructure()) << std::endl;
+	// std::cout << "equalities.hessianStructure = \n" << Eigen::MatrixX<int>(equalities->hessianStructure()) << std::endl;
+
+	// auto lagrangian = prob.weighed_sum("lagrangian");
+	// lagrangian->add(objective);
+	// lagrangian->add(equalities);
+	// lagrangian->add(inequalities);
+
+	auto objective = prob.weighted_sum("objective");
+	for(int i=0; i<N-1; i++)
+		objective->call(stage_cost, {x[i], u[i], xss, uss});
+	
 	// auto inequalities = prob.function("inequalities");
 	// for(int i=0; i<N-1; i++)
 	// 	inequalities->add(Functions::dynamics(), {xss, u[i]});
@@ -63,12 +93,12 @@ int main()
 	f.open("/Users/cnjones/git/lampc/examples/qp.compiled.hpp", std::ios::trunc);
 
 	f << prob.generate();
-	// std::cout << prob.generate();
+	// // std::cout << prob.generate();
 
-	// equalities->template generate<scalar_t>(f);
-	// equalities->template generate<scalar_t>(std::cout);
+	// // equalities->template generate<scalar_t>(f);
+	// // equalities->template generate<scalar_t>(std::cout);
 
-	// compiled.toFile(f);
+	// // compiled.toFile(f);
 	f.close();
 
 	// std::cout << indent(equalities->generate_eval());

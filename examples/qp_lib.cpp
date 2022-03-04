@@ -3,8 +3,8 @@
  */
 #include "qp_lib.hpp"
 
-void solve_qp(QP::param_t param, 
-              QP::equalities::variable_t &x, // Input
+void solve_qp(QP::param_t &param, 
+              QP::variable_t &x, // Input
               QP::equalities::out_t &eq, // Output
               QP::equalities::jacobian_t &J)
 {
