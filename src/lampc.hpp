@@ -44,80 +44,89 @@ struct sparseblock_info
  * - overwrite a sub-matrix, while zeroing elements that aren't in source
  */
 
-/**
- * Copy a sub-matrix into another, larger matrix
- * 
- * The blocks array must have been built with the build_copy_sequence function 
- * with the same sparsity structures.
- * 
- * Note: Only copies the non-zero elements of source. 
- * The zero elements in source are untouched in target.
- */
-template<typename T>
-void copy_submatrix(Eigen::SparseMatrix<T> &target, const Eigen::SparseMatrix<T> &source, 
-					const sparseblock_info<int> *blocks, const int num_blocks)
+
+
+
+template<typename scalar_t>
+struct abstract_function_t
 {
-	T* targetPtr = target.valuePtr();
-	T* sourcePtr = source.valuePtr();
-	for(int i=0; i<num_blocks; i++)
+	/**
+	 * Copy a sub-matrix into another, larger matrix
+	 * 
+	 * The blocks array must have been built with the build_copy_sequence function 
+	 * with the same sparsity structures.
+	 * 
+	 * Note: Only copies the non-zero elements of source. 
+	 * The zero elements in source are untouched in target.
+	 */
+	static void copy_submatrix(Eigen::Ref<Eigen::SparseMatrix<scalar_t>> target, 
+						const Eigen::SparseMatrix<scalar_t> &source, 
+						const sparseblock_info<int> *blocks, const int num_blocks)
 	{
-		memcpy(targetPtr + blocks[i].target_index, sourcePtr, sizeof(T) * blocks[i].block_length);
-		sourcePtr += blocks[i].block_length;
+		scalar_t* targetPtr = target.valuePtr();
+		scalar_t* sourcePtr = source.valuePtr();
+		for(int i=0; i<num_blocks; i++)
+		{
+			memcpy(targetPtr + blocks[i].target_index, sourcePtr, sizeof(scalar_t) * blocks[i].block_length);
+			sourcePtr += blocks[i].block_length;
+		}
+	};
+
+	static void copy_submatrix(Eigen::Ref<Eigen::SparseMatrix<scalar_t>> target, 
+						const Eigen::MatrixX<scalar_t> &source, 
+						const sparseblock_info<int> *blocks, const int num_blocks)
+	{
+		scalar_t* targetPtr = target.valuePtr();
+		const scalar_t* sourcePtr = source.data();
+		for(int i=0; i<num_blocks; i++)
+		{
+			memcpy(targetPtr + blocks[i].target_index, sourcePtr, sizeof(scalar_t) * blocks[i].block_length);
+			sourcePtr += blocks[i].block_length;
+		}
+	};
+};
+
+template<typename scalar_t, typename out_t, typename jacobian_t>
+struct function_util_t : public abstract_function_t<scalar_t>
+{
+	/** 
+	 * Copy the LAMPC_Function output into the right place in the jacobian
+	 */
+	template<typename jacobian_output_t>
+	static inline void setJ(Eigen::Ref<out_t> out, Eigen::Ref<jacobian_t> jacobian, // Values to write into
+				 	 const int offset, // Offset into out for the evaluation
+				 	 const sparseblock_info<int> *jac_seq, // Writing sequence for the jacobian
+				 	 const int num_blocks, 
+				 	 const jacobian_output_t &J) // Input
+	{
+	      out.template segment<jacobian_output_t::num_outputs>(offset) = J.val;
+	      abstract_function_t<scalar_t>::copy_submatrix(jacobian, J.jacobian, jac_seq, num_blocks);
 	}
 };
 
-template<typename T>
-void copy_submatrix(Eigen::SparseMatrix<T> &target, const Eigen::MatrixX<T> &source, 
-					const sparseblock_info<int> *blocks, const int num_blocks)
+template<typename scalar_t, typename gradient_t, typename weight_t>
+struct weightedsum_util_t : public abstract_function_t<scalar_t>
 {
-	T* targetPtr = target.valuePtr();
-	const T* sourcePtr = source.data();
-	for(int i=0; i<num_blocks; i++)
+	/** 
+	 * Copy the LAMPC_Function output into the gradient
+	 */
+	template<typename jacobian_output_t>
+	static inline void setGrad(scalar_t &val, Eigen::Ref<gradient_t> grad, 
+				  const sparseblock_info<int> *var_info, int num_vars, // Offsets of the vars into grad
+				  const Eigen::Ref<const Eigen::Vector<scalar_t, jacobian_output_t::num_outputs>> w, 
+				  const jacobian_output_t &J)
 	{
-		memcpy(targetPtr + blocks[i].target_index, sourcePtr, sizeof(T) * blocks[i].block_length);
-		sourcePtr += blocks[i].block_length;
+		val += w.dot(J.val);
+		auto g = w.transpose() * J.jacobian;
+		int offset = 0;
+		int varlen = 0;
+		for(int i=0; i<num_vars; i++)
+		{
+			varlen = var_info[i].block_length;
+			grad.segment(var_info[i].target_index, varlen) += g.segment(offset, varlen);
+			offset += varlen;
+		}
 	}
 };
 
-
-/** 
- * Copy the LAMPC_Function output into the right place in the jacobian
- */
-template<int len, typename scalar_t,
-		 typename out_t, typename jacobian_t,
-		 typename jacobian_output_t>
-inline void setJ(out_t &out, jacobian_t &jacobian, // Values to write into
-			 	 const int offset, // Offset into out for the evaluation
-			 	 const sparseblock_info<int> *jac_seq, // Writing sequence for the jacobian
-			 	 const int num_blocks, 
-			 	 const jacobian_output_t &J) // Input
-{
-      out.template segment<len>(offset) = J.val;
-      copy_submatrix<scalar_t>(jacobian, J.jacobian, jac_seq, num_blocks);
-}
-
-
-/** 
- * Copy the LAMPC_Function output into the gradient
- */
-template<int len, typename scalar_t, typename gradient_t, typename weight_t, typename jacobian_output_t>
-inline void setGrad(scalar_t &val, gradient_t &grad, 
-			  const sparseblock_info<int> *var_info, int num_vars, // Offsets of the vars into grad
-			  const weight_t &w, 
-			  const jacobian_output_t &J)
-{
-	std::cout << "J.val = " << J.val.transpose() << std::endl;
-	std::cout << "w = " << w.transpose() << std::endl;
-
-	// val += w.dot(J.val);
-	// auto g = w.transpose() * J.jacobian;
-	// int offset = 0;
-	// int varlen = 0;
-	// for(int i=0; i<num_vars; i++)
-	// {
-	// 	varlen = var_info[i].block_length;
-	// 	grad.segment(var_info[i].target_index, varlen) += g.segment(offset, varlen);
-	// 	offset += varlen;
-	// }
-}
 #endif // __LAMPC__HPP

@@ -99,19 +99,21 @@ namespace lampc {
 
 namespace detail 
 {
-	template<typename scalar_t, int num_outputs, int num_inputs>
+	template<typename scalar_t, int _num_outputs, int num_inputs>
 	struct jacobian_return_t
 	{
 		EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+		constexpr static int num_outputs = _num_outputs;
 
 		Eigen::Matrix<scalar_t, num_outputs, 1> val;
 		Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
 	};
 
-	template<typename scalar_t, int num_outputs, int num_inputs>
+	template<typename scalar_t, int _num_outputs, int num_inputs>
 	struct hessian_return_t
 	{
 		EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+		constexpr static int num_outputs = _num_outputs;
 
 		Eigen::Matrix<scalar_t, num_outputs, 1> val;
 		Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;

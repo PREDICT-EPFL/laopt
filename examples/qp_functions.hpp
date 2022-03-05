@@ -10,8 +10,8 @@ struct MyFunctions
         Eigen::Matrix<scalar_t, 2, 1> B {10, 20};
         Eigen::Matrix<scalar_t, 1, 1> ref {3};
 
-        Eigen::Matrix<scalar_t, 2, 1> q {1, 1e3}; // Stage-cost weights
-        Eigen::Matrix<scalar_t, 1, 1> r {1e-3}; // Stage-cost weights
+        Eigen::Matrix<scalar_t, 2, 1> q {1, 2}; // Stage-cost weights
+        Eigen::Matrix<scalar_t, 1, 1> r {3}; // Stage-cost weights
     };
     using param_t = param_t_;
 

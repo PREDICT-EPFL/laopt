@@ -644,9 +644,10 @@ std::string function_t::generate()
 {
 	IndentStream o;
 
-	o << "struct " << name << "\n{\n";
+	o << fmt::format("struct {} : public function_util_t<scalar_t, Eigen::Vector<scalar_t, {}>, Eigen::SparseMatrix<scalar_t>>\n",
+				name, num_outputs());
+	o << "\n{\n";
 	o << IndentStream::indent;
-	// o << "using variable_t = Eigen::Vector<scalar_t, num_variables>;\n"; 
 	o << fmt::format("using out_t = Eigen::Vector<scalar_t, {}>;\n", num_outputs());
 	o << "using jacobian_t = Eigen::SparseMatrix<scalar_t>;\n";
 	o << "using hessian_t = Eigen::SparseMatrix<scalar_t>;\n";
@@ -654,7 +655,6 @@ std::string function_t::generate()
 	o << "\n";
 	o << generate_eval() << "\n\n";
 	o << generate_jacobian() << "\n\n";
-	// o << generate_hessian() << "\n\n";
 	o << IndentStream::outdent;
 
 	o << "};\n";
@@ -757,23 +757,7 @@ std::string function_t::generate_jacobian()
 		o << fmt::format("{}{{{},{}}}", join, blk.target_index, blk.block_length);
 		join = ",";
 	}
-	o << "};\n"
-	  << "template<int len, typename jacobian_output_t>\n"
-	  << "static inline void setJ(out_t &out, jacobian_t &jacobian, // Values to write into\n"
-	  << "         const int offset, // Offset into out for the evaluation\n"
-      << "         const int sequence_offset, // Offset into jacobian copy sequence\n"
-	  << "         const int num_blocks, \n"
-	  << "         const jacobian_output_t &J) // Input\n"
-	  << "{\n"
-	  << "  out.template segment<len>(offset) = J.val;\n"
-	  << "  copy_submatrix<scalar_t>(jacobian, J.jacobian, jac_seq + sequence_offset, num_blocks);\n"
-	  << "}\n\n";
-
-	o << "/**\n"
-	  << " * Evaluate the function and its jacobian\n"
-	  << " *\n"
-	  << " * jacobian must have been initialized with the function initialize_jacobian\n"
-	  << " */\n";
+	o << "};\n";
 	o << "static void eval(param_t &param, variable_t x, out_t &out, jacobian_t &jacobian)\n"
 	  << "{\n";
 
@@ -787,8 +771,8 @@ std::string function_t::generate_jacobian()
 		int size = call->callable->num_outputs;
 		std::string name = call->callable->name;
 
-			o << fmt::format("setJ<{}>(out, jacobian, {}, {}, {}, {}::jac(param, {})); // ",
-								size, offset, 
+			o << fmt::format("setJ(out, jacobian, {}, jac_seq+{}, {}, {}::jac(param, {})); // ",
+								offset, 
 								sequence_call_offset[call_index],
 								sequence_call_offset[call_index+1] - sequence_call_offset[call_index],
 								name,
@@ -813,9 +797,10 @@ std::string weightedsum_t::generate()
 {
 	IndentStream o;
 
-	o << "struct " << name << "\n{\n";
+	o << fmt::format("struct {} : public weightedsum_util_t<scalar_t, Eigen::Vector<scalar_t, num_variables>, Eigen::Vector<scalar_t, {}>>",
+		name, num_outputs());
+	o << "\n{\n";
 	o << IndentStream::indent;
-	// o << "using variable_t = Eigen::Vector<scalar_t, num_variables>;\n"; 
 	o << fmt::format("using weight_t = Eigen::Vector<scalar_t, {}>;\n", num_outputs());
 	o << "using gradient_t = Eigen::Vector<scalar_t, num_variables>;\n";
 	o << "using hessian_t = Eigen::SparseMatrix<scalar_t>;\n";
@@ -897,8 +882,8 @@ std::string weightedsum_t::generate_gradient()
 		int size = call->callable->num_outputs;
 		std::string name = call->callable->name;
 
-		oo << fmt::format("setGrad<{}>(val, gradient, {}, {}, w.SEG({},{}), {}::jac(param, {}));",
-			size, blocks.size(),
+		oo << fmt::format("setGrad(val, gradient, grad_seq+{}, {}, w.SEG({},{}), {}::jac(param, {}));",
+			blocks.size(),
 			call->callable->num_args,
 			size, offset, 
 			name,
@@ -923,23 +908,6 @@ std::string weightedsum_t::generate_gradient()
             std::end(blocks),
             std::experimental::make_ostream_joiner(os, ","));
   os << "};\n";
-	os << "template<int len, typename scalar_t, typename gradient_t, typename weight_t, typename jacobian_output_t>\n";
-	os << "static inline void setGrad(scalar_t &val, gradient_t &grad, \n";
-	os << "        int seq_offset, int num_vars, // Offsets of the vars into grad\n";
-	os << "        const weight_t &w, \n";
-	os << "        const jacobian_output_t &J)\n";
-	os << "{\n";
-	os << "  val += w.dot(J.val);\n";
-	os << "  auto g = w.transpose() * J.jacobian;\n";
-	os << "  int offset = 0;\n";
-	os << "  int varlen = 0;\n";
-	os << "  for(int i=0; i<num_vars; i++)\n";
-	os << "  {\n";
-	os << "   varlen = grad_seq[seq_offset+i].block_length;\n";
-	os << "   grad.segment(grad_seq[seq_offset+i].target_index, varlen) += g.segment(offset, varlen);\n";
-	os << "   offset += varlen;\n";
-	os << "  }\n";
-	os << "}\n";
 
   o << os.str() << oo.str();
 
