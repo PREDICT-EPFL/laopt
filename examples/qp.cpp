@@ -56,12 +56,6 @@ int main()
     std::cout << "xss = \n" << QP::xss(x) << std::endl;
     std::cout << "uss = \n" << QP::uss(x) << std::endl;
 
-        // obj = (x(1,:)-xss(1))^2 + 2*(x(2,:)-xss(2))^2 + 3*(u(:) - uss)^2
-        // obj = (N-1)*((1-10)^2 + 2*(1-10)^2 + 3*(1-10)^2)
-        //     = (N-1)*6*81
-        //     = 4'374
-
-
     // QP::equalities::hessian_t H;
     // QP::equalities::initialize_hessian(H);
     // std::cout << "H = \n" << Eigen::MatrixX<double>(H) << std::endl;

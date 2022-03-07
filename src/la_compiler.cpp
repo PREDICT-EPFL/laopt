@@ -14,6 +14,7 @@
 #include <ctime> 
 #include <numeric>
 #include <fstream>
+#include <tuple>
 
 
 #define FMT_HEADER_ONLY
@@ -115,79 +116,6 @@ struct IndentStream
 };
 
 
-
-/**
- * Copy column source_column of source into the target_column of target starting at row target_row
- * 
- * Assumption: The elements of the target matrix are enumerated from 0 -> nnz in the valuePtr array
- * 
- */
-int build_copy_sequence(Eigen::SparseMatrix<int> &_target, Eigen::SparseMatrix<int> &source, 
-						int target_row, int target_column, int source_column,
-						std::vector<sparseblock_info<int>> &blocks)
-{
-	assert( _target.isCompressed() && "_target matrix must be in compressed format" );
-	assert( source.isCompressed() && "source matrix must be in compressed format" );
-
-	Eigen::SparseMatrix<int> target(_target);
-	for(int i=0; i<target.nonZeros(); i++)
-		target.valuePtr()[i] = i;
-
-	// Number of nonzeros in this column
-	int nnz = source.outerIndexPtr()[source_column+1] - source.outerIndexPtr()[source_column];
-	int source_start = source.outerIndexPtr()[source_column];
-
-	// std::cout << fmt::format("source_column = {}\n", source_column);
-	// std::cout << fmt::format("source_start = {}\n", source_start);
-	// std::cout << fmt::format("nnz = {}\n", nnz);
-
-	int num_blocks = 0; // Number of blocks pushed to blocks
-	sparseblock_info<int> blk;
-
-	int number_written = 0;
-	int target_ind = target.outerIndexPtr()[target_column];
-	int source_ind = source.outerIndexPtr()[source_column];
-	while( number_written < nnz )
-	{
-		// std::cout << fmt::format("target_ind = {} source_ind = {}\n", target_ind, source_ind);
-		// std::cout << fmt::format("target.innerIndexPtr()[target_ind] = {} source.innerIndexPtr()[source_ind] + target_row = {}\n",
-		// 	target.innerIndexPtr()[target_ind],
-		// 	source.innerIndexPtr()[source_ind] + target_row);
-
-		// Advance the target index until source and target are synchronized
-		while( target.innerIndexPtr()[target_ind] < source.innerIndexPtr()[source_ind] + target_row )
-		{
-			target_ind++;
-			assert( target_ind <= target.nonZeros() && "Error: target index ran past the end of the matrix" );
-		};
-		blk.target_index = target.valuePtr()[target_ind];
-		blk.block_length = 0;
-
-		// std::cout << fmt::format("target.innerIndexPtr()[target_ind] = {} source.innerIndexPtr()[source_ind] + target_row = {}\n",
-		// 	target.innerIndexPtr()[target_ind],
-		// 	source.innerIndexPtr()[source_ind] + target_row);
-		// std::cout << fmt::format("blk.target_index = {}\n", blk.target_index);
-
-		// Run down the block as long as the source and target are synched
-		while( target.innerIndexPtr()[target_ind] == source.innerIndexPtr()[source_ind] + target_row 
-				&& number_written < nnz )
-		{
-			blk.block_length++;
-			target_ind++;
-			source_ind++;
-			number_written++;
-
-			assert( target_ind <= target.nonZeros() && "Error: target index ran past the end of the matrix" );
-			assert( source_ind <= source.nonZeros() && "Error: source index ran past the end of the matrix" );
-		};
-
-		// Either we're done, or the target has more nonzeros than the source
-		blocks.push_back(blk);
-	};
-
-	return number_written;
-}
-
 struct variable_t
 {
 	std::string name;
@@ -210,6 +138,99 @@ struct variableset_t
 	variableset_t(std::string name) : name(name)	{};
 };
 
+
+
+
+/**
+ * Return the location in the target where ind in the source should be copied
+ * 
+ * partition = {{index_i,len_i}, ...}
+ * Partitions a vector of length sum len_i into segements starting at the index_i's
+ */
+int get_target_location(int ind, std::vector<seqinfo> &partition)
+{
+	std::stringstream o;
+	// for(auto &p : partition) o << fmt::format("({},{}), ", p.index, p.length);
+	// std::cout << fmt::format("Requesting index {} in partition {} -> ", ind, o.str());
+	for(auto &segment: partition)
+	{
+		if(ind >= segment.length) ind -= segment.length;
+		else 
+		{
+			// std::cout << segment.index + ind << "\n";
+			return segment.index + ind;
+		}
+	}
+	throw std::runtime_error("Invalid index passed to get_target_location");
+	assert(0 && "Invalid index passed to get_target_location");
+	return -1;
+}
+
+
+/**
+ * Copy source into target
+ * 
+ * The source is partitioned into blocks and copied into target according to
+ * - rows = {{target_row, len}, ...}
+ * - cols = {{target_col, len}, ...}
+ * 
+ * Returns a vector of seqinfo specifying the copies to be done on the source data in 
+ * data-contiguous order to achieve the requested sparse block-copy.
+ */
+std::vector<seqinfo> build_copy_sequence(
+						Eigen::SparseMatrix<int> &_target,
+						Eigen::SparseMatrix<int> &source,
+						std::vector<seqinfo> &rows,
+						std::vector<seqinfo> &cols)
+{
+	if(!_target.isCompressed()) std::runtime_error( "_target matrix must be in compressed format" );
+	if(!source.isCompressed()) std::runtime_error( "source matrix must be in compressed format" );
+
+	// Add ordering to the coeffs of target
+	Eigen::SparseMatrix<int> target(_target);
+	for(int i=0; i<target.nonZeros(); i++)
+		target.valuePtr()[i] = i;
+
+	// We iterate over the source in data-continuous order, defining the copy sequence to the target
+	std::vector<seqinfo> seq; // The copying sequence
+
+	for (int c=0; c<source.outerSize(); ++c)
+	{
+		int tcol = get_target_location(c, cols);
+		for (SparseMatrix<int>::InnerIterator it(source,c); it; ++it)
+		{
+			int trow = get_target_location(it.row(), rows);
+			int tindex = target.coeffRef(trow,tcol); // Index into the data at the target location
+
+			// std::cout << fmt::format("source ({:3d},{:3d}) -> target ({:3d},{:3d}) [{:3d}]", it.row(), c, trow, tcol, tindex);
+
+			// The next target index if the data is contiguous
+			if(seq.size() == 0 || tindex != seq.back().index + seq.back().length)
+			{
+				// std::cout << "  NON-CONTIGUOUS\n";
+				seq.push_back({.index = tindex, .length=1});
+			}
+			else
+			{
+				// std::cout << "  CONTIGUOUS\n";
+				seq.back().length++;
+			}
+		}		
+	}
+
+	return seq;
+}
+
+/**
+ * Take a set of variable arguments and build a partition of the source matrix
+ */
+std::vector<seqinfo> args_to_partion(std::vector<variable_p> &args)
+{
+	std::vector<seqinfo> partition;	
+	for(auto& arg: args) 
+		partition.push_back(seqinfo{.index=arg->offset, .length=arg->len});
+	return partition;
+}
 
 
 // List of callable functions
@@ -346,7 +367,7 @@ void function_t::call(callable_p callable, std::vector<variable_p> args)
 	// Check that we've got the right number of arguments
 	if(args.size() != callable->num_args)
 	{
-	    std::stringstream err;
+    std::stringstream err;
 		err << fmt::format("Expected {} arguments for function {}, but {} were provided",
 						callable->num_args, callable->name, args.size());
 		throw std::runtime_error(err.str());
@@ -558,7 +579,7 @@ std::string generate_sparse_init(Eigen::SparseMatrix<int> &J, std::string funcNa
   o << IndentStream::indent;
 
 	o << fmt::format("{}.resize({},{});\n", matrixName, J.rows(), J.cols());
-	o << fmt::format("{}.reserve({});\n\n", matrixName, J.nonZeros());
+	o << fmt::format("{}.reserve({});\n", matrixName, J.nonZeros());
 
 	o << fmt::format("typedef Eigen::Triplet<scalar_t> T;\n");
 	o << fmt::format("std::array<T,{}> tripletList = {{T", J.nonZeros());
@@ -577,6 +598,23 @@ o << fmt::format("{}.setFromTriplets(tripletList.begin(), tripletList.end());\n"
 	return o.str();
 }
 
+
+/**
+ * Generate an array named name of sparseblock_info
+ */
+std::string generate_sequence(std::string name, std::vector<seqinfo> &blocks)
+{
+	std::stringstream o;
+	o << fmt::format("static constexpr seqinfo {}[{}] = {{", name, blocks.size());
+	std::string join = "";
+	for(auto &blk: blocks)
+	{
+		o << fmt::format("{}{{{},{}}}", join, blk.index, blk.length);
+		join = ",";
+	}
+	o << "};\n";
+	return o.str();
+}
 
 
 /**
@@ -653,8 +691,8 @@ std::string function_t::generate()
 	o << "using hessian_t = Eigen::SparseMatrix<scalar_t>;\n";
 
 	o << "\n";
-	o << generate_eval() << "\n\n";
-	o << generate_jacobian() << "\n\n";
+	o << generate_eval() << "\n";
+	o << generate_jacobian() << "\n";
 	o << IndentStream::outdent;
 
 	o << "};\n";
@@ -704,7 +742,6 @@ std::string function_t::generate_eval()
 	return o.str();
 }
 
-
 /**
  * Produce code to evaluate the jacobian of this function
  * 
@@ -720,6 +757,7 @@ std::string function_t::generate_jacobian()
 	// Get the jacobian structure
 	auto J = jacobianStructure();
 
+
 	o << generate_sparse_init(J, "initialize_jacobian");
 	o << "\n";
 
@@ -728,64 +766,60 @@ std::string function_t::generate_jacobian()
 		<< " */\n";
 
 	// Store the sequence of copies to fill in the jacobian
-	std::vector<int> sequence_call_offset; // Offset into blocks for a given call
-	std::vector<sparseblock_info<int>> blocks;
+	std::vector<seqinfo> sequence;
 	int row = 0;
 	for(auto& call: calls)
 	{
-		sequence_call_offset.push_back(blocks.size());
+		auto partition = args_to_partion(call->args);
+		std::vector<seqinfo> row_partition = {{row,call->num_outputs()}};
+		auto seq = build_copy_sequence(J, call->callable->jacobianStructure, row_partition, partition);
 
-		auto source = call->callable->jacobianStructure;
+		// std::cout << "Here\n  {";
+		// for(auto &s: seq)
+		// 	std::cout << fmt::format("{{{},{}}}, ", s.index, s.length);
+		// std::cout << "}\n";
+		// auto ptrJ = J.valuePtr();
+		// for(int i=0; i<J.nonZeros(); i++) ptrJ[i] = 1;
+		// auto j = call->callable->jacobianStructure;
+		// auto ptr = j.valuePtr();
+		// for(int i=0; i<j.nonZeros(); i++) ptr[i] = 2;
+		// std::cout << Eigen::MatrixX<int>(j) << std::endl;
+		// abstract_function_t<int>::copy_submatrix(J, j, seq.data(), seq.size());
+		// std::cout << Eigen::MatrixX<int>(J) << std::endl;
 
-		// Determine where each of the columns of the submatrix source should go
-		// in the full jacobian matrix J
-		int column = 0;
-		for(auto& arg: call->args)
-		{
-		    for(int c=0; c<arg->len; c++)
-		        build_copy_sequence(J, source, row, arg->offset+c, column+c, blocks);
-			column += arg->len;
-		}
-		row += source.rows();
+		sequence.insert(sequence.end(), seq.begin(), seq.end());
+		row += call->num_outputs();
 	}			
-	sequence_call_offset.push_back(blocks.size());
+	o << generate_sequence("jac_seq", sequence);
 
-	o << fmt::format("static constexpr sparseblock_info<int> jac_seq[{}] = {{", blocks.size());
-	std::string join = "";
-	for(auto &blk: blocks)
-	{
-		o << fmt::format("{}{{{},{}}}", join, blk.target_index, blk.block_length);
-		join = ",";
-	}
-	o << "};\n";
 	o << "static void eval(param_t &param, variable_t x, out_t &out, jacobian_t &jacobian)\n"
 	  << "{\n";
 
 	o << IndentStream::indent;
 
-	int offset = 0; // Output offset
-	int call_index = 0;
-	for(auto call : calls)
-	{
-		// Write out the C++ format
-		int size = call->callable->num_outputs;
-		std::string name = call->callable->name;
+	// int offset = 0; // Output offset
+	// int call_index = 0;
+	// for(auto call : calls)
+	// {
+	// 	// Write out the C++ format
+	// 	int size = call->callable->num_outputs;
+	// 	std::string name = call->callable->name;
 
-			o << fmt::format("setJ(out, jacobian, {}, jac_seq+{}, {}, {}::jac(param, {})); // ",
-								offset, 
-								sequence_call_offset[call_index],
-								sequence_call_offset[call_index+1] - sequence_call_offset[call_index],
-								name,
-								arglist(call->args));
-			o << call << "\n";
+	// 		o << fmt::format("setJ(out, jacobian, {}, jac_seq+{}, {}, {}::jac(param, {})); // ",
+	// 							offset, 
+	// 							sequence_call_offset[call_index],
+	// 							sequence_call_offset[call_index+1] - sequence_call_offset[call_index],
+	// 							name,
+	// 							arglist(call->args));
+	// 		o << call << "\n";
 
-		offset += size;
-		call_index++;
-	}
+	// 	offset += size;
+	// 	call_index++;
+	// }
 
 	o << IndentStream::outdent;
 	o << "};" << std::endl;
-	o << "\n\n";
+	o << "\n";
 	return o.str();
 }
 
@@ -806,9 +840,9 @@ std::string weightedsum_t::generate()
 	o << "using hessian_t = Eigen::SparseMatrix<scalar_t>;\n";
 
 	o << "\n";
-	o << generate_eval() << "\n\n";
-	o << generate_gradient() << "\n\n";
-	// o << generate_hessian() << "\n\n";
+	o << generate_eval() << "\n";
+	// o << generate_gradient() << "\n";
+	o << generate_hessian() << "\n";
 	o << IndentStream::outdent;
 
 	o << "};\n";
@@ -875,7 +909,7 @@ std::string weightedsum_t::generate_gradient()
 
 	int offset = 0; // Output offset
 	int call_index = 0;
-	std::vector<std::string> blocks;
+	std::vector<seqinfo> blocks;
 	for(auto call : calls)
 	{
 		// Write out the C++ format
@@ -891,7 +925,7 @@ std::string weightedsum_t::generate_gradient()
 		oo << " // " << call << "\n";
 
 		for(auto arg: call->args)
-			blocks.push_back(fmt::format("{{{},{}}}", arg->offset, arg->len));
+			blocks.push_back(seqinfo{.index=arg->offset, .length=arg->len});
 
 		offset += size;
 		call_index++;
@@ -899,17 +933,7 @@ std::string weightedsum_t::generate_gradient()
 	oo << "return val;\n";
 	oo << IndentStream::outdent << "};" << std::endl;
 
-	// Write out the gradient sequence
-	// We need this to be copied directly into the generated file so that the function can see
-	// the grad_seq. I think this is because its constexpr and we're using static functions.
-	std::stringstream os;
-	os << fmt::format("static constexpr sparseblock_info<int> grad_seq[{}] = {{", blocks.size());
-  std::copy(std::begin(blocks),
-            std::end(blocks),
-            std::experimental::make_ostream_joiner(os, ","));
-  os << "};\n";
-
-  o << os.str() << oo.str();
+  o << generate_sequence("grad_seq", blocks) << oo.str();
 
 	o << "\n";
 	return o.str();
@@ -927,7 +951,7 @@ std::string weightedsum_t::generate_hessian()
 {
 	IndentStream o;
 
-	auto J = jacobianStructure();
+	// auto J = jacobianStructure();
 	auto H = hessianStructure();
 
 	o << "/**\n"
@@ -948,64 +972,76 @@ std::string weightedsum_t::generate_hessian()
 	  << " *   hessian += sum wi * hessian fi(x)\n"
 	  << " */\n";
 
-	// Store the sequence of copies to fill in the hessian for each function
-	std::vector<int> sequence_call_offset; // Offset into blocks for a given call
-	std::vector<sparseblock_info<int>> blocks;
+	// Iterate over each call computing the copy sequence
+	std::vector<seqinfo> sequence;
 	for(auto& call: calls)
 	{
-		sequence_call_offset.push_back(blocks.size());
-
+		// Compute the hessian for each output in turn
 		for(int i=0; i<call->callable->num_outputs; i++)
 		{
 			auto h = call->callable->hessianStructure[i];
-
-			int arg1_offset = 0;
-			for(auto& arg1: call->args)
-			{
-				int arg2_offset = 0;
-				for(auto& arg2: call->args)
-				{
-					Eigen::SparseMatrix<int> blk = Eigen::MatrixX<int>(h.block(arg1_offset,arg2_offset,arg1->len,arg2->len)).sparseView();
-					for(int column=0; column<arg2->len; column++)
-						build_copy_sequence(H, 
-							blk, 
-							arg1->offset, arg2->offset,
-							column, blocks);
-					arg2_offset += arg2->len;
-				}
-				arg1_offset += arg1->len;
-			}
+			auto partition = args_to_partion(call->args);
+			auto seq = build_copy_sequence(H, h, partition, partition);
+			sequence.insert(sequence.end(), seq.begin(), seq.end());
 		}
 	}
-	sequence_call_offset.push_back(blocks.size());
 
-	o << fmt::format("static constexpr sparseblock_info<int> hessian_seq[{}] = {{", blocks.size());
-	std::string join = "";
-	for(auto &blk: blocks)
-	{
-		o << fmt::format("{}{{{},{}}}", join, blk.target_index, blk.block_length);
-		join = ",";
-	}
-	o << "};\n";
+	// std::cout << "Write sequence:\n"; 
+	// for(auto& seq: sequence)
+	// 	std::cout << fmt::format("offset = {} length = {}\n", seq.index, seq.length);
 
-	o << "template<int len, typename hessian_output_t>\n"
-	  << "static inline void setH(scalar_t &value, variable_t &gradient, hessian_t &hessian, // Values to write into\n"
-	  << "         const Eigen::Ref<const Eigen::Vector<scalar_t, len>> w,\n" // Function is <w, fi(x)>
-      << "         const int sequence_offset, // Offset into hessian copy sequence\n"
-	  << "         const int num_blocks[len], \n"
-	  << "         const hessian_output_t &H) // Input\n"
-	  << "{\n"
-	  << "  value += w.dot(H.val);\n"
-	  << "  gradient += w.transpose() * H.jacobian;\n"
-	  << "  for(int i=0; i<len; i++)\n"
-	  << "  {\n"
-	  << "    copy_submatrix<scalar_t>(hessian, H.hessian, hessian_seq + sequence_offset, num_blocks[i]);\n"
-	  << "    sequence_offset += num_blocks[i];\n"
-	  << "  }\n"
-	  << "}\n\n";
+	// // Store the sequence of copies to fill in the hessian for each function
+	// std::vector<int> sequence_call_offset; // Offset into blocks for a given call
+	// std::vector<seqinfo> blocks;
 
+	// // Iterate over each call
+	// for(auto& call: calls)
+	// {
+	// 	sequence_call_offset.push_back(blocks.size());
 
+	// 	// Compute the hessian for each output in turn
+	// 	for(int i=0; i<call->callable->num_outputs; i++)
+	// 	{
+	// 		auto h = call->callable->hessianStructure[i];
 
+	// 		// Iterate over each pair of inputs
+	// 		int arg1_offset = 0;
+	// 		for(auto& arg1: call->args)
+	// 		{
+	// 			int arg2_offset = 0;
+	// 			for(auto& arg2: call->args)
+	// 			{
+	// 				Eigen::SparseMatrix<int> source = Eigen::MatrixX<int>(h.block(arg1_offset,arg2_offset,arg1->len,arg2->len)).sparseView();
+	// 				// for(int column=0; column<arg2->len; column++)
+	// 					// build_copy_sequence(H, 
+	// 					// 	source, 
+	// 					// 	arg1->offset, arg2->offset,
+	// 					// 	column, blocks);
+	// 				arg2_offset += arg2->len;
+	// 			}
+	// 			arg1_offset += arg1->len;
+	// 		}
+	// 	}
+	// }
+	// sequence_call_offset.push_back(blocks.size());
+
+	// o << generate_sequence("hessian_seq", blocks);
+
+	// o << "template<int len, typename hessian_output_t>\n"
+	//   << "static inline void setH(scalar_t &value, variable_t &gradient, hessian_t &hessian, // Values to write into\n"
+	//   << "         const Eigen::Ref<const Eigen::Vector<scalar_t, len>> w,\n" // Function is <w, fi(x)>
+ //      << "         const int sequence_offset, // Offset into hessian copy sequence\n"
+	//   << "         const int num_blocks[len], \n"
+	//   << "         const hessian_output_t &H) // Input\n"
+	//   << "{\n"
+	//   << "  value += w.dot(H.val);\n"
+	//   << "  gradient += w.transpose() * H.jacobian;\n"
+	//   << "  for(int i=0; i<len; i++)\n"
+	//   << "  {\n"
+	//   << "    copy_submatrix<scalar_t>(hessian, H.hessian, hessian_seq + sequence_offset, num_blocks[i]);\n"
+	//   << "    sequence_offset += num_blocks[i];\n"
+	//   << "  }\n"
+	//   << "}\n";
 
 	return o.str();
 }
