@@ -1,3 +1,6 @@
+#ifndef __QP_FUNCTIONS_HPP
+#define __QP_FUNCTIONS_HPP
+
 template<typename scalar_t_>
 struct MyFunctions
 {
@@ -11,7 +14,10 @@ struct MyFunctions
         Eigen::Matrix<scalar_t, 1, 1> ref {3};
 
         Eigen::Matrix<scalar_t, 2, 1> q {1, 2}; // Stage-cost weights
+        Eigen::Matrix<scalar_t, 2, 2> Q {{4, 2}, {2, 7}}; // Stage-cost weights
         Eigen::Matrix<scalar_t, 1, 1> r {3}; // Stage-cost weights
+
+        Eigen::Matrix<scalar_t, 2, 2> P {{5, 1},{1, 8}}; // Stage-cost weights
     };
     using param_t = param_t_;
 
@@ -46,6 +52,14 @@ struct MyFunctions
         Eigen::Matrix<T, 2, 1> x_err = x - xss;
         Eigen::Matrix<T, 1, 1> u_err = u - uss;
 
-        val(0) = x_err.cwiseProduct(p.q.template cast<T>()).dot(x_err) + u_err.cwiseProduct(p.r.template cast<T>()).dot(u_err);
+        // val(0) = x_err.cwiseProduct(p.q.template cast<T>()).dot(x_err) + u_err.cwiseProduct(p.r.template cast<T>()).dot(u_err);
+        val = x_err.transpose() * p.Q.template cast<T>() * x_err + u_err.transpose() * p.r.template cast<T>() * u_err;
+    }
+
+    FUNCTION(terminal_cost, scalar_t, param_t, (val, 1), (x, 2), (xss, 2))
+    {
+        val = (x - xss).transpose() * p.P.template cast<T>() * (x - xss);
     }
 };
+
+#endif

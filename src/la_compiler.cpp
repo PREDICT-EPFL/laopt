@@ -585,35 +585,63 @@ std::string generate_sparse_init(Eigen::SparseMatrix<int> &J, std::string funcNa
 	o << fmt::format("std::array<T,{}> tripletList = {{T", J.nonZeros());
 
 	std::vector<std::string> args;
-for (int k=0; k < J.outerSize(); ++k)
+	for (int k=0; k < J.outerSize(); ++k)
     for (Eigen::SparseMatrix<int>::InnerIterator it(J,k); it; ++it)
     	args.push_back(fmt::format("{{{},{},1}}", it.row(), it.col()));
 
-std::copy(args.begin(), args.end(),
-          std::experimental::make_ostream_joiner(o.get_stream(), ","));
-o << "};\n";
-o << fmt::format("{}.setFromTriplets(tripletList.begin(), tripletList.end());\n", matrixName);
+	std::copy(args.begin(), args.end(),
+  	        std::experimental::make_ostream_joiner(o.get_stream(), ","));
+	o << "};\n";
+	o << fmt::format("{}.setFromTriplets(tripletList.begin(), tripletList.end());\n", matrixName);
 
 	o << IndentStream::outdent << "}\n";
 	return o.str();
 }
 
+/**
+ * Call func (which returns a string) on each element in vec, and then join
+ * the result in a comma seperated list
+ */
+template<typename F, typename T>
+std::string make_csv(std::vector<T> &vec, F func)
+{
+	std::vector<std::string> args;
+	for(auto &elem: vec) args.push_back(func(elem));
+
+	std::stringstream o;
+	std::copy(args.begin(), args.end(),
+	          std::experimental::make_ostream_joiner(o, ","));
+	return o.str();
+}
 
 /**
  * Generate an array named name of sparseblock_info
  */
-std::string generate_sequence(std::string name, std::vector<seqinfo> &blocks)
+std::string function_t::generate_sequence(std::string name, std::vector<std::vector<seqinfo>> &blocks)
 {
 	std::stringstream o;
-	o << fmt::format("static constexpr seqinfo {}[{}] = {{", name, blocks.size());
-	std::string join = "";
+	int len=0;
+	for(auto &blk: blocks) len += blk.size();
+	o << fmt::format("static constexpr seqinfo {}[{}] = {{\n  ", name, len);
+
+	std::vector<std::string> args;
 	for(auto &blk: blocks)
-	{
-		o << fmt::format("{}{{{},{}}}", join, blk.index, blk.length);
-		join = ",";
-	}
+		args.push_back(make_csv(blk, [](seqinfo seq){return fmt::format("{{{},{}}}", seq.index, seq.length);}));
+	
+	std::copy(args.begin(), args.end(),
+	          std::experimental::make_ostream_joiner(o, ",\n  "));
+
 	o << "};\n";
+
+	// Add the definition of this array to outside the class
+	o_postfix << fmt::format("constexpr seqinfo {}::{}::{}[];\n", compiler.className, this->name, name);
+
 	return o.str();
+}
+std::string function_t::generate_sequence(std::string name, std::vector<seqinfo> &blocks)
+{
+	std::vector<std::vector<seqinfo>> tmp = {blocks};
+	return generate_sequence(name, tmp);
 }
 
 
@@ -624,6 +652,7 @@ std::string LACompiler::generate()
 {
 	IndentStream o;
 
+	o << fmt::format("#ifndef __{}_HPP\n#define __{}_HPP\n", className, className);
 	o << "struct " << className << "\n{\n";
 	o << IndentStream::indent;
 	o << fmt::format("static constexpr int num_variables = {};\n", num_variables());
@@ -665,11 +694,25 @@ std::string LACompiler::generate()
 	for(auto callable: callables)
 		o << fmt::format("using {} = {};\n", callable->name, callable->signature);
 
-	for(auto &func: functions) o << "\n" << func->generate() << "\n";
-	for(auto &wsum: weightedsums) o << "\n" << wsum->generate() << "\n";
+	for(auto &func: functions) 
+	{
+		o << "\n" << func->generate() << "\n";
+		o_postfix << func->o_postfix.str();
+		func->o_postfix.str("");
+		func->o_postfix.clear();
+	}
+	for(auto &wsum: weightedsums) 
+	{
+		o << "\n" << wsum->generate() << "\n";
+		o_postfix << wsum->o_postfix.str();
+		wsum->o_postfix.str("");
+		wsum->o_postfix.clear();
+	}
 	o << IndentStream::outdent;
 
 	o << "};\n";
+	o << o_postfix.str();
+	o << "#endif\n";
 	return o.str();
 }
 
@@ -766,28 +809,13 @@ std::string function_t::generate_jacobian()
 		<< " */\n";
 
 	// Store the sequence of copies to fill in the jacobian
-	std::vector<seqinfo> sequence;
+	std::vector<std::vector<seqinfo>> sequence;
 	int row = 0;
 	for(auto& call: calls)
 	{
 		auto partition = args_to_partion(call->args);
 		std::vector<seqinfo> row_partition = {{row,call->num_outputs()}};
-		auto seq = build_copy_sequence(J, call->callable->jacobianStructure, row_partition, partition);
-
-		// std::cout << "Here\n  {";
-		// for(auto &s: seq)
-		// 	std::cout << fmt::format("{{{},{}}}, ", s.index, s.length);
-		// std::cout << "}\n";
-		// auto ptrJ = J.valuePtr();
-		// for(int i=0; i<J.nonZeros(); i++) ptrJ[i] = 1;
-		// auto j = call->callable->jacobianStructure;
-		// auto ptr = j.valuePtr();
-		// for(int i=0; i<j.nonZeros(); i++) ptr[i] = 2;
-		// std::cout << Eigen::MatrixX<int>(j) << std::endl;
-		// abstract_function_t<int>::copy_submatrix(J, j, seq.data(), seq.size());
-		// std::cout << Eigen::MatrixX<int>(J) << std::endl;
-
-		sequence.insert(sequence.end(), seq.begin(), seq.end());
+		sequence.push_back(build_copy_sequence(J, call->callable->jacobianStructure, row_partition, partition));
 		row += call->num_outputs();
 	}			
 	o << generate_sequence("jac_seq", sequence);
@@ -797,25 +825,22 @@ std::string function_t::generate_jacobian()
 
 	o << IndentStream::indent;
 
-	// int offset = 0; // Output offset
-	// int call_index = 0;
-	// for(auto call : calls)
-	// {
-	// 	// Write out the C++ format
-	// 	int size = call->callable->num_outputs;
-	// 	std::string name = call->callable->name;
+	int offset = 0; // Output offset
+	int call_index = 0;
+	int seq_offset = 0; // Offset into the jac_seq
+	for(int i=0; i<calls.size(); i++)
+	{
+		o << fmt::format("setJ(out, jacobian, {}, jac_seq+{}, {}, {}::jac(param, {})); // ",
+							offset, seq_offset,
+							sequence[i].size(),
+							calls[i]->callable->name,
+							arglist(calls[i]->args));
+			o << calls[i] << "\n";
 
-	// 		o << fmt::format("setJ(out, jacobian, {}, jac_seq+{}, {}, {}::jac(param, {})); // ",
-	// 							offset, 
-	// 							sequence_call_offset[call_index],
-	// 							sequence_call_offset[call_index+1] - sequence_call_offset[call_index],
-	// 							name,
-	// 							arglist(call->args));
-	// 		o << call << "\n";
-
-	// 	offset += size;
-	// 	call_index++;
-	// }
+		offset += calls[i]->callable->num_outputs;
+		seq_offset += sequence[i].size();
+		call_index++;
+	}
 
 	o << IndentStream::outdent;
 	o << "};" << std::endl;
@@ -841,7 +866,7 @@ std::string weightedsum_t::generate()
 
 	o << "\n";
 	o << generate_eval() << "\n";
-	// o << generate_gradient() << "\n";
+	o << generate_gradient() << "\n";
 	o << generate_hessian() << "\n";
 	o << IndentStream::outdent;
 
@@ -908,32 +933,33 @@ std::string weightedsum_t::generate_gradient()
 	  << "scalar_t val = 0;\n";
 
 	int offset = 0; // Output offset
-	int call_index = 0;
-	std::vector<seqinfo> blocks;
+	int sequence_offset = 0;
+	std::vector<std::vector<seqinfo>> sequence;
 	for(auto call : calls)
 	{
-		// Write out the C++ format
 		int size = call->callable->num_outputs;
 		std::string name = call->callable->name;
 
-		oo << fmt::format("setGrad(val, gradient, grad_seq+{}, {}, w.SEG({},{}), {}::jac(param, {}));",
-			blocks.size(),
+		oo << fmt::format("accGrad(val, gradient, grad_seq+{}, {}, w.SEG({},{}), {}::jac(param, {}));",
+			sequence_offset,
 			call->callable->num_args,
 			size, offset, 
 			name,
 			arglist(call->args));
 		oo << " // " << call << "\n";
 
+		std::vector<seqinfo> blocks;
 		for(auto arg: call->args)
 			blocks.push_back(seqinfo{.index=arg->offset, .length=arg->len});
+		sequence.push_back(blocks);
+		sequence_offset += blocks.size();
 
 		offset += size;
-		call_index++;
 	}
 	oo << "return val;\n";
 	oo << IndentStream::outdent << "};" << std::endl;
 
-  o << generate_sequence("grad_seq", blocks) << oo.str();
+  o << generate_sequence("grad_seq", sequence) << oo.str();
 
 	o << "\n";
 	return o.str();
@@ -972,76 +998,56 @@ std::string weightedsum_t::generate_hessian()
 	  << " *   hessian += sum wi * hessian fi(x)\n"
 	  << " */\n";
 
+	IndentStream oo;
+	oo << "static scalar_t eval(param_t &param, const Eigen::Ref<const weight_t> w, const Eigen::Ref<const variable_t> x, Eigen::Ref<gradient_t> gradient, Eigen::Ref<hessian_t> hessian)\n"
+	   << "{\n" << IndentStream::indent
+	   << "gradient.array() = 0;\n"
+	   << "scalar_t val = 0;\n"
+	   << "auto ptr = hessian.valuePtr();\n"
+	   << "for(int i=0; i<hessian.nonZeros(); i++) ptr[i] = 0;\n";
+
 	// Iterate over each call computing the copy sequence
-	std::vector<seqinfo> sequence;
+	std::vector<std::vector<seqinfo>> sequence;
+	int offset = 0;
+	int gradient_offset = 0;
+	int hessian_offset = 0;
+	std::vector<std::string> seq_lengths;
 	for(auto& call: calls)
 	{
 		// Compute the hessian for each output in turn
+		std::vector<seqinfo> hessian_call_sequence; // Sequence for the entire set of hessians
 		for(int i=0; i<call->callable->num_outputs; i++)
 		{
 			auto h = call->callable->hessianStructure[i];
 			auto partition = args_to_partion(call->args);
 			auto seq = build_copy_sequence(H, h, partition, partition);
-			sequence.insert(sequence.end(), seq.begin(), seq.end());
+			hessian_call_sequence.insert(hessian_call_sequence.end(), seq.begin(), seq.end());
+			seq_lengths.push_back(fmt::format("{}",seq.size()));
 		}
+		sequence.push_back(hessian_call_sequence);
+
+		oo << fmt::format("accHessian(val, gradient, hessian, grad_seq+{}, {}, ", 
+						gradient_offset, call->callable->num_args)
+			 << fmt::format("hessian_seq+{}, hessian_seq_len+{}, ",	
+			 			hessian_offset, offset)
+			 << fmt::format("w.SEG({},{}), ",
+			 			call->callable->num_outputs, offset)
+			 << fmt::format("{}::hessian(param, {}));\n",
+			 			call->callable->name, arglist(call->args));
+
+ 		gradient_offset += call->callable->num_args;
+ 		hessian_offset += hessian_call_sequence.size();
+ 		offset += call->callable->num_outputs;
 	}
-
-	// std::cout << "Write sequence:\n"; 
-	// for(auto& seq: sequence)
-	// 	std::cout << fmt::format("offset = {} length = {}\n", seq.index, seq.length);
-
-	// // Store the sequence of copies to fill in the hessian for each function
-	// std::vector<int> sequence_call_offset; // Offset into blocks for a given call
-	// std::vector<seqinfo> blocks;
-
-	// // Iterate over each call
-	// for(auto& call: calls)
-	// {
-	// 	sequence_call_offset.push_back(blocks.size());
-
-	// 	// Compute the hessian for each output in turn
-	// 	for(int i=0; i<call->callable->num_outputs; i++)
-	// 	{
-	// 		auto h = call->callable->hessianStructure[i];
-
-	// 		// Iterate over each pair of inputs
-	// 		int arg1_offset = 0;
-	// 		for(auto& arg1: call->args)
-	// 		{
-	// 			int arg2_offset = 0;
-	// 			for(auto& arg2: call->args)
-	// 			{
-	// 				Eigen::SparseMatrix<int> source = Eigen::MatrixX<int>(h.block(arg1_offset,arg2_offset,arg1->len,arg2->len)).sparseView();
-	// 				// for(int column=0; column<arg2->len; column++)
-	// 					// build_copy_sequence(H, 
-	// 					// 	source, 
-	// 					// 	arg1->offset, arg2->offset,
-	// 					// 	column, blocks);
-	// 				arg2_offset += arg2->len;
-	// 			}
-	// 			arg1_offset += arg1->len;
-	// 		}
-	// 	}
-	// }
-	// sequence_call_offset.push_back(blocks.size());
-
-	// o << generate_sequence("hessian_seq", blocks);
-
-	// o << "template<int len, typename hessian_output_t>\n"
-	//   << "static inline void setH(scalar_t &value, variable_t &gradient, hessian_t &hessian, // Values to write into\n"
-	//   << "         const Eigen::Ref<const Eigen::Vector<scalar_t, len>> w,\n" // Function is <w, fi(x)>
- //      << "         const int sequence_offset, // Offset into hessian copy sequence\n"
-	//   << "         const int num_blocks[len], \n"
-	//   << "         const hessian_output_t &H) // Input\n"
-	//   << "{\n"
-	//   << "  value += w.dot(H.val);\n"
-	//   << "  gradient += w.transpose() * H.jacobian;\n"
-	//   << "  for(int i=0; i<len; i++)\n"
-	//   << "  {\n"
-	//   << "    copy_submatrix<scalar_t>(hessian, H.hessian, hessian_seq + sequence_offset, num_blocks[i]);\n"
-	//   << "    sequence_offset += num_blocks[i];\n"
-	//   << "  }\n"
-	//   << "}\n";
+	oo << "return val;\n" << IndentStream::outdent << "}\n";
+	o << generate_sequence("hessian_seq", sequence);
+	o << "static constexpr int hessian_seq_len[" << seq_lengths.size() << "] = {";
+  std::copy(std::begin(seq_lengths),
+            std::end(seq_lengths),
+            std::experimental::make_ostream_joiner(o.get_stream(), ","));
+  o << "};\n";
+  o_postfix << fmt::format("constexpr int {}::{}::hessian_seq_len[];\n", compiler.className, this->name);
+	o << oo.str();
 
 	return o.str();
 }

@@ -89,6 +89,37 @@ struct abstract_function_t
 			sourcePtr += blocks[i].length;
 		}
 	};
+
+	// Accumulate the source into the target
+	static void accumulate_submatrix(Eigen::Ref<Eigen::SparseMatrix<scalar_t>> target, 
+						const Eigen::SparseMatrix<scalar_t> &source, 
+						const seqinfo *blocks, const int num_blocks)
+	{
+		scalar_t* targetPtr = target.valuePtr();
+		const scalar_t* sourcePtr = source.valuePtr();
+		for(int i=0; i<num_blocks; i++)
+		{
+			Eigen::Map<Eigen::VectorX<scalar_t>>(targetPtr + blocks[i].index, blocks[i].length)
+				+= Eigen::Map<const Eigen::VectorX<scalar_t>>(sourcePtr, blocks[i].length);
+			sourcePtr += blocks[i].length;
+		}
+	};
+
+	static void accumulate_submatrix(Eigen::Ref<Eigen::SparseMatrix<scalar_t>> target, 
+						const Eigen::MatrixX<scalar_t> &source, 
+						const seqinfo *blocks, const int num_blocks)
+	{
+		scalar_t* targetPtr = target.valuePtr();
+		const scalar_t* sourcePtr = source.data();
+		for(int i=0; i<num_blocks; i++)
+		{
+			Eigen::Map<Eigen::VectorX<scalar_t>>(targetPtr + blocks[i].index, blocks[i].length)
+				+= Eigen::Map<const Eigen::VectorX<scalar_t>>(sourcePtr, blocks[i].length);
+			// memcpy(targetPtr + blocks[i].index, sourcePtr, sizeof(scalar_t) * blocks[i].length);
+			sourcePtr += blocks[i].length;
+		}
+	};
+
 };
 
 template<typename scalar_t, typename out_t, typename jacobian_t>
@@ -110,17 +141,18 @@ struct function_util_t : public abstract_function_t<scalar_t>
 	static inline void setJ(Eigen::Ref<out_t> out, Eigen::Ref<jacobian_t> jacobian, // Values to write into
 				 	 const int offset, // Offset into out for the evaluation
 				 	 const seqinfo *jac_seq, // Writing sequence for the jacobian
-				 	 const int num_blocks, 
+				 	 const int num_segments, 
 				 	 const jacobian_output_t &J) // Input
 	{
 	      out.template segment<jacobian_output_t::num_outputs>(offset) = J.val;
-	      abstract_function_t<scalar_t>::copy_submatrix(jacobian, J.jacobian, jac_seq, num_blocks);
+	      abstract_function_t<scalar_t>::copy_submatrix(jacobian, J.jacobian, jac_seq, num_segments);
 	}
 };
 
 template<typename scalar_t, typename gradient_t, typename weight_t>
 struct weightedsum_util_t : public abstract_function_t<scalar_t>
 {
+
 	/** 
 	 * Accumulate the block gradient into the gradient
 	 * 
@@ -150,6 +182,39 @@ struct weightedsum_util_t : public abstract_function_t<scalar_t>
 			offset += varlen;
 		}
 	}
+
+	/** 
+	 * Accumulate the block hessian into the hessian
+	 * 
+	 * Add the hessian of each of the functions wi[j] * fi[j] to the hessian
+	 *  (as well as the gradient and value)
+	 * 
+	 * hessian_output_t must containt three members
+	 * - val = vector of length num_outputs
+	 * - jacobian = matrix of size num_outputs x sum_i var_info[i].block_length
+	 * - hessian = array of size num_outputs of matrices of size num_inputs x num_inputs
+	 */
+	using hessian_t = Eigen::SparseMatrix<scalar_t>;
+	template<typename hessian_output_t>
+	static inline void accHessian(scalar_t &val, 
+					Eigen::Ref<gradient_t> grad, 
+					Eigen::Ref<hessian_t> hessian,
+				  const seqinfo *var_info, int num_vars, // Offsets of the vars into grad
+				  const seqinfo *hessian_seq, const int seq_len[hessian_output_t::num_outputs],
+				  const Eigen::Ref<const Eigen::Vector<scalar_t, hessian_output_t::num_outputs>> w, 
+				  const hessian_output_t &H)
+	{
+		accGrad(val, grad, var_info, num_vars, w, H);
+
+		int offset = 0;
+		for(int i=0; i<hessian_output_t::num_outputs; i++)
+		{
+	      abstract_function_t<scalar_t>::accumulate_submatrix(hessian, H.hessian[i], 
+	      													  hessian_seq+offset, seq_len[i]);
+	      offset += seq_len[i];
+		}
+	}
+
 };
 
 #endif // __LAMPC__HPP

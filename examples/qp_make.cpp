@@ -40,17 +40,18 @@ int main()
     auto dynamics_eq = prob.callable(callable_info(Functions::dynamics_eq()));
     auto dynamics_ss = prob.callable(callable_info(Functions::dynamics_ss()));
     auto stage_cost = prob.callable(callable_info(Functions::stage_cost()));
+    auto terminal_cost = prob.callable(callable_info(Functions::terminal_cost()));
 
     std::cout << prob.callables << std::endl;
 
 	auto equalities = prob.function("equalities");
 	equalities->call(dynamics, {x[1], u[0]});
+	equalities->call(dynamics_ss, {xss, uss});
 	for(int i=0; i<N-1; i++)
 		equalities->call(dynamics_eq, {x[i+1], x[i], u[i]});
 
 	// equalities->add_iterator(Functions::dynamics_eq(), {it(x,i+1), it(x,i), it(u,i), x[N], u[0]});
 
-	equalities->call(dynamics_ss, {xss, uss});
 
 	std::cout << equalities << std::endl;
 
@@ -65,6 +66,11 @@ int main()
 	auto objective = prob.weighted_sum("objective");
 	for(int i=0; i<N-1; i++)
 		objective->call(stage_cost, {x[i], u[i], xss, uss});
+	objective->call(terminal_cost, {x[N-1], xss});
+
+	// auto test = prob.weighted_sum("test");
+	// for(int i=0; i<N-1; i++)
+	// 	test->call(dynamics_eq, {x[i+1], x[i], u[i]});
 	
 	// auto inequalities = prob.function("inequalities");
 	// for(int i=0; i<N-1; i++)

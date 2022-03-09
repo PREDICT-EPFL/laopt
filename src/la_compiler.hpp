@@ -58,6 +58,10 @@ protected:
 
 	std::string generate_eval();
 	std::string generate_jacobian();
+
+	std::ostringstream o_postfix;
+	std::string generate_sequence(std::string name, std::vector<std::vector<seqinfo>> &blocks);
+	std::string generate_sequence(std::string name, std::vector<seqinfo> &blocks);	
 };
 
 /**
@@ -110,7 +114,11 @@ struct LACompiler
 	// Get information about the problem
 	int num_variables();
 
-private:
+	// Any material that should be placed before and after the generated code
+	// Set before calling generate
+	std::ostringstream o_postfix;
+
+protected:
 	variable_p variable_impl(std::string name, int len);
 };
 

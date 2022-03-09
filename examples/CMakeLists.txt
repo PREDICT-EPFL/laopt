@@ -21,9 +21,10 @@ add_custom_target(
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/qp.compiled.hpp
 )
 
-add_library(qp_lib qp_lib.cpp)
-add_dependencies(qp_lib GeneratedQP)
+# add_library(qp_lib qp_lib.cpp)
+# add_dependencies(qp_lib GeneratedQP)
 
 add_executable(qp qp.cpp)
-add_dependencies(qp qp_lib)
-target_link_libraries(qp qp_lib)
+add_dependencies(qp GeneratedQP)
+# add_dependencies(qp qp_lib)
+# target_link_libraries(qp qp_lib)
