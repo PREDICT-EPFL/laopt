@@ -13,8 +13,8 @@ message(STATUS "Using Eigen3 library found at ${EIGEN3_INCLUDE_DIR}")
 
 add_definitions(-DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB - For both Windows and UNIX
 
-include_directories(polympc/src)
-include_directories(qpmad/include/)
+# include_directories(polympc/src)
+# include_directories(qpmad/include/)
 
 option(BUILD_RELEASE "Build release version w/o debugging symbols" ON)
 
@@ -26,8 +26,10 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_VERBOSE_MAKEFILE “ON”)
 if(BUILD_RELEASE)
   set(CMAKE_BUILD_TYPE "Release")
+  message(STATUS "Building release version")
 else()
   set(CMAKE_BUILD_TYPE "Debug")
+  message(STATUS "Building debug version")
 endif()
 
 
@@ -36,7 +38,7 @@ include_directories(src bsmatrix src/examples /usr/local/include/)
 
 add_subdirectory(src     )
 add_subdirectory(examples)
-add_subdirectory(polympc)
-add_subdirectory(qpmad  )
+# add_subdirectory(polympc)
+# add_subdirectory(qpmad  )
 add_subdirectory(tests  )
 
