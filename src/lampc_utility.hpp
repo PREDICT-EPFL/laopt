@@ -93,5 +93,18 @@ constexpr auto type_name() noexcept {
   return name;
 }
 
+/**
+ * Extracts the return-type of a function
+ * 
+ * Use like this:     
+ *  std::cout << type_name<decltype(ret(f))>() << std::endl;
+ * 
+ */
+template<typename R, typename... A>
+R ret(R(*)(A...)) ;
+
+template<typename C, typename R, typename... A>
+R ret(R(C::*)(A...));
+
 
 #endif // LAMPC_UTILITY

@@ -11,6 +11,29 @@
 // #include "qp_lib.hpp"
 #include <chrono>
 
+struct Prob : QP
+{
+  using param_t = QP::param_t;
+  using scalar_t = QP::scalar_t;
+  using variable_t = QP::variable_t;
+
+  using constraint_t = typename Prob::constraints_vec;
+  using constraint_jacobian_t = typename Prob::constraints_jacobian_mat;
+  using obj_gradient_t = typename Prob::obj_gradient_vec;
+  using obj_hessian_t = typename Prob::obj_hessian_mat;
+  using obj_t = typename Prob::obj_vec;
+};
+
+
+/**
+ * Problem structure
+ * 
+ * min sum w_i f_i(x)
+ * s.t. g_lb <= g(x) <= g_ub
+ *        lb <=   x  <=   ub
+ */
+
+
 int main()
 {
     QP::variable_t x;

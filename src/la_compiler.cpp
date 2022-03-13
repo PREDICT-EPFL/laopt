@@ -24,97 +24,7 @@
 
 #include "lampc.hpp"
 #include "la_compiler.hpp"
-
-
-struct IndentStream
-{
-	std::vector<std::shared_ptr<std::stringstream>> streams;
-
-	IndentStream()
-	{
-		streams.push_back(std::make_shared<std::stringstream>());
-	}
-
-	template <typename T>
-	IndentStream& operator<<(const T& x)
-	{
-	    *(this->streams.back()) << x;
-	    return *this;
-	}
-
-
-	// function that takes a custom stream, and returns it
-	typedef IndentStream& (*IndentStreamManipulator)(IndentStream&);
-
-	// take in a function with the custom signature
-	IndentStream& operator<<(IndentStreamManipulator manip)
-	{
-	    // call the function, and return its value
-	    return manip(*this);
-	}
-
-	// define the indent manipulator for this stream.
-	static IndentStream& indent(IndentStream& stream)
-	{
-		stream.streams.push_back(std::make_shared<std::stringstream>());
-	    return stream;
-	}
-
-	// define the outdent manipulator for this stream.
-	static IndentStream& outdent(IndentStream& stream)
-	{
-		assert(stream.streams.size() > 1 && "Too many outdents");
-		if(stream.streams.size() == 1) return stream;
-		auto o = stream.streams.back();
-		stream.streams.pop_back();
-		stream << add_tab(o->str());
-	    return stream;
-	}
-
-	static std::string add_tab(const std::string &i)
-	{
-		std::ostringstream o;
-		std::stringstream s(i);
-		for(std::string line; std::getline(s, line); ) 
-			o << "  " << line << "\n";
-		return o.str();
-	}
-
-	// this is the type of std::cout
-	typedef std::basic_ostream<char, std::char_traits<char> > CoutType;
-
-	// this is the function signature of std::endl
-	typedef CoutType& (*StandardEndLine)(CoutType&);
-
-	// define an operator<< to take in std::endl
-	IndentStream& operator<<(StandardEndLine manip)
-	{
-	    // call the function, but we cannot return it's value
-	    manip(*(this->streams.back()));
-	    return *this;
-	}
-
-	/**
-	 * Unroll the indents and write to the previous level
-	 */
-	std::string str()
-	{
-		// Flatten the string structure
-		std::string s;
-		for(int i=streams.size()-1; i>=0; i--)
-			s = streams[i]->str() + add_tab(s);
-		return s;
-	}
-
-	/**
-	 * Return a reference to the current stream
-	 */
-	std::stringstream& get_stream()
-	{
-		return *(this->streams.back());
-	}
-};
-
+#include "IndentStream.hpp"
 
 struct variable_t
 {
@@ -129,6 +39,21 @@ struct variable_t
 		{}
 };
 
+callable_info::callable_info(variable_p var)
+{
+	int size = var->len;
+	jacobianStructure = Eigen::MatrixX<int>::Identity(size, size).sparseView();
+	for(int i=0; i<size; i++)
+		hessianStructure.push_back(Eigen::SparseMatrix<int>(size, size));
+
+	input_sizes.push_back(size);
+	num_outputs = size;
+	num_args = 1;
+	name = "id";
+	signature = "TODO id";
+}
+
+
 // A group of similarly-named variables
 struct variableset_t
 {
@@ -136,9 +61,18 @@ struct variableset_t
 	std::vector<variable_p> variables;
 
 	variableset_t(std::string name) : name(name)	{};
+
+	std::string str()
+	{
+		if(variables.size() == 1) return name;
+		else                      return fmt::format("{}[{}]", name, variables.size());
+	}
 };
 
 
+
+int call_t::num_outputs() const 
+	{ return callable->num_outputs; }
 
 
 /**
@@ -233,53 +167,11 @@ std::vector<seqinfo> args_to_partion(std::vector<variable_p> &args)
 }
 
 
-// List of callable functions
-// We store these as strings so that we can do a comparison
-// of static types without having to instantiate and compare
-// function pointers, since these may be instantiated multiple
-// times.
-struct callable_t
-{
-	std::string signature;
-	std::string name;
-	int num_args;
-	int num_outputs;
-	std::vector<int> input_sizes;
-
-	Eigen::SparseMatrix<int> jacobianStructure;
-	std::vector<Eigen::SparseMatrix<int>> hessianStructure; // Structure per output
-
-	callable_t(std::string signature_, std::string name_, 
-			   int num_args_, int num_outputs_, std::vector<int> input_sizes)
-		: signature(signature_), name(name_), 
-		  num_args(num_args_), num_outputs(num_outputs_),
-		  input_sizes(input_sizes)
-	{}
-
-	callable_t(callable_info &info)
-		: signature(info.signature), name(info.name), 
-		  num_args(info.num_args), num_outputs(info.num_outputs),
-		  input_sizes(info.input_sizes)
-	{
-		jacobianStructure = info.jacobianStructure;
-
-		for(int i=0; i<num_outputs; i++)
-			hessianStructure.push_back(info.hessianStructure[i]);
-	}
-
-	bool operator==(const callable_t& rhs) const noexcept
-	{
-	    return (signature == rhs.signature) &&
-	    	   (name == rhs.name) &&
-	    	   (num_args == rhs.num_args) &&
-	    	   (num_outputs == rhs.num_outputs);
-	}
-};
 
 
 callable_p LACompiler::callable(callable_info info)
 {
-	auto callable = std::make_shared<callable_t>(info);
+	auto callable = std::make_shared<callable_t>(info, this);
 	callables.push_back(callable);
 	return callable;
 }
@@ -335,7 +227,7 @@ std::vector<variable_p> LACompiler::variable(std::string name, int len, int numb
 	std::vector<variable_p> vars;
 	for(int i=0; i<number; i++)
 	{
-		auto var = variable_impl(name + "_" + std::to_string(i), len);
+		auto var = variable_impl(name + std::to_string(i), len);
 		vars.push_back(var);
 		varset->variables.push_back(var);
 	}
@@ -343,23 +235,6 @@ std::vector<variable_p> LACompiler::variable(std::string name, int len, int numb
 	return vars;
 }
 
-
-/**
- * A called callable. 
- * i.e., we call the function callable at a specific set of arguments (variables) args
- */
-struct call_t
-{
-	callable_p callable;
-	std::vector<variable_p> args;
-
-	call_t(callable_p callable, std::vector<variable_p> args)
-		: callable(callable), args(args) {};
-
-	int num_outputs()	{ return callable->num_outputs; }
-
-	friend std::ostream &operator<<(std::ostream &os, callable_p const &callable);
-};
 
 
 void function_t::call(callable_p callable, std::vector<variable_p> args)
@@ -510,32 +385,54 @@ std::ostream &operator<<(std::ostream &os, variable_p const &var)
 	os << var->name;
 	return os;
 }
-
-std::ostream &operator<<(std::ostream &os, callable_p const &callable)
+std::ostream &operator<<(std::ostream &os, variableset_p const &var)
 {
-	os << fmt::format("{} with {} args of size (", callable->name, callable->num_args);
-    std::copy(std::begin(callable->input_sizes),
-              std::end(callable->input_sizes),
+	os << var->str();
+	return os;
+}
+std::ostream &operator<<(std::ostream &os, std::vector<variableset_p> const &vars)
+{
+	std::vector<std::string> varnames;
+	transform(vars.begin(), vars.end(), back_inserter(varnames), 
+		[](auto var){return var->str();});
+
+    std::copy(std::begin(varnames),
+              std::end(varnames),
               std::experimental::make_ostream_joiner(os, ", "));
-    os << fmt::format(") and {} outputs", callable->num_outputs);
+
+	return os;
+}
+
+std::ostream &operator<<(std::ostream &os, callable_t const &callable)
+{
+	os << fmt::format("{} with {} args of size (", callable.name, callable.num_args);
+    std::copy(std::begin(callable.input_sizes),
+              std::end(callable.input_sizes),
+              std::experimental::make_ostream_joiner(os, ", "));
+    os << fmt::format(") and {} outputs", callable.num_outputs);
+	return os;
+}
+std::ostream &operator<<(std::ostream &os, callable_p const callable)
+{
+	os << callable.get();
 	return os;
 }
 std::ostream &operator<<(std::ostream &os, std::vector<callable_p> const &callables)
 {
 	IndentStream o;
 	o << "Callables:\n" << IndentStream::indent;
-	for(auto &call: callables)
+	for(auto call: callables)
 		o << call << std::endl;
 	os << o.str();
 	return os;
 }
 
-std::ostream &operator<<(std::ostream &os, call_p const &call)
+std::ostream &operator<<(std::ostream &os, call_t const &call)
 {
-	os << call->callable->name << "(";
+	os << call.callable->name << "(";
 
 	std::vector<std::string> varnames;
-	transform(call->args.begin(), call->args.end(), back_inserter(varnames), 
+	transform(call.args.begin(), call.args.end(), back_inserter(varnames), 
 		[](auto var){return var->name;});
 
     std::copy(std::begin(varnames),
@@ -544,6 +441,11 @@ std::ostream &operator<<(std::ostream &os, call_p const &call)
     os << ")";
 
     return os;
+}
+std::ostream &operator<<(std::ostream &os, call_p const &call)
+{
+	os << *(call.get());
+	return os;
 }
 
 std::ostream &operator<<(std::ostream &os, function_p const &f)
@@ -554,6 +456,25 @@ std::ostream &operator<<(std::ostream &os, function_p const &f)
 	for(auto &call : f->calls)
 		o << call << std::endl;
 	o << IndentStream::outdent;
+	os << o.str();
+	return os;
+}
+
+std::ostream &operator<<(std::ostream &os, callable_info const &callable)
+{
+	IndentStream o;
+	o << "callable_info : " << callable.name << std::endl;
+	o << IndentStream::indent;
+	o << "signature : " << callable.signature << std::endl;
+	o << fmt::format("num_args = {} num_outputs = {}\n", callable.num_args, callable.num_outputs);
+	o << "Input sizes:";
+	for(auto sz: callable.input_sizes) o << sz << " ";
+	o << std::endl;
+	o << "Jacobian structure\n" << callable.jacobianStructure << std::endl;
+	o << "Hessian structure\n";
+	for(auto h: callable.hessianStructure) o << h << "\n";
+	o << std::endl << IndentStream::outdent;
+
 	os << o.str();
 	return os;
 }
