@@ -49,6 +49,59 @@ using constraint_p = std::shared_ptr<constraint_t>;
 using function_p = std::shared_ptr<function_t>;
 using weightedsum_p = std::shared_ptr<weightedsum_t>;
 
+
+struct variable_t
+{
+	std::string name;
+	int len;
+	int offset;
+
+	// Range of the variable
+	Eigen::VectorX<double> lb, ub;
+
+	int size() {return len;}
+	int length() {return len;}
+
+	variable_t(std::string name_, int len_, int offset_)
+		: name(name_), len(len_), offset(offset_), lb(len), ub(len)
+		{
+			lb.array() = -std::numeric_limits<double>::infinity();
+			ub.array() = std::numeric_limits<double>::infinity();
+		}
+};
+
+/**
+ * A called callable. 
+ * i.e., we call the function callable at a specific set of arguments (variables) args
+ */
+struct call_t
+{
+	callable_t *callable;
+	std::vector<variable_p> args;
+
+	call_t(callable_t *callable, std::vector<variable_p> args)
+		: callable(callable), args(args) {};
+
+	call_t(callable_p callable, std::vector<variable_p> args)
+		: callable(callable.get()), args(args) {};
+
+	int num_outputs() const;
+
+	friend std::ostream &operator<<(std::ostream &os, callable_p const &callable);
+	friend std::ostream &operator<<(std::ostream &os, callable_t const &callable);
+
+	friend std::ostream &operator<<(std::ostream &os, call_p const &call);
+	friend std::ostream &operator<<(std::ostream &os, call_t const &call);
+
+	// Human-readable
+	std::string str() const
+	{
+		std::stringstream o;
+		o << *this;
+		return o.str();
+	}
+};
+
 /**
  * A function is a list of callables evaluated at a set of arguments
  * 
@@ -70,6 +123,8 @@ public:
 
 	friend std::ostream &operator<<(std::ostream &os, function_p const &f);
 	friend LACompiler;
+
+	std::ostringstream o_hook; // Added to the end of the function struct
 
 // protected:
 	// List of functions with the arguments
@@ -98,6 +153,9 @@ public:
 	weightedsum_t(std::string name, LACompiler &compiler) : function_t(name, compiler) {};
 
 	friend LACompiler;
+
+	// Define the elements of the sum
+	void operator+=(call_t call) { add_call(std::make_shared<call_t>(call)); }
 
 protected:
 	std::string generate();
@@ -141,9 +199,13 @@ struct LACompiler
 	// Get information about the problem
 	int num_variables();
 
-	// Any material that should be placed before and after the generated code
-	// Set before calling generate
+	// Any material that should be placed after the generated code outside the 
+	// struct definition
 	std::ostringstream o_postfix;
+
+	// Any material that should be placed after the generated code inside the 
+	// struct definition
+	std::ostringstream o_hook;
 
 protected:
 	variable_p variable_impl(std::string name, int len);
@@ -194,34 +256,6 @@ struct callable_info
 std::ostream &operator<<(std::ostream &os, callable_info const &callable);
 
 
-/**
- * A called callable. 
- * i.e., we call the function callable at a specific set of arguments (variables) args
- */
-struct call_t
-{
-	callable_t *callable;
-	std::vector<variable_p> args;
-
-	call_t(callable_t *callable, std::vector<variable_p> args)
-		: callable(callable), args(args) {};
-
-	call_t(callable_p callable, std::vector<variable_p> args)
-		: callable(callable.get()), args(args) {};
-
-	int num_outputs() const;
-
-	friend std::ostream &operator<<(std::ostream &os, callable_p const &callable);
-	friend std::ostream &operator<<(std::ostream &os, callable_t const &callable);
-
-	// Human-readable
-	std::string str() const
-	{
-		std::stringstream o;
-		o << *this;
-		return o.str();
-	}
-};
 
 
 
@@ -262,13 +296,13 @@ struct callable_t
 			hessianStructure.push_back(info.hessianStructure[i]);
 	}
 
-	// bool operator==(const callable_t& rhs) const noexcept
-	// {
-	//     return (signature == rhs.signature) &&
-	//     	   (name == rhs.name) &&
-	//     	   (num_args == rhs.num_args) &&
-	//     	   (num_outputs == rhs.num_outputs);
-	// }
+	bool operator==(const callable_t& rhs) const noexcept
+	{
+	    return (signature == rhs.signature) &&
+	    	   (name == rhs.name) &&
+	    	   (num_args == rhs.num_args) &&
+	    	   (num_outputs == rhs.num_outputs);
+	}
 
 	template<typename... Vars>
 	call_t operator()(const Vars... variables) 

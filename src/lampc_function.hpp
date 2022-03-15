@@ -166,6 +166,7 @@ struct Jacobian // < FunctionTraits<Func, scalar_t, param_t, num_outputs, input_
 		// Default is just a dense matrix
 		Eigen::MatrixX<int> S(num_outputs, num_inputs);
 		S.array() = 1;
+
 		return S.sparseView();
 	}
 
@@ -375,6 +376,17 @@ private:
 	}
 
 };
+
+// Definitions for static members
+template<typename Func_, typename scalar_t_, typename param_t_, int num_outputs_, int... input_sizes>
+constexpr const char* Jacobian<Func_, scalar_t_, param_t_, num_outputs_, input_sizes...>::name;
+template<typename Func_, typename scalar_t_, typename param_t_, int num_outputs_, int... input_sizes>
+constexpr int Jacobian<Func_, scalar_t_, param_t_, num_outputs_, input_sizes...>::num_inputs;
+template<typename Func_, typename scalar_t_, typename param_t_, int num_outputs_, int... input_sizes>
+constexpr int Jacobian<Func_, scalar_t_, param_t_, num_outputs_, input_sizes...>::num_input_vars;
+template<typename Func_, typename scalar_t_, typename param_t_, int num_outputs_, int... input_sizes>
+constexpr int Jacobian<Func_, scalar_t_, param_t_, num_outputs_, input_sizes...>::num_outputs;
+
 
 };
 

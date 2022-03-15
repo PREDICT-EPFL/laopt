@@ -11,7 +11,7 @@
 #include "lampc_utility.hpp"
 #include "lampc_function.hpp"
 // #include "lampc_impl.hpp"
-#include "la_functionset.hpp"
+// #include "la_functionset.hpp"
 
 #define SEG(len,offset) template segment<len>(offset)
 

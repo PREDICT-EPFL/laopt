@@ -82,6 +82,17 @@ inline constraint_t operator>= (const constraint_t& call, const Eigen::VectorX<d
 	return constraint;
 }
 
+inline variable_p operator<= (const variable_p var, const Eigen::VectorX<double> val)
+{
+	var->ub = val;
+	return var;
+}
+inline variable_p operator>= (const variable_p var, const Eigen::VectorX<double> val)
+{
+	var->lb = val;
+	return var;
+}
+
 
 inline constraint_t operator<= (const Eigen::VectorX<double> val, const call_t& call)
 	{ return call >= val; }
@@ -91,6 +102,10 @@ inline constraint_t operator<= (const Eigen::VectorX<double> val, const constrai
 	{ return call >= val; }
 inline constraint_t operator>= (const Eigen::VectorX<double> val, const constraint_t& call)
 	{ return call <= val; }
+inline variable_p operator<= (const Eigen::VectorX<double> val, const variable_p var)
+	{ return var >= val; }
+inline variable_p operator>= (const Eigen::VectorX<double> val, const variable_p var)
+	{ return var <= val; }
 
 
 /**
@@ -114,6 +129,15 @@ inline constraint_t operator<= (const constraint_t& call, const double val)
 inline constraint_t operator<= (const double val, const constraint_t& call)
 	{ return Eigen::VectorX<double>::Constant(call.num_outputs(), val) <= call; }
 
+inline variable_p operator>= (const variable_p var, const double val)
+	{ return var >= Eigen::VectorX<double>::Constant(var->size(), val); }
+inline variable_p operator>= (const double val, const variable_p var)
+	{ return Eigen::VectorX<double>::Constant(var->size(), val) >= var; }
+inline variable_p operator<= (const variable_p var, const double val)
+	{ return var <= Eigen::VectorX<double>::Constant(var->size(), val); }
+inline variable_p operator<= (const double val, const variable_p var)
+	{ return Eigen::VectorX<double>::Constant(var->size(), val) <= var; }
+
 /** 
  * Equalities
  */
@@ -126,18 +150,20 @@ inline constraint_t operator== (const call_t& call, const Eigen::VectorX<double>
 inline constraint_t operator== (const Eigen::VectorX<double> val, const call_t& call)
 	{ return val <= call <= val; }
 
-
 /**
  * An optimization problem
  */
 class LAOptimizationProblem
 {
+	LACompiler compiler;
+	
 public:
 	LAOptimizationProblem(std::string name, 
 		   				  std::string param_t="param_t",
 		   				  std::string scalar_t="double") :
 		compiler(name, param_t, scalar_t),
-		variables(compiler.variables)
+		variables(compiler.variables),
+		objective(*compiler.weighted_sum("objective"))
 		{
 			constraints = compiler.function("constraints");
 		}
@@ -152,6 +178,7 @@ public:
 
 	std::vector<variable_p> &variables;
 	function_p constraints;	
+	weightedsum_t& objective;
 
 	// Cast the list of calls to constraints
 	std::vector<constraint_t*> get_constraints()
@@ -164,14 +191,82 @@ public:
 
     friend LAOptimizationProblem& operator<<(LAOptimizationProblem& prob, const constraint_t& con);
 
+    // Hook to write additional material to the end of the struct
+	std::ostringstream& o_hook() {return compiler.o_hook;}
+
+
+// protected:
+    /**
+     * Upper and lower bounds on the constraints and the variables
+     */
+    struct bounds_t
+    {
+    	Eigen::VectorX<double> lb, ub; // Constraints
+    	Eigen::VectorX<double> x_lb, x_ub; // Variables
+
+    	bounds_t(int num_constraints, int num_variables)
+    	: lb(num_constraints), ub(num_constraints),
+    	  x_lb(num_variables), x_ub(num_variables)
+    	  {
+    	  	lb.array() = -std::numeric_limits<double>::infinity();
+			ub.array() = std::numeric_limits<double>::infinity();
+    	  	x_lb.array() = -std::numeric_limits<double>::infinity();
+			x_ub.array() = std::numeric_limits<double>::infinity();
+    	  }
+    };
+
+    bounds_t get_bounds()
+    {
+    	bounds_t bnds(constraints->num_outputs(), compiler.num_variables());
+
+    	/** Generate the upper and lower bounds */
+    	int offset = 0;
+    	for(auto& call : constraints->calls)
+    	{
+			auto p = *static_cast<constraint_t*>(call.get());
+			bnds.lb.segment(offset, p.num_outputs()) = p.lb;
+			bnds.ub.segment(offset, p.num_outputs()) = p.ub;
+			offset += p.num_outputs();
+    	}
+
+    	for(auto var : variables)
+    	{
+			bnds.x_lb.segment(var->offset, var->length()) = var->lb;
+			bnds.x_ub.segment(var->offset, var->length()) = var->ub;
+    	}
+
+    	return bnds;
+    }
+
+public:
     std::string generate()
     {
-    	/** Generate the upper and lower bounds */
-    	for(auto& con : constraints->calls)
-    	{
-			auto p = *static_cast<constraint_t*>(con.get());
-			std::cout << p.name << std::endl;
-    	}
+    	auto bnds = get_bounds();
+
+    	// Set variable bounds
+ 		Eigen::IOFormat csv(Eigen::StreamPrecision, Eigen::DontAlignCols, ",");
+
+    	IndentStream o;
+		o << "static void variable_bounds(Eigen::Ref<variable_t> lb, Eigen::Ref<variable_t> ub)\n"
+    	  << "{\n"
+    	  << IndentStream::indent
+    	  << "constexpr scalar_t inf = std::numeric_limits<double>::infinity();\n"
+    	  << "lb << " << bnds.x_lb.transpose().format(csv) << ";\n"
+    	  << "ub << " << bnds.x_ub.transpose().format(csv) << ";\n"
+    	  << IndentStream::outdent
+    	  << "}\n";
+    	o_hook() << o.str();
+
+    	o.get_stream().str(""); o.get_stream().clear();
+		o << "static void bounds(Eigen::Ref<out_t> lb, Eigen::Ref<out_t> ub)\n"
+    	  << "{\n"
+    	  << IndentStream::indent
+    	  << "constexpr scalar_t inf = std::numeric_limits<double>::infinity();\n"
+    	  << "lb << " << bnds.lb.transpose().format(csv) << ";\n"
+    	  << "ub << " << bnds.ub.transpose().format(csv) << ";\n"
+    	  << IndentStream::outdent
+    	  << "}\n";
+    	constraints->o_hook << o.str();
 
     	return compiler.generate();
     }
@@ -186,7 +281,6 @@ public:
 	friend std::ostream &operator<<(std::ostream &os, LAOptimizationProblem &prob);
 
 protected:
-	LACompiler compiler;
 
 	struct id_factory
 	{
@@ -212,6 +306,13 @@ public:
 LAOptimizationProblem& operator<<(LAOptimizationProblem& prob, const constraint_t& con)
 {
 	prob.constraints->add_call(std::make_shared<constraint_t>(con));
+	return prob;
+}
+
+// Just pass over variables. 
+// They're only here as a side-effect of enforcing constraints.
+LAOptimizationProblem& operator<<(LAOptimizationProblem& prob, const variable_p var)
+{
 	return prob;
 }
 
@@ -310,6 +411,15 @@ std::ostream &operator<<(std::ostream &os, LAOptimizationProblem &prob)
 		o << *con << "\n";
 	}
 	o << IndentStream::outdent;
+
+	// o << bold << "Variable bounds:\n" << def << IndentStream::indent;
+	// xxx
+	// for(auto var: prob.variables)
+	// {
+
+	// }
+	// o << IndentStream::outdent;
+
 
 	o << "=== === === === === === === === === === ===\n";
 

@@ -21,23 +21,11 @@
 #include "fmt/format.h"
 
 #include <experimental/iterator>
+#include <limits>
 
 #include "lampc.hpp"
 #include "la_compiler.hpp"
 #include "IndentStream.hpp"
-
-struct variable_t
-{
-	std::string name;
-	int len;
-	int offset;
-
-	// compiler_t &prob; // Reference to parent problem
-
-	variable_t(std::string name_, int len_, int offset_)
-		: name(name_), len(len_), offset(offset_)
-		{}
-};
 
 callable_info::callable_info(variable_p var)
 {
@@ -629,10 +617,13 @@ std::string LACompiler::generate()
 		wsum->o_postfix.str("");
 		wsum->o_postfix.clear();
 	}
-	o << IndentStream::outdent;
+	o << o_hook.str();
+	o_hook.str("");
+	o_hook.clear();
 
+	o << IndentStream::outdent;
 	o << "};\n";
-	o << o_postfix.str();
+	o << o_postfix.str(); o_postfix.str(""); o_postfix.clear();
 	o << "#endif\n";
 	return o.str();
 }
@@ -657,6 +648,7 @@ std::string function_t::generate()
 	o << "\n";
 	o << generate_eval() << "\n";
 	o << generate_jacobian() << "\n";
+	o << o_hook.str(); o_hook.str(""); o_hook.clear();
 	o << IndentStream::outdent;
 
 	o << "};\n";

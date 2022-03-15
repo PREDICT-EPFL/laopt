@@ -1,6 +1,8 @@
 #ifndef __QP_FUNCTIONS_HPP
 #define __QP_FUNCTIONS_HPP
 
+#include "make_yaml_info.hpp"
+
 template<typename scalar_t_>
 struct MyFunctions
 {
@@ -47,6 +49,12 @@ struct MyFunctions
         out = tmp - x;
     }
 
+    // Compute the output of the system
+    FUNCTION(output, scalar_t, param_t, (out, 1), (x, 2))
+    {
+        out[0] = x[1] + 3*x[0];
+    }
+
     FUNCTION(stage_cost, scalar_t, param_t, (val, 1), (x, 2), (u, 1), (xss, 2), (uss, 1))
     {
         Eigen::Matrix<T, 2, 1> x_err = x - xss;
@@ -59,6 +67,18 @@ struct MyFunctions
     FUNCTION(terminal_cost, scalar_t, param_t, (val, 1), (x, 2), (xss, 2))
     {
         val = (x - xss).transpose() * p.P.template cast<T>() * (x - xss);
+    }
+
+    static std::string saveFunctionInfo()
+    {
+        return saveInfoYAML<scalar_t, 
+                            dynamics, 
+                            dynamics_eq, 
+                            dynamics_0, 
+                            dynamics_ss, 
+                            output, 
+                            stage_cost, 
+                            terminal_cost>();
     }
 };
 

@@ -4,6 +4,7 @@
 
 // #define SEG(len,offset) template segment<len>(offset)
 
+#include <iostream>
 #include "lampc.hpp"
 #include "qp_functions.hpp"
 #include "qp.compiled.hpp"
@@ -11,18 +12,18 @@
 // #include "qp_lib.hpp"
 #include <chrono>
 
-struct Prob : QP
-{
-  using param_t = QP::param_t;
-  using scalar_t = QP::scalar_t;
-  using variable_t = QP::variable_t;
+// struct Prob : QP
+// {
+//   using param_t = QP::param_t;
+//   using scalar_t = QP::scalar_t;
+//   using variable_t = QP::variable_t;
 
-  using constraint_t = typename Prob::constraints_vec;
-  using constraint_jacobian_t = typename Prob::constraints_jacobian_mat;
-  using obj_gradient_t = typename Prob::obj_gradient_vec;
-  using obj_hessian_t = typename Prob::obj_hessian_mat;
-  using obj_t = typename Prob::obj_vec;
-};
+//   using constraint_t = typename Prob::constraints_vec;
+//   using constraint_jacobian_t = typename Prob::constraints_jacobian_mat;
+//   using obj_gradient_t = typename Prob::obj_gradient_vec;
+//   using obj_hessian_t = typename Prob::obj_hessian_mat;
+//   using obj_t = typename Prob::obj_vec;
+// };
 
 
 /**
@@ -37,27 +38,24 @@ struct Prob : QP
 int main()
 {
     QP::variable_t x;
-    x.array() = 0;
+    x.array() = 1.5;
 
     QP::param_t param;
-    QP::equalities::out_t eq;
-    QP::equalities::jacobian_t J;
+    QP::constraints::out_t eq;
+    QP::constraints::jacobian_t J;
 
     QP::xss(x).array() = 3;
     QP::uss(x).array() = 3;
 
     // Compute jacobian
-    QP::equalities::initialize_jacobian(J);
-    QP::equalities::eval(param, x, eq, J);
+    QP::constraints::initialize_jacobian(J);
+    QP::constraints::eval(param, x, eq, J);
 
     std::cout << "eq = " << eq.transpose() << std::endl;
     std::cout << "J = \n" << Eigen::MatrixX<double>(J) << std::endl;
 
     QP::objective::weight_t w;
-    w.array() = 1;
-    x.array() = 1;
-    QP::xss(x).array() = 10;
-    QP::uss(x).array() = 10;
+    w.array() = 1.2;
     std::cout << "objective = " << QP::objective::eval(param, w, x) << std::endl;
 
     QP::objective::gradient_t grad;
@@ -74,7 +72,7 @@ int main()
     auto start = std::chrono::steady_clock::now();
     long N = 1000000;
     for(int i=0; i<N; i++)
-        QP::equalities::eval(param, x, eq, J);
+        QP::constraints::eval(param, x, eq, J);
     auto end = std::chrono::steady_clock::now();
     std::cout << "Jacobian time in nanoseconds: "
         << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() / (double)N
