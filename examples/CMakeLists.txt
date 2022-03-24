@@ -25,7 +25,11 @@ add_custom_target(
 # add_dependencies(qp_lib GeneratedQP)
 
 add_executable(qp qp.cpp)
-add_dependencies(qp GeneratedQP)
+target_link_libraries(qp ipopt)
+# add_dependencies(qp GeneratedQP)
 # add_dependencies(qp qp_lib)
 # target_link_libraries(qp qp_lib)
 
+
+add_executable(ipopt_test_nlp ipopt_test_nlp.cpp)
+target_link_libraries(ipopt_test_nlp ipopt)

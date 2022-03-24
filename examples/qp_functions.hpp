@@ -16,7 +16,7 @@ struct MyFunctions
         Eigen::Matrix<scalar_t, 1, 1> ref {3};
 
         Eigen::Matrix<scalar_t, 2, 1> q {1, 2}; // Stage-cost weights
-        Eigen::Matrix<scalar_t, 2, 2> Q {{4, 2}, {2, 7}}; // Stage-cost weights
+        Eigen::Matrix<scalar_t, 2, 2> Q {{4, 0}, {2, 0}}; // Stage-cost weights
         Eigen::Matrix<scalar_t, 1, 1> r {3}; // Stage-cost weights
 
         Eigen::Matrix<scalar_t, 2, 2> P {{5, 1},{1, 8}}; // Stage-cost weights
@@ -66,7 +66,8 @@ struct MyFunctions
 
     FUNCTION(terminal_cost, scalar_t, param_t, (val, 1), (x, 2), (xss, 2))
     {
-        val = (x - xss).transpose() * p.P.template cast<T>() * (x - xss);
+        val = (x - xss).transpose() * p.P.template cast<T>() * (x - xss)
+            + T(100) * xss.transpose() * p.P.template cast<T>() * xss;
     }
 
     static std::string saveFunctionInfo()

@@ -220,6 +220,11 @@ class Call:
 		self.lb[:] = other
 		return self
 
+	def __eq__(self, other):
+		self.lb[:] = other
+		self.ub[:] = other
+		return self
+
 	def __or__(self, other):
 		self.name = other
 		return self
@@ -244,9 +249,18 @@ class VectorFunction:
 		name_len = max(len(c.name) for c in self.calls)
 		lb_len = max(len(str(c.lb)) for c in self.calls)
 		ub_len = max(len(str(c.ub)) for c in self.calls)
+		call_len = max(len(str(c)) for c in self.calls)
 
 		for call in self.calls:
-			s += f"  {call.name: <{name_len}} | {str(call.lb): >{lb_len}} <= {str(call)} <= {str(call.ub): <{ub_len}}\n"
+			if np.linalg.norm(call.lb - call.ub) == 0:
+				lb = f"{'': >{lb_len}}"
+				lb_sym = "  "
+				ub_sym = "=="
+			else:
+				lb = f"{str(call.lb): >{lb_len}}"
+				lb_sym = "<="
+				ub_sym = "<="
+			s += f"  {call.name: <{name_len}} | {lb} {lb_sym} {str(call): <{call_len}} {ub_sym} {str(call.ub): <{ub_len}}\n"
 		return s
 
 	def __or__(self, name):
@@ -432,14 +446,16 @@ class VectorFunction:
 		o += "{"
 		o.indent()
 		o += tw.dedent(f"""\
-				using out_t = Eigen::Vector<scalar_t, {len(self)}>;
+				static constexpr std::size_t output_size = {len(self)};
+				static constexpr std::size_t nnz_jacobian = {self.jacobianStructure.getnnz()};
+				using out_t = Eigen::Vector<scalar_t, output_size>;
 				using jacobian_t = Eigen::SparseMatrix<scalar_t>;
 				using hessian_t = Eigen::SparseMatrix<scalar_t>;
 				""")
 		o += self.generate_eval() + "\n"
 		o += self.generate_jacobian() + "\n"
 
-		o += "static void bounds(Eigen::Ref<out_t> lb, Eigen::Ref<out_t> ub)"
+		o += "static void bounds(param_t &param, Eigen::Ref<out_t> lb, Eigen::Ref<out_t> ub)"
 		o += "{"
 		o.indent()
 		o += "constexpr scalar_t inf = std::numeric_limits<double>::infinity();"
@@ -472,6 +488,16 @@ class VectorFunction:
 		for call in self.calls:
 			o += f"out.SEG({len(call)},{offset}) = {call.callable.name}::eval(param, {self.generate_arglist(call.args)}); // {str(call)}"
 			offset += len(call)
+
+		# # Search for sequences that can be compressed
+		# ind = 0
+		# comp = [(self.calls[0].name, self.calls[0].args)]
+		# while ind < len(self.calls):
+		# 	# Test if we're a fixed step past the last call
+		# 	comp = self.calls[ind].name
+
+
+
 		o.dedent()
 		o += "};"
 		return str(o)
@@ -529,7 +555,7 @@ class VectorFunction:
 
 		o += self.generate_sequence("jac_seq", sequence)
 
-		o += "static void eval(param_t &param, variable_t x, out_t &out, jacobian_t &jacobian)"
+		o += "static void eval(param_t &param, const Eigen::Ref<const variable_t> &x, Eigen::Ref<out_t> out, Eigen::Ref<jacobian_t> jacobian)"
 		o += "{"
 		o.indent()
 
@@ -577,8 +603,10 @@ class WeightedSum(VectorFunction):
 		o += "{"
 		o.indent()
 		o += tw.dedent(f"""\
-			using weight_t = Eigen::Vector<scalar_t, {len(self)}>;
+			static constexpr std::size_t num_weights = {len(self)};
+			using weight_t = Eigen::Vector<scalar_t, num_weights>;
 			using gradient_t = Eigen::Vector<scalar_t, num_variables>;
+			static constexpr std::size_t hessian_nnz = {self.hessianStructure.getnnz()};
 			using hessian_t = Eigen::SparseMatrix<scalar_t>;
 			""")
 		o += ""
@@ -800,7 +828,7 @@ class Compiler:
 	def load_function_info(self, filename):
 		"""Read C++ function information from given YAML file"""
 
-		with open('qp_functions.yml', 'r') as file:
+		with open(filename, 'r') as file:
 			callables = yaml.safe_load(file)
 			for name, y in callables.items():
 				num_inputs = sum(y['input_sizes'])
@@ -865,7 +893,7 @@ class Compiler:
 			wsum.o_postfix = Indenter()
 
 		o += ""
-		o += "static void variable_bounds(Eigen::Ref<variable_t> lb, Eigen::Ref<variable_t> ub)"
+		o += "static void variable_bounds(param_t &param, Eigen::Ref<variable_t> lb, Eigen::Ref<variable_t> ub)"
 		o += "{"
 		o.indent()
 		o += "constexpr scalar_t inf = std::numeric_limits<double>::infinity();"
@@ -911,6 +939,12 @@ class OptimizationProblem:
 	def objective(self):
 		return self._objective
 
+	@objective.setter
+	def objective(self, value):
+		# Do nothing... 
+		# we just need this so that += gets passed through to the objective
+		pass
+
 	@property
 	def scalar_t(self):
 		return self._compiler.scalar_t
@@ -930,9 +964,36 @@ class OptimizationProblem:
 	@property
 	def callables(self):
 		return self._compiler.callables
+
+	def _add_lagrangian(self):
+		"""Return a copy of the compiler with the lagrangian added"""
+		compiler = copy.deepcopy(self._compiler)
+		lag = compiler.weighted_sum("lagrangian")
+
+		for f in self.objective.calls:
+			lag += f
+		for f in self.constraints.calls:
+			lag += f
+
+		## TODO: Add variable constarints to the lagrangian, but not the hessian...
+		## NOTE: This will compute the correct hessian, but the gradient and value will be wrong
+
+		return compiler
+
 	
 	def generate(self):
-		return self._compiler.generate()
+		return self._add_lagrangian().generate()
+
+		# Generate code to compute the lagrangian
+	    # L = obj + lam_ineq' * ineq + lam_eq' * eq + lam_var' * var
+
+    	# The Hessian matrix that %Ipopt uses is
+    	# \sigma_f \nabla^2 f(x_k) + \sum_{i=1}^m\lambda_i\nabla^2 g_i(x_k) \f]
+    	# for the given values for \f$x\f$, \f$\sigma_f\f$, and \f$\lambda\f$.
+    	# See \ref TRIPLET for a discussion of the sparse matrix format used in this method.
+
+		# code = self.compiler.generate()
+		# return code
 
 	def load_function_info(self, filename):
 		"""Read C++ function information from given YAML file"""
@@ -964,40 +1025,71 @@ class OptimizationProblem:
 
 
 if __name__ == '__main__': 
-	prob = OptimizationProblem("QP")
-	N = 50
+	prob = OptimizationProblem("ipopt_nlp_test")
+	x1 = prob.variable("x1", 1)
+	x2 = prob.variable("x2", 1)
+	x3 = prob.variable("x3", 1)
+	x4 = prob.variable("x4", 1)
 
-	x = prob.variable("x", 2, N)
-	u = prob.variable("u", 1, N-1)
-	xss = prob.variable("xss", 2)
-	uss = prob.variable("uss", 1)
+	prob.load_function_info("ipopt_functions.yml")
+	print(prob.callables)
+	ineq = prob.callables['ineq']
+	eq = prob.callables['eq']
+	obj = prob.callables['obj']
 
-	prob.load_function_info("qp_functions.yml")
+	prob.constraints << (ineq(x1,x2,x3,x4) >= 25) | "inequality"
+	prob.constraints << (eq(x1,x2,x3,x4) == 40) | "equality"
+	1 <= x1 <= 5
+	1 <= x2 <= 5
+	1 <= x3 <= 5
+	1 <= x4 <= 5
 
-	dynamics = prob.callables['dynamics_0']
-	dynamics_eq = prob.callables['dynamics_eq']
-	stage_cost = prob.callables['stage_cost']
-	terminal_cost = prob.callables['terminal_cost']
-
-	prob.constraints << dynamics(x[0],u[2])
-	ub = np.array([1, 2])
-	-20 <= u[0] <= 30
-	for i in range(1,N-1):
-		prob.constraints << (-1*i <= dynamics_eq(x[i+1],x[i],u[i]) <= ub) | f"dynamics{i}"
-		-2 <= u[i] <= 3
-		-5 <= x[i] <= 8.3
-	-12 <= x[N-1] <= 12
-
-	obj = prob.objective
-	obj += dynamics(x[2],u[1])
-	obj += terminal_cost(x[N-1], xss)
-	for i in range(N-1):
-		obj += stage_cost(x[i], u[i], xss, uss)
-
-	prob.scalar_t = "double"
-	prob.param_t = "MyFunctions<double>::param_t"
+	prob.objective += obj(x1,x2,x3,x4)
 
 	print(prob)
 
-	with open('../examples/qp.compiled.hpp', 'w') as f:
+	prob.scalar_t = "double"
+	prob.param_t = "MyFunctions<double>::param_t"
+	with open('../examples/ipopt_test.compiled.hpp', 'w') as f:
 		f.write(prob.generate())
+
+
+	# prob = OptimizationProblem("QP")
+	# N = 25
+
+	# x = prob.variable("x", 2, N)
+	# u = prob.variable("u", 1, N-1)
+	# xss = prob.variable("xss", 2)
+	# uss = prob.variable("uss", 1)
+
+	# prob.load_function_info("qp_functions.yml")
+
+	# dynamics = prob.callables['dynamics_0']
+	# dynamics_ss = prob.callables['dynamics_ss']
+	# dynamics_eq = prob.callables['dynamics_eq']
+	# stage_cost = prob.callables['stage_cost']
+	# terminal_cost = prob.callables['terminal_cost']
+
+	# prob.constraints << (dynamics(x[0],u[0]) == 0)
+	# ub = np.array([1, 2])
+	# -20 <= u[0] <= 30
+	# for i in range(1,N-1):
+	# 	prob.constraints << (dynamics_eq(x[i+1],x[i],u[i]) == 0) | f"dynamics{i}"
+	# 	-2 <= u[i] <= 3
+	# 	-5 <= x[i] <= 8.3
+	# -12 <= x[N-1] <= 12
+	# prob.constraints << (0 <= dynamics_ss(xss,uss) <= 0) | "steady_state"
+
+	# obj = prob.objective
+	# obj += dynamics(x[2],u[1])
+	# obj += terminal_cost(x[N-1], xss)
+	# for i in range(N-1):
+	# 	obj += stage_cost(x[i], u[i], xss, uss)
+
+	# prob.scalar_t = "double"
+	# prob.param_t = "MyFunctions<double>::param_t"
+
+	# print(prob)
+
+	# with open('../examples/qp.compiled.hpp', 'w') as f:
+	# 	f.write(prob.generate())

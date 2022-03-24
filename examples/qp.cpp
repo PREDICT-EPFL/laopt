@@ -12,19 +12,7 @@
 // #include "qp_lib.hpp"
 #include <chrono>
 
-// struct Prob : QP
-// {
-//   using param_t = QP::param_t;
-//   using scalar_t = QP::scalar_t;
-//   using variable_t = QP::variable_t;
-
-//   using constraint_t = typename Prob::constraints_vec;
-//   using constraint_jacobian_t = typename Prob::constraints_jacobian_mat;
-//   using obj_gradient_t = typename Prob::obj_gradient_vec;
-//   using obj_hessian_t = typename Prob::obj_hessian_mat;
-//   using obj_t = typename Prob::obj_vec;
-// };
-
+#include "ipopt_interface.hpp"
 
 /**
  * Problem structure
@@ -34,63 +22,134 @@
  *        lb <=   x  <=   ub
  */
 
+struct QP_bnds : public QP
+{
+  static void variable_bounds(param_t &param, Eigen::Ref<variable_t> lb, Eigen::Ref<variable_t> ub)
+  {
+    QP::variable_bounds(param, lb, ub);
+
+    std::cout << "Called\n";
+    std::cout << "param.x0 = " << param.x0.transpose() << std::endl;
+
+    x(lb,0) = param.x0;
+    x(ub,0) = param.x0;
+
+    std::cout << "lb = " << x(lb,0).transpose() << std::endl;
+    std::cout << "ub = " << x(ub,0).transpose() << std::endl;
+  }
+};
+
+        // std::cout << "Called\n";
+        // std::cout << "param.x0 = " << param.x0.transpose() << std::endl;
+        // auto lb = Eigen::Map<variable_t>(x_l);
+        // auto ub = Eigen::Map<variable_t>(x_u);
+        // std::cout << "lb = " << Prob::x(lb,0).transpose() << std::endl;
+        // std::cout << "ub = " << Prob::x(ub,0).transpose() << std::endl;
+
+        // Prob::x(lb,0) = param.x0;
+        // Prob::x(ub,0) = param.x0;
+
+        // std::cout << "lb = " << Prob::x(lb,0).transpose() << std::endl;
+        // std::cout << "ub = " << Prob::x(ub,0).transpose() << std::endl;
+
+
 
 int main()
 {
-    QP::variable_t x;
+    QP_bnds::variable_t x;
     x.array() = 1.5;
 
-    QP::param_t param;
-    QP::constraints::out_t eq;
-    QP::constraints::jacobian_t J;
+    QP_bnds::param_t param;
+    QP_bnds::constraints::out_t eq;
+    QP_bnds::constraints::jacobian_t J;
 
-    QP::xss(x).array() = 3;
-    QP::uss(x).array() = 3;
+    QP_bnds::xss(x).array() = 3;
+    QP_bnds::uss(x).array() = 3;
 
     // Compute jacobian
-    QP::constraints::initialize_jacobian(J);
-    QP::constraints::eval(param, x, eq, J);
+    QP_bnds::constraints::initialize_jacobian(J);
+    QP_bnds::constraints::eval(param, x, eq, J);
 
     std::cout << "eq = " << eq.transpose() << std::endl;
     std::cout << "J = \n" << Eigen::MatrixX<double>(J) << std::endl;
 
-    QP::objective::weight_t w;
+    QP_bnds::objective::weight_t w;
     w.array() = 1.2;
-    std::cout << "objective = " << QP::objective::eval(param, w, x) << std::endl;
+    std::cout << "objective = " << QP_bnds::objective::eval(param, w, x) << std::endl;
 
-    QP::objective::gradient_t grad;
-    std::cout << "objective = " << QP::objective::eval(param, w, x, grad) << std::endl;
+    QP_bnds::objective::gradient_t grad;
+    std::cout << "objective = " << QP_bnds::objective::eval(param, w, x, grad) << std::endl;
     std::cout << "gradient  = " << grad.transpose() << std::endl;
 
-    QP::objective::hessian_t H;
-    QP::objective::initialize_hessian(H);
+    QP_bnds::objective::hessian_t H;
+    QP_bnds::objective::initialize_hessian(H);
     std::cout << "H = \n" << Eigen::MatrixX<double>(H) << std::endl;
-    std::cout << "objective = " << QP::objective::eval(param, w, x, grad, H) << std::endl;
+    std::cout << "objective = " << QP_bnds::objective::eval(param, w, x, grad, H) << std::endl;
     std::cout << "H = \n" << Eigen::MatrixX<double>(H) << std::endl;
 
 
     auto start = std::chrono::steady_clock::now();
-    long N = 1000000;
+    long N = 100000;
     for(int i=0; i<N; i++)
-        QP::constraints::eval(param, x, eq, J);
+        QP_bnds::constraints::eval(param, x, eq, J);
     auto end = std::chrono::steady_clock::now();
     std::cout << "Jacobian time in nanoseconds: "
         << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() / (double)N
         << " ns" << std::endl;
 
+    start = std::chrono::steady_clock::now();
     for(int i=0; i<N; i++)
-        QP::objective::eval(param, w, x, grad);
+        QP_bnds::objective::eval(param, w, x, grad);
     end = std::chrono::steady_clock::now();
     std::cout << "Gradient time in nanoseconds: "
         << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() / (double)N
         << " ns" << std::endl;
 
+    start = std::chrono::steady_clock::now();
     for(int i=0; i<N; i++)
-        QP::objective::eval(param, w, x, grad, H);
+        QP_bnds::objective::eval(param, w, x, grad, H);
     end = std::chrono::steady_clock::now();
     std::cout << "Hessian time in nanoseconds: "
         << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() / (double)N
         << " ns" << std::endl;
+
+
+    using myNLP = NLP_Ipopt<QP_bnds>;
+    param.x0[0] = 0;
+    param.x0[1] = 1;
+
+    Ipopt::SmartPtr<myNLP> mynlp = new myNLP(param);
+    Ipopt::SmartPtr<Ipopt::IpoptApplication> app = new Ipopt::IpoptApplication();
+
+    app->Options()->SetNumericValue("tol", 1e-7);
+    // app->Options()->SetStringValue("mu_strategy", "adaptive");
+    app->Options()->SetStringValue("output_file", "ipopt.out");
+    // app->Options()->SetStringValue("hessian_approximation", "limited-memory");
+
+    Ipopt::ApplicationReturnStatus status;
+    status = app->Initialize();
+    if( status != Ipopt::Solve_Succeeded )
+    {
+        std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl;
+        return -1;
+    }
+
+    const std::size_t NUM_EXP = 1;
+    start = std::chrono::steady_clock::now();
+    for(int i = 0; i < NUM_EXP; ++i)
+    {
+        mynlp->x0.array() = 0;
+        status = app->OptimizeTNLP(mynlp);
+    }
+    end = std::chrono::steady_clock::now();
+
+    std::cout << "\n\n\n\n===================== IPOPT SOLUTION =====================\n";
+    std::cout << "IPOPT time: "
+        << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
+        << " ms" << std::endl;
+    std::cout << "x = \n" << QP_bnds::x(mynlp->sol.primal).transpose() << std::endl;
+    std::cout << "u = \n" << QP_bnds::u(mynlp->sol.primal).transpose() << std::endl;
+    std::cout << "\n\n\n\n";
 
     return 1;
 }

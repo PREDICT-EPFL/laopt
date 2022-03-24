@@ -93,28 +93,30 @@ struct abstract_function_t
 	// Accumulate the source into the target
 	static void accumulate_submatrix(Eigen::Ref<Eigen::SparseMatrix<scalar_t>> target, 
 						const Eigen::SparseMatrix<scalar_t> &source, 
-						const seqinfo *blocks, const int num_blocks)
+						const seqinfo *blocks, const int num_blocks,
+						const Eigen::Ref<const Eigen::VectorX<scalar_t>> w)
 	{
 		scalar_t* targetPtr = target.valuePtr();
 		const scalar_t* sourcePtr = source.valuePtr();
 		for(int i=0; i<num_blocks; i++)
 		{
 			Eigen::Map<Eigen::VectorX<scalar_t>>(targetPtr + blocks[i].index, blocks[i].length)
-				+= Eigen::Map<const Eigen::VectorX<scalar_t>>(sourcePtr, blocks[i].length);
+				+= w[i] * Eigen::Map<const Eigen::VectorX<scalar_t>>(sourcePtr, blocks[i].length);
 			sourcePtr += blocks[i].length;
 		}
 	};
 
 	static void accumulate_submatrix(Eigen::Ref<Eigen::SparseMatrix<scalar_t>> target, 
 						const Eigen::MatrixX<scalar_t> &source, 
-						const seqinfo *blocks, const int num_blocks)
+						const seqinfo *blocks, const int num_blocks,
+						const Eigen::Ref<const Eigen::VectorX<scalar_t>> w)
 	{
 		scalar_t* targetPtr = target.valuePtr();
 		const scalar_t* sourcePtr = source.data();
 		for(int i=0; i<num_blocks; i++)
 		{
 			Eigen::Map<Eigen::VectorX<scalar_t>>(targetPtr + blocks[i].index, blocks[i].length)
-				+= Eigen::Map<const Eigen::VectorX<scalar_t>>(sourcePtr, blocks[i].length);
+				+= w[i] * Eigen::Map<const Eigen::VectorX<scalar_t>>(sourcePtr, blocks[i].length);
 			// memcpy(targetPtr + blocks[i].index, sourcePtr, sizeof(scalar_t) * blocks[i].length);
 			sourcePtr += blocks[i].length;
 		}
@@ -210,7 +212,8 @@ struct weightedsum_util_t : public abstract_function_t<scalar_t>
 		for(int i=0; i<hessian_output_t::num_outputs; i++)
 		{
 	      abstract_function_t<scalar_t>::accumulate_submatrix(hessian, H.hessian[i], 
-	      													  hessian_seq+offset, seq_len[i]);
+	      													  hessian_seq+offset, seq_len[i],
+	      													  w);
 	      offset += seq_len[i];
 		}
 	}

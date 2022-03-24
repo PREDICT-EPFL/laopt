@@ -17,17 +17,19 @@ public:
 
 	using scalar_t = typename Prob::scalar_t;
 	using param_t = typename Prob::param_t;
-	using variable_t = typename Prob::variable_vec;
-	using constraint_t = typename Prob::constraints_vec;
-	using constraint_jacobian_t = typename Prob::constraints_jacobian_mat;
-	using obj_gradient_t = typename Prob::obj_gradient_vec;
-	using obj_hessian_t = typename Prob::obj_hessian_mat;
-	using obj_t = typename Prob::obj_vec;
+	using variable_t = typename Prob::variable_t;
+	using constraint_t = typename Prob::constraints::out_t;
+	using constraint_jacobian_t = typename Prob::constraints::jacobian_t;
+	using obj_gradient_t = typename Prob::objective::gradient_t;
+	using obj_t = typename Prob::scalar_t;
 
 	static constexpr std::size_t num_variables = Prob::num_variables;
-	static constexpr std::size_t num_constraints = Prob::constraints_t::num_constraints;
+	static constexpr std::size_t num_constraints = Prob::constraints::output_size;
 
 	variable_t x0;  // Initial iterate
+
+	// Weight for the objective function
+	typename Prob::objective::weight_t w_obj; 
 
 	// Parameter struct - owned outside this class
 	param_t& param;
@@ -42,8 +44,7 @@ public:
 		constraint_t dual_g;
 		variable_t dual_x;
 		obj_t obj;
-		// obj_gradient_t obj_gradient;
-		// obj_hessian_t obj_hessian;
+		obj_gradient_t obj_gradient;
 	};
 	sol_t sol;
 
@@ -54,9 +55,10 @@ public:
 		jac_g(num_constraints, num_variables),
 		hessian_lagrangian(num_variables, num_variables)
 	{
-        this->constraints.initialize_sparse_jacobian(jac_g);
-        this->lagrangian.initialize_sparse_hessian(hessian_lagrangian);
+		Prob::constraints::initialize_jacobian(jac_g);
+		Prob::lagrangian::initialize_hessian(hessian_lagrangian);
 		x0.array() = 0.0;
+		w_obj.array() = 1;
 	};
 
 	bool get_nlp_info(
@@ -69,28 +71,17 @@ public:
 	{
 		n = num_variables;
 		m = num_constraints;
-		nnz_jac_g = this->constraints.nnz_jacobian;
-		nnz_h_lag = this->lagrangian.nnz_hessian();
+		nnz_jac_g = Prob::constraints::nnz_jacobian;
+		// nnz_h_lag = Prob::lagrangian::hessian_nnz; // Total NNZ - we only want lower part
 		index_style = TNLP::C_STYLE;
-
 
 		// Compute nnz in the lower-triangular part of the hessian
 		int ind = 0;
-	    for (int k=0; k < hessian_lagrangian.outerSize(); ++k)
-	    {
-	        for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(hessian_lagrangian, k); it; ++it)
-	        {
-	        	if(it.row() >= it.col())  // Store only the lower triangular part
-	        	{
-					// iRow[ind] = it.row();
-					// jCol[ind] = it.col();
+		for (int k=0; k < hessian_lagrangian.outerSize(); ++k)
+			for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(hessian_lagrangian, k); it; ++it)
+				if(it.row() >= it.col())  // Store only the lower triangular part
 					ind++;
-	        	}
-	        }
-	    }
 		nnz_h_lag = ind;
-
-		std::cout << "nnz_h_lag = " << nnz_h_lag << std::endl;
 		return true;
 	};
 
@@ -107,8 +98,8 @@ public:
 		assert(n == num_variables);
 		assert(m == num_constraints);
 
-		this->variables.get_bounds(param, Eigen::Map<variable_t>(x_l), Eigen::Map<variable_t>(x_u));
-		this->constraints.get_bounds(param, Eigen::Map<constraint_t>(g_l), Eigen::Map<constraint_t>(g_u));
+		Prob::variable_bounds(param, Eigen::Map<variable_t>(x_l), Eigen::Map<variable_t>(x_u));
+		Prob::constraints::bounds(param, Eigen::Map<constraint_t>(g_l), Eigen::Map<constraint_t>(g_u));
 
 		return true;	
 	}
@@ -143,7 +134,7 @@ public:
 	)
 	{
 		assert(n == num_variables);		
-		obj_value = this->objective(param, Eigen::Map<const variable_t>(x));
+		obj_value = Prob::objective::eval(param, w_obj, Eigen::Map<const variable_t>(x));
 		return true;
 	}
 
@@ -155,7 +146,7 @@ public:
 	)
 	{
 		assert(n == num_variables);
-		this->objective(param, Eigen::Map<const variable_t>(x), Eigen::Map<obj_gradient_t>(grad_f));
+		Prob::objective::eval(param, w_obj, Eigen::Map<const variable_t>(x), Eigen::Map<obj_gradient_t>(grad_f));
 		return true;
 	}
 
@@ -172,7 +163,7 @@ public:
 
 		Eigen::Map<const variable_t > var(x);
 		Eigen::Map<constraint_t > constraints(g);
-		this->constraints(param, var, constraints);
+		Prob::constraints::eval(param, var, constraints);
 
 		return true;   	
 	}
@@ -217,7 +208,7 @@ public:
 													    jac_g.outerIndexPtr(), jac_g.innerIndexPtr(),
 													    values);
 			constraint_t tmp;
-			this->constraints(param, var, tmp, J); 
+			Prob::constraints::eval(param, var, tmp, J); 
 		}
 
 		return true;
@@ -241,8 +232,6 @@ public:
 		Ipopt::Number*       values
 	)
 	{
-		// std::cout << "Evaluating hessian\n";
-
 		assert(n == num_variables);
 		assert(m == num_constraints);
 
@@ -262,7 +251,6 @@ public:
 						iRow[ind] = it.row();
 						jCol[ind] = it.col();
 						ind++;
-
 		        	}
 		        }
 		    }
@@ -280,18 +268,14 @@ public:
 			// 										    values);
 
 			Eigen::Map<const variable_t> var(x);
-			Eigen::Map<const typename Prob::equalities_vec> dual_eq(lambda);
-			Eigen::Map<const typename Prob::inequalities_vec> dual_ineq(lambda + Prob::num_equalities);
-			// Eigen::Map<const constraint_t> lam(lambda);
 
-			variable_t dual_var = variable_t::Ones();
+			// Setup the weight vector = [obj_factor*1 lambda] where 1 is the length of the objective
+			typename Prob::lagrangian::weight_t w;
+			w.array() = obj_factor;
+			w.template tail<Prob::constraints::output_size>() = Eigen::Map<const constraint_t>(lambda);
 
 			variable_t tmp_grad;
-		    this->lagrangian(param, var, obj_factor,
-		    							 dual_eq,
-		                                 dual_ineq,
-		                                 dual_var,
-		                                 tmp_grad, hessian_lagrangian);
+			Prob::lagrangian::eval(param, w, var, tmp_grad, hessian_lagrangian);
 
 			// Copy the lower-triangular part of the hessian
 			int ind = 0;
