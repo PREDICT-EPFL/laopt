@@ -400,8 +400,8 @@ class VStack(Expression):
         args = [str(x) for x in self.args]
         return f"vstack({' '.join(args)})"
 
-    # def _generate(self, p, *args):
-    #     return p.evaluate_vstack(self, args, (a.shape for a in self.args))
+    def _generate(self, p, *args):
+        return p.evaluate_vstack(self, args, (a.shape for a in self.args))
 
     def __len__(self):
         return sum(arg.shape[0] for arg in self.args)
@@ -434,13 +434,13 @@ class functionExpression(Expression):
         args = [str(x) for x in self.args]
         return f"{self.function.name}({', '.join(args)})"
 
-    # def _generate(self, p, *args):
-    #     p.add_dependency(self.function, 'Function')  # Register this function for generation
-    #     out = p.get(self)  # Test if this function has been generated before
-    #     if not out:
-    #         out = p.evaluate_functionExpression(self, *args)
-    #         p.add(self, out)
-    #     return out
+    def _generate(self, p, *args):
+        p.add_dependency(self.function, 'Function')  # Register this function for generation
+        out = p.get(self)  # Test if this function has been generated before
+        if not out:
+            out = p.evaluate_functionExpression(self, *args)
+            p.add(self, out)
+        return out
 
     def _is_equal(self, other):
         if id(self.function) != id(other.function):
@@ -537,35 +537,35 @@ class sliceExpression(UnaryExpression):
             rep = str(key)
         return rep
 
-    # @staticmethod
-    # def _slice_to_offset(key, length):
-    #     # Convert a slice object key to a (len, offset)
-    #     # length is the size of the object being sliced
-    #     assert key.step == None, NotADirectoryError("Cannot have slices with steps until Eigen 4")
+    @staticmethod
+    def _slice_to_offset(key, length):
+        # Convert a slice object key to a (len, offset)
+        # length is the size of the object being sliced
+        assert key.step == None, NotADirectoryError("Cannot have slices with steps until Eigen 4")
 
-    #     start = key.start if key.start else 0
-    #     stop = key.stop if key.stop else length
+        start = key.start if key.start else 0
+        stop = key.stop if key.stop else length
 
-    #     if start < 0:
-    #         start = length + start
-    #     if stop < 0:
-    #         stop = length + stop
+        if start < 0:
+            start = length + start
+        if stop < 0:
+            stop = length + stop
 
-    #     return (stop - start, start)
+        return (stop - start, start)
 
-    # def _generate(self, p, *args):
-    #     if isinstance(self.key, int):
-    #         rep = f"segment<1>({self.key})"
-    #     if isinstance(self.key, tuple):    
-    #         if len(self.key) == 1:  # Segment of a vector
-    #             size, offset = sliceExpression._slice_to_offset(self.key[0], self.args[0].shape[0])
-    #             rep = f"segment<{size}>({offset})"
-    #         else:  # Block of a matrix
-    #             x_size, x_offset = sliceExpression._slice_to_offset(self.key[0], self.args[0].shape[0])
-    #             y_size, y_offset = sliceExpression._slice_to_offset(self.key[1], self.args[0].shape[1])
-    #             rep = f"block<{x_size}, {y_size}>({x_offset}, {y_offset})"
+    def _generate(self, p, *args):
+        if isinstance(self.key, int):
+            rep = f"segment<1>({self.key})"
+        if isinstance(self.key, tuple):    
+            if len(self.key) == 1:  # Segment of a vector
+                size, offset = sliceExpression._slice_to_offset(self.key[0], self.args[0].shape[0])
+                rep = f"segment<{size}>({offset})"
+            else:  # Block of a matrix
+                x_size, x_offset = sliceExpression._slice_to_offset(self.key[0], self.args[0].shape[0])
+                y_size, y_offset = sliceExpression._slice_to_offset(self.key[1], self.args[0].shape[1])
+                rep = f"block<{x_size}, {y_size}>({x_offset}, {y_offset})"
 
-    #     return f"{args[0]}.template {rep}"
+        return f"{args[0]}.template {rep}"
 
     def _is_equal(self, other):
         if self.key != other.key:
@@ -791,35 +791,35 @@ class Matrix(AtomicExpression):
     def shape(self):
         return self.M.shape
 
-    # def generate_declaration(self, p):
-    #     # Return string to declare this variable / constant
-    #     p(f"Matrix<scalar_t, {self.shape[0]}, {self.shape[1]}> {self.name};")
+    def generate_declaration(self, p):
+        # Return string to declare this variable / constant
+        p(f"Matrix<scalar_t, {self.shape[0]}, {self.shape[1]}> {self.name};")
 
-    # def generate_initialization(self, p):
-    #     # Initialize the variable if initial is specified
-    #     # print(f"initializing {self}")
-    #     M = self.M
-    #     if np.all(M == np.ravel(M)[0]):  # All values are the same
-    #         p(f"{self.name}.array() = {M[0][0]};")
-    #     else:
-    #         ret = f"{self.name} << "
-    #         rows = []
-    #         for row in M:
-    #             rows.append(", ".join(str(x) for x in row))
-    #         ret += ", ".join(rows) + ";"
-    #         p(ret)
+    def generate_initialization(self, p):
+        # Initialize the variable if initial is specified
+        # print(f"initializing {self}")
+        M = self.M
+        if np.all(M == np.ravel(M)[0]):  # All values are the same
+            p(f"{self.name}.array() = {M[0][0]};")
+        else:
+            ret = f"{self.name} << "
+            rows = []
+            for row in M:
+                rows.append(", ".join(str(x) for x in row))
+            ret += ", ".join(rows) + ";"
+            p(ret)
 
     def _is_equal(self, other):
         if self.name != other.name:
             return False
         return np.array_equiv(self.M, other.M)
 
-    # def _generate(self, p, *args):
-    #     p.add_dependency(self, 'VariableMatrix')  # Register this matrix for generation
-    #     # return super()._generate(p, *args)
-    #     if p.option('cast_constants'):
-    #         return f"{self}.template cast<T>()"
-    #     return str(self)
+    def _generate(self, p, *args):
+        p.add_dependency(self, 'VariableMatrix')  # Register this matrix for generation
+        # return super()._generate(p, *args)
+        if p.option('cast_constants'):
+            return f"{self}.template cast<T>()"
+        return str(self)
 
 
 class ConstMatrix(Matrix):
@@ -843,34 +843,34 @@ class ConstMatrix(Matrix):
     def isZero(self):
         return np.all((self.M == 0))
 
-    # def generate_declaration(self, p):
-    #     # Return string to declare this constant
-    #     if self.shape[0] == 1 or self.shape[1] == 1:
-    #         values = ", ".join(str(x) for x in np.ravel(self.M))
-    #     else:
-    #         rows = []
-    #         for row in self.M:
-    #             rows.append(", ".join(str(x) for x in row))
-    #         rows = [f"{{{row}}}" for row in rows]
-    #         values = ", ".join(rows)
-    #     ret = f"const Matrix<scalar_t, {self.shape[0]}, {self.shape[1]}> {self.name} = {{{values}}};"
-    #     p(ret)
+    def generate_declaration(self, p):
+        # Return string to declare this constant
+        if self.shape[0] == 1 or self.shape[1] == 1:
+            values = ", ".join(str(x) for x in np.ravel(self.M))
+        else:
+            rows = []
+            for row in self.M:
+                rows.append(", ".join(str(x) for x in row))
+            rows = [f"{{{row}}}" for row in rows]
+            values = ", ".join(rows)
+        ret = f"const Matrix<scalar_t, {self.shape[0]}, {self.shape[1]}> {self.name} = {{{values}}};"
+        p(ret)
 
-    # def generate_initialization(self, p):
-    #     pass  # No initialization in the constructor - it's in the declaration
+    def generate_initialization(self, p):
+        pass  # No initialization in the constructor - it's in the declaration
 
     def _is_equal(self, other):
         return np.array_equiv(self.M, other.M)
 
-    # def _generate(self, p, *args):
-    #     M = self.M
-    #     if np.all(M == np.ravel(M)[0]):
-    #         return f"Matrix<{p.option('number_type')}, {M.shape[0]}, {M.shape[1]}>::Constant({M[0][0]})"
+    def _generate(self, p, *args):
+        M = self.M
+        if np.all(M == np.ravel(M)[0]):
+            return f"Matrix<{p.option('number_type')}, {M.shape[0]}, {M.shape[1]}>::Constant({M[0][0]})"
 
-    #     p.add_dependency(self, 'ConstantMatrix')  # Register this matrix for generation
-    #     if p.option('cast_constants'):
-    #         return f"{self}.template cast<T>()"
-    #     return str(self)
+        p.add_dependency(self, 'ConstantMatrix')  # Register this matrix for generation
+        if p.option('cast_constants'):
+            return f"{self}.template cast<T>()"
+        return str(self)
 
     def generate_scalar(self, p, *args):
         """Generate a scalar assignment - x.array() = value"""
@@ -985,9 +985,9 @@ class Scalar(AtomicExpression):
     def __hash__(self):
         return hash((self.name, self.value))
 
-    # def generate_declaration(self, p):
-    #     # Return string to declare this variable / constant
-    #     p(f"scalar_t {self.name} = {self.value};")
+    def generate_declaration(self, p):
+        # Return string to declare this variable / constant
+        p(f"scalar_t {self.name} = {self.value};")
 
     def _is_equal(self, other):
         if self.value != other.value:
@@ -996,9 +996,9 @@ class Scalar(AtomicExpression):
             return False
         return True
 
-    # def _generate(self, p, *args):
-    #     p.add_dependency(self, 'VariableScalar')  # Register this matrix for generation
-    #     return super()._generate(p, *args)
+    def _generate(self, p, *args):
+        p.add_dependency(self, 'VariableScalar')  # Register this matrix for generation
+        return super()._generate(p, *args)
 
     def generate_scalar(self, p, *args):
         """Generate a scalar assignment - x.array() = value"""
@@ -1022,11 +1022,11 @@ class ConstScalar(Scalar):
     # def to_python(self, p=None):
     #     return str(self.value)
 
-    # def _generate(self, p, *args):
-    #     if p.option('cast_constants'):
-    #         scalar_t = p.option('number_type')
-    #         return f"static_cast<{scalar_t}>({self.value})"
-    #     return str(self.value)
+    def _generate(self, p, *args):
+        if p.option('cast_constants'):
+            scalar_t = p.option('number_type')
+            return f"static_cast<{scalar_t}>({self.value})"
+        return str(self.value)
 
     def generate_scalar(self, p, *args):
         """Generate a scalar assignment - x.array() = value"""
@@ -1220,10 +1220,10 @@ class Variable(AtomicExpression):
         self.lb.state = newState
         self.ub.state = newState
 
-    # def eigen_get(self, var, **kwargs):
-    #     """Return an eigen statement to access this variable as an offset into var"""
-    #     if self.var_set:
-    #         return f"{str(self.var_set.name)}.get({var}, {self.ind})"
-    #     else:
-    #         return f"{str(self)}.get({var})"
+    def eigen_get(self, var, **kwargs):
+        """Return an eigen statement to access this variable as an offset into var"""
+        if self.var_set:
+            return f"{str(self.var_set.name)}.get({var}, {self.ind})"
+        else:
+            return f"{str(self)}.get({var})"
 
