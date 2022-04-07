@@ -4,7 +4,6 @@
 // Defines differentiable dense functions
 
 #include "Eigen/Dense"
-#include <Eigen/Sparse>
 #include "unsupported/Eigen/AutoDiff"
 
 #include "lampc_utility.hpp"
@@ -15,172 +14,29 @@ using namespace Eigen;
 
 namespace lampc {
 
-// User macro to define a differentiable function
-#define really_unparen(...) __VA_ARGS__
-
-#define GET_VAR_SIZE(name, len) len
-#define GET_VAR_SIZE_PAIR(pair) GET_VAR_SIZE pair
-#define GET_VAR_NAME(name, len) name
-#define GET_VAR_NAME_PAIR(pair) GET_VAR_NAME pair
-#define GET_OUT_SIZE(name, len) len
-#define GET_OUT_SIZE_PAIR(pair) GET_OUT_SIZE pair
-#define GET_VAR_LIST(name, len) const Eigen::Ref<const Eigen::Matrix<T, len, 1>> name
-#define GET_VAR_LIST_PAIR(pair) GET_VAR_LIST pair
-
-/** @file */
-
 /**
- * Macro to define a differentiable function.
+ * Used to create a differentiable function
  * 
- * For example:
- * 
- * \code{.cpp}
- *  FUNCTION(quadratic, scalar_t, param_t, (out, 2), (x, 1), (y, 2))
- *  {
- *      out << x(0) + y(0), 
- *             p.q * x(0) + y(0) + 2 * y(1);
- *  };
- * \endcode
- *  
- * Will expand to the structure
- * \code{.cpp}
- * struct quadratic_
- * {
- *    template<typename T>
- *    static EIGEN_STRONG_INLINE void impl(const param_t& p, 
- *               Eigen::Ref<Eigen::Matrix<T, 2, 1> out,
- *               const Eigen::Ref<const Eigen::Matrix<T, 1, 1> x,
- *               const Eigen::Ref<const Eigen::Matrix<T, 2, 1> y)
- *    {
- *      quadratic_impl<T>(p, out, x, y);
- *    }
- * };
- * 
- * using quadratic = lampc::Jacobian<quadratic_, scalar_t, param_t, 2, 1, 2>;
- * 
- * template<typename T>
- * static EIGEN_STRONG_INLINE void quadratic_impl(const param_t& p, 
- *            Eigen::Ref<Eigen::Matrix<T, 2, 1> out,
- *            const Eigen::Ref<const Eigen::Matrix<T, 1, 1> x,
- *            const Eigen::Ref<const Eigen::Matrix<T, 2, 1> y)
- * {
- *      out << x(0) + y(0), 
- *             p.q * x(0) + y(0) + 2 * y(1);
- * }
- * \endcode 
+ * Usage:
+ *   using F = lampc::Function<double, 2, 2,2>;
+ *   auto f = make_function(F, myfunction);
  */
- #define FUNCTION(func_name, scalar_t, param_t, out_pair, ...) \
-	struct func_name##_ \
-	{ \
-		static constexpr const char* name=#func_name;\
-		template<typename T> \
-		static EIGEN_STRONG_INLINE void impl(const param_t& p,\
-		Eigen::Ref<Eigen::Matrix<T, GET_VAR_SIZE_PAIR(out_pair), 1>> GET_VAR_NAME_PAIR(out_pair), \
-		MAP_LIST(GET_VAR_LIST_PAIR, __VA_ARGS__) \
-		) noexcept \
-		{ \
-			func_name##_impl<T>(p, GET_VAR_NAME_PAIR(out_pair), MAP_LIST(GET_VAR_NAME_PAIR, __VA_ARGS__)); \
-		} \
-	}; \
-	using func_name = lampc::Jacobian<func_name##_, scalar_t, param_t, \
-	GET_VAR_SIZE_PAIR(out_pair), \
-	MAP_LIST(GET_VAR_SIZE_PAIR, __VA_ARGS__) \
-	>; \
-	template<typename T> \
-	static EIGEN_STRONG_INLINE void func_name##_impl(const param_t& p,\
-	Eigen::Ref<Eigen::Matrix<T, GET_VAR_SIZE_PAIR(out_pair), 1>> GET_VAR_NAME_PAIR(out_pair), \
-	MAP_LIST(GET_VAR_LIST_PAIR, __VA_ARGS__) \
-	) noexcept
+#define make_function(F, name) F(name<F::scalar_t>, name<F::scalar_t, F::AD_scalar>, name<F::scalar_t, F::outerADScalar>);
+// #define make_jacobian(F, name) F(name<double>, name<F::AD_scalar>);
 
+// Tags so the user can choose the operator overload
+struct Eval{};
+struct Jacobian{};
+struct Hessian{};
 
-/*************************************************************
-	 Jacobian computation
- *************************************************************/
-
-namespace detail 
+template<typename scalar_t_, int num_outputs_, int... input_sizes>
+struct Function
 {
-	template<typename scalar_t, int _num_outputs, int num_inputs>
-	struct jacobian_return_t
-	{
-		EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-		constexpr static int num_outputs = _num_outputs;
-
-		Eigen::Matrix<scalar_t, num_outputs, 1> val;
-		Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
-	};
-
-	template<typename scalar_t, int _num_outputs, int num_inputs>
-	struct hessian_return_t
-	{
-		EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-		constexpr static int num_outputs = _num_outputs;
-
-		Eigen::Matrix<scalar_t, num_outputs, 1> val;
-		Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
-		using hessian_t = Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
-		std::array<hessian_t, num_outputs> hessian;
-	};
-};
-
-template<typename Func_, typename scalar_t_, typename param_t_, int num_outputs_, int... input_sizes>
-struct Jacobian // < FunctionTraits<Func, scalar_t, param_t, num_outputs, input_sizes...> >
-{
-	using Func = Func_;
-	using param_t = param_t_;
 	using scalar_t = scalar_t_;
-
-	static constexpr const char* name = Func::name;
 
 	static constexpr int num_inputs = meta::sum_template<input_sizes...>();  // Total number of inputs
 	static constexpr int num_input_vars = sizeof...(input_sizes);  // Number of input vector variables
 	static constexpr int num_outputs = num_outputs_;
-
-	static std::vector<int> get_input_sizes()
-	{
-		return std::vector<int>{input_sizes...};
-	}
-
-	/**
-	 * Return the number of nonzeros in the jacobian
-	 * 
-	 * Default implementation assumes dense jacobians.
-	 * Oveload in child class for sparse.
-	 */
-	static constexpr int nnzJacobian()
-	{
-		int nnz = 0;
-		auto l = {(
-			nnz += input_sizes * num_outputs_,
-			0
-			)...};
-		return nnz;
-	}
-
-	/**
-	 * Returns the sparsity structure of the jacobian of this function
-	 * 
-	 * S = [J_var1 J_var2 ...]
-	 */
-	static Eigen::SparseMatrix<int> jacobianStructure()
-	{
-		// Default is just a dense matrix
-		Eigen::MatrixX<int> S(num_outputs, num_inputs);
-		S.array() = 1;
-
-		return S.sparseView();
-	}
-
-	/**
-	 * Returns the sparsity structure of the hessian of the i'th output of this function
-	 */
-	static Eigen::SparseMatrix<int> hessianStructure(int output_index)
-	{
-		// Default is just a dense matrix
-		Eigen::MatrixX<int> H(num_inputs, num_inputs);
-		H.array() = 1;
-		return H.sparseView();
-	}
-
 
 	// First order derivative
 	using AD_scalar = Eigen::AutoDiffScalar<Eigen::Matrix<scalar_t, num_inputs, 1>>;
@@ -191,85 +47,127 @@ struct Jacobian // < FunctionTraits<Func, scalar_t, param_t, num_outputs, input_
 	using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
 	using outerAD_t = Eigen::Matrix<outerADScalar, num_outputs, 1>;  
 
-	using jacobian_return_t = detail::jacobian_return_t<scalar_t, num_outputs, num_inputs>;
-	using hessian_return_t = detail::hessian_return_t<scalar_t, num_outputs, num_inputs>;
+	using out_t = Eigen::Vector<scalar_t, num_outputs>;
+	using jacobian_t = Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
 
-	/*
-		Evaluate the function with scalar type
-	 */
-	template<typename T>
-	static EIGEN_STRONG_INLINE void impl(
-		const param_t& param,
-		Eigen::Ref<Eigen::Matrix<T, num_outputs, 1>> out, 
-		const Eigen::Ref<const Eigen::Matrix<T, input_sizes, 1>>&... args) 
-		noexcept
+	// Hessian for each of the outputs in an array
+	using hessian_single_t = Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
+	using hessian_t = std::array<hessian_single_t, num_outputs>;
+
+	// Function types for scalar and autodiff types
+	using Func = Eigen::Vector<scalar_t, num_outputs>(const Eigen::Ref<const Eigen::Vector<scalar_t, input_sizes>>&...);
+	using DFunc = Eigen::Vector<AD_scalar, num_outputs>(const Eigen::Ref<const Eigen::Vector<AD_scalar, input_sizes>>&...);
+	using DDFunc = Eigen::Vector<outerADScalar, num_outputs>(const Eigen::Ref<const Eigen::Vector<outerADScalar, input_sizes>>&...);
+
+	// Three function references to evaluate and first and second derivative overloads
+	Func &func;
+	DFunc &dfunc;
+	DDFunc &ddfunc;
+
+	Function(Func& func, DFunc& dfunc, DDFunc& ddfunc)
+		: func(func), dfunc(dfunc), ddfunc(ddfunc)
+		{}
+
+	Function(Func& func, DFunc& dfunc)
+		: func(func), dfunc(dfunc), ddfunc(nullptr)
+		{}
+
+// 	static std::vector<int> get_input_sizes()
+// 	{
+// 		return std::vector<int>{input_sizes...};
+// 	}
+
+// 	/**
+// 	 * Return the number of nonzeros in the jacobian
+// 	 * 
+// 	 * Default implementation assumes dense jacobians.
+// 	 * Oveload in child class for sparse.
+// 	 */
+// 	static constexpr int nnzJacobian()
+// 	{
+// 		int nnz = 0;
+// 		auto l = {(
+// 			nnz += input_sizes * num_outputs_,
+// 			0
+// 			)...};
+// 		return nnz;
+// 	}
+
+// 	/**
+// 	 * Returns the sparsity structure of the jacobian of this function
+// 	 * 
+// 	 * S = [J_var1 J_var2 ...]
+// 	 */
+// 	static Eigen::SparseMatrix<int> jacobianStructure()
+// 	{
+// 		// Default is just a dense matrix
+// 		Eigen::MatrixX<int> S(num_outputs, num_inputs);
+// 		S.array() = 1;
+
+// 		return S.sparseView();
+// 	}
+
+// 	/**
+// 	 * Returns the sparsity structure of the hessian of the i'th output of this function
+// 	 */
+// 	static Eigen::SparseMatrix<int> hessianStructure(int output_index)
+// 	{
+// 		// Default is just a dense matrix
+// 		Eigen::MatrixX<int> H(num_inputs, num_inputs);
+// 		H.array() = 1;
+// 		return H.sparseView();
+// 	}
+
+	EIGEN_STRONG_INLINE 
+	out_t operator()(const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>... args) noexcept
 	{
-		Func::template impl<T>(param, out, args...);
+		return func(args...);
 	}
 
-
-	/*
-		Evaluate the function
-	 */
-	static EIGEN_STRONG_INLINE auto eval(
-		const param_t& param,
-		const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>&... args) 
-		noexcept
+	EIGEN_STRONG_INLINE 
+	out_t operator()(const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>... args, Eval) noexcept
 	{
-		Eigen::Matrix<scalar_t, num_outputs, 1> out;
-		Func::template impl<scalar_t>(param, out, args...);
-		return out;
+		return func(args...);
 	}
 
-	/*
-		Evaluate the function, and its jacobian
-	 */
-	static EIGEN_STRONG_INLINE auto jac(
-		const param_t& param,
-		const Ref<const Matrix<scalar_t, input_sizes, 1>>&... args) 
-		noexcept
+	EIGEN_STRONG_INLINE 
+	std::pair<out_t, jacobian_t> operator()(const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>... args, Jacobian) noexcept
 	{
-		AD_output_t _out;
-
 		// Convert to AD variables for the inputs and call our function
-		seed_and_call(make_ad<input_sizes>(args)..., _out, param);
+		AD_output_t out = seed_and_call(make_ad<input_sizes>(args)...);
 
 		// Copy Jacobian into output variables
-		jacobian_return_t ret;
+		out_t val;
+		jacobian_t jacobian;
 		for(int i=0; i<num_outputs; i++)
 		{
-			ret.val(i) = _out[i].value();
-			ret.jacobian.row(i) = _out[i].derivatives();
+			val(i) = out[i].value();
+			jacobian.row(i) = out[i].derivatives();
 		}
 
-		return ret;
+		return std::make_pair(val, jacobian);
 	}
 
-	/*
-		Evaluate the function, its jacobian and hessian
-	 */
-	static EIGEN_STRONG_INLINE auto hessian(
-		const param_t& param,
-		const Ref<const Matrix<scalar_t, input_sizes, 1>>&... args) 
-		noexcept
+	EIGEN_STRONG_INLINE 
+	std::tuple<out_t, jacobian_t, hessian_t> operator()(const Ref<const Matrix<scalar_t, input_sizes, 1>>&... args, Hessian) noexcept
 	{
-		outerAD_t _out;
-
 		// Convert to AD variables for the inputs and call our function
-		seed_and_call2(make_ad2<input_sizes>(args)..., _out, param);
+		outerAD_t out = seed_and_call2(make_ad2<input_sizes>(args)...);
 
 		// Copy Hessian into output variables
-		hessian_return_t ret;
+		out_t val;
+		jacobian_t jacobian;
+		hessian_t hessian;
 		for(int i=0; i<num_outputs; i++)
 		{
-			ret.val(i) = _out[i].value().value();
-			ret.jacobian.row(i) = _out[i].value().derivatives();
+			val(i) = out[i].value().value();
+			jacobian.row(i) = out[i].value().derivatives();
 			for (int j = 0; j < num_inputs; j++) {
-				ret.hessian[i].template middleRows<1>(j) = _out[i].derivatives()(j).derivatives().transpose();
+				hessian[i].template middleRows<1>(j) = out[i].derivatives()(j).derivatives().transpose();
 			}
 		}
 
-		return ret;
+		return std::make_tuple(val, jacobian, hessian);
 	}
 
 
@@ -278,37 +176,6 @@ private:
 	/*********
 	 Jacobians 
 	 *********/
-
-	// Take a vector input and return a AD version of the vector
-	template<int n>
-	static EIGEN_STRONG_INLINE Matrix<AD_scalar, n, 1> 
-		make_ad(const Ref<const Matrix<scalar_t, n, 1>> x)
-	{
-		Matrix<AD_scalar, n, 1> y;
-		y = x;
-		for (int i=0; i<y.rows(); i++) {
-			y[i].derivatives().setZero();
-		}
-		return y;
-	}
-
-	static EIGEN_STRONG_INLINE void seed_and_call(
-			Matrix<AD_scalar, input_sizes, 1>... args,
-			Eigen::Ref<Eigen::Matrix<AD_scalar, num_outputs, 1>> out,
-			const param_t& param)
-	{
-		// Set derivative equal to identity
-		int offset = 0;
-		(void)std::initializer_list<int>{ 
-			(
-				offset = AD_Seed(args, offset), // Set to unit vectors
-				0
-			)...
-		};
-
-		// Call our function
-		Func::template impl<AD_scalar>(param, out, args...);
-	}
 
 	// Sets the input derivatives to the identity. 
 	// Assumes that the derivative matrix is initially zero
@@ -319,6 +186,38 @@ private:
 			x[i].derivatives().coeffRef(i + offset) = 1;
 		return offset + x.rows();
 	}
+
+	// Take a vector input and return a AD version of the vector
+	template<int n>
+	static 
+	EIGEN_STRONG_INLINE 
+	Matrix<AD_scalar, n, 1> 
+	make_ad(const Ref<const Matrix<scalar_t, n, 1>> x)
+	{
+		Matrix<AD_scalar, n, 1> y;
+		y = x;
+		for (int i=0; i<y.rows(); i++) {
+			y[i].derivatives().setZero();
+		}
+		return y;
+	}
+
+	EIGEN_STRONG_INLINE 
+	Eigen::Matrix<AD_scalar, num_outputs, 1>
+	seed_and_call(Matrix<AD_scalar, input_sizes, 1>... args)
+	{
+		// Set derivative equal to identity
+		int offset = 0;
+		(void)std::initializer_list<int>{ 
+			(
+				offset = AD_Seed(args, offset), // Set to unit vectors
+				0
+			)...
+		};
+
+		return dfunc(args...);  // Call our derivative function
+	}
+
 
 
 	/********
@@ -357,10 +256,7 @@ private:
 		return offset + x.rows();
 	}
 
-	static EIGEN_STRONG_INLINE void seed_and_call2(
-		Eigen::Matrix<outerADScalar, input_sizes, 1>... args,
-		Eigen::Ref<outerAD_t> out,
-		const param_t& param)
+	EIGEN_STRONG_INLINE outerAD_t seed_and_call2(Eigen::Matrix<outerADScalar, input_sizes, 1>... args)
 	{
 		// Set derivative equal to identity
 		int offset = 0;
@@ -372,20 +268,19 @@ private:
 		};
 
 		// Call our function
-		Func::template impl<outerADScalar>(param, out, args...);
+		return ddfunc(args...);
 	}
-
 };
 
 // Definitions for static members
-template<typename Func_, typename scalar_t_, typename param_t_, int num_outputs_, int... input_sizes>
-constexpr const char* Jacobian<Func_, scalar_t_, param_t_, num_outputs_, input_sizes...>::name;
-template<typename Func_, typename scalar_t_, typename param_t_, int num_outputs_, int... input_sizes>
-constexpr int Jacobian<Func_, scalar_t_, param_t_, num_outputs_, input_sizes...>::num_inputs;
-template<typename Func_, typename scalar_t_, typename param_t_, int num_outputs_, int... input_sizes>
-constexpr int Jacobian<Func_, scalar_t_, param_t_, num_outputs_, input_sizes...>::num_input_vars;
-template<typename Func_, typename scalar_t_, typename param_t_, int num_outputs_, int... input_sizes>
-constexpr int Jacobian<Func_, scalar_t_, param_t_, num_outputs_, input_sizes...>::num_outputs;
+// template<typename Func_, typename scalar_t_, typename param_t_, int num_outputs_, int... input_sizes>
+// constexpr const char* Jacobian<Func_, scalar_t_, param_t_, num_outputs_, input_sizes...>::name;
+template<typename scalar_t, int num_outputs_, int... input_sizes>
+constexpr int Function<scalar_t,num_outputs_, input_sizes...>::num_inputs;
+template<typename scalar_t, int num_outputs_, int... input_sizes>
+constexpr int Function<scalar_t,num_outputs_, input_sizes...>::num_input_vars;
+template<typename scalar_t, int num_outputs_, int... input_sizes>
+constexpr int Function<scalar_t,num_outputs_, input_sizes...>::num_outputs;
 
 
 };
