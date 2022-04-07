@@ -291,11 +291,11 @@ public:
 template<typename scalar_t>
 class BSMatrix
 {
-public:
+private:
 
-	Eigen::SparseMatrix<double> *target; // Where we're going to write the data
+	scalar_t* target; // Where we're going to write the data
 
-	Eigen::SparseMatrix<double> sparsity_structure;
+	Eigen::SparseMatrix<scalar_t> sparsity_structure;
 	std::vector<Segment>  segments;
 	std::vector<CopyInfo> copies;
 	int copy_index;
@@ -307,7 +307,7 @@ public:
 		for(int i=0; i<copies[copy_index].num_segments_to_copy; i++)
 		{
 			Segment seg = segments[segment_index + i];
-			Eigen::Map<Eigen::VectorX<scalar_t>>(target->valuePtr()+seg.index, seg.length) = 
+			Eigen::Map<Eigen::VectorX<scalar_t>>(target+seg.index, seg.length) = 
 				Eigen::Map<const Eigen::VectorX<scalar_t>>(source, seg.length);
 			source += seg.length;
 		}
@@ -332,8 +332,8 @@ public:
 	 */
 	void initialize_matrix(SparseMatrix<scalar_t>& S)
 	{
-		target = &S;
-		S = sparsity_structure;		
+		S = sparsity_structure;
+		target = S.valuePtr();
 	}
 
 	/**
@@ -341,6 +341,7 @@ public:
 	 */
 	void operator=(const Eigen::SparseMatrix<scalar_t>& block)
 	{
+		do_copy(block.valuePtr());
 	}	
 
 	void operator=(const Eigen::Ref<const Eigen::MatrixX<scalar_t>>& block)
@@ -350,80 +351,13 @@ public:
 
 	// These all compile out. Not used in deployment.
 	inline BSMatrix& operator()(std::initializer_list<Segment> rows, std::initializer_list<Segment> cols)	{return *this;}
-	inline BSMatrix& operator()(std::initializer_list<std::pair<int, int>> rows, int col)	{return *this;}
-	inline BSMatrix& operator()(int row, std::initializer_list<std::pair<int, int>> cols)	{return *this;}
+	inline BSMatrix& operator()(std::initializer_list<Segment> rows, int col)	{return *this;}
+	inline BSMatrix& operator()(int row, std::initializer_list<Segment> cols)	{return *this;}
 	inline BSMatrix& operator()(int row, int col)	{return *this;}
-
-	void finalize_structure(int rows=-1, int cols=-1)
-	{}	
-};
-
-template<typename Mat> 
-void testFunction(Mat& mat, 	
-									const Eigen::Ref<const Eigen::MatrixX<double>>& B, 
-									const Eigen::Ref<const Eigen::Matrix<double, 6, 9>>& X)
-{
-	// X is a 6x9 matrix
-	// This partitions is into blocks 
-	// [3x3 3x3 3x3
-	//  3x3 3x3 3x3]
-	// And then copies them to the target locations
-	// [10x5 10x0 10x10
-	//   0x5  0x0  0x10]
-	mat({{10,3},{0,3}},{{5,3},{0,3},{10,3}}) = X; 
-
-	mat(1,1) = B;  // This copies B to 1,1
-	mat(3,3) = B;  // This copies B to 1,1
+	void finalize_structure(int rows=-1, int cols=-1)	{}	
 };
 
 
-template<typename scalar_t, int n, int m>
-using SysFunc_ptr = std::add_pointer_t<Eigen::Vector<scalar_t, n>(
-		const Eigen::Ref<const Eigen::Vector<scalar_t, n>>&, 
-		const Eigen::Ref<const Eigen::Vector<scalar_t, m>>&)>;
-
-Eigen::Matrix<double, 2, 2> A{{1,2},{3,4}};
-Eigen::Matrix<double, 2, 1> B{{5},{6}};
-
-template<typename scalar_t>
-Eigen::Vector<scalar_t, 2> system(
-		const Eigen::Ref<const Eigen::Vector<scalar_t, 2>>& x, 
-		const Eigen::Ref<const Eigen::Vector<scalar_t, 1>>& u)
-{
-	return A * x + B * u;
-}
-
-
-template<typename scalar_t=double, typename diff_t=scalar_t>
-Vector<diff_t, 2> sys(const Ref<const Matrix<diff_t, 2, 1>>& x, const Ref<const Vector<diff_t, 1>>& u)
-{
-  Matrix<scalar_t, 2, 2> A{{2,2},{3,4}};
-  Vector<scalar_t, 2> B = A(all, 0);
-  return ((((x(0)) * (A.template cast<diff_t>()).array()).matrix()) * (x)) + ((B.template cast<diff_t>()) * (u));
-}
-
-template<typename scalar_t, int n, int m>
-Eigen::Vector<scalar_t, n> rk4(SysFunc_ptr<scalar_t,n,m> ode, 
-															 const Eigen::Ref<const Eigen::Vector<scalar_t, n>>& x, 
-															 const Eigen::Ref<const Eigen::Vector<scalar_t, m>>& u,
-															 const double _h)
-{
-	scalar_t h = static_cast<scalar_t>(_h);
-  Eigen::Vector<scalar_t, n> k1 = ode(x,       u);
-  Eigen::Vector<scalar_t, n> k2 = ode(x+h/static_cast<scalar_t>(2.0)*k1,u);
-  Eigen::Vector<scalar_t, n> k3 = ode(x+h/static_cast<scalar_t>(2.0)*k2,u);
-  Eigen::Vector<scalar_t, n> k4 = ode(x+h*k3,  u);
-  return x + h/static_cast<scalar_t>(6.0) * (k1 + static_cast<scalar_t>(2.0)*k2 + static_cast<scalar_t>(2.0)*k3 + k4);
-}
-
-template<typename scalar_t=double, typename diff_t=scalar_t>
-Vector<diff_t, 2> _dsys(
-		const Ref<const Matrix<diff_t, 2, 1>>& xp, 
-		const Ref<const Matrix<diff_t, 2, 1>>& x, 
-		const Ref<const Vector<diff_t, 1>>& u)
-{
-	return xp - rk4<diff_t, 2, 1>(sys<scalar_t, diff_t>, x, u, 0.1);
-}
 
 template<typename scalar_t>
 struct Variable;
@@ -431,13 +365,18 @@ struct Variable;
 template<typename scalar_t>
 struct Problem
 {
-	std::shared_ptr<Variable<scalar_t>> variable(int n, int m=1)
+	Variable<scalar_t> variable(int n, int m=1)
 	{
-		variables.emplace_back(n,m,size());
-		return variables.back();
+		Variable<scalar_t> v(n,m,size);
+		variables.push_back(v);
+		size = compute_size(); // Update the total size of the problem variable
+
+		// Return with move symantics is required, 
+		// since we need the reference stored in variables to remain valid
+		return v; 
 	}
 
-	int size = -1;
+	int size = 0;
 
 	/**
 	 * Called once the problem is defined. Defines the optimization variable.
@@ -480,9 +419,9 @@ private:
 template<typename scalar_t>
 struct Variable
 {
-	Variable(int n, int m) 
-		: n(n), m(m), 
-			offset(0), src(NULL,n,m)
+	Variable(int n, int m, int offset) 
+		: n(n), m(m), offset(offset), 
+			src(NULL,n,m) // Variable is invalid until set_var is called
 		{}
 
 	inline int num_elements() { return n*m; } // Total number of elements in the variable (n*m)
@@ -516,11 +455,6 @@ struct Variable
 
 friend Problem<scalar_t>;
 protected:
-	inline void initialize(int _offset)
-	{
-		offset = _offset;
-	}
-
 	inline void set_var(Eigen::Ref<Eigen::VectorX<scalar_t>> var)
 	{
 	  new (&src) Eigen::Map<Eigen::MatrixX<scalar_t>>(var.data() + offset, n, m);
@@ -537,26 +471,76 @@ private:
 };
 
 
-// template<typename scalar_t, typename D, typename Mat, typename F> 
-// void shooting(Mat& mat, const F dynamics, 
-// 												const Variable<scalar_t>& x, 
-// 												const Variable<scalar_t>& u)
-// {
-// 	for(int i=0; i<x().cols()-1; i++)
-// 		mat(-1,{X(i+1), X(i), U(i)}) = dynamics(x(all,i+1), x(all,i), u(all,i), D());
-// };
+
+
+/**
+ * General RK4 integrator
+ * 
+ * Takes a pointer to the ODE and a step size, and returns the RK4 integration.
+ */
+template<typename diff_t, int n, int m>
+using SysFunc_ptr = std::add_pointer_t<Eigen::Vector<diff_t, n>(
+		const Eigen::Ref<const Eigen::Vector<diff_t, n>>&, 
+		const Eigen::Ref<const Eigen::Vector<diff_t, m>>&)>;
+
+template<typename scalar_t=double, typename diff_t=scalar_t, int n, int m>
+Eigen::Vector<diff_t, n> rk4(SysFunc_ptr<diff_t,n,m> ode, 
+															 const Eigen::Ref<const Eigen::Vector<diff_t, n>>& x, 
+															 const Eigen::Ref<const Eigen::Vector<diff_t, m>>& u,
+															 const scalar_t _h)
+{
+	diff_t h = static_cast<diff_t>(_h);
+  Eigen::Vector<diff_t, n> k1 = ode(x,       u);
+  Eigen::Vector<diff_t, n> k2 = ode(x+h/static_cast<diff_t>(2.0)*k1,u);
+  Eigen::Vector<diff_t, n> k3 = ode(x+h/static_cast<diff_t>(2.0)*k2,u);
+  Eigen::Vector<diff_t, n> k4 = ode(x+h*k3,  u);
+  return x + h/static_cast<diff_t>(6.0) * (k1 + static_cast<diff_t>(2.0)*k2 + static_cast<diff_t>(2.0)*k3 + k4);
+}
+
+/**
+ * A multiple-shooting constraint.
+ */
+template<typename scalar_t=double, typename diff_t=scalar_t>
+Eigen::Vector<diff_t, 2> linear_system(
+		const Eigen::Ref<const Eigen::Vector<diff_t, 2>>& x, 
+		const Eigen::Ref<const Eigen::Vector<diff_t, 1>>& u)
+{
+	Eigen::Matrix<scalar_t, 2, 2> A{{1,2},{3,4}};
+	Eigen::Matrix<scalar_t, 2, 1> B{{5},{6}};
+	return A.template cast<diff_t>() * x + B.template cast<diff_t>() * u;
+}
+
+
+template<typename scalar_t=double, typename diff_t=scalar_t>
+Vector<diff_t, 2> sys(const Ref<const Matrix<diff_t, 2, 1>>& x, const Ref<const Vector<diff_t, 1>>& u)
+{
+  Matrix<scalar_t, 2, 2> A{{2,2},{3,4}};
+  Vector<scalar_t, 2> B = A(all, 0);
+  return ((((x(0)) * (A.template cast<diff_t>()).array()).matrix()) * (x)) + ((B.template cast<diff_t>()) * (u));
+}
+
+template<typename scalar_t=double, typename diff_t=scalar_t>
+Vector<diff_t, 2> _dsys(
+		const Ref<const Vector<diff_t, 2>>& xp, 
+		const Ref<const Vector<diff_t, 2>>& x, 
+		const Ref<const Vector<diff_t, 1>>& u)
+{
+	return xp - rk4<scalar_t, diff_t, 2, 1>(sys<scalar_t, diff_t>, x, u, 0.1);
+}
 
 
 int main()
 {
-	using scalar_t = double;
-
-	constexpr int N = 10;
-	Variable<scalar_t> x(2, N);
-	Variable<scalar_t> u(1, N-1);
+	using scalar_t = float;
 
 	Problem<scalar_t> prob;
-	prob.register_variables({x, u});
+
+	constexpr int N = 5;
+	auto x = prob.variable(2, N);
+	auto u = prob.variable(1, N-1);
+
+	std::cout << "type(x) = " << type_name<decltype(x)>() << std::endl;
+	std::cout << "&x = " << &x << std::endl;
 
 	Eigen::VectorX<scalar_t> var(prob.size);
 	prob.set_variable(var);
@@ -571,76 +555,60 @@ int main()
 	// constexpr int m = 1;
 	// constexpr scalar_t h = 0.1;
 
-	// Eigen::Vector<scalar_t, n> x{1,2}; 
-	// Eigen::Vector<scalar_t, m> u{3};
 	// SysFunc_ptr<scalar_t,n,m> psystem = system<scalar_t>;
 
-	// // std::cout << "system(x, u) = " << system<scalar_t>(x, u).transpose() << std::endl;
-	// // std::cout << "rk4(system(x, u)) = " << rk4<scalar_t, n, m>(psystem, x, u, h).transpose() << std::endl;
+	// std::cout << "system(x, u) = " << system<scalar_t>(x, u).transpose() << std::endl;
+	// std::cout << "rk4(system(x, u)) = " << rk4<scalar_t, n, m>(psystem, x, u, h).transpose() << std::endl;
 
-	// // using F = lampc::Function<double, 2, 2,1>;
-	// // auto f = make_function(F, sys);
+	using DSYS = lampc::Function<scalar_t, 2, 2,2,1>;
+	auto dsys = make_function(DSYS, _dsys);
 
-	// // std::cout << "f(x, u) = " << f(x, u).transpose() << std::endl;
-	// // std::cout << "jac f(x, u) = \n" << std::get<1>(f(x, u, lampc::Jacobian())) << std::endl;
-	// // std::cout << "hess f(x, u) = \n" << std::get<2>(f(x, u, lampc::Hessian()))[0] << std::endl;
+	std::cout << "dsys(x, u) = " << dsys(x(1),x(0), u(0)).transpose() << std::endl;
+	std::cout << "jac dsys(x, u) = \n" << std::get<1>(dsys(x(1),x(0), u(0), lampc::Jacobian())) << std::endl;
+	std::cout << "hess dsys(x, u) = \n" << std::get<2>(dsys(x(1),x(0), u(0), lampc::Hessian()))[0] << std::endl;
 
-	// using DSYS = lampc::Function<double, 2, 2,1>;
-	// auto dsys = make_function(DSYS, _dsys);
-
-	// std::cout << "dsys(x, u) = " << dsys(x, u).transpose() << std::endl;
-	// std::cout << "jac dsys(x, u) = \n" << std::get<1>(dsys(x, u, lampc::Jacobian())) << std::endl;
-	// std::cout << "hess dsys(x, u) = \n" << std::get<2>(dsys(x, u, lampc::Hessian()))[0] << std::endl;
-
+	auto shoot = [&](auto& tape)
+	{
+		for(int i=0; i<x().cols()-1; i++)
+			std::tie(std::ignore, tape(-1,{x[i],u[i],x[i+1]})) = dsys(x(i+1),u(i),x(i),lampc::Jacobian());
+	};
 
 	// Create the tape to record the copy sequence
-	BSMatrixTape<double> tape;
-
-
-	// Call the function twice, passing it the tape, rather than the target matrix
-	Eigen::MatrixX<double> B(4,5);
-	// Eigen::MatrixX<double> X(6,9);
-
-	// tape(-1,{{5,3},{0,3},{10,3}}) = X; 
-	for(int i=0; i<x().cols()-1; i++)
-		tape(-1,{x[i],u[i],x[i+1]}) = B;
-
+	BSMatrixTape<scalar_t> tape;
+	shoot(tape);
 	tape.finalize_structure();
-
-	// tape(-1,{{5,3},{0,3},{10,3}}) = X; 
-	for(int i=0; i<x().cols()-1; i++)
-		tape(-1,{x[i],u[i],x[i+1]}) = dynamics(x(i),u(i),x(i+1),lampc::Jacobian());
+	shoot(tape);
 
 	std::cout << "Sparsity structure = \n" << Eigen::MatrixX<int>(tape.get_sparsity_structure()) << std::endl;
 	std::cout << "Copies = " << tape.copy_sequence << std::endl;
+	std::cout << "\n\n";
 
-	// testFunction(tape, B, X);  // First time just defines the sparsity structure
-	// tape.finalize_structure();
-	// testFunction(tape, B, X);  // Second time records the copy sequence
+	// We now replace the tape with a block-sparse matrix
+	// which loads the copy-sequence from the tape (or from file)
+	BSMatrix<scalar_t> mat(tape);
+	SparseMatrix<scalar_t> S;
+	mat.initialize_matrix(S);
 
-	// std::cout << "Sparsity structure = \n" << Eigen::MatrixX<int>(tape.get_sparsity_structure()) << std::endl;
+	// Now we call the function and it just plays back the copy sequence
+	shoot(mat);
+	std::cout << "S = \n" << Eigen::MatrixX<scalar_t>(S).format(Eigen::IOFormat(2)) << std::endl;
 
-	// // // We now replace the tape with a block-sparse matrix
-	// // // which loads the copy-sequence from the tape (or from file)
-	// // BSMatrix<double> mat(tape);
-	// // SparseMatrix<double> S;
-	// // mat.initialize_matrix(S);
+	x(2).array() = 10;
+	shoot(mat);
+	std::cout << "S = \n" << Eigen::MatrixX<scalar_t>(S).format(Eigen::IOFormat(2)) << std::endl;
 
-	// // // Now we call the function and it just plays back the copy sequence
-	// // B.array() = 10;
-	// // int i=1;
-	// // for(int r=0; r<6; r+=3)
-	// // 	for(int c=0; c<9; c+=3)
-	// // 		X(seqN(r,3),seqN(c,3)).array() = i++;
+	constexpr int NUM_EXP = 1000;
+  auto start = std::chrono::steady_clock::now();
+  for(int i = 0; i < NUM_EXP; ++i)
+  {
+		x(2)(0)++;
+		shoot(mat);
+  }
+  auto end = std::chrono::steady_clock::now();
 
-	// // testFunction(mat, B, X);
-
-	// // std::cout << "Source matrices:\n";
-	// // std::cout << "B = \n" << B << std::endl;
-	// // std::cout << "X = \n" << X << std::endl;
-
-	// // std::cout << "Resulting final matrix:\n";
-	// // std::cout << "S = \n" << Eigen::MatrixX<double>(S)	 << std::endl;
+  std::cout << "Time to compute the block-sparse jacobian: "
+      << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / (double)NUM_EXP
+      << " us" << std::endl;
 
 	return 0;
 }
