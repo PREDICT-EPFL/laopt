@@ -8,8 +8,6 @@
 
 #include "lampc_utility.hpp"
 
-#include "map.hpp"
-
 using namespace Eigen;
 
 namespace lampc {

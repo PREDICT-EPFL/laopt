@@ -31,6 +31,18 @@ target_link_libraries(
   gtest
 )
 
+add_executable(
+  bs_test
+  bs_test.cpp
+  /Users/cnjones/git/lampc/src/lampc_function.hpp
+)
+target_link_libraries(
+  bs_test
+  gtest_main
+  gtest
+)
+
+
 #  ipopt
 #  Eigen3::Eigen
 
@@ -60,3 +72,4 @@ target_link_libraries(
 
 include(GoogleTest)
 gtest_discover_tests(func_test)
+gtest_discover_tests(bs_test)

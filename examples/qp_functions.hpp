@@ -23,9 +23,17 @@ struct MyFunctions
     };
     using param_t = param_t_;
 
+    template<typename T>
+    static T bob(T q, scalar_t x)
+    {
+        return x*q;
+    }
+
     FUNCTION(dynamics, scalar_t, param_t, (xplus, 2), (x, 2), (u, 1))
     {
+        // scalar_t jill = bob(4.5);
         xplus = p.A.template cast<T>() * x + p.B.template cast<T>() * u;
+        xplus[0] = bob(x[0], 5.0);
     }
 
     FUNCTION(dynamics_eq, scalar_t, param_t, (out, 2), (xplus, 2), (x, 2), (u, 1))

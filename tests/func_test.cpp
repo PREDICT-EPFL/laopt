@@ -2,79 +2,53 @@
  * Unit test for the construction and computation of LAMPC functions.
  */
 
+#include <iostream>
+
 #include "lampc.hpp"
-
-#include <iomanip>
-#include <Eigen/Eigenvalues> 
-#include <type_traits>
-
-using namespace lampc;
 
 #include "gtest/gtest.h"
 
-namespace {
-
-// Build a couple functions to test
-template<typename scalar_t>
-struct func_t
+template<typename scalar_t=double, typename diff_t=scalar_t>
+EIGEN_STRONG_INLINE Eigen::Vector<diff_t, 2> test_function(
+        const Eigen::Ref<const Eigen::Vector<diff_t, 2>>& x, 
+        const Eigen::Ref<const Eigen::Vector<diff_t, 1>>& u) noexcept
 {
-    struct param_t
-    {
-        scalar_t q = 3;
-    };
+    Eigen::Matrix<scalar_t, 2, 2> A{{1,2},{3,4}};
+    Eigen::Matrix<scalar_t, 2, 1> B{{5},{6}};
+    return x(0) * (A.template cast<diff_t>() * x + B.template cast<diff_t>() * u);
+}
 
-    FUNCTION(quadratic, scalar_t, param_t, (out, 2), (x, 1), (y, 2))
-    {
-        out << x(0)*(x(0) + y(0)), 
-               p.q * x(0) + y(0) + 2 * y(1) + y(0)*y(1)*p.q;
-    };
-
-    FUNCTION(linear, scalar_t, param_t, (out, 1), (x, 1), (y, 2))
-    {
-        out << x(0) + y(0) + y(1);
-    };
-
-
-};
-
-TEST(FunctionTest, Evaluation) {
+/**
+ * Compute the jacobian and hessian of a function
+ */
+TEST(BSMatrix, Construction) {
     using scalar_t = double;
-    using func = func_t<scalar_t>;
 
-    Eigen::Matrix<scalar_t, 1, 1> x {2};
-    Eigen::Matrix<scalar_t, 2, 1> y {3, 4};
+    using Function = lampc::Function<scalar_t, 2, 2,1>;
+    auto function = make_function(Function, test_function);
 
-    func::param_t p;
-    p.q = 5;
+    Eigen::VectorX<scalar_t> x(2); x << 1,2;
+    Eigen::VectorX<scalar_t> u(1); u << 3;
 
-    Eigen::Matrix<scalar_t, 2, 1> sol_eval {10, 81};
-    EXPECT_EQ(func::quadratic::eval(p, x, y), sol_eval);
+    // Evaluation
+    EXPECT_EQ(function(x,u), (Eigen::VectorX<scalar_t>(2) << 20,29).finished());
 
-    func::quadratic::jacobian_return_t sol_jac;
-    sol_jac.val << 10, 81;
-    sol_jac.jacobian << 7, 2, 0, 
-                        5, 21, 17;
-    auto ret_jac = func::quadratic::jac(p, x, y);
-    EXPECT_EQ(ret_jac.val, sol_jac.val);
-    EXPECT_EQ(ret_jac.jacobian, sol_jac.jacobian);
+    // Jacobian
+    EXPECT_EQ(function(x,u,lampc::Jacobian()), 
+        std::make_pair(
+            (Eigen::Vector<scalar_t,2>() << 20,29).finished(),
+            (Eigen::Matrix<scalar_t,2,3>() << 21,2,5,32,4,6).finished()
+        ));
 
-    func::quadratic::hessian_return_t sol_hess;
-    sol_hess.val << 10, 81;
-    sol_hess.jacobian << 7, 2, 0, 
-                         5, 21, 17;
-
-    sol_hess.hessian[0] << 2, 1, 0,
-                           1, 0, 0,
-                           0, 0, 0;
-    sol_hess.hessian[1] << 0, 0, 0,
-                           0, 0, 5,
-                           0, 5, 0;
-
-    auto ret_hess = func::quadratic::hessian(p, x, y);
-    EXPECT_EQ(ret_hess.val, sol_hess.val);
-    EXPECT_EQ(ret_hess.jacobian, sol_hess.jacobian);
-    EXPECT_EQ(ret_hess.hessian[0], sol_hess.hessian[0]);
-    EXPECT_EQ(ret_hess.hessian[1], sol_hess.hessian[1]);
+    // Hessian
+    EXPECT_EQ(function(x,u,lampc::Hessian()), 
+        std::make_tuple(
+            (Eigen::Vector<scalar_t,2>() << 20,29).finished(),
+            (Eigen::Matrix<scalar_t,2,3>() << 21,2,5,32,4,6).finished(),
+            Function::hessian_t{
+                (Eigen::Matrix<scalar_t,3,3>() << 2,2,5,2,0,0,5,0,0).finished(),
+                (Eigen::Matrix<scalar_t,3,3>() << 6,4,6,4,0,0,6,0,0).finished()
+            }
+        ));
 }
 
-}

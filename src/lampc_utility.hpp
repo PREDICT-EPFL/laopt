@@ -42,35 +42,35 @@ namespace lampc
 }
 
 
-/*************************************************************
-    Meta-programming helper functions
- *************************************************************/
+// /*************************************************************
+//     Meta-programming helper functions
+//  *************************************************************/
 
-// Sum the inputs to get total number of inputs
-template<int... S>
-constexpr int sum_template() {
-    int result = 0;
-    for(auto s : { S... }) result += s;
-    return result;
-}
+// // Sum the inputs to get total number of inputs
+// template<int... S>
+// constexpr int sum_template() {
+//     int result = 0;
+//     for(auto s : { S... }) result += s;
+//     return result;
+// }
 
-// Build an array at compile time
-template <typename T, typename... Args>
-constexpr std::array<T, sizeof...(Args)> make_array(Args... args)
-{
-    return {args...};
-}
+// // Build an array at compile time
+// template <typename T, typename... Args>
+// constexpr std::array<T, sizeof...(Args)> make_array(Args... args)
+// {
+//     return {args...};
+// }
 
-// Helper function to reshape an eigen matrix while maintaining const'ness
-template <typename map_to, typename scalar_t>
-constexpr auto _map_matrix(const scalar_t* x) {
-    return Eigen::Map<const map_to>(x);
-}
+// // Helper function to reshape an eigen matrix while maintaining const'ness
+// template <typename map_to, typename scalar_t>
+// constexpr auto _map_matrix(const scalar_t* x) {
+//     return Eigen::Map<const map_to>(x);
+// }
 
-template <typename map_to, typename scalar_t>
-constexpr auto _map_matrix(scalar_t* x) {
-    return Eigen::Map<map_to>(x);
-}
+// template <typename map_to, typename scalar_t>
+// constexpr auto _map_matrix(scalar_t* x) {
+//     return Eigen::Map<map_to>(x);
+// }
 
 template <typename T>
 constexpr auto type_name() noexcept {
@@ -93,18 +93,18 @@ constexpr auto type_name() noexcept {
   return name;
 }
 
-/**
- * Extracts the return-type of a function
- * 
- * Use like this:     
- *  std::cout << type_name<decltype(ret(f))>() << std::endl;
- * 
- */
-template<typename R, typename... A>
-R ret(R(*)(A...)) ;
+// /*
+//  * Extracts the return-type of a function
+//  * 
+//  * Use like this:     
+//  *  std::cout << type_name<decltype(ret(f))>() << std::endl;
+//  */
+ 
+// template<typename R, typename... A>
+// R ret(R(*)(A...)) ;
 
-template<typename C, typename R, typename... A>
-R ret(R(C::*)(A...));
+// template<typename C, typename R, typename... A>
+// R ret(R(C::*)(A...));
 
 
 #endif // LAMPC_UTILITY

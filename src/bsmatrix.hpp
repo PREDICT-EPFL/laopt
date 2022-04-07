@@ -1,473 +1,362 @@
 #ifndef __BSMATRIX_HPP
 #define __BSMATRIX_HPP
 
-#include <array>
-#include <iostream>
-#include <iomanip>
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
 
-#include "Eigen/Dense"
-#include "Eigen/Sparse"
+namespace lampc
+{
 
-#include "lampc_utility.hpp"
+/**
+ * Copy information for a sparse block matrix
+ */
+struct Segment
+{
+	int index;  // Index into the target.valuePtr()
+	int length; // Number of element to copy
+};
+struct CopyInfo
+{
+	int segment_index;  // Index into segments
+	int num_segments_to_copy;  // Number of segments to copy to execute this task
+};
 
-namespace BS {
+std::ostream &operator<<(std::ostream &os, std::vector<Segment> const &sequence) 
+{
+	for(auto& seg: sequence)
+		os << "(" << seg.index << "," << seg.length << ")";
+	return os;
+}
+std::ostream &operator<<(std::ostream &os, std::vector<CopyInfo> const &sequence) 
+{
+	for(auto& seg: sequence)
+		os << "(" << seg.segment_index << "," << seg.num_segments_to_copy << ")";
+	return os;
+}
 
-	namespace detail {
-		/** Return the sum of the integers
-		 */
-		template<int... i>
-		constexpr int sum_int_template()
-		{
-			int acc = 0;
-			auto l = { (acc += i, 0)... };
-			return acc;
-		}
-	};
 
-template<typename Scalar, 
-				 int _numBlockRows, int _numBlockColumns, // Number of blocks
-				 int rowsAtCompileTime, int colsAtCompileTime, // Total size of the matrix
-				 int nnzBlocks, // Number of non-zero blocks
-				 int nnzBlockColumns, // Number of columns in the nonzero blocks
-				 int nnzEstimate // Estimate of the number of non-zeros
-				 >
-class BSMatrix
+/**
+ * Class to record the copy sequence for a series of sparse matrices.
+ */
+template<typename scalar_t>
+class BSMatrixTape
 {
 public:
-	static const int numBlockRows = _numBlockRows;
-	static const int numBlockColumns = _numBlockColumns;
+	// Sparse matrix structure
+	// S.valuePtr = [0,1,2,...]
+	SparseMatrix<int> S;
+	
+	// List of non-zero coefficients
+	std::vector< Eigen::Triplet<int> > trip;
 
-	// Size of each block
-	Eigen::Vector<int, numBlockColumns> columnSizes;
-	Eigen::Vector<int, numBlockRows> rowSizes;
+	// Partition of the next block to copy
+	std::vector<Segment> row_partition;
+	std::vector<Segment> col_partition;
 
-	// Offset of each block in scalars
-	// Note valid until after finalize is called
-	Eigen::Vector<int, numBlockColumns> columnIndices;
-	Eigen::Vector<int, numBlockRows> rowIndices;
+	// The copy sequence data (output of the tape)
+	std::vector<Segment> copy_sequence;
+	std::vector<int> copy_lengths; // copy_lengths[i] == number of segments to execute for the i'th copy
 
-private:
+	enum State { 
+			build_structure, // Initial state. Recording the structure of S
+			create_copy_sequence};  // Phase II. Recoding the copy sequence
 
-	/**
-	 * Blocks are stored in a compressed row format
-	 * 
-	 * [B1 B2 0 B3]
-	 * [0  B4 0 0 ]
-	 * [B5 0  0 B6]
-	 * 
-	 * Is stored as 
-	 * blocks = [B1, B2, B3, B4, B5, B6]
-	 * 
-	 * Each block stores its block-location and location in the dense matrix.
-	 * 
-	 * We store a row-vector that provides an offset to the first 
-	 * non-zero block of each row.
-	 */
-
-	/** 
-	 * Offset into the blocks vector of the first non-zero block of this row
-	 * 
-	 * [B1 B2 0 B3]
-	 * [0  B4 0 0 ]
-	 * [0  0  0 0 ]
-	 * [B5 0  0 B6]
-	 * 
-	 * This matrix would have a blockRows = [0 3 4 4 6]
-	 * The first block in row r is blockRows[r]
-	 * The number of non-zero columns in row r is blockRows[r+1] - blockRows[r]
-	 */
-	Eigen::Vector<int, numBlockRows + 1> blockRows;
-
-	struct Block
-	{
-		int blkColumnOffset; // Offset for the first column into blkColumnInfo vector
-		int row, column; // Location of the top left element
-		int blockRow, blockColumn; // Block location
-	};
-	Eigen::Vector<Block, nnzBlocks> blocks;
-	int next_block = 0; // Pointer to the first unused element of blocks
-
-	struct BlockColumnInfo
-	{
-		int valuePtr_offset; // Offset into the sparse matrix valuePtr
-		int nnz; // Number of non-zeros in this block-column
-	};
-
-	// Offsets of each block column into output sparse matrix
-	Eigen::Vector<BlockColumnInfo, nnzBlockColumns> blkColumnInfo;
-	int next_blkColumnInfo = 0; // Pointer to the first unused element of column_offsets
-
-
-public:
-	Eigen::SparseMatrix<Scalar> S{rowsAtCompileTime, colsAtCompileTime};
-
-	// BSMatrix(Eigen::Vector<int, numBlockRows> rowSizes_, Eigen::Vector<int, numBlockColumns> columnSizes_)
-	BSMatrix(std::array<int, numBlockRows> rowSizes_, std::array<int, numBlockColumns> columnSizes_)
-		: rowSizes(rowSizes_.data()), columnSizes(columnSizes_.data())
-	{
-		// rowSizes = rowSizes_;
-		// columnSizes = columnSizes_;
-
-		S.reserve(nnzEstimate);
-	}
+	State state = build_structure;
 
 	/**
-	 * Set a block to non-zero. Must be specified in compressed row-major order.
+	 * Return the location in the target where ind in the source should be copied
+	 * 
+	 * partition = {{index_i,len_i}, ...}
+	 * Partitions a vector of length sum len_i into segements starting at the index_i's
 	 */
-	void addDenseBlock(int blockRow, int blockColumn)
+	int get_target_location(int ind, std::vector<Segment> &partition)
 	{
-		assert(next_blkColumnInfo <= blkColumnInfo.size());
-		assert(next_block <= blocks.size());
-
-		// Check that we're getting the blocks in compressed row-major order
-		if(next_block > 0)
+		for(auto &segment: partition)
 		{
-			assert(blocks[next_block-1].blockRow <= blockRow);
-			if(blocks[next_block-1].blockRow == blockRow)
-				assert(blocks[next_block-1].blockColumn <= blockColumn);
+			if(ind >= segment.length) ind -= segment.length;
+			else return segment.index + ind;
 		}
-
-		Block &block = blocks[next_block++];
-
-		block.blkColumnOffset = next_blkColumnInfo; 
-		next_blkColumnInfo += columnSizes[blockColumn];
-
-		// Assuming this is a dense block
-		int nnz = rowSizes(blockRow) * columnSizes(blockColumn);
-
-		// Location of the block
-		block.row = rowSizes.head(blockRow).sum();
-		block.column = columnSizes.head(blockColumn).sum();
-
-		block.blockRow = blockRow;
-		block.blockColumn = blockColumn;
-
-		// Reserve memory for the block
-		for(int r=block.row; r<block.row + rowSizes[blockRow]; r++)
-			for(int c=block.column; c<block.column + columnSizes[blockColumn]; c++)
-				S.insert(r,c) = 1;
-	}
-
-	/**
-	 * Must be called after all nonzero blocks have been declared
-	 */
-	void finalize()
-	{
-		// Check that all blocks have been filled
-		assert(next_blkColumnInfo == blkColumnInfo.size());
-		assert(next_block == blocks.size());
-
-		// Get pointers into the blocks to accelerate rowwise access
-		blockRows(0) = 0;
-		for(int r=1; r<blockRows.size()-1; r++)
-		{
-			int i;
-			for(i=0; i<blocks.size(); i++)
-				if(blocks(i).blockRow >= r) break;
-			blockRows(r) = i;
-		}
-		blockRows(blockRows.size()-1) = nnzBlocks;
-
-		S.makeCompressed();
-
-		// Get pointers to the start of each block-column 
-		// and fill in the blkColumnInfo vector
-
-		// First we write the offsets into the valuePtr so we can find
-		// the offset locations
-		Scalar* data = S.valuePtr();
-		for(int i=0; i<S.nonZeros(); i++)
-			data[i] = i;
-
-		for(const auto &block : blocks)
-		{
-			for(int ind=0; ind<columnSizes[block.blockColumn]; ind++)
-			{
-				BlockColumnInfo& info = blkColumnInfo[block.blkColumnOffset + ind];
-
-				// Get the offset into the valueptr for the first non-zero element in this column
-				// Iterate over all non-zeros in this column to find the first one larger than our block row
-				info.valuePtr_offset = 0; // Will stay zero of nnz = 0 
-				for (typename Eigen::SparseMatrix<Scalar>::InnerIterator it(S, block.column + ind); it; ++it)
-				{
-					if(it.row() >= block.row)
-					{
-						info.valuePtr_offset = it.value();
-						break;
-					}
-				}
-
-				// Compute the number of non-zeros in the column
-				info.nnz = 0;
-				for (typename Eigen::SparseMatrix<Scalar>::InnerIterator it(S, block.column + ind); it; ++it)
-					if(it.row() >= block.row && it.row() < block.row + rowSizes[block.blockRow])
-						info.nnz++;
-			}
-		}
-
-		// Set the row indices
-		rowIndices[0] = 0;
-		for(int i=1; i<numBlockRows; i++)
-			rowIndices[i] = rowIndices[i-1] + rowSizes[i-1];
-
-		// Set the column indices
-		columnIndices[0] = 0;
-		for(int i=1; i<numBlockColumns; i++)
-			columnIndices[i] = columnIndices[i-1] + columnSizes[i-1];
-	}
-
-	/** 
-	 * Returns true if block is nonzero.
-	 */
-	bool isNonzero(int blockRow, int blockColumn)
-	{
-		return getBlockIndex(blockRow, blockColumn) >= 0;
-	}
-
-	/** 
-	 * Get a dense copy of a block.
-	 */
-	Eigen::MatrixX<Scalar> getBlock(int blockRow, int blockColumn)
-	{
-		Eigen::MatrixX<Scalar> mat(rowSizes[blockRow], columnSizes[blockColumn]);
-		mat.array() = 0;
-
-		int ind = getBlockIndex(blockRow, blockColumn);
-		if(ind >= 0)
-		{
-			Block &blk = blocks[ind];
-			for(int i=0; i<mat.cols(); i++)
-			{
-				auto &info = blkColumnInfo[blk.blkColumnOffset + i];				
-				assert(info.nnz == rowSizes[blockRow] && "Only dense blocks implemented so far.");
-
-				mat.col(i) = Eigen::Map<Eigen::VectorX<Scalar>>(S.valuePtr() + info.valuePtr_offset, rowSizes[blockRow]);
-			}
-		}
-
-		return mat;
-	}
-
-	/** 
-	 * Copy the dense block into the BSMatrix.
-	 */
-	void setBlockByIndex(int ind, const Eigen::Ref<const Eigen::MatrixX<Scalar>>& mat)
-	{
-		Block &blk = blocks[ind];
-		assert(ind >= 0 && "Attempt to set zero block");
-
-		int blockRow = blk.blockRow;
-		int blockColumn = blk.blockColumn;
-		assert(mat.rows() == rowSizes[blockRow] && mat.cols() == columnSizes[blockColumn] && "setBlock: Matrix is the wrong size");
-
-		for(int i=0; i<mat.cols(); i++)
-		{
-			auto &info = blkColumnInfo[blk.blkColumnOffset + i];				
-			assert(info.nnz == rowSizes[blockRow] && "Only dense blocks implemented so far.");
-
-			Eigen::Map<Eigen::VectorX<Scalar>>(S.valuePtr() + info.valuePtr_offset, rowSizes[blockRow]) = mat.col(i);
-		}
-	}
-
-	/**
-	 * Get index into blocks. 
-	 * If block doesn't exist, returns -1.
-	 */
-	int getBlockIndex(int blockRow, int blockColumn)
-	{
-		// For now, we just do a simple linear search assuming that the number of blocks per row is small
-		for(int ind = blockRows[blockRow]; ind < blockRows[blockRow+1]; ind++)
-			if(blocks[ind].blockColumn == blockColumn) return ind;
+		throw std::runtime_error("Invalid index passed to get_target_location");
+		assert(0 && "Invalid index passed to get_target_location");
 		return -1;
 	}
 
-	/** 
-	 * Copy the dense block into the BSMatrix.
+	/**
+	 * Copy source into target
+	 * 
+	 * The source is partitioned into blocks and copied into target according to
+	 * - rows = {{target_row, len}, ...}
+	 * - cols = {{target_col, len}, ...}
+	 * 
+	 * Returns a vector of Segment specifying the copies to be done on the source data in 
+	 * data-contiguous order to achieve the requested sparse block-copy.
 	 */
-	void setBlock(int blockRow, int blockColumn, const Eigen::Ref<const Eigen::MatrixX<Scalar>>& mat)
+	std::vector<Segment> build_copy_sequence(const Eigen::SparseMatrix<int>& source)
 	{
-		int ind = getBlockIndex(blockRow, blockColumn);
-		assert(ind >= 0 && "Attempt to set zero block");
+		if(!source.isCompressed()) std::runtime_error( "Source matrix must be in compressed format" );
 
-		setBlockByIndex(ind, mat);
+		// We iterate over the source in data-continuous order, defining the copy sequence to the target
+		std::vector<Segment> seq; // The copying sequence
+
+		for (int c=0; c<source.outerSize(); ++c)
+		{
+			int tcol = get_target_location(c, col_partition);
+			for (SparseMatrix<int>::InnerIterator it(source,c); it; ++it)
+			{
+				int trow = get_target_location(it.row(), row_partition);
+				int tindex = S.coeffRef(trow,tcol); // Index into the data at the target location
+
+				// std::cout << fmt::format("source ({:3d},{:3d}) -> target ({:3d},{:3d}) [{:3d}]", it.row(), c, trow, tcol, tindex);
+
+				// The next target index if the data is contiguous
+				if(seq.size() == 0 || tindex != seq.back().index + seq.back().length)
+				{
+					// std::cout << "  NON-CONTIGUOUS\n";
+					seq.push_back({.index = tindex, .length=1});
+				}
+				else
+				{
+					// std::cout << "  CONTIGUOUS\n";
+					seq.back().length++;
+				}
+			}		
+		}
+
+		return seq;
 	}
 
+	void finalize_partition(int rows, int cols)
+	{
+		if(row_partition.back().length == -1) row_partition.back().length = rows;
+		if(col_partition.back().length == -1) col_partition.back().length = cols;
+	}
 
-	// /** 
-	//  * Copy the given matrix into block (r, c) of the SparseMatrix S
-	//  */
-	// void set(Eigen::SparseMatrix<Scalar> S, int r, int c, Eigen::MatrixX<Scalar> B)
-	// {
-	// 	assert(blocks[r][c].nonZero);
+	/**
+	 * Computes the current shape of the matrix, before the sparsity pattern is complete
+	 */
+	std::pair<int,int> nonfinalized_shape()
+	{
+		int rows = 0;
+		int cols = 0;
+		for(auto &t : trip) 
+		{
+			rows = std::max(rows, t.row() + 1);
+			cols = std::max(cols, t.col() + 1);
+		}
+		return std::make_pair(rows, cols);
+	}
 
-	// 	int offset = blocks[r][c].offset;
-	// 	// for(int i=0; i<blocks[r][c].
-	// }
+public:
+	/**
+	 * Record the data to copy block to (target_row, target_column)
+	 */
+	void operator=(const Eigen::SparseMatrix<scalar_t>& block)
+	{
+		finalize_partition(block.rows(), block.cols());
+
+		std::cout << "NOT IMPLEMENTED YET!!!\n";
+
+		if(state == create_copy_sequence) // Copy block sparsity structure
+		{
+			// Record copy data to copy block to (target_row, target_column)
+			std::vector<Segment> v = build_copy_sequence(block);
+		}
+
+		row_partition.clear();
+	}	
+
+	/**
+	 * Copy the given block into the BSMatrix according to the partition set in operator()
+	 */
+	void operator=(const Eigen::Ref<const Eigen::MatrixX<scalar_t>>& block)
+	{
+		finalize_partition(block.rows(), block.cols());
+
+		// Iterate over partition
+		for(auto& row_seg: row_partition)
+			for(auto& col_seg: col_partition)
+				// Fill in the non-zeros
+		    for(int r=0; r<row_seg.length; r++)
+		    	for(int c=0; c<col_seg.length; c++)
+		    		trip.push_back(Eigen::Triplet<int>(r + row_seg.index, c + col_seg.index, 1));
+
+		if(state == create_copy_sequence) // Copy block sparsity structure
+		{
+			Eigen::MatrixX<scalar_t> B(block);
+			B.array() = 1;
+			std::vector<Segment> v = build_copy_sequence(B.sparseView().template cast<int>());
+
+			copy_sequence.insert(copy_sequence.end(), v.begin(), v.end());
+			copy_lengths.push_back(v.size());
+		}
+
+		row_partition.clear();
+	}
+
+	/**
+	 * Set the target rows and columns according to the given partition.
+	 * 
+	 * The source is partitioned into blocks and copied into target according to
+	 * - rows = {{target_row, len}, ...}
+	 * - cols = {{target_col, len}, ...}
+	 * 
+	 * The blocks are taken contiguously from the matrix to be copied in.
+	 */
+	BSMatrixTape& operator()(std::initializer_list<Segment> rows,
+								 					 std::initializer_list<Segment> cols)
+	{
+		row_partition = rows;
+		col_partition = cols;
+		return *this;
+	}
+
+	BSMatrixTape& operator()(std::initializer_list<Segment> rows, int col)
+	{
+		if(col == -1)	std::tie(std::ignore, col) = nonfinalized_shape();
+		return operator()(rows, {{col,-1}});
+	}
+	BSMatrixTape& operator()(int row, std::initializer_list<Segment> cols)
+	{
+		if(row == -1) std::tie(row,std::ignore) = nonfinalized_shape();
+		return operator()({{row,-1}}, cols);
+	}
+
+	BSMatrixTape& operator()(int row, int col)
+	{
+		// We want to append this matrix after the last row that we've seen so far
+		if(row == -1) std::tie(row,std::ignore) = nonfinalized_shape();
+		if(col == -1)	std::tie(std::ignore, col) = nonfinalized_shape();
+		return operator()({{row,-1}}, {{col,-1}});
+	}
+
+	/**
+	 * Called when all copy operations have been completed once, which fixes the sparsity structure.
+	 * 
+	 * If rows and cols aren't specified, then they will be taken as large enough to contain all the
+	 * blocks copied in.
+	 */
+	void finalize_structure(int rows=-1, int cols=-1)
+	{
+		if(rows == -1 || cols == -1)
+		{
+			// Determine the size of the matrix as the largest element
+			std::tie(rows, cols) = nonfinalized_shape();
+		}
+		S.resize(rows, cols);
+		S.setFromTriplets(trip.begin(), trip.end());
+		S.makeCompressed();
+
+		// Write the index of each element of S to its data matrix
+		for(int i=0; i<S.nonZeros(); i++)
+			S.valuePtr()[i] = i;
+
+		// Clear the triplet representation, so that the -1's in the operator() are
+		// correctly created in the second call sequence.
+		trip.clear(); 
+
+		state = State::create_copy_sequence;
+	}
+
+	/**
+	 * Produce the information required to execute the recorded copies
+	 */
+	void generate_copy_data(std::vector<Segment>& segments, 
+													std::vector<CopyInfo>& copies, 
+													Eigen::SparseMatrix<scalar_t>& sparsity_structure)
+	{
+		int offset = 0;
+		for(int i=0; i<copy_lengths.size(); i++)
+		{
+			copies.push_back({.segment_index=offset, .num_segments_to_copy=copy_lengths[i]});
+			offset += copy_lengths[i];
+		}
+		segments = copy_sequence;
+		sparsity_structure = S.template cast<scalar_t>();
+	}
+
+	int rows() {return S.rows();}
+	int cols() {return S.cols();}
+
+	Eigen::SparseMatrix<int> get_sparsity_structure()
+	{
+		Eigen::SparseMatrix<int> ret = S;
+		for(int i=0; i<ret.nonZeros(); i++) ret.valuePtr()[i] = 1;
+		return ret;
+	}
 };
 
 
-// /**
-//  * FunctionSet
-//  * 
-//  * Take a list of functions [F1;...;FN] and their arguments such that 
-//  * we can evaluate them as a single function F = [F1;...;FN]
-//  */
-// template<typename Scalar, typename param_t, 
-// 				int numInputs_, int numOutputs_,
-// 				typename jacobian_BSMatrix_t,
-// 				typename... F> // The functions to call in order
-// class FunctionSetx
-// {
-// public:
-// 	static const int totalNumArgs = detail::sum_int_template<F::num_input_vars...>();
 
-// 	static const int numInputs = numInputs_;
-// 	static const int numOutputs = numOutputs_;
+template<typename scalar_t>
+class BSMatrix
+{
+private:
 
-// 	using variable_t = Eigen::Vector<Scalar, numInputs>;
-// 	using output_t = Eigen::Vector<Scalar, numOutputs>;
+	scalar_t* target; // Where we're going to write the data
 
-// 	using jacobian_t = Eigen::SparseMatrix<Scalar>;
+	Eigen::SparseMatrix<scalar_t> sparsity_structure;
+	std::vector<Segment>  segments;
+	std::vector<CopyInfo> copies;
+	int copy_index;
 
+	// Execute the next copy in the sequence
+	void do_copy(const scalar_t *source)
+	{
+		int segment_index = copies[copy_index].segment_index;
+		for(int i=0; i<copies[copy_index].num_segments_to_copy; i++)
+		{
+			Segment seg = segments[segment_index + i];
+			Eigen::Map<Eigen::VectorX<scalar_t>>(target+seg.index, seg.length) = 
+				Eigen::Map<const Eigen::VectorX<scalar_t>>(source, seg.length);
+			source += seg.length;
+		}
+		copy_index++;
 
-// private:
-// 	jacobian_BSMatrix_t jacobian_BS;
+		if(copy_index == copies.size()) copy_index = 0;
+	}
 
+public:
 
-// public: // Public for the Factory class, not the user
-// 	/**
-// 	 * We build an array of info about the arguments in the calling sequence.
-// 	 * 
-// 	 * [F1(arg1, arg2); F2(arg3, arg4, arg5); ... ]
-// 	 */
-// 	struct argInfo_t
-// 	{
-// 		int index;  // Index of the block-variable
-// 		int offset;  // Offset into the dense variable
-// 		int len;  // Length
+	// Initialize from a tape instance
+	BSMatrix(BSMatrixTape<scalar_t> tape) 
+		: target(NULL)
+	{
+		tape.generate_copy_data(segments, copies, sparsity_structure);
+		copy_index = 0;
+	}
 
-// 		int jacobianBlockIndex; // Index into the block for this argument's jacobian
-// 	};
+	/**
+	 * Initialize S to the right sparsity structure and set it
+	 * as the target
+	 */
+	void initialize_matrix(SparseMatrix<scalar_t>& S)
+	{
+		S = sparsity_structure;
+		target = S.valuePtr();
+	}
 
-// 	Eigen::Vector<argInfo_t, totalNumArgs> argInfo;
+	/**
+	 * Copy the given block into the target matrix
+	 */
+	void operator=(const Eigen::SparseMatrix<scalar_t>& block)
+	{
+		do_copy(block.valuePtr());
+	}	
 
-// private:
-// 	template<typename f, int... Is>
-// 	void call_F(
-// 		param_t& param,
-// 		const Eigen::Ref<const Eigen::VectorX<Scalar>>& x,
-// 		Eigen::Ref<Eigen::VectorX<Scalar>> out,
-// 		int index,  // Index into the argInfo vector
-// 		std::integer_sequence<int, Is...>)
-// 	{
-// 		out = f::eval(param, 
-// 									x.segment(argInfo[index + Is].offset,
-// 														argInfo[index + Is].len)...);
-// 	}
+	void operator=(const Eigen::Ref<const Eigen::MatrixX<scalar_t>>& block)
+	{
+		do_copy(block.data());
+	}
 
-// 	// Evaluate the function and copy the jacobian into jacobian_BS
-// 	template<typename f, int... Is>
-// 	void call_jacobian_F(
-// 		param_t& param,
-// 		const Eigen::Ref<const Eigen::VectorX<Scalar>>& x,
-// 		Eigen::Ref<Eigen::VectorX<Scalar>> out,
-// 		int index,  // Index into the argInfo vector
-// 		std::integer_sequence<int, Is...>)
-// 	{
-// 		// f::jac(param, 
-// 		// 	std::make_pair(x.segment(argInfo[index + Is].offset, argInfo[index + Is].len), 
-// 		// 	columnOffsets.segment(argInfo[index+Is].offset, argInfo[index + Is].len))...)
-
-// 		typename f::jacobian_return_t jac = f::jac(param, x.segment(argInfo[index + Is].offset,
-// 													argInfo[index + Is].len)...);
-// 		out = jac.val;
-
-// 		// Copy the jacobian into the right blocks
-// 		int offset = 0;
-// 		auto l = {(
-// 			jacobian_BS.setBlockByIndex(argInfo[index + Is].jacobianBlockIndex, 
-// 																	jac.jacobian.middleCols(offset,argInfo[index + Is].len)),
-// 			offset += argInfo[index + Is].len,
-// 			0
-// 			)...};
-// 	}
-
-// public:
-
-// 	/**
-// 	 * Evalue the FunctionSet for the variable x
-// 	 */
-// 	void eval(
-// 		param_t &param,
-// 		const Eigen::Ref<const Eigen::Vector<Scalar, numInputs>>& x,
-// 		Eigen::Ref<Eigen::Vector<Scalar, numOutputs>> out)
-// 	{
-// 		int output_index = 0;
-// 		int arg_index = 0;
-
-// 		/**
-// 		 * Iterate over each function in the set and evaluate.
-// 		 * 
-// 		 * We're unrolling the loop here, so there is one line of 
-// 		 * generated code per function in the set.
-// 		 * However, the templated function callF is overloaded only by
-// 		 * the underlying function, and not by the constraint. i.e., we've
-// 		 * decoupled the variable tag from the function tag here. This means
-// 		 * that callF is generated only once per unique function called.
-// 		 */
-// 		auto l = {(
-// 			call_F<F>(
-// 				param, 
-// 				x,
-// 				out.segment(output_index, F::num_outputs),
-// 				arg_index,
-// 				std::make_integer_sequence<int, F::num_input_vars>()),
-
-// 			arg_index += F::num_input_vars,
-// 			output_index += F::num_outputs,
-// 			0)...};
-// 	}
-
-// 	/**
-// 	 * Evalue the jacobian of the FunctionSet for the variable x
-// 	 */
-// 	void jacobian(
-// 		param_t &param,
-// 		const Eigen::Ref<const Eigen::Vector<Scalar, numInputs>>& x,
-// 		Eigen::Ref<Eigen::Vector<Scalar, numOutputs>> out)
-// 	{
-// 		int output_index = 0;
-// 		int arg_index = 0;
-
-// 		auto l = {(
-// 			call_jacobian_F<F>(
-// 				param, 
-// 				x,
-// 				out.segment(output_index, F::num_outputs),
-// 				arg_index,
-// 				std::make_integer_sequence<int, F::num_input_vars>()),
-
-// 			arg_index += F::num_input_vars,
-// 			output_index += F::num_outputs,
-// 			0)...};
-// 	}
-
-// 	/**
-// 	 * Returns a reference to the jacobian matrix
-// 	 * 
-// 	 * This is overwritten when jacobian is called.
-// 	 */
-// 	Eigen::SparseMatrix<Scalar>& get_jacobian()
-// 	{
-// 		return jacobian_BS.S;
-// 	}
-
-
-// 	FunctionSetx(Eigen::Vector<argInfo_t, totalNumArgs> argInfo_, jacobian_BSMatrix_t jacobian_BS_)
-// 		: argInfo(argInfo_), jacobian_BS(jacobian_BS_)
-// 		{}
-// };
+	// These all compile out. Not used in deployment.
+	inline BSMatrix& operator()(std::initializer_list<Segment> rows, std::initializer_list<Segment> cols)	{return *this;}
+	inline BSMatrix& operator()(std::initializer_list<Segment> rows, int col)	{return *this;}
+	inline BSMatrix& operator()(int row, std::initializer_list<Segment> cols)	{return *this;}
+	inline BSMatrix& operator()(int row, int col)	{return *this;}
+	void finalize_structure(int rows=-1, int cols=-1)	{}	
+};
 
 };
+
 
 #endif // __BSMATRIX_HPP
