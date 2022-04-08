@@ -23,7 +23,6 @@ enable_testing()
 add_executable(
   func_test
   func_test.cpp
-  /Users/cnjones/git/lampc/src/lampc_function.hpp
 )
 target_link_libraries(
   func_test
@@ -34,7 +33,6 @@ target_link_libraries(
 add_executable(
   bs_test
   bs_test.cpp
-  /Users/cnjones/git/lampc/src/lampc_function.hpp
 )
 target_link_libraries(
   bs_test
@@ -42,34 +40,17 @@ target_link_libraries(
   gtest
 )
 
-
-#  ipopt
-#  Eigen3::Eigen
-
-# add_executable(
-#   bs_test
-#   bs_test.cpp
-# )
-# target_link_libraries(
-#   bs_test
-#   gtest_main
-#   gtest
-# )
-
-# add_executable(
-#   con_test
-#   constraints_test.cpp
-# )
-# target_link_libraries(
-#   con_test
-#   gtest_main
-#   gtest
-# )
-
-#  ipopt
-#  Eigen3::Eigen
-
+add_executable(
+  problem_test
+  problem_test.cpp
+)
+target_link_libraries(
+  problem_test
+  gtest_main
+  gtest
+)
 
 include(GoogleTest)
 gtest_discover_tests(func_test)
 gtest_discover_tests(bs_test)
+gtest_discover_tests(problem_test)

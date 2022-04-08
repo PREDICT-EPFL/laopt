@@ -12,49 +12,50 @@ struct Variable;
 template<typename scalar_t>
 struct Problem
 {
-	Variable<scalar_t> variable(int n, int m=1)
+	Variable<scalar_t>& variable(int n, int m=1)
 	{
-		Variable<scalar_t> v(n,m,size);
+		auto v = std::make_shared<Variable<scalar_t>>(n,m,size);
 		variables.push_back(v);
 		size = compute_size(); // Update the total size of the problem variable
 
 		// Return with move symantics is required, 
 		// since we need the reference stored in variables to remain valid
-		return v; 
+		return *(v.get());
 	}
 
 	int size = 0;
 
-	/**
-	 * Called once the problem is defined. Defines the optimization variable.
-	 */
-	void register_variables(std::initializer_list<std::reference_wrapper<Variable<scalar_t>>> vars)
-	{
-		variables = vars;
+	// /**
+	//  * Called once the problem is defined. Defines the optimization variable.
+	//  */
+	// void register_variables(std::initializer_list<std::reference_wrapper<Variable<scalar_t>>> vars)
+	// {
+	// 	variables = vars;
 
-		int offset = 0;
-		for(auto v: variables)
-		{
-			v.get().initialize(offset);
-			offset += v.get().num_elements();
-		}
+	// 	int offset = 0;
+	// 	for(auto v: variables)
+	// 	{
+	// 		v.get().initialize(offset);
+	// 		offset += v.get().num_elements();
+	// 	}
 
-		size = compute_size(); // Once all the variables are registered, the size doesn't change
-	}
+	// 	size = compute_size(); // Once all the variables are registered, the size doesn't change
+	// }
 
 	void set_variable(Eigen::Ref<Eigen::VectorX<scalar_t>> var)
 	{
 		for(auto v: variables)
-			v.get().set_var(var);
+			v->set_var(var);
 	}
 
 private:
-	std::vector<std::reference_wrapper<Variable<scalar_t>>> variables;
+	// std::vector<std::reference_wrapper<Variable<scalar_t>>> variables;
+	std::vector<std::shared_ptr<Variable<scalar_t>>> variables;
 
 	int compute_size() // Total number of optimization variables
 	{
 		return std::accumulate(variables.begin(), variables.end(), 0, 
-							[](int total, std::reference_wrapper<Variable<scalar_t>> var) {return total + var.get().num_elements();});
+							[](int total, std::shared_ptr<Variable<scalar_t>> var) {return total + var->num_elements();});
 	}
 };
 

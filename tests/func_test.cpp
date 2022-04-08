@@ -8,6 +8,8 @@
 
 #include "gtest/gtest.h"
 
+namespace {
+
 template<typename scalar_t=double, typename diff_t=scalar_t>
 EIGEN_STRONG_INLINE Eigen::Vector<diff_t, 2> test_function(
         const Eigen::Ref<const Eigen::Vector<diff_t, 2>>& x, 
@@ -21,7 +23,7 @@ EIGEN_STRONG_INLINE Eigen::Vector<diff_t, 2> test_function(
 /**
  * Compute the jacobian and hessian of a function
  */
-TEST(BSMatrix, Construction) {
+TEST(FunctionTest, Construction) {
     using scalar_t = double;
 
     using Function = lampc::Function<scalar_t, 2, 2,1>;
@@ -52,3 +54,4 @@ TEST(BSMatrix, Construction) {
         ));
 }
 
+}

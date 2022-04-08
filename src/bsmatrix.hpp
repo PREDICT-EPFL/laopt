@@ -317,12 +317,20 @@ private:
 
 public:
 
+	BSMatrix() {}; // Must call initialize_from_tape before using
+	void initialize_from_tape(BSMatrixTape<scalar_t> tape)
+	{
+		tape.generate_copy_data(segments, copies, sparsity_structure);
+		copy_index = 0;
+		for(int i=0; i<sparsity_structure.nonZeros(); i++)
+			sparsity_structure.valuePtr()[i] = 1;
+	}
+
 	// Initialize from a tape instance
 	BSMatrix(BSMatrixTape<scalar_t> tape) 
 		: target(NULL)
 	{
-		tape.generate_copy_data(segments, copies, sparsity_structure);
-		copy_index = 0;
+		initialize_from_tape(tape);
 	}
 
 	/**
