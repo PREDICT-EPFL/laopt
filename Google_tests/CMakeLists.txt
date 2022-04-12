@@ -1,13 +1,15 @@
 cmake_minimum_required(VERSION 3.5)
 project(lampc_test)
 
+add_subdirectory(lib)
+include_directories(${gtest_SOURCE_DIR}/include ${gtest_SOURCE_DIR})
+
 include_directories(
 	include 
 	/usr/local/include/ 
 	${EIGEN3_INCLUDE_DIR} 
 	/opt/homebrew/Cellar/ipopt/3.14.2/include/coin-or/ 
-	/opt/homebrew/Cellar/fmt/8.0.1/include 
-	/opt/homebrew/opt/googletest/include
+	/opt/homebrew/Cellar/fmt/8.0.1/include
 	/Users/cnjones/git/lampc/src
 )
 
@@ -15,7 +17,6 @@ link_directories(
 	/Users/cnjones/git/lampc 
 	/opt/homebrew/Cellar/ipopt/3.14.2/lib/ 
 	/opt/homebrew/Cellar/fmt/8.0.1/lib
-	/opt/homebrew/opt/googletest/lib
 )
 
 enable_testing()

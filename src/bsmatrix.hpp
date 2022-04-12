@@ -167,8 +167,10 @@ public:
 
 	/**
 	 * Copy the given block into the BSMatrix according to the partition set in operator()
+	 * 
+	 * Assumption: The input matrix is contiguous. Don't change this to a Ref.
 	 */
-	void operator=(const Eigen::Ref<const Eigen::MatrixX<scalar_t>>& block)
+	void operator=(const Eigen::MatrixX<scalar_t>& block)
 	{
 		finalize_partition(block.rows(), block.cols());
 
@@ -340,7 +342,20 @@ public:
 	void initialize_matrix(SparseMatrix<scalar_t>& S)
 	{
 		S = sparsity_structure;
+		set_target(S);
+	}
+
+	/**
+	 * Use the given matrix as the target.
+	 * Must already have been initialized to the correct sparsity structure!
+	 */
+	void set_target(Eigen::SparseMatrix<scalar_t>& S)
+	{
 		target = S.valuePtr();
+	}
+	void set_target(Eigen::Ref<Eigen::MatrixX<scalar_t>> S)
+	{
+		target = S.data();
 	}
 
 	/**
@@ -351,18 +366,21 @@ public:
 		do_copy(block.valuePtr());
 	}	
 
-	void operator=(const Eigen::Ref<const Eigen::MatrixX<scalar_t>>& block)
+	// Assumption: The input matrix is contiguous. Don't change this to a Ref.
+	void operator=(const Eigen::MatrixX<scalar_t>& block)
 	{
 		do_copy(block.data());
 	}
 
 	// These all compile out. Not used in deployment.
-	inline BSMatrix& operator()(std::initializer_list<Segment> rows, std::initializer_list<Segment> cols)	{return *this;}
-	inline BSMatrix& operator()(std::initializer_list<Segment> rows, int col)	{return *this;}
-	inline BSMatrix& operator()(int row, std::initializer_list<Segment> cols)	{return *this;}
-	inline BSMatrix& operator()(int row, int col)	{return *this;}
+	inline BSMatrix<scalar_t>& operator()(std::initializer_list<Segment> rows, std::initializer_list<Segment> cols)	{return *this;}
+	inline BSMatrix<scalar_t>& operator()(std::initializer_list<Segment> rows, int col)	{return *this;}
+	inline BSMatrix<scalar_t>& operator()(int row, std::initializer_list<Segment> cols)	{return *this;}
+	inline BSMatrix<scalar_t>& operator()(int row, int col)	{return *this;}
 	void finalize_structure(int rows=-1, int cols=-1)	{}	
 };
+
+
 
 };
 

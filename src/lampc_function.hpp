@@ -13,21 +13,6 @@ using namespace Eigen;
 
 namespace lampc {
 
-// template<typename Fn, typename... Args, 
-//         std::enable_if_t<std::is_member_pointer<std::decay_t<Fn>>{}, int> = 0 >
-// constexpr decltype(auto) my_invoke(Fn&& f, Args&&... args)
-//     noexcept(noexcept(std::mem_fn(f)(std::forward<Args>(args)...)))
-// {
-//     return std::mem_fn(f)(std::forward<Args>(args)...);
-// }
-
-// template<typename Fn, typename... Args, 
-//          std::enable_if_t<!std::is_member_pointer<std::decay_t<Fn>>{}, int> = 0>
-// constexpr decltype(auto) my_invoke(Fn&& f, Args&&... args)
-//     noexcept(noexcept(std::forward<Fn>(f)(std::forward<Args>(args)...)))
-// {
-//     return std::forward<Fn>(f)(std::forward<Args>(args)...);
-// }
 
 /**
  * Used to create a differentiable function
@@ -44,8 +29,8 @@ namespace lampc {
  * Usage:
  *   make_differentiable(function_name, output_size, input_sizes...)
  */
-#define make_differentiable(name, out_size, ...)\
-    using name##_t = lampc::Function<scalar_t, out_size, __VA_ARGS__>;\
+#define make_jacobian(name, out_size, ...)\
+    using name##_t = lampc::DFunction<scalar_t, out_size, __VA_ARGS__>;\
     template<typename diff_t=scalar_t, typename... Args>\
     EIGEN_STRONG_INLINE auto name(lampc::Jacobian, const Args&... args) noexcept\
     {\
@@ -53,7 +38,8 @@ namespace lampc {
     	return name##_t::jacobian([self](auto... args){\
     		return self->template name<typename name##_t::AD_scalar>(args...);\
     	}, args...);\
-    }\
+    }
+#define make_hessian(name, out_size, ...)\
     template<typename diff_t=scalar_t, typename... Args>\
     EIGEN_STRONG_INLINE auto name(lampc::Hessian, const Args&... args) noexcept\
     {\
@@ -68,9 +54,6 @@ namespace lampc {
 struct Eval{};
 struct Jacobian{};
 struct Hessian{};
-
-
-
 
 
 
@@ -99,21 +82,10 @@ struct DFunction
 	using hessian_single_t = Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
 	using hessian_t = std::array<hessian_single_t, num_outputs>;
 
-	/**
-	 * Create a lambda function to call the given member function
-	 */
-	template<typename T, typename C, typename F>
-	static auto make_member_eval(C* obj, F f)
-	{
-	    return [obj,f] (const Eigen::Ref<const Eigen::Vector<T, input_sizes>>&... args) -> Eigen::Vector<T, num_outputs>
-	    {
-	    	return (obj->*f)(args...);
-	    };
-	}
-
-	template<typename F, typename... Args>
-	static EIGEN_STRONG_INLINE std::pair<out_t, jacobian_t> jacobian(F f, Args&... args) noexcept
-		// const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>... args) noexcept
+	template<typename F>
+	static EIGEN_STRONG_INLINE std::pair<out_t, jacobian_t> 
+	jacobian(F f, 
+		const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>&... args) noexcept
 	{
 		// Convert to AD variables for the inputs and call our function
 		AD_output_t out = seed_and_call(f, make_ad(args)...);
@@ -171,10 +143,13 @@ private:
 	}
 
 	// Take a vector input and return a AD version of the vector
-	template<typename Arg>
-	static EIGEN_STRONG_INLINE auto make_ad(const Arg& x)
+	template<int n>
+	static EIGEN_STRONG_INLINE 
+	Matrix<AD_scalar, n, 1> 
+	make_ad(const Ref<const Matrix<scalar_t, n, 1>> x)
+	// static EIGEN_STRONG_INLINE auto make_ad(const Arg& x)
 	{
-		Matrix<AD_scalar, Arg::RowsAtCompileTime, 1> y(x.rows());
+		Matrix<AD_scalar, n, 1> y;
 		y = x;
 		for (int i=0; i<y.rows(); i++) {
 			y[i].derivatives().setZero();
@@ -183,8 +158,9 @@ private:
 	}
 
 
-	template<typename F, typename... Args>
-	static EIGEN_STRONG_INLINE auto	seed_and_call(F f, Args&... args)
+	template<typename F>
+	static EIGEN_STRONG_INLINE Eigen::Matrix<AD_scalar, num_outputs, 1>
+	seed_and_call(F f, Eigen::Matrix<AD_scalar, input_sizes, 1>... args)
 	{
 		// Set derivative equal to identity
 		int offset = 0;
@@ -194,7 +170,6 @@ private:
 				0
 			)...
 		};
-
 		return f(args...);
 	}
 

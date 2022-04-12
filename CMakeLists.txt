@@ -41,5 +41,6 @@ add_subdirectory(examples)
 add_subdirectory(transpiler)
 # add_subdirectory(polympc)
 # add_subdirectory(qpmad  )
-add_subdirectory(tests  )
+# add_subdirectory(tests  )
+add_subdirectory(Google_tests)
 
