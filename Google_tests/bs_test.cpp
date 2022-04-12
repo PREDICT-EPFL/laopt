@@ -95,9 +95,9 @@ TEST(BSMatrix, Construction_Complex) {
     }    
 }
 
-TEST(BSHessian, Construction_Simple) {
+TEST(BSJacobian, Construction_Simple) {
     using scalar_t = double;
-    lampc::BSHessianTape<scalar_t> tape;
+    lampc::BSJacobianTape<scalar_t> tape;
 
     Eigen::VectorX<scalar_t> A(2);
     Eigen::VectorX<scalar_t> B(4);
@@ -123,7 +123,7 @@ TEST(BSHessian, Construction_Simple) {
     }
 
     // Check copy
-    lampc::BSHessian<scalar_t> mat(tape);
+    lampc::BSJacobian<scalar_t> mat(tape);
     Eigen::SparseMatrix<scalar_t> S;
     Eigen::VectorX<scalar_t> value(6);
     mat.initialize_jacobian(S);

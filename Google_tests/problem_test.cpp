@@ -28,11 +28,11 @@ EIGEN_STRONG_INLINE Eigen::Vector<diff_t, n> rk4(O ode, const scalar_t _h, const
 }
 
 
-/**
- * Computes the jacobian of the dynamics for a simple multiple-shooting transcription
+/** 
+ * Define the dynamics for a simple double integrator model discretized by RK4
  */
 template<typename scalar_t>
-struct Shooter
+struct Double_Integrator
 {
   // Example : Double integrator
   Eigen::Matrix<scalar_t, 2, 2> A{{0,1},{0,0}};
@@ -93,11 +93,16 @@ struct Shooter
 
     return std::make_pair(val, J);
   }
+};
 
+/**
+ * Defines an OCP for the Double Integrator
+ */
+template<typename scalar_t>
+struct Shooter : public Double_Integrator<scalar_t>
+{
+  using Base = Double_Integrator<scalar_t>;
 
-  /**
-   * Define the OCP
-   */
   lampc::Problem<scalar_t> prob;
   lampc::Variable<scalar_t>& x;
   lampc::Variable<scalar_t>& u;
@@ -108,7 +113,7 @@ struct Shooter
   void shoot(T& tape)
   {
     for(int i=0; i<x().cols()-1; i++)
-      std::tie(std::ignore, tape(-1,{x[i+1],x[i],u[i]})) = dsys_equality(D(),x(i+1),x(i),u(i));
+      std::tie(std::ignore, tape(-1,{x[i+1],x[i],u[i]})) = this->dsys_equality(D(),x(i+1),x(i),u(i));
   };
 
   SparseMatrix<scalar_t>& shoot()
@@ -158,4 +163,52 @@ TEST(ProblemTest, ShootJacobian) {
     }
 }
 
+
+/**
+ * Defines an OCP using the BSJacobian class
+ */
+template<typename scalar_t>
+struct Shooter_BSJacobian : public Double_Integrator<scalar_t>
+{
+  /**
+   * Define the OCP
+   */
+  lampc::Problem<scalar_t> prob;
+  lampc::Variable<scalar_t>& x;
+  lampc::Variable<scalar_t>& u;
+
+  Eigen::VectorX<scalar_t> var; // The problem variable
+
+  template<typename D, typename T>
+  void shoot(T& tape)
+  {
+    for(int i=0; i<x().cols()-1; i++)
+      std::tie(std::ignore, tape(-1,{x[i+1],x[i],u[i]})) = this->dsys_equality(D(),x(i+1),x(i),u(i));
+  };
+
+  SparseMatrix<scalar_t>& shoot()
+  {
+    shoot<lampc::Jacobian>(mat);
+    return S;
+  }
+
+  lampc::BSMatrix<scalar_t> mat;
+  SparseMatrix<scalar_t> S;
+
+  Shooter_BSJacobian(int N)   : x(prob.variable(2,N)), u(prob.variable(1,N)), var(prob.size)
+  {
+    prob.set_variable(var);
+
+    // Create the tape to record the copy sequence
+    lampc::BSMatrixTape<scalar_t> tape;
+    shoot<lampc::Jacobian>(tape);
+    tape.finalize_structure();
+    shoot<lampc::Jacobian>(tape);
+
+    // We now replace the tape with a block-sparse matrix
+    // which loads the copy-sequence from the tape (or from file)
+    mat.initialize_from_tape(tape);
+    mat.initialize_matrix(S);
+  }
+};
 }
