@@ -107,8 +107,8 @@ TEST(BSJacobian, Construction_Simple) {
 
     // Create the matrix blkdiag(A,B)
     auto F = [&](auto& tape){
-        tape(0,0) = std::make_tuple(A, JA);
-        tape(-1,-1) = std::make_tuple(B, JB);
+        tape(0,0) = std::make_pair(A, JA);
+        tape(-1,-1) = std::make_pair(B, JB);
     };
 
     F(tape);

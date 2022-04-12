@@ -10,28 +10,18 @@ namespace lampc
 {
 
 /**
- * A collection of BSMatrices representing the evaluation, jacobian and hessian of a function
+ * A collection of BSMatrices representing the evaluation and jacobian of a function
  */
 template<typename scalar_t>
 struct BSJacobianTape
 {
 	BSMatrixTape<scalar_t> value;
 	BSMatrixTape<scalar_t> jacobian;
-	BSMatrixTape<scalar_t> hessian;
-
-	template<typename Arg1, typename Arg2, typename Arg3>
-	void operator=(std::tuple<Arg1, Arg2, Arg3> tup)
-	{
-		value = std::get<0>(tup);
-		jacobian = std::get<1>(tup);
-		hessian = std::get<2>(tup);
-	}
 
 	template<typename Arg1, typename Arg2>
-	void operator=(std::tuple<Arg1, Arg2> tup)
+	void operator=(std::pair<Arg1, Arg2> tup)
 	{
-		value = std::get<0>(tup);
-		jacobian = std::get<1>(tup);
+		std::tie(value, jacobian) = tup;
 	}
 
 	template<typename Arg1>
@@ -40,12 +30,31 @@ struct BSJacobianTape
 		value = tup;
 	}
 
-	template<typename Rows, typename Cols>
-	BSJacobianTape& operator()(Rows rows, Cols cols)
+	BSJacobianTape<scalar_t>& operator()(std::initializer_list<Segment> rows,
+								 					 std::initializer_list<Segment> cols)
 	{
 		value(rows, 0);
 		jacobian(rows, cols);
-		hessian(cols, cols);
+		return *this;
+	}
+
+	BSJacobianTape<scalar_t>& operator()(std::initializer_list<Segment> rows, int col)
+	{
+		value(rows, 0);
+		jacobian(rows, col);
+		return *this;
+	}
+	BSJacobianTape<scalar_t>& operator()(int row, std::initializer_list<Segment> cols)
+	{
+		value(row, 0);
+		jacobian(row, cols);
+		return *this;
+	}
+
+	BSJacobianTape<scalar_t>& operator()(int row, int col)
+	{
+		value(row, 0);
+		jacobian(row, col);
 		return *this;
 	}
 
@@ -59,7 +68,6 @@ struct BSJacobianTape
 	{
 		value.finalize_structure(rows, 1);
 		jacobian.finalize_structure(rows, cols);
-		hessian.finalize_structure(cols, cols);
 	}
 
 	// /**
@@ -97,7 +105,6 @@ class BSJacobian
 {
 	BSMatrix<scalar_t> value;
 	BSMatrix<scalar_t> jacobian;
-	BSMatrix<scalar_t> hessian;
 
 public:
 
@@ -106,7 +113,6 @@ public:
 	{
 		value.initialize_from_tape(tape.value);
 		jacobian.initialize_from_tape(tape.jacobian);
-		hessian.initialize_from_tape(tape.hessian);
 	}
 
 	// Initialize from a tape instance
@@ -123,10 +129,6 @@ public:
 	{
 		jacobian.initialize_matrix(jac);
 	}
-	void initialize_hessian(Eigen::SparseMatrix<scalar_t>& hess)
-	{
-		hessian.initialize_matrix(hess);
-	}
 
 	void set_target_value(Eigen::SparseMatrix<scalar_t>& S)       {value.set_target(S);}
 	void set_target_value(Eigen::Ref<Eigen::MatrixX<scalar_t>> S) {value.set_target(S);}
@@ -134,25 +136,13 @@ public:
 	void set_target_jacobian(Eigen::SparseMatrix<scalar_t>& S)       {jacobian.set_target(S);}
 	void set_target_jacobian(Eigen::Ref<Eigen::MatrixX<scalar_t>> S) {jacobian.set_target(S);}
 
-	void set_target_hessian(Eigen::SparseMatrix<scalar_t>& S)       {hessian.set_target(S);}
-	void set_target_hessian(Eigen::Ref<Eigen::MatrixX<scalar_t>> S) {hessian.set_target(S);}
-
 	/**
 	 * Copy the given block into the target matrix
 	 */
-	template<typename Arg1, typename Arg2, typename Arg3>
-	void operator=(std::tuple<Arg1, Arg2, Arg3> tup)
-	{
-		value = std::get<0>(tup);
-		jacobian = std::get<1>(tup);
-		hessian = std::get<2>(tup);
-	}
-
 	template<typename Arg1, typename Arg2>
-	void operator=(std::tuple<Arg1, Arg2> tup)
+	void operator=(std::pair<Arg1, Arg2> tup)
 	{
-		value = std::get<0>(tup);
-		jacobian = std::get<1>(tup);
+		std::tie(value, jacobian) = tup;
 	}
 
 	template<typename Arg1>
