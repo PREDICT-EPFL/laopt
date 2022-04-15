@@ -7,3 +7,6 @@
 [submodule "polympc"]
 	path = polympc
 	url = git@gitlab.epfl.ch:listov/polympc.git
+[submodule "span"]
+	path = span
+	url = https://github.com/tcbrindle/span.git
