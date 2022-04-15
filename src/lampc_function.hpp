@@ -29,16 +29,38 @@ namespace lampc {
  * Usage:
  *   make_differentiable(function_name, output_size, input_sizes...)
  */
+// #define make_jacobian(name, out_size, ...)\
+//     using name##_t = lampc::DFunction<scalar_t, out_size, __VA_ARGS__>;\
+//     template<typename diff_t=scalar_t, typename... Args>\
+//     EIGEN_STRONG_INLINE auto name(lampc::Jacobian, const Args&... args) noexcept\
+//     {\
+//     	auto self = this;\
+//     	return name##_t::jacobian([self](auto... args){\
+//     		return self->template name<typename name##_t::AD_scalar>(args...);\
+//     	}, args...);\
+//     }
+
 #define make_jacobian(name, out_size, ...)\
-    using name##_t = lampc::DFunction<scalar_t, out_size, __VA_ARGS__>;\
-    template<typename diff_t=scalar_t, typename... Args>\
-    EIGEN_STRONG_INLINE auto name(lampc::Jacobian, const Args&... args) noexcept\
-    {\
-    	auto self = this;\
-    	return name##_t::jacobian([self](auto... args){\
-    		return self->template name<typename name##_t::AD_scalar>(args...);\
-    	}, args...);\
-    }
+	using name##_t = lampc::DFunction<scalar_t, out_size, __VA_ARGS__>;\
+	template<typename diff_t=scalar_t, typename... Args>\
+	EIGEN_STRONG_INLINE auto name(lampc::Jacobian, const std::pair<lampc::Segment, Args>... args) noexcept\
+	{\
+	auto self = this;\
+	return std::make_pair(std::vector<lampc::Segment>{args.first...},\
+	        name##_t::jacobian([self](auto... args){\
+	  return self->template name<typename name##_t::AD_scalar>(args...);\
+	}, args.second...));\
+	}\
+	template<typename diff_t=scalar_t, typename... Args>\
+	EIGEN_STRONG_INLINE auto name(lampc::Jacobian, const Args... args) noexcept\
+	{\
+	auto self = this;\
+	return name##_t::jacobian([self](auto... args){\
+	  return self->template name<typename name##_t::AD_scalar>(args...);\
+	}, args...);\
+	}
+
+
 #define make_hessian(name, out_size, ...)\
     template<typename diff_t=scalar_t, typename... Args>\
     EIGEN_STRONG_INLINE auto name(lampc::Hessian, const Args&... args) noexcept\

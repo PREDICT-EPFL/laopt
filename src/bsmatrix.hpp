@@ -4,6 +4,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
+#include "tcb/span.hpp"
+
 namespace lampc
 {
 
@@ -204,20 +206,20 @@ public:
 	 * 
 	 * The blocks are taken contiguously from the matrix to be copied in.
 	 */
-	BSMatrixTape& operator()(std::initializer_list<Segment> rows,
-								 					 std::initializer_list<Segment> cols)
+	BSMatrixTape& operator()(std::vector<Segment> rows,
+								 					 std::vector<Segment> cols)
 	{
 		row_partition = rows;
 		col_partition = cols;
 		return *this;
 	}
 
-	BSMatrixTape& operator()(std::initializer_list<Segment> rows, int col)
+	BSMatrixTape& operator()(std::vector<Segment> rows, int col)
 	{
 		if(col == -1)	std::tie(std::ignore, col) = nonfinalized_shape();
 		return operator()(rows, {{col,-1}});
 	}
-	BSMatrixTape& operator()(int row, std::initializer_list<Segment> cols)
+	BSMatrixTape& operator()(int row, std::vector<Segment> cols)
 	{
 		if(row == -1) std::tie(row,std::ignore) = nonfinalized_shape();
 		return operator()({{row,-1}}, cols);
@@ -373,9 +375,9 @@ public:
 	}
 
 	// These all compile out. Not used in deployment.
-	inline BSMatrix<scalar_t>& operator()(std::initializer_list<Segment> rows, std::initializer_list<Segment> cols)	{return *this;}
-	inline BSMatrix<scalar_t>& operator()(std::initializer_list<Segment> rows, int col)	{return *this;}
-	inline BSMatrix<scalar_t>& operator()(int row, std::initializer_list<Segment> cols)	{return *this;}
+	inline BSMatrix<scalar_t>& operator()(std::vector<Segment> rows, std::vector<Segment> cols)	{return *this;}
+	inline BSMatrix<scalar_t>& operator()(std::vector<Segment> rows, int col)	{return *this;}
+	inline BSMatrix<scalar_t>& operator()(int row, std::vector<Segment> cols)	{return *this;}
 	inline BSMatrix<scalar_t>& operator()(int row, int col)	{return *this;}
 	void finalize_structure(int rows=-1, int cols=-1)	{}	
 };

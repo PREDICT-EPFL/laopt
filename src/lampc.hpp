@@ -7,7 +7,6 @@
 #include "lampc_utility.hpp"
 #include "lampc_function.hpp"
 #include "bsmatrix.hpp"
-#include "bsjacobian.hpp"
 #include "problem.hpp"
 
 #endif // __LAMPC__HPP
