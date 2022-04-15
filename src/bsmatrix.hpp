@@ -1,10 +1,10 @@
 #ifndef __BSMATRIX_HPP
 #define __BSMATRIX_HPP
 
+#include <functional>
+
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
-
-#include "tcb/span.hpp"
 
 namespace lampc
 {
@@ -148,6 +148,34 @@ public:
 		return std::make_pair(rows, cols);
 	}
 
+	/**
+	 * Execute the copy operation on this block
+	 */
+	void record_op(const Eigen::MatrixX<scalar_t>& block)
+	{
+		finalize_partition(block.rows(), block.cols());
+
+		// Iterate over partition
+		for(auto& row_seg: row_partition)
+			for(auto& col_seg: col_partition)
+				// Fill in the non-zeros
+		    for(int r=0; r<row_seg.length; r++)
+		    	for(int c=0; c<col_seg.length; c++)
+		    		trip.push_back(Eigen::Triplet<int>(r + row_seg.index, c + col_seg.index, 1));
+
+		if(state == create_copy_sequence) // Copy block sparsity structure
+		{
+			Eigen::MatrixX<scalar_t> B(block);
+			B.array() = 1;
+			std::vector<Segment> v = build_copy_sequence(B.sparseView().template cast<int>());
+
+			copy_sequence.insert(copy_sequence.end(), v.begin(), v.end());
+			copy_lengths.push_back(v.size());
+		}
+
+		row_partition.clear();
+	}
+
 public:
 	/**
 	 * Record the data to copy block to (target_row, target_column)
@@ -174,27 +202,15 @@ public:
 	 */
 	void operator=(const Eigen::MatrixX<scalar_t>& block)
 	{
-		finalize_partition(block.rows(), block.cols());
-
-		// Iterate over partition
-		for(auto& row_seg: row_partition)
-			for(auto& col_seg: col_partition)
-				// Fill in the non-zeros
-		    for(int r=0; r<row_seg.length; r++)
-		    	for(int c=0; c<col_seg.length; c++)
-		    		trip.push_back(Eigen::Triplet<int>(r + row_seg.index, c + col_seg.index, 1));
-
-		if(state == create_copy_sequence) // Copy block sparsity structure
-		{
-			Eigen::MatrixX<scalar_t> B(block);
-			B.array() = 1;
-			std::vector<Segment> v = build_copy_sequence(B.sparseView().template cast<int>());
-
-			copy_sequence.insert(copy_sequence.end(), v.begin(), v.end());
-			copy_lengths.push_back(v.size());
-		}
-
-		row_partition.clear();
+		record_op(block);
+	}
+	void operator+=(const Eigen::MatrixX<scalar_t>& block)
+	{
+		record_op(block);
+	}
+	void operator-=(const Eigen::MatrixX<scalar_t>& block)
+	{
+		record_op(block);
 	}
 
 	/**
@@ -304,20 +320,22 @@ private:
 	int copy_index;
 
 	// Execute the next copy in the sequence
-	void do_copy(const scalar_t *source)
+	template<typename Op>
+	inline void execute_operation(Op op, const scalar_t *source)
 	{
 		int segment_index = copies[copy_index].segment_index;
 		for(int i=0; i<copies[copy_index].num_segments_to_copy; i++)
 		{
 			Segment seg = segments[segment_index + i];
-			Eigen::Map<Eigen::VectorX<scalar_t>>(target+seg.index, seg.length) = 
-				Eigen::Map<const Eigen::VectorX<scalar_t>>(source, seg.length);
+			op(Eigen::Map<Eigen::VectorX<scalar_t>>(target+seg.index, seg.length),
+				Eigen::Map<const Eigen::VectorX<scalar_t>>(source, seg.length));
 			source += seg.length;
 		}
 		copy_index++;
 
 		if(copy_index == copies.size()) copy_index = 0;
 	}
+
 
 public:
 
@@ -365,13 +383,41 @@ public:
 	 */
 	void operator=(const Eigen::SparseMatrix<scalar_t>& block)
 	{
-		do_copy(block.valuePtr());
+		execute_operation([](auto&& a, auto&& b){a=b;}, block.valuePtr());
 	}	
 
 	// Assumption: The input matrix is contiguous. Don't change this to a Ref.
 	void operator=(const Eigen::MatrixX<scalar_t>& block)
 	{
-		do_copy(block.data());
+		execute_operation([](auto&& a, auto&& b){a=b;}, block.data());
+	}
+
+	/**
+	 * Copy the given block into the target matrix
+	 */
+	void operator+=(const Eigen::SparseMatrix<scalar_t>& block)
+	{
+		execute_operation([](auto&& a, auto&& b){a+=b;}, block.valuePtr());
+	}	
+
+	// Assumption: The input matrix is contiguous. Don't change this to a Ref.
+	void operator+=(const Eigen::MatrixX<scalar_t>& block)
+	{
+		execute_operation([](auto&& a, auto&& b){a+=b;}, block.data());
+	}
+
+	/**
+	 * Copy the given block into the target matrix
+	 */
+	void operator-=(const Eigen::SparseMatrix<scalar_t>& block)
+	{
+		execute_operation([](auto&& a, auto&& b){a-=b;}, block.valuePtr());
+	}	
+
+	// Assumption: The input matrix is contiguous. Don't change this to a Ref.
+	void operator-=(const Eigen::MatrixX<scalar_t>& block)
+	{
+		execute_operation([](auto&& a, auto&& b){a-=b;}, block.data());
 	}
 
 	// These all compile out. Not used in deployment.

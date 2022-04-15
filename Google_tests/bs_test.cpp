@@ -95,6 +95,52 @@ TEST(BSMatrix, Construction_Complex) {
     }    
 }
 
+
+/**
+ * Form a block-diagonal matrix and then add to it
+ */
+TEST(BSMatrix, SimpleSum) {
+    using scalar_t = double;
+    lampc::BSMatrixTape<scalar_t> tape;
+
+    Eigen::MatrixX<scalar_t> A(2,3);
+    Eigen::MatrixX<scalar_t> B(4,5);
+
+    // Create the matrix blkdiag(A,B)
+    auto F = [&](auto& tape){
+        tape(0,0) = A;
+        tape(-1,-1) = B;
+        tape(1,2) += B;
+        tape(-1,4) += B;
+        tape(5,5) += A;
+    };
+
+    F(tape);
+    tape.finalize_structure();
+    F(tape);
+
+    // Confirm the correct sparsity structure
+    {
+        auto ground = triplet_to_sparse<int>(10,9,{{0,0,1},{1,0,1},{0,1,1},{1,1,1},{0,2,1},{1,2,1},{2,2,1},{3,2,1},{4,2,1},{1,3,1},{2,3,1},{3,3,1},{4,3,1},{5,3,1},{1,4,1},{2,4,1},{3,4,1},{4,4,1},{5,4,1},{6,4,1},{7,4,1},{8,4,1},{9,4,1},{1,5,1},{2,5,1},{3,5,1},{4,5,1},{5,5,1},{6,5,1},{7,5,1},{8,5,1},{9,5,1},{1,6,1},{2,6,1},{3,6,1},{4,6,1},{5,6,1},{6,6,1},{7,6,1},{8,6,1},{9,6,1},{2,7,1},{3,7,1},{4,7,1},{5,7,1},{6,7,1},{7,7,1},{8,7,1},{9,7,1},{6,8,1},{7,8,1},{8,8,1},{9,8,1}});
+        EXPECT_TRUE(ground.isApprox(tape.get_sparsity_structure(), 0));
+    }
+
+    // Confirm the correct copy process
+    lampc::BSMatrix<scalar_t> mat(tape);
+    SparseMatrix<scalar_t> S;
+    mat.initialize_matrix(S);
+
+    A << 1,2,3,4,5,6;
+    B << 7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26;
+    F(mat);
+
+    {
+        auto ground = triplet_to_sparse<double>(10,9,{{0,0,1},{1,0,4},{0,1,2},{1,1,5},{0,2,3},{1,2,13},{2,2,13},{3,2,18},{4,2,23},{1,3,9},{2,3,20},{3,3,30},{4,3,40},{5,3,22},{1,4,10},{2,4,22},{3,4,32},{4,4,42},{5,4,23},{6,4,8},{7,4,13},{8,4,18},{9,4,23},{1,5,11},{2,5,24},{3,5,34},{4,5,44},{5,5,25},{6,5,13},{7,5,14},{8,5,19},{9,5,24},{1,6,12},{2,6,26},{3,6,36},{4,6,46},{5,6,27},{6,6,15},{7,6,15},{8,6,20},{9,6,25},{2,7,11},{3,7,16},{4,7,21},{5,7,29},{6,7,17},{7,7,16},{8,7,21},{9,7,26},{6,8,12},{7,8,17},{8,8,22},{9,8,27}});
+        EXPECT_TRUE(ground.isApprox(S, 0));
+    }
+}
+
+
 // TEST(BSJacobian, Construction_Simple) {
 //     using scalar_t = double;
 //     lampc::BSJacobianTape<scalar_t> tape;
