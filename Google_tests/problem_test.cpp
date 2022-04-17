@@ -12,24 +12,6 @@
 
 namespace {
 
-/**
- * Simple general RK4 integrator
- */
-template<typename scalar_t, typename diff_t=scalar_t, 
-         int n, // Dimension of x
-         typename O, typename... Parameters>
-EIGEN_STRONG_INLINE Eigen::Vector<diff_t, n> rk4(O ode, const scalar_t _h, const Eigen::Ref<const Eigen::Vector<diff_t, n>>& x, 
-                             const Parameters&... params) noexcept
-{
-  diff_t h = static_cast<diff_t>(_h);
-  auto k1 = ode(x,                               params...);
-  auto k2 = ode(x+h/static_cast<diff_t>(2.0)*k1, params...);
-  auto k3 = ode(x+h/static_cast<diff_t>(2.0)*k2, params...);
-  auto k4 = ode(x+h*k3,                          params...);
-  return x + h/static_cast<diff_t>(6.0) * (k1 + static_cast<diff_t>(2.0)*k2 + static_cast<diff_t>(2.0)*k3 + k4);
-}
-
-
 /** 
  * Define the dynamics for a simple double integrator model discretized by RK4
  */
@@ -39,6 +21,9 @@ struct DoubleIntegrator
   // Example : Double integrator
   Eigen::Matrix<scalar_t, 2, 2> A{{0,1},{0,0}};
   Eigen::Matrix<scalar_t, 2, 1> B{{0},{1}};
+
+  Eigen::Matrix<scalar_t, 2, 2> Q{{1,0},{0,1}};
+  Eigen::Matrix<scalar_t, 1, 1> R{2};
 
   /** Continuous system dynamics */
   template<typename diff_t=scalar_t>
@@ -55,7 +40,7 @@ struct DoubleIntegrator
       dsys(const Ref<const Matrix<diff_t, 2, 1>>& x, const Ref<const Vector<diff_t, 1>>& u) noexcept
   {
     auto self = this;
-    auto q = rk4<scalar_t, diff_t, 2>([self](
+    auto q = lampc::rk4<scalar_t, diff_t, 2>([self](
       const Eigen::Ref<const Eigen::Vector<diff_t, 2>>& x,
       const Eigen::Ref<const Eigen::Vector<diff_t, 1>>& u)
     {
@@ -96,87 +81,94 @@ struct DoubleIntegrator
 
   //   return std::make_pair(val, J);
   // }  
+
+  
+  template<typename diff_t=scalar_t>
+  EIGEN_STRONG_INLINE Vector<diff_t,1> stage_cost(
+          const Ref<const Vector<diff_t, 2>>& x,
+          const Ref<const Vector<diff_t, 2>>& xss,
+          const Ref<const Vector<diff_t, 1>>& u,
+          const Ref<const Vector<diff_t, 1>>& uss) noexcept
+  {
+    return (x-xss).transpose()*(Q.template cast<diff_t>())*(x-xss) + (u-uss).transpose()*(R.template cast<diff_t>())*(u-uss);
+  }
+  make_hessian(stage_cost, 1, 2,2,1,1);
+
+  template<typename diff_t=scalar_t>
+  EIGEN_STRONG_INLINE Vector<diff_t,1> terminal_cost(
+          const Ref<const Vector<diff_t, 2>>& x,
+          const Ref<const Vector<diff_t, 2>>& xss) noexcept
+  {
+    return static_cast<diff_t>(20)*(x-xss).transpose()*(Q.template cast<diff_t>())*(x-xss);
+  }
+  make_hessian(terminal_cost, 1, 2,2);
 };
 
 
-template<typename scalar_t>
-struct OCP_DoubleIntegrator : public DoubleIntegrator<scalar_t>
+template<typename scalar_t, typename Problem=lampc::Problem<scalar_t>>
+struct OCP_DoubleIntegrator : public DoubleIntegrator<scalar_t>, public Problem
 {
+  // References into the decision variable
+  using Variable = typename Problem::Variable;
+  Variable& x;
+  Variable& u;
+  Variable& xss;
+  Variable& uss;
+  const int N;
 
-  /**
-   * Define the optimization problem variables
-   */
-  template<typename Base>
-  struct MyProblem : Base
-  {
-    using Variable = typename Base::Variable;
-    Variable& x;
-    Variable& u;
-    MyProblem(int N) : x(this->variable(2,N)), u(this->variable(1,N))
-    {};
-  };
-  MyProblem<lampc::Problem<scalar_t>> prob;
-  Eigen::VectorX<scalar_t> var; // The problem variable
+  OCP_DoubleIntegrator(int N) : N(N),
+                                x(this->variable(2,N)), // Order here defines the order
+                                u(this->variable(1,N)), // in the optimization problem
+                                xss(this->variable(2)), 
+                                uss(this->variable(1))
+  {};
 
-  template<typename D, typename T>
-  void constraints(T& prob)
-  {
-    auto x = prob.x;
-    auto u = prob.u;
-
-    for(int i=0; i<x.cols()-1; i++)
-    {
-      prob.constraints << this->dsys_equality(D(),x(i+1),x(i),u(i));
-      // auto t = this->dsys_equality(D(),x(i+1),x(i),u(i));
-      // std::cout << "t<0> = " << type_name<decltype(std::get<0>(t))>() << std::endl;
-      // std::cout << "t = " << type_name<decltype(t)>() << std::endl;
-        // prob << (this->dsys_equality(D(),x(i+1),x(i),u(i)) == 0);
-      // con << ({-2,-4} <= this->output(D(),x(i),xs,u(i),us) <= {1,2});
-      // 2 <= x(i) <= 4;
-    }
-  };
-
+  template<typename D = lampc::Jacobian>
   void eval_constraints()
   {
-    constraints<lampc::Jacobian>(prob);
+    this->constraints << lampc::id(D(), x(0));
+    for(int i=0; i<x.cols()-1; i++)
+      this->constraints << this->dsys_equality(D(), x(i+1),x(i),u(i));
   }
 
-  Eigen::SparseMatrix<scalar_t> g_jacobian;
-  Eigen::SparseMatrix<scalar_t> g;
-
-  OCP_DoubleIntegrator(int N) : prob(N), var(prob.size)
+  template<typename D = lampc::Hessian>
+  void eval_objective()
   {
-    // Create the tape to record the copy sequence
-    MyProblem<lampc::ProblemTape<scalar_t>> tape(N);
-    tape.set_variable(var);
+    this->objective = 0; // Must be called to initialize the object each time
 
-    constraints<lampc::Jacobian>(tape); // Create structure
-    tape.finalize_structure();
-    constraints<lampc::Jacobian>(tape); // Create copy-sequence
-
-    // We now initialize the problem from the tape
-    prob.initialize_from_tape(tape, var, g, g_jacobian);
+    for(int i=0; i<x.cols()-1; i++)
+      this->objective += this->stage_cost(D(), x(i), xss(0), u(i), uss(0));
+    this->objective += this->terminal_cost(D(), x(N-1), xss(0));
   }
 };
 
 TEST(ProblemTest, OCP_DoubleIntegrator) {
+  using scalar_t = double;
   int N = 10;
-  OCP_DoubleIntegrator<double> t(N);
-  auto& prob = t.prob;
+  auto prob = lampc::makeProblem<OCP_DoubleIntegrator, scalar_t>(N);
+  auto mem = lampc::makeProblemMemory<scalar_t>(prob);
 
-  std::cout << "g_jacobian = \n" << t.g_jacobian << std::endl;
-  std::cout << "g = \n" << t.g << std::endl;
+  std::cout << "mem.obj_weight.data = " << mem.obj_weight.data() << std::endl;
 
   for(int i=0; i<N; i++)
   {
-    prob.x(i) << 0.3*i,0.4*i;
-    prob.u(i) << 0;
+    prob.x(i) << 1,1;
+    prob.u(i) << 1;
   }
-  t.eval_constraints();
+  prob.xss(0) << 0,0;
+  prob.uss(0) << 0;
+  prob.eval_constraints();
 
   std::cout << std::setprecision(2);
-  std::cout << "g_jacobian = \n" << Eigen::MatrixX<double>(t.g_jacobian) << std::endl;
-  std::cout << "g = " << t.g.transpose() << std::endl;
+  std::cout << "g_jacobian = \n" << Eigen::MatrixX<scalar_t>(mem.g_jacobian) << std::endl;
+  std::cout << "g = \n" << mem.g << std::endl;
+
+  prob.eval_objective();
+
+  std::cout << std::setprecision(10);
+  std::cout << "obj = " << prob.objective.value << std::endl;
+  std::cout << "obj gradient = " << mem.obj_gradient.transpose() << std::endl;
+  std::cout << "obj hessian = \n" << Eigen::MatrixX<scalar_t>(mem.obj_hessian) << std::endl;
  
     // Eigen::Vector<double,18> ground_val;
     // ground_val << -0.3,-0.4,-0.287757,-0.4,-0.250028,-0.4,-0.185253,-0.4,-0.091788,-0.4,0.0321,-0.4,0.188236,-0.4,0.378541,-0.4,0.605036,-0.4;

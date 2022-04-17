@@ -7,6 +7,17 @@ namespace lampc
 {
 
 /**
+ * We create two copies of the problem (and the contained constraints, objective, etc). 
+ * 
+ * The first is a Tape version, in which the variable information is also propagated with every function
+ * call and passed to BSMatrixTape objects to develop the spasity structures and record the copy operations.
+ * 
+ * The second is the non-tape (deployment) version, which doesn't have the variable information and
+ * just plays back the tape for speed. Only this version needs to be optimized.
+ */
+
+
+/**
  * Represents a variable, which is an offset into
  * a global decision variable.
  */
@@ -114,9 +125,7 @@ public:
 	ConstraintBase()
 	{}
 
-
 	// TODO: Add overload to handle value-only calculation for constraint
-
 };
 
 template<typename scalar_t>
@@ -206,14 +215,121 @@ public:
 };
 
 
+/**
+ * WeightedSum defined a function that's a weighted sum
+ * 
+ * f(x) = sum_i w_i * f_i(x)
+ * 
+ */
 
-template<typename scalar_t, typename _Variable, typename _Constraint>
+template<typename scalar_t>
+struct WeightedSumTape
+{
+	WeightedSumTape() {}
+
+	scalar_t value;
+	BSMatrixTape<scalar_t> gradient;
+	BSMatrixTape<scalar_t> hessian;
+
+	int num_weights = 0;
+
+	template<typename value_t, typename jacobian_t, typename hessian_array_t>
+	void operator+=(std::pair<std::vector<Segment>, // Information about the variables
+								  std::tuple<value_t, jacobian_t, hessian_array_t>>
+								  data)
+	{
+		gradient(data.first, 0) += (std::get<1>(data.second).colwise().sum()).transpose(); // 1'*jacobian
+
+		// Iterate over the hessian
+		// The i'th hessian is wrt the i'th row of this vector function
+		for(auto& h : std::get<2>(data.second))
+			hessian(data.first, data.first) += h;
+
+		num_weights += std::get<0>(data.second).rows();
+	}
+
+	void operator=(int) {}
+
+	void finalize_structure()
+	{
+		gradient.finalize_structure();
+		hessian.finalize_structure();
+	}
+};
+
+template<typename scalar_t>
+struct WeightedSum
+{
+	WeightedSum() : weight_src(NULL)
+	{}
+
+	scalar_t value;
+	BSMatrix<scalar_t> gradient;
+	BSMatrix<scalar_t> hessian;
+
+	int num_weights = 0;
+	int weight_offset = 0; // Offset into the weight vector
+
+	// Called to restart the computation process
+	inline void operator=(int)
+	{
+		weight_offset = 0;
+		value = 0;
+		gradient.set_zero();
+		hessian.set_zero();
+	}
+
+	template<typename value_t, typename jacobian_t, typename hessian_array_t>
+	inline void operator+=(std::tuple<value_t, jacobian_t, hessian_array_t> data)
+	{
+		assert(weight_src != NULL && "set_weight must be called before calling this function");
+		int rows = std::get<1>(data).rows(); // Number of rows in the jacobian
+		assert(num_weights >= weight_offset + rows && "weight vector is too small");
+
+		auto w = Eigen::Map<Eigen::VectorX<scalar_t>>(weight_src+weight_offset, rows);
+		weight_offset += rows;
+
+		value += w.transpose() * std::get<0>(data);
+		gradient += std::get<1>(data).transpose() * w;
+
+		// Iterate over the hessian
+		// The i'th hessian is wrt the i'th row of this vector function
+		for(int i=0; i<rows; i++)
+			hessian += w(i) * std::get<2>(data)[i];
+	}
+
+	inline void finalize_structure() {}
+
+	void initialize_from_tape(WeightedSumTape<scalar_t>& tape)
+	{
+		gradient.initialize_from_tape(tape.gradient);
+		hessian.initialize_from_tape(tape.hessian);
+		num_weights = tape.num_weights;
+	}
+
+	/**
+	 * Set the memory source that the weight will be taken from
+	 */
+	void set_weight(Eigen::VectorX<scalar_t>& weight)
+	{
+		assert(num_weights == weight.rows() && "Provided weight vector is not the right length");
+		weight_src = weight.data();
+	}
+
+private:
+	scalar_t* weight_src;
+};
+
+
+template<typename scalar_t, typename _Variable, typename _Constraint, typename _Objective>
 struct ProblemBase
 {
 	using Variable = _Variable;
 	using Constraint = _Constraint;
+	using Objective = _Objective;
 
 	Constraint constraints;
+	Objective objective;
 
 	Variable& variable(int n, int m=1)
 	{
@@ -234,10 +350,10 @@ struct ProblemBase
 			v->set_var(var);
 	}
 
-	void finalize_structure(int rows=-1, int cols=-1)
-	{
-		constraints.finalize_structure(rows,cols);
-	}
+	// void finalize_structure(int rows=-1, int cols=-1)
+	// {
+	// 	constraints.finalize_structure(rows,cols);
+	// }
 
 private:
 	std::vector<std::shared_ptr<Variable>> variables;
@@ -251,29 +367,139 @@ private:
 
 
 template<typename scalar_t>
-struct ProblemTape : public ProblemBase<scalar_t, VariableTape<scalar_t>, ConstraintTape<scalar_t>>
+struct ProblemTape : public ProblemBase<scalar_t, VariableTape<scalar_t>, ConstraintTape<scalar_t>, WeightedSumTape<scalar_t>>
 {
 	ProblemTape() {}
-
 };
 
 template<typename scalar_t>
-struct Problem : public ProblemBase<scalar_t, Variable<scalar_t>, Constraint<scalar_t>>
+struct Problem : public ProblemBase<scalar_t, Variable<scalar_t>, Constraint<scalar_t>, WeightedSum<scalar_t>>
 {
 	Problem() {}
 
-	void initialize_from_tape(ProblemTape<scalar_t>& tape,
-														Eigen::VectorX<scalar_t>& var,
-														Eigen::SparseMatrix<scalar_t>& g,
-														Eigen::SparseMatrix<scalar_t>& g_jacobian)
+	void initialize_from_tape(ProblemTape<scalar_t>& tape)
 	{
 		this->constraints.initialize_from_tape(tape.constraints);
+		this->objective.initialize_from_tape(tape.objective);
+	}
+
+	/**
+	 * Allocates memory for this problem, including the sparsity structures
+	 */
+	void initialize_memory(Eigen::VectorX<scalar_t>& var,
+												 Eigen::VectorX<scalar_t>& g,
+											   Eigen::SparseMatrix<scalar_t>& g_jacobian,
+											   Eigen::VectorX<scalar_t>& obj_gradient,
+											   Eigen::SparseMatrix<scalar_t>& obj_hessian,
+											   Eigen::VectorX<scalar_t>& obj_weight)
+	{
+		var.resize(this->size, 1);
+		this->constraints.jacobian.initialize_matrix(g_jacobian);
+		g.resize(g_jacobian.rows(), 1);
+
+		obj_gradient.resize(g_jacobian.cols(), 1);
+		this->objective.hessian.initialize_matrix(obj_hessian);
+		obj_weight.resize(this->objective.num_weights, 1);
+		obj_weight.array() = 1; // Default
+	}
+
+	/**
+	 * Sets the memory locations that this problem will read/write to.
+	 * 
+	 * Assumption: All memory has already been allocated
+	 */
+	void set_memory_targets(Eigen::VectorX<scalar_t>& var,
+													Eigen::VectorX<scalar_t>& g,
+											   	Eigen::SparseMatrix<scalar_t>& g_jacobian,
+											    Eigen::VectorX<scalar_t>& obj_gradient,
+ 											    Eigen::SparseMatrix<scalar_t>& obj_hessian,
+ 											    Eigen::VectorX<scalar_t>& obj_weight)
+	{
     this->set_variable(var);
 
-		this->constraints.jacobian.initialize_matrix(g_jacobian);
-		this->constraints.value.initialize_matrix(g);
+    this->constraints.value.set_target(g);
+    this->constraints.jacobian.set_target(g_jacobian);
+
+    this->objective.gradient.set_target(obj_gradient);
+    this->objective.hessian.set_target(obj_hessian);
+    this->objective.set_weight(obj_weight);
 	}
 };
+
+
+/**
+ * Creates and runs the tape for a user-defined class, and then 
+ * creates the given executable object from the tape.
+ * 
+ * Assumes that the user-defined class contains two functions:
+ * 	eval_constraints
+ * 	eval_objective
+ * 
+ * Calling form:
+ *   auto prob = makeProblem<UserClass, double>(10);
+ */
+template<template<typename, typename> class P, typename scalar_t, typename... Args>
+P<scalar_t, lampc::Problem<scalar_t>> makeProblem(Args... args)
+{
+  // Create the tape to record the copy sequence
+  P<scalar_t, lampc::ProblemTape<scalar_t>> tape(args...);
+
+	// Temporary optimization variable used to call all functions 
+	// when creating the tape
+  Eigen::VectorX<scalar_t> var(tape.size);
+  tape.set_variable(var);
+  
+  tape.template eval_constraints<lampc::Jacobian>(); // Create structure
+  tape.constraints.finalize_structure();
+  tape.template eval_constraints<lampc::Jacobian>(); // Create copy-sequence
+
+  tape.template eval_objective<lampc::Hessian>(); // Create structure
+  tape.objective.finalize_structure();
+  tape.template eval_objective<lampc::Hessian>(); // Create copy-sequence
+
+  // We now create and initialize the problem from the tape
+  P<scalar_t, lampc::Problem<scalar_t>> prob(args...);
+  prob.initialize_from_tape(tape);
+
+  return prob;
+}
+
+
+/**
+ * The Problem class doesn't own any of the memory for the problem.
+ * This is done because most solvers (e.g., ipopt) own their own
+ * memory.
+ * 
+ * This class is a helper that provides a full set of memory for a given
+ * problem.
+ */
+template<typename scalar_t>
+struct Problem_Memory
+{
+  Eigen::VectorX<scalar_t> var;
+
+  Eigen::VectorX<scalar_t> g;
+  Eigen::SparseMatrix<scalar_t> g_jacobian;
+
+  Eigen::VectorX<scalar_t> obj_gradient;
+  Eigen::SparseMatrix<scalar_t> obj_hessian;
+  Eigen::VectorX<scalar_t> obj_weight;
+};
+
+/**
+ * Allocates and associates problem memory for a given problem.
+ */
+template<typename scalar_t, typename P>
+Problem_Memory<scalar_t> makeProblemMemory(P& prob)
+{
+	Problem_Memory<scalar_t> mem;
+
+	prob.initialize_memory(mem.var, mem.g, mem.g_jacobian, mem.obj_gradient, mem.obj_hessian, mem.obj_weight);
+	prob.set_memory_targets(mem.var, mem.g, mem.g_jacobian, mem.obj_gradient, mem.obj_hessian, mem.obj_weight);
+
+	return mem;
+}
+
 
 };
 

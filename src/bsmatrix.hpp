@@ -336,7 +336,6 @@ private:
 		if(copy_index == copies.size()) copy_index = 0;
 	}
 
-
 public:
 
 	BSMatrix() {}; // Must call initialize_from_tape before using
@@ -363,6 +362,14 @@ public:
 	{
 		S = sparsity_structure;
 		set_target(S);
+	}
+
+	/**
+	 * Clear the matrix to all-zeros
+	 */
+	void set_zero()
+	{
+		Eigen::Map<Eigen::VectorX<scalar_t>>(target, sparsity_structure.nonZeros()).array() = 0;
 	}
 
 	/**
@@ -426,6 +433,9 @@ public:
 	inline BSMatrix<scalar_t>& operator()(int row, std::vector<Segment> cols)	{return *this;}
 	inline BSMatrix<scalar_t>& operator()(int row, int col)	{return *this;}
 	void finalize_structure(int rows=-1, int cols=-1)	{}	
+
+	inline auto rows() {return sparsity_structure.rows();}
+	inline auto cols() {return sparsity_structure.cols();}
 };
 
 

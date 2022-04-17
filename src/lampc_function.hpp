@@ -42,7 +42,7 @@ namespace lampc {
 
 #define make_jacobian(name, out_size, ...)\
 	using name##_t = lampc::DFunction<scalar_t, out_size, __VA_ARGS__>;\
-	template<typename diff_t=scalar_t, typename... Args>\
+	template<typename... Args>\
 	EIGEN_STRONG_INLINE auto name(lampc::Jacobian, const std::pair<lampc::Segment, Args>... args) noexcept\
 	{\
 	auto self = this;\
@@ -51,7 +51,7 @@ namespace lampc {
 	  return self->template name<typename name##_t::AD_scalar>(args...);\
 	}, args.second...));\
 	}\
-	template<typename diff_t=scalar_t, typename... Args>\
+	template<typename... Args>\
 	EIGEN_STRONG_INLINE auto name(lampc::Jacobian, const Args... args) noexcept\
 	{\
 	auto self = this;\
@@ -62,14 +62,33 @@ namespace lampc {
 
 
 #define make_hessian(name, out_size, ...)\
-    template<typename diff_t=scalar_t, typename... Args>\
-    EIGEN_STRONG_INLINE auto name(lampc::Hessian, const Args&... args) noexcept\
-    {\
-    	auto self = this;\
-    	return name##_t::hessian([self](auto... args){\
-    		return self->template name<typename name##_t::AD_scalar>(args...);\
-    	}, args...);\
-    }
+	make_jacobian(name, out_size, __VA_ARGS__);\
+	template<typename... Args>\
+	EIGEN_STRONG_INLINE auto name(lampc::Hessian, const std::pair<lampc::Segment, Args>... args) noexcept\
+	{\
+	auto self = this;\
+	return std::make_pair(std::vector<lampc::Segment>{args.first...},\
+	        name##_t::hessian([self](auto... args){\
+	  return self->template name<typename name##_t::outerADScalar>(args...);\
+	}, args.second...));\
+	}\
+	template<typename... Args>\
+	EIGEN_STRONG_INLINE auto name(lampc::Hessian, const Args... args) noexcept\
+	{\
+	auto self = this;\
+	return name##_t::hessian([self](auto... args){\
+	  return self->template name<typename name##_t::outerADScalar>(args...);\
+	}, args...);\
+	}
+
+  // template<typename diff_t=scalar_t, typename... Args>\
+  // EIGEN_STRONG_INLINE auto name(lampc::Hessian, const Args&... args) noexcept\
+  // {\
+  // 	auto self = this;\
+  // 	return name##_t::hessian([self](auto... args){\
+  // 		return self->template name<typename name##_t::AD_scalar>(args...);\
+  // 	}, args...);\
+  // }
 
 
 // Tags so the user can choose the operator overload
@@ -122,6 +141,30 @@ struct DFunction
 		}
 
 		return std::make_pair(val, jacobian);
+	}
+
+	template<typename F>
+	static EIGEN_STRONG_INLINE std::tuple<out_t, jacobian_t, hessian_t> 
+	hessian(F f, 
+		const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>&... args) noexcept
+	{
+		// Convert to AD variables for the inputs and call our function
+		outerAD_t out = seed_and_call2(f, make_ad2<input_sizes>(args)...);
+
+		// Copy Hessian into output variables
+		out_t val;
+		jacobian_t jacobian;
+		hessian_t hessian;
+		for(int i=0; i<num_outputs; i++)
+		{
+			val(i) = out[i].value().value();
+			jacobian.row(i) = out[i].value().derivatives();
+			for (int j = 0; j < num_inputs; j++) {
+				hessian[i].template middleRows<1>(j) = out[i].derivatives()(j).derivatives().transpose();
+			}
+		}
+
+		return std::make_tuple(val, jacobian, hessian);
 	}
 
 
@@ -196,56 +239,57 @@ private:
 	}
 
 
-	// /********
-	//  Hessians 
-	//  ********/
+	/********
+	 Hessians 
+	 ********/
 
-	// // Take a vector input and return a AD version of the vector
-	// template<int n>
-	// static EIGEN_STRONG_INLINE Eigen::Matrix<outerADScalar, n, 1> 
-	// 	make_ad2(const Eigen::Ref<const Eigen::Matrix<scalar_t, n, 1>> x)
-	// {
-	// 	Eigen::Matrix<outerADScalar, n, 1> y;
-	// 	// y = x;
-	// 	for (int i=0; i<n; i++) {
-	// 		y(i).value().value() = x(i);
-	// 		y(i).value().derivatives().setZero();
-	// 		y(i).derivatives().setZero();
-	// 		for (int j = 0; j < n; j++) {
-	// 			y(i).derivatives()(j).derivatives().setZero();
-	// 		}
-	// 	}
-	// 	return y;
-	// }
+	// Take a vector input and return a AD version of the vector
+	template<int n>
+	static EIGEN_STRONG_INLINE Eigen::Matrix<outerADScalar, n, 1> 
+		make_ad2(const Eigen::Ref<const Eigen::Matrix<scalar_t, n, 1>> x)
+	{
+		Eigen::Matrix<outerADScalar, n, 1> y;
+		// y = x;
+		for (int i=0; i<n; i++) {
+			y(i).value().value() = x(i);
+			y(i).value().derivatives().setZero();
+			y(i).derivatives().setZero();
+			for (int j = 0; j < n; j++) {
+				y(i).derivatives()(j).derivatives().setZero();
+			}
+		}
+		return y;
+	}
 
-	// // Sets the input derivatives to the identity. 
-	// // Assumes that the derivative matrix is initially zero
-	// template <typename vec>
-	// static constexpr int AD_Seed2(vec &x, int offset)
-	// {
-	// 	for (int i=0; i<x.rows(); i++)
-	// 	{
-	// 		x(i).value().derivatives().coeffRef(i + offset) = 1;
-	// 		x(i).derivatives().coeffRef(i + offset) = 1;
-	// 	}
+	// Sets the input derivatives to the identity. 
+	// Assumes that the derivative matrix is initially zero
+	template <typename vec>
+	static constexpr int AD_Seed2(vec &x, int offset)
+	{
+		for (int i=0; i<x.rows(); i++)
+		{
+			x(i).value().derivatives().coeffRef(i + offset) = 1;
+			x(i).derivatives().coeffRef(i + offset) = 1;
+		}
 
-	// 	return offset + x.rows();
-	// }
+		return offset + x.rows();
+	}
 
-	// EIGEN_STRONG_INLINE outerAD_t seed_and_call2(Eigen::Matrix<outerADScalar, input_sizes, 1>... args)
-	// {
-	// 	// Set derivative equal to identity
-	// 	int offset = 0;
-	// 	(void)std::initializer_list<int>{ 
-	// 		(
-	// 			offset = AD_Seed2(args, offset), // Set to unit vectors
-	// 			0
-	// 		)...
-	// 	};
+	template<typename F>
+	static EIGEN_STRONG_INLINE outerAD_t seed_and_call2(F f, Eigen::Matrix<outerADScalar, input_sizes, 1>... args)
+	{
+		// Set derivative equal to identity
+		int offset = 0;
+		(void)std::initializer_list<int>{ 
+			(
+				offset = AD_Seed2(args, offset), // Set to unit vectors
+				0
+			)...
+		};
 
-	// 	// Call our function
-	// 	return ddfunc(args...);
-	// }
+		// Call our function
+		return f(args...);
+	}
 };
 
 
