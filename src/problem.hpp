@@ -280,6 +280,17 @@ struct WeightedSumTape
 	int num_weights = 0;
 
 	template<typename Func>
+	void operator+=(typename lampc::CallTape<Func> call)
+	{}
+
+	template<typename Func>
+	void operator+=(typename lampc::JacobianTapeCall<Func> call)
+	{
+		gradient(call.inputs, 0) += call.jacobian.colwise().sum().transpose(); // 1'*jacobian
+		num_weights += call.jacobian.rows();
+	}
+
+	template<typename Func>
 	void operator+=(typename lampc::HessianTapeCall<Func> call)
 	{
 		gradient(call.inputs, 0) += call.jacobian.colwise().sum().transpose(); // 1'*jacobian
@@ -291,22 +302,6 @@ struct WeightedSumTape
 
 		num_weights += call.jacobian.rows();
 	}
-
-
-	// template<typename value_t, typename jacobian_t, typename hessian_array_t>
-	// void operator+=(std::pair<std::vector<Segment>, // Information about the variables
-	// 							  std::tuple<value_t, jacobian_t, hessian_array_t>>
-	// 							  data)
-	// {
-	// 	gradient(data.first, 0) += (std::get<1>(data.second).colwise().sum()).transpose(); // 1'*jacobian
-
-	// 	// Iterate over the hessian
-	// 	// The i'th hessian is wrt the i'th row of this vector function
-	// 	for(auto& h : std::get<2>(data.second))
-	// 		hessian(data.first, data.first) += h;
-
-	// 	num_weights += std::get<0>(data.second).rows();
-	// }
 
 	void operator=(int) {}
 
@@ -337,6 +332,33 @@ struct WeightedSum
 		value = 0;
 		gradient.set_zero();
 		hessian.set_zero();
+	}
+
+	template<typename Func>
+	void operator+=(typename lampc::Call<Func> call)
+	{
+		assert(weight_src != NULL && "set_weight must be called before calling this function");
+		int rows = call.value.rows(); 
+		assert(num_weights >= weight_offset + rows && "weight vector is too small");
+
+		auto w = Eigen::Map<Eigen::VectorX<scalar_t>>(weight_src+weight_offset, rows);
+		weight_offset += rows;
+
+		value += w.transpose() * call.value;
+	}
+
+	template<typename Func>
+	void operator+=(typename lampc::JacobianCall<Func> call)
+	{
+		assert(weight_src != NULL && "set_weight must be called before calling this function");
+		int rows = call.jacobian.rows(); // Number of rows in the jacobian
+		assert(num_weights >= weight_offset + rows && "weight vector is too small");
+
+		auto w = Eigen::Map<Eigen::VectorX<scalar_t>>(weight_src+weight_offset, rows);
+		weight_offset += rows;
+
+		value += w.transpose() * call.value;
+		gradient += call.jacobian.transpose() * w;
 	}
 
 	template<typename Func>

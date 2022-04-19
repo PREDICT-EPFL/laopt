@@ -23,9 +23,27 @@ namespace lampc {
 template<typename Func>
 struct Call
 {
+	using out_t = typename Func::out_t;
+	using out_r = typename Eigen::Ref<out_t>;
+	using scalar_t = typename Func::scalar_t;
+
 	Eigen::Matrix<typename Func::scalar_t, Func::num_outputs, 2> bounds;
 	typename Func::out_t value;
+
+	Call<Func> operator<=(name<F> call, typename name<F>::out_r ub)  { call.bounds(all, last) = ub; return call; }
+	template<typename F, typename scalar_t> name<F> operator<=(name<F> call, scalar_t ub)                 { call.bounds(all, last).array() = ub; return call; }
+	template<typename F>        name<F> operator>=(name<F> call, Eigen::Ref<Eigen::VectorX<typename F::scalar_t>> lb)  { std::cout << "operator" << std::endl; call.bounds(all, 0) = lb;            return call; }
+	// template<typename F, typename scalar_t> name<F> operator>=(name<F> call, scalar_t lb)                 {
+	// std::cout << "operator" << std::endl;
+	// std::cout << "type(lb) = " << type_name<decltype(lb)>() << std::endl;
+	// std::cout << "type(out_t) = " << type_name<typename F::out_t>() << std::endl;
+	// call.bounds(all, 0).array() = lb;            return call; }
+	template<typename F, typename scalar_t> name<F> operator==(name<F> call, scalar_t val)                { val <= call <= val; std::cout << "HERE" << std::endl; return call; }
+	template<typename F, typename scalar_t> name<F> operator==(scalar_t val, name<F> call)                { val <= call <= val; return call; }
+	template<typename F, typename scalar_t> name<F> operator<=(scalar_t lb, name<F> call)                 { return call >= lb; }
+	template<typename F, typename scalar_t> name<F> operator>=(scalar_t ub, name<F> call)                 { return call <= ub; } 
 };
+
 
 template<typename Func>
 struct JacobianCall : public Call<Func>
@@ -64,6 +82,30 @@ struct HessianTapeCall : public HessianCall<Func>, public InputInfo
 {
 	HessianTapeCall(std::initializer_list<Segment> inputs) : InputInfo(inputs) {}
 };
+
+
+#define make_call_comparison(name) \
+template<typename F>                    name<F> operator<=(name<F> call, typename name<F>::out_r ub)  { call.bounds(all, last) = ub; return call; } \
+template<typename F, typename scalar_t> name<F> operator<=(name<F> call, scalar_t ub)                 { call.bounds(all, last).array() = ub; return call; } \
+template<typename F>        name<F> operator>=(name<F> call, Eigen::Ref<Eigen::VectorX<typename F::scalar_t>> lb)  { std::cout << "operator" << std::endl; call.bounds(all, 0) = lb;            return call; } \
+// template<typename F, typename scalar_t> name<F> operator>=(name<F> call, scalar_t lb)                 { \
+// std::cout << "operator" << std::endl; \
+// std::cout << "type(lb) = " << type_name<decltype(lb)>() << std::endl; \
+// std::cout << "type(out_t) = " << type_name<typename F::out_t>() << std::endl; \
+// call.bounds(all, 0).array() = lb;            return call; } \
+template<typename F, typename scalar_t> name<F> operator==(name<F> call, scalar_t val)                { val <= call <= val; std::cout << "HERE" << std::endl; return call; } \
+template<typename F, typename scalar_t> name<F> operator==(scalar_t val, name<F> call)                { val <= call <= val; return call; } \
+template<typename F, typename scalar_t> name<F> operator<=(scalar_t lb, name<F> call)                 { return call >= lb; } \
+template<typename F, typename scalar_t> name<F> operator>=(scalar_t ub, name<F> call)                 { return call <= ub; } 
+
+make_call_comparison(Call)
+make_call_comparison(JacobianCall)
+make_call_comparison(HessianCall)
+
+make_call_comparison(CallTape)
+make_call_comparison(JacobianTapeCall)
+make_call_comparison(HessianTapeCall)
+
 
 
 /**
