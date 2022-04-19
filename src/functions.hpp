@@ -29,41 +29,43 @@ namespace lampc {
 	/**
 	 * Identity function
 	 */
-	template<typename V>
-	EIGEN_STRONG_INLINE V id(lampc::Eval, const Eigen::Ref<const V>& x) noexcept
+	template<int n, typename V>
+	EIGEN_STRONG_INLINE V id(lampc::Eval, Eigen::Ref<V>& x) noexcept
 	{
-		V y(x.rows());
+		assert(x.rows() == n && "Invalid size passed to id");
+		Eigen::Vector<typename V::Scalar, n> y;
 		y = x;
 		return y;
 	}
 
 	// Tape version
-	template<typename V>
+	template<int n, typename V>
 	EIGEN_STRONG_INLINE auto id(lampc::Jacobian, const std::pair<lampc::Segment, Eigen::Ref<V>> x) noexcept
 	{
+		assert(x.second.rows() == n && "Invalid size passed to id");
 		using scalar_t = typename V::Scalar;
-		int rows = x.second.rows();
+		using Func = lampc::DFunction<scalar_t, n, n>;
+		typename lampc::JacobianTapeCall<Func> ret{x.first};
 
-		V value(rows);
-		value = x.second;
+		ret.value = x.second;
+		ret.jacobian = Eigen::Matrix<scalar_t, n, n>::Identity();
 
-		Eigen::MatrixX<scalar_t> jac = Eigen::MatrixX<scalar_t>::Identity(rows, rows);
-
-		return std::make_pair(std::vector<lampc::Segment>{x.first},	std::make_pair(value, jac));
+		return ret;
 	}
 
 	// Deployment version
-	template<typename V>
-	EIGEN_STRONG_INLINE std::pair<V, Eigen::MatrixX<typename V::Scalar>> id(lampc::Jacobian, Eigen::Ref<V> x) noexcept
+	template<int n, typename V>
+	EIGEN_STRONG_INLINE auto id(lampc::Jacobian, Eigen::Ref<V> x) noexcept
 	{
+		assert(x.rows() == n && "Invalid size passed to id");
 		using scalar_t = typename V::Scalar;
+		using Func = lampc::DFunction<scalar_t, n, n>;
+		typename lampc::JacobianCall<Func> ret;
 
-		V value(x.rows());
-		value = x;
+		ret.value = x;
+		ret.jacobian = Eigen::Matrix<scalar_t, n, n>::Identity();
 
-		Eigen::MatrixX<scalar_t> jac = Eigen::MatrixX<scalar_t>::Identity(x.rows(), x.rows());
-
-		return std::make_pair(value, jac);
+		return ret;
 	}
 
 	// TODO: Create a method to produce hessians for functions where the number of rows is not known at compile-time...

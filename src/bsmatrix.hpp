@@ -46,7 +46,7 @@ class BSMatrixTape
 public:
 	// Sparse matrix structure
 	// S.valuePtr = [0,1,2,...]
-	SparseMatrix<int> S;
+	Eigen::SparseMatrix<int> S;
 	
 	// List of non-zero coefficients
 	std::vector< Eigen::Triplet<int> > trip;
@@ -103,7 +103,7 @@ public:
 		for (int c=0; c<source.outerSize(); ++c)
 		{
 			int tcol = get_target_location(c, col_partition);
-			for (SparseMatrix<int>::InnerIterator it(source,c); it; ++it)
+			for (Eigen::SparseMatrix<int>::InnerIterator it(source,c); it; ++it)
 			{
 				int trow = get_target_location(it.row(), row_partition);
 				int tindex = S.coeffRef(trow,tcol); // Index into the data at the target location
@@ -184,7 +184,8 @@ public:
 	{
 		finalize_partition(block.rows(), block.cols());
 
-		std::cout << "NOT IMPLEMENTED YET!!!\n";
+		// std::cout << "NOT IMPLEMENTED YET!!!\n";
+		assert(0 && "NOT IMPLEMENTED YET!!!");
 
 		if(state == create_copy_sequence) // Copy block sparsity structure
 		{
@@ -358,7 +359,7 @@ public:
 	 * Initialize S to the right sparsity structure and set it
 	 * as the target
 	 */
-	void initialize_matrix(SparseMatrix<scalar_t>& S)
+	void initialize_matrix(Eigen::SparseMatrix<scalar_t>& S)
 	{
 		S = sparsity_structure;
 		set_target(S);

@@ -137,27 +137,53 @@ struct ConstraintTape : public ConstraintBase<scalar_t, ConstraintTape<scalar_t>
 	BSMatrixTape<scalar_t> value;
 	BSMatrixTape<scalar_t> jacobian;
 
+	BSMatrixTape<scalar_t> lb;
+	BSMatrixTape<scalar_t> ub;
+
 public:
 	ConstraintTape() : Base()
 	{}
 
-	/**
-	 * Add a block-row to the constraint
-	 */
-	template<typename value_t, typename jacobian_t>
-	ConstraintTape<scalar_t>& operator<<(
-									std::pair<std::vector<Segment>, // Segment information for the columns of the jacobian
-								  std::pair<value_t, jacobian_t>>
-								  data)
+	// /**
+	//  * Add a block-row to the constraint
+	//  */
+	// template<typename value_t, typename jacobian_t>
+	// ConstraintTape<scalar_t>& operator<<(
+	// 								std::pair<std::vector<Segment>, // Segment information for the columns of the jacobian
+	// 							  std::pair<value_t, jacobian_t>>
+	// 							  data)
+	// {
+	// 	// Push a new constraint on the bottom, and set the columns
+	// 	value(-1, 0);
+	// 	jacobian(-1, data.first);
+
+	// 	// Copy the value and jacobian to the right place
+	// 	std::tie(value, jacobian) = data.second;
+	// 	return *this;
+	// }
+
+
+	template<typename Func>
+	ConstraintTape<scalar_t>& operator<<(typename lampc::JacobianTapeCall<Func> call)
 	{
 		// Push a new constraint on the bottom, and set the columns
 		value(-1, 0);
-		jacobian(-1, data.first);
+		jacobian(-1, call.inputs);
 
 		// Copy the value and jacobian to the right place
-		std::tie(value, jacobian) = data.second;
+		value = call.value;
+		jacobian = call.jacobian;
 		return *this;
 	}
+
+	// template<int num_outputs, int... input_sizes>
+	// using JacobianTapeCall = typename lampc::FunctionInfo<scalar_t, num_outputs, input_sizes...>::JacobianCall;
+
+	// template<int num_outputs, int... input_sizes>
+	// ConstraintTape<scalar_t>& operator<<(JacobianTapeCall<num_outputs, input_sizes...>& data)
+	// {
+
+	// }
 
 	/**
 	 * Called when all copy operations have been completed once, which fixes the sparsity structure.
@@ -194,11 +220,12 @@ public:
 	/**
 	 * Add a block-row to the constraint
 	 */
-	template<typename value_t, typename jacobian_t>
-	Constraint<scalar_t>& operator<<(std::pair<value_t, jacobian_t> data)
+	template<typename Func>
+	Constraint<scalar_t>& operator<<(typename lampc::JacobianCall<Func> call)
 	{
 		// Copy the value and jacobian to the right place
-		std::tie(value, jacobian) = data;
+		value = call.value;
+		jacobian = call.jacobian;
 		return *this;
 	}
 
@@ -233,20 +260,34 @@ struct WeightedSumTape
 
 	int num_weights = 0;
 
-	template<typename value_t, typename jacobian_t, typename hessian_array_t>
-	void operator+=(std::pair<std::vector<Segment>, // Information about the variables
-								  std::tuple<value_t, jacobian_t, hessian_array_t>>
-								  data)
+	template<typename Func>
+	void operator+=(typename lampc::HessianTapeCall<Func> call)
 	{
-		gradient(data.first, 0) += (std::get<1>(data.second).colwise().sum()).transpose(); // 1'*jacobian
+		gradient(call.inputs, 0) += call.jacobian.colwise().sum().transpose(); // 1'*jacobian
 
 		// Iterate over the hessian
 		// The i'th hessian is wrt the i'th row of this vector function
-		for(auto& h : std::get<2>(data.second))
-			hessian(data.first, data.first) += h;
+		for(auto& h : call.hessian)
+			hessian(call.inputs, call.inputs) += h;
 
-		num_weights += std::get<0>(data.second).rows();
+		num_weights += call.jacobian.rows();
 	}
+
+
+	// template<typename value_t, typename jacobian_t, typename hessian_array_t>
+	// void operator+=(std::pair<std::vector<Segment>, // Information about the variables
+	// 							  std::tuple<value_t, jacobian_t, hessian_array_t>>
+	// 							  data)
+	// {
+	// 	gradient(data.first, 0) += (std::get<1>(data.second).colwise().sum()).transpose(); // 1'*jacobian
+
+	// 	// Iterate over the hessian
+	// 	// The i'th hessian is wrt the i'th row of this vector function
+	// 	for(auto& h : std::get<2>(data.second))
+	// 		hessian(data.first, data.first) += h;
+
+	// 	num_weights += std::get<0>(data.second).rows();
+	// }
 
 	void operator=(int) {}
 
@@ -279,24 +320,43 @@ struct WeightedSum
 		hessian.set_zero();
 	}
 
-	template<typename value_t, typename jacobian_t, typename hessian_array_t>
-	inline void operator+=(std::tuple<value_t, jacobian_t, hessian_array_t> data)
+	template<typename Func>
+	inline void operator+=(typename lampc::HessianCall<Func> call)
 	{
 		assert(weight_src != NULL && "set_weight must be called before calling this function");
-		int rows = std::get<1>(data).rows(); // Number of rows in the jacobian
+		int rows = call.jacobian.rows(); // Number of rows in the jacobian
 		assert(num_weights >= weight_offset + rows && "weight vector is too small");
 
 		auto w = Eigen::Map<Eigen::VectorX<scalar_t>>(weight_src+weight_offset, rows);
 		weight_offset += rows;
 
-		value += w.transpose() * std::get<0>(data);
-		gradient += std::get<1>(data).transpose() * w;
+		value += w.transpose() * call.value;
+		gradient += call.jacobian.transpose() * w;
 
 		// Iterate over the hessian
 		// The i'th hessian is wrt the i'th row of this vector function
 		for(int i=0; i<rows; i++)
-			hessian += w(i) * std::get<2>(data)[i];
+			hessian += w(i) * call.hessian[i];
 	}
+
+	// template<typename value_t, typename jacobian_t, typename hessian_array_t>
+	// inline void operator+=(std::tuple<value_t, jacobian_t, hessian_array_t> data)
+	// {
+	// 	assert(weight_src != NULL && "set_weight must be called before calling this function");
+	// 	int rows = std::get<1>(data).rows(); // Number of rows in the jacobian
+	// 	assert(num_weights >= weight_offset + rows && "weight vector is too small");
+
+	// 	auto w = Eigen::Map<Eigen::VectorX<scalar_t>>(weight_src+weight_offset, rows);
+	// 	weight_offset += rows;
+
+	// 	value += w.transpose() * std::get<0>(data);
+	// 	gradient += std::get<1>(data).transpose() * w;
+
+	// 	// Iterate over the hessian
+	// 	// The i'th hessian is wrt the i'th row of this vector function
+	// 	for(int i=0; i<rows; i++)
+	// 		hessian += w(i) * std::get<2>(data)[i];
+	// }
 
 	inline void finalize_structure() {}
 
@@ -439,7 +499,7 @@ struct Problem : public ProblemBase<scalar_t, Variable<scalar_t>, Constraint<sca
  *   auto prob = makeProblem<UserClass, double>(10);
  */
 template<template<typename, typename> class P, typename scalar_t, typename... Args>
-P<scalar_t, lampc::Problem<scalar_t>> makeProblem(Args... args)
+P<scalar_t, lampc::Problem<scalar_t>> make_problem(Args... args)
 {
   // Create the tape to record the copy sequence
   P<scalar_t, lampc::ProblemTape<scalar_t>> tape(args...);
@@ -474,7 +534,7 @@ P<scalar_t, lampc::Problem<scalar_t>> makeProblem(Args... args)
  * problem.
  */
 template<typename scalar_t>
-struct Problem_Memory
+struct ProblemMemory
 {
   Eigen::VectorX<scalar_t> var;
 
@@ -490,9 +550,9 @@ struct Problem_Memory
  * Allocates and associates problem memory for a given problem.
  */
 template<typename scalar_t, typename P>
-Problem_Memory<scalar_t> makeProblemMemory(P& prob)
+ProblemMemory<scalar_t> make_problem_memory(P& prob)
 {
-	Problem_Memory<scalar_t> mem;
+	ProblemMemory<scalar_t> mem;
 
 	prob.initialize_memory(mem.var, mem.g, mem.g_jacobian, mem.obj_gradient, mem.obj_hessian, mem.obj_weight);
 	prob.set_memory_targets(mem.var, mem.g, mem.g_jacobian, mem.obj_gradient, mem.obj_hessian, mem.obj_weight);

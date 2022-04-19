@@ -116,19 +116,38 @@ struct OCP_DoubleIntegrator : public DoubleIntegrator<scalar_t>, public Problem
   Variable& uss;
   const int N;
 
+  Eigen::Vector<scalar_t, 2> x_lb; // Upper and lower state bounds
+  Eigen::Vector<scalar_t, 2> x_ub;
+  Eigen::Vector<scalar_t, 2> x0; // Initial state
+
+  scalar_t u_ub() { return x0.sum() + 3; }
+
   OCP_DoubleIntegrator(int N) : N(N),
                                 x(this->variable(2,N)), // Order here defines the order
                                 u(this->variable(1,N)), // in the optimization problem
                                 xss(this->variable(2)), 
                                 uss(this->variable(1))
-  {};
+  {
+    x_lb << -5,-5;
+    x_ub << 5,5;
+  };
 
   template<typename D = lampc::Jacobian>
   void eval_constraints()
   {
-    this->constraints << lampc::id(D(), x(0));
-    for(int i=0; i<x.cols()-1; i++)
+    this->constraints << lampc::id<2>(D(), x(0));
+    for(int i=0; i<N-1; i++)
       this->constraints << this->dsys_equality(D(), x(i+1),x(i),u(i));
+
+    // this->constraints << (lampc::id<2>(D(), x(0)) == x0);
+    // for(int i=0; i<N-1; i++)
+    //   this->constraints << (this->dsys_equality(D(), x(i+1),x(i),u(i)) == 0);
+
+    // for(int i=0; i<N-1; i++)
+    // {      
+    //   this->constraints << (-x_lb <= lampc::id(D(), x(i)) <= x_ub)
+    //                     << (-1 <= lampc::id(D(), u(i)) <= u_ub(x0));
+    // }
   }
 
   template<typename D = lampc::Hessian>
@@ -145,8 +164,8 @@ struct OCP_DoubleIntegrator : public DoubleIntegrator<scalar_t>, public Problem
 TEST(ProblemTest, OCP_DoubleIntegrator) {
   using scalar_t = double;
   int N = 10;
-  auto prob = lampc::makeProblem<OCP_DoubleIntegrator, scalar_t>(N);
-  auto mem = lampc::makeProblemMemory<scalar_t>(prob);
+  auto prob = lampc::make_problem<OCP_DoubleIntegrator, scalar_t>(N);
+  auto mem = lampc::make_problem_memory<scalar_t>(prob);
 
   for(int i=0; i<N; i++)
   {

@@ -3,25 +3,68 @@
 
 // Defines differentiable dense functions
 #include <functional>
+#include <algorithm>
 
 #include "Eigen/Dense"
 #include "unsupported/Eigen/AutoDiff"
 
 #include "lampc_utility.hpp"
+#include "bsmatrix.hpp"
 
 using namespace Eigen;
 
 namespace lampc {
 
 
+
 /**
- * Used to create a differentiable function
- * 
- * Usage:
- *   using F = lampc::Function<double, 2, 2,2>;
- *   auto f = make_function(F, myfunction);
+ * The output from a function call.
  */
-#define make_function(F, name) F(name<F::scalar_t>, name<F::scalar_t, F::AD_scalar>, name<F::scalar_t, F::outerADScalar>);
+template<typename Func>
+struct Call
+{
+	Eigen::Matrix<typename Func::scalar_t, Func::num_outputs, 2> bounds;
+	typename Func::out_t value;
+};
+
+template<typename Func>
+struct JacobianCall : public Call<Func>
+{
+	typename Func::jacobian_t jacobian;
+};
+
+template<typename Func>
+struct HessianCall : public JacobianCall<Func>
+{
+	typename Func::hessian_t hessian;
+};
+
+
+// Information about the inputs to the call
+struct InputInfo
+{
+	std::vector<Segment> inputs;
+	InputInfo(std::initializer_list<Segment> in) : inputs(in) {}
+};
+
+template<typename Func>
+struct CallTape : public Call<Func>, public InputInfo
+{
+	CallTape(std::initializer_list<Segment> inputs) : InputInfo(inputs) {}
+};
+
+template<typename Func>
+struct JacobianTapeCall : public JacobianCall<Func>, public InputInfo
+{
+	JacobianTapeCall(std::initializer_list<Segment> inputs) : InputInfo(inputs) {}
+};
+
+template<typename Func>
+struct HessianTapeCall : public HessianCall<Func>, public InputInfo
+{
+	HessianTapeCall(std::initializer_list<Segment> inputs) : InputInfo(inputs) {}
+};
+
 
 /**
  * Used to add member functions to a class to make a function differentiable
@@ -29,35 +72,29 @@ namespace lampc {
  * Usage:
  *   make_differentiable(function_name, output_size, input_sizes...)
  */
-// #define make_jacobian(name, out_size, ...)\
-//     using name##_t = lampc::DFunction<scalar_t, out_size, __VA_ARGS__>;\
-//     template<typename diff_t=scalar_t, typename... Args>\
-//     EIGEN_STRONG_INLINE auto name(lampc::Jacobian, const Args&... args) noexcept\
-//     {\
-//     	auto self = this;\
-//     	return name##_t::jacobian([self](auto... args){\
-//     		return self->template name<typename name##_t::AD_scalar>(args...);\
-//     	}, args...);\
-//     }
-
 #define make_jacobian(name, out_size, ...)\
 	using name##_t = lampc::DFunction<scalar_t, out_size, __VA_ARGS__>;\
+	/* Tape version of the jacobian */\
 	template<typename... Args>\
 	EIGEN_STRONG_INLINE auto name(lampc::Jacobian, const std::pair<lampc::Segment, Args>... args) noexcept\
 	{\
-	auto self = this;\
-	return std::make_pair(std::vector<lampc::Segment>{args.first...},\
-	        name##_t::jacobian([self](auto... args){\
-	  return self->template name<typename name##_t::AD_scalar>(args...);\
-	}, args.second...));\
+		auto self = this; \
+		lampc::JacobianTapeCall<name##_t> ret{args.first...}; \
+	  name##_t::jacobian(ret, \
+	  	[self](auto... args){return self->template name<typename name##_t::AD_scalar>(args...);}, \
+	  	args.second...); \
+	  return ret; \
 	}\
+	/* Standard version of the jacobian */\
 	template<typename... Args>\
 	EIGEN_STRONG_INLINE auto name(lampc::Jacobian, const Args... args) noexcept\
 	{\
-	auto self = this;\
-	return name##_t::jacobian([self](auto... args){\
-	  return self->template name<typename name##_t::AD_scalar>(args...);\
-	}, args...);\
+		auto self = this;\
+		lampc::JacobianCall<name##_t> ret; \
+		name##_t::jacobian(ret, \
+			[self](auto... args){return self->template name<typename name##_t::AD_scalar>(args...);}, \
+			args...);\
+		return ret; \
 	}
 
 
@@ -66,19 +103,22 @@ namespace lampc {
 	template<typename... Args>\
 	EIGEN_STRONG_INLINE auto name(lampc::Hessian, const std::pair<lampc::Segment, Args>... args) noexcept\
 	{\
-	auto self = this;\
-	return std::make_pair(std::vector<lampc::Segment>{args.first...},\
-	        name##_t::hessian([self](auto... args){\
-	  return self->template name<typename name##_t::outerADScalar>(args...);\
-	}, args.second...));\
+		auto self = this; \
+		lampc::HessianTapeCall<name##_t> ret{args.first...}; \
+	  name##_t::hessian(ret, \
+	  	[self](auto... args){return self->template name<typename name##_t::outerADScalar>(args...);}, \
+	  	args.second...); \
+	  return ret; \
 	}\
 	template<typename... Args>\
 	EIGEN_STRONG_INLINE auto name(lampc::Hessian, const Args... args) noexcept\
 	{\
-	auto self = this;\
-	return name##_t::hessian([self](auto... args){\
-	  return self->template name<typename name##_t::outerADScalar>(args...);\
-	}, args...);\
+		auto self = this; \
+		lampc::HessianCall<name##_t> ret; \
+		name##_t::hessian(ret, \
+			[self](auto... args){return self->template name<typename name##_t::outerADScalar>(args...);}, \
+			args...); \
+		return ret; \
 	}
 
   // template<typename diff_t=scalar_t, typename... Args>\
@@ -96,8 +136,6 @@ struct Eval{};
 struct Jacobian{};
 struct Hessian{};
 
-
-
 template<typename scalar_t_, int num_outputs_, int... input_sizes>
 struct DFunction
 {
@@ -106,6 +144,13 @@ struct DFunction
 	static constexpr int num_inputs = meta::sum_template<input_sizes...>();  // Total number of inputs
 	static constexpr int num_input_vars = sizeof...(input_sizes);  // Number of input vector variables
 	static constexpr int num_outputs = num_outputs_;
+
+	using out_t = Eigen::Vector<scalar_t, num_outputs>;
+	using jacobian_t = Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
+
+	// Hessian for each of the outputs in an array
+	using hessian_single_t = Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
+	using hessian_t = std::array<hessian_single_t, num_outputs>;
 
 	// First order derivative
 	using AD_scalar = Eigen::AutoDiffScalar<Eigen::Matrix<scalar_t, num_inputs, 1>>;
@@ -116,55 +161,41 @@ struct DFunction
 	using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
 	using outerAD_t = Eigen::Matrix<outerADScalar, num_outputs, 1>;  
 
-	using out_t = Eigen::Vector<scalar_t, num_outputs>;
-	using jacobian_t = Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
-
-	// Hessian for each of the outputs in an array
-	using hessian_single_t = Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
-	using hessian_t = std::array<hessian_single_t, num_outputs>;
-
-	template<typename F>
-	static EIGEN_STRONG_INLINE std::pair<out_t, jacobian_t> 
-	jacobian(F f, 
+	template<typename ret_t, // Return type (must be derived from JacobianCall)
+					 typename F>     // Function to be called
+	static EIGEN_STRONG_INLINE void
+	jacobian(ret_t& ret, F f, 
 		const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>&... args) noexcept
 	{
 		// Convert to AD variables for the inputs and call our function
 		AD_output_t out = seed_and_call(f, make_ad(args)...);
 
 		// Copy Jacobian into output variables
-		out_t val;
-		jacobian_t jacobian;
 		for(int i=0; i<num_outputs; i++)
 		{
-			val(i) = out[i].value();
-			jacobian.row(i) = out[i].derivatives();
+			ret.value(i) = out[i].value();
+			ret.jacobian.row(i) = out[i].derivatives();
 		}
-
-		return std::make_pair(val, jacobian);
 	}
 
-	template<typename F>
-	static EIGEN_STRONG_INLINE std::tuple<out_t, jacobian_t, hessian_t> 
-	hessian(F f, 
+	template<typename ret_t, // Return type (must be derived from HessianCall)
+					 typename F>     // Function to be called
+	static EIGEN_STRONG_INLINE void
+	hessian(ret_t& ret, F f, 
 		const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>&... args) noexcept
 	{
 		// Convert to AD variables for the inputs and call our function
 		outerAD_t out = seed_and_call2(f, make_ad2<input_sizes>(args)...);
 
 		// Copy Hessian into output variables
-		out_t val;
-		jacobian_t jacobian;
-		hessian_t hessian;
 		for(int i=0; i<num_outputs; i++)
 		{
-			val(i) = out[i].value().value();
-			jacobian.row(i) = out[i].value().derivatives();
+			ret.value(i) = out[i].value().value();
+			ret.jacobian.row(i) = out[i].value().derivatives();
 			for (int j = 0; j < num_inputs; j++) {
-				hessian[i].template middleRows<1>(j) = out[i].derivatives()(j).derivatives().transpose();
+				ret.hessian[i].template middleRows<1>(j) = out[i].derivatives()(j).derivatives().transpose();
 			}
 		}
-
-		return std::make_tuple(val, jacobian, hessian);
 	}
 
 
@@ -310,6 +341,15 @@ private:
 
 
 
+
+/**
+ * Used to create a differentiable function
+ * 
+ * Usage:
+ *   using F = lampc::Function<double, 2, 2,2>;
+ *   auto f = make_function(F, myfunction);
+ */
+#define make_function(F, name) F(name<F::scalar_t>, name<F::scalar_t, F::AD_scalar>, name<F::scalar_t, F::outerADScalar>);
 
 
 template<typename scalar_t_, int num_outputs_, int... input_sizes>

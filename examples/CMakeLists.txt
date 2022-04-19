@@ -4,7 +4,7 @@ include_directories(
   include 
   /usr/local/include/ 
   ${EIGEN3_INCLUDE_DIR} 
-  /opt/homebrew/Cellar/ipopt/3.14.2/include/coin-or/ 
+#  /opt/homebrew/Cellar/ipopt/3.14.2/include/coin-or/ 
   /opt/homebrew/Cellar/fmt/8.1.1_1/include 
   /opt/homebrew/opt/googletest/include
   /Users/cnjones/git/lampc/src
@@ -12,7 +12,7 @@ include_directories(
 
 link_directories(
   /Users/cnjones/git/lampc 
-  /opt/homebrew/Cellar/ipopt/3.14.2/lib/ 
+#  /opt/homebrew/Cellar/ipopt/3.14.2/lib/ 
   /opt/homebrew/Cellar/fmt/8.1.1_1/lib
   /opt/homebrew/opt/googletest/lib
 )
@@ -39,15 +39,21 @@ add_custom_target(
 # add_library(qp_lib qp_lib.cpp)
 # add_dependencies(qp_lib GeneratedQP)
 
-add_executable(qp qp.cpp)
-target_link_libraries(qp ipopt)
+add_library(double_integrator double_integrator.cpp)
+
+add_executable(test_double_integrator test_double_integrator.cpp)
+target_link_libraries(double_integrator)
+
+
+# add_executable(qp qp.cpp)
+# target_link_libraries(qp ipopt)
 # add_dependencies(qp GeneratedQP)
 # add_dependencies(qp qp_lib)
 # target_link_libraries(qp qp_lib)
 
 
-add_executable(ipopt_test_nlp ipopt_test_nlp.cpp)
-target_link_libraries(ipopt_test_nlp ipopt)
+# add_executable(ipopt_test_nlp ipopt_test_nlp.cpp)
+# target_link_libraries(ipopt_test_nlp ipopt)
 
 add_executable(notes notes.cpp)
 # target_link_libraries(qp ipopt)
