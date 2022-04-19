@@ -30,12 +30,27 @@ namespace lampc {
 	 * Identity function
 	 */
 	template<int n, typename V>
-	EIGEN_STRONG_INLINE V id(lampc::Eval, Eigen::Ref<V>& x) noexcept
+	EIGEN_STRONG_INLINE auto id(lampc::Eval, const std::pair<lampc::Segment, Eigen::Ref<V>> x) noexcept
+	{
+		assert(x.second.rows() == n && "Invalid size passed to id");
+		using scalar_t = typename V::Scalar;
+		using Func = lampc::DFunction<scalar_t, n, n>;
+		typename lampc::CallTape<Func> ret{x.first};
+
+		ret.value = x.second;
+		return ret;
+	}
+
+	template<int n, typename V>
+	EIGEN_STRONG_INLINE auto id(lampc::Eval, Eigen::Ref<V> x) noexcept
 	{
 		assert(x.rows() == n && "Invalid size passed to id");
-		Eigen::Vector<typename V::Scalar, n> y;
-		y = x;
-		return y;
+		using scalar_t = typename V::Scalar;
+		using Func = lampc::DFunction<scalar_t, n, n>;
+		typename lampc::Call<Func> ret;
+
+		ret.value = x;
+		return ret;
 	}
 
 	// Tape version

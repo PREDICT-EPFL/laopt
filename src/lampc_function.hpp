@@ -72,8 +72,40 @@ struct HessianTapeCall : public HessianCall<Func>, public InputInfo
  * Usage:
  *   make_differentiable(function_name, output_size, input_sizes...)
  */
+
+
+
+#define make_eval(name, out_size, ...) \
+	using name##_t = lampc::DFunction<scalar_t, out_size, __VA_ARGS__>; \
+	/* Tape version of eval */\
+	template<typename... V>\
+	EIGEN_STRONG_INLINE auto name(lampc::Eval, const std::pair<lampc::Segment, Eigen::Ref<V>>... args) noexcept \
+	{\
+		auto self = this; \
+		lampc::CallTape<name##_t> ret{args.first...}; \
+	  name##_t::eval(ret, \
+	  	[self](auto... args){return self->template name<typename name##_t::scalar_t>(args...);}, \
+	  	args.second...); \
+	  return ret; \
+	}\
+	/* Standard version of eval */\
+	template<typename... V>\
+	EIGEN_STRONG_INLINE auto name(lampc::Eval, Eigen::Ref<V>... args) noexcept \
+	{\
+		auto self = this; \
+		lampc::Call<name##_t> ret; \
+	  name##_t::eval(ret, \
+	  	[self](auto... args){return self->template name<typename name##_t::scalar_t>(args...);}, \
+	  	args...); \
+		return ret; \
+	}
+
+		// ret.value = self->template name(args.second...); \
+		// ret.value = self->template name(args...); \
+
+
 #define make_jacobian(name, out_size, ...)\
-	using name##_t = lampc::DFunction<scalar_t, out_size, __VA_ARGS__>;\
+	make_eval(name, out_size, __VA_ARGS__); \
 	/* Tape version of the jacobian */\
 	template<typename... Args>\
 	EIGEN_STRONG_INLINE auto name(lampc::Jacobian, const std::pair<lampc::Segment, Args>... args) noexcept\
@@ -161,6 +193,16 @@ struct DFunction
 	using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
 	using outerAD_t = Eigen::Matrix<outerADScalar, num_outputs, 1>;  
 
+
+	template<typename ret_t, // Return type (must be derived from Call)
+					 typename F>     // Function to be called
+	static EIGEN_STRONG_INLINE void
+	eval(ret_t& ret, F f, 
+		   const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>&... args) noexcept
+	{
+		ret.value = f(make_copy(args)...);
+	}
+
 	template<typename ret_t, // Return type (must be derived from JacobianCall)
 					 typename F>     // Function to be called
 	static EIGEN_STRONG_INLINE void
@@ -223,6 +265,22 @@ struct DFunction
 
 
 private:
+
+	/********
+	 * Eval
+	 ********/
+
+	// Take a vector input and return a fixed-sized version of it (copies)
+	template<int n>
+	static EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, n> 
+	make_copy(const Ref<const Matrix<scalar_t, n, 1>> x)
+	{
+		Eigen::Vector<scalar_t, n> y;
+		y = x;
+		return y;
+	}
+
+
 
 	/*********
 	 Jacobians 

@@ -164,6 +164,17 @@ public:
 
 
 	template<typename Func>
+	ConstraintTape<scalar_t>& operator<<(typename lampc::CallTape<Func> call)
+	{
+		// Push a new constraint on the bottom, and set the columns
+		value(-1, 0);
+
+		// Copy the value to the right place
+		value = call.value;
+		return *this;
+	}
+
+	template<typename Func>
 	ConstraintTape<scalar_t>& operator<<(typename lampc::JacobianTapeCall<Func> call)
 	{
 		// Push a new constraint on the bottom, and set the columns
@@ -220,6 +231,14 @@ public:
 	/**
 	 * Add a block-row to the constraint
 	 */
+	template<typename Func>
+	Constraint<scalar_t>& operator<<(typename lampc::Call<Func> call)
+	{
+		// Copy the value to the right place
+		value = call.value;
+		return *this;
+	}
+
 	template<typename Func>
 	Constraint<scalar_t>& operator<<(typename lampc::JacobianCall<Func> call)
 	{
