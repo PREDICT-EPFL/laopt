@@ -10,48 +10,63 @@
 
 namespace {
 
-template<typename scalar_t=double, typename diff_t=scalar_t>
-EIGEN_STRONG_INLINE Eigen::Vector<diff_t, 2> test_function(
-        const Eigen::Ref<const Eigen::Vector<diff_t, 2>>& x, 
-        const Eigen::Ref<const Eigen::Vector<diff_t, 1>>& u) noexcept
+
+template<typename Info>
+struct _TestFunction : public lampc::Hessian<_TestFunction, Info>
 {
-    Eigen::Matrix<scalar_t, 2, 2> A{{1,2},{3,4}};
-    Eigen::Matrix<scalar_t, 2, 1> B{{5},{6}};
-    return x(0) * (A.template cast<diff_t>() * x + B.template cast<diff_t>() * u);
-}
+    typename Info::param_t& param;
+    _TestFunction(typename Info::param_t& param) : param(param) {}
+
+    template<typename diff_t>
+    EIGEN_STRONG_INLINE Eigen::Vector<diff_t, 2> 
+    impl( const Eigen::Ref< const Eigen::Vector<diff_t, 2> >& x, 
+          const Eigen::Ref< const Eigen::Vector<diff_t, 1> >& u) noexcept        
+    {
+        return x(0) * (param.A.template cast<diff_t>() * x + param.B.template cast<diff_t>() * u);
+    }
+};
+template<typename scalar_t, typename param_t>
+using TestFunction = _TestFunction<lampc::FuncInfo<scalar_t,param_t, 2, 2,1>>;
+
+template<typename scalar_t>
+struct param_t {
+  Eigen::Matrix<scalar_t, 2, 2> A{{0,1},{0,0}};
+  Eigen::Matrix<scalar_t, 2, 1> B{{0},{1}};
+};
+
 
 /**
  * Compute the jacobian and hessian of a function
  */
 TEST(FunctionTest, Construction) {
+
     using scalar_t = double;
+    using param_t = param_t<scalar_t>;
 
-    using Function = lampc::Function<scalar_t, 2, 2,1>;
-    auto function = make_function(Function, test_function);
+    param_t param;
+    TestFunction<scalar_t,param_t> test(param);
 
-    Eigen::VectorX<scalar_t> x(2); x << 1,2;
-    Eigen::VectorX<scalar_t> u(1); u << 3;
+    Eigen::Vector<scalar_t, 2> xp;
+    Eigen::Vector<scalar_t, 2> x;
+    Eigen::Vector<scalar_t, 1> u;
+    x << 1,2;
+    u << 3;
+    xp = test.eval(x, u);   
+    std::cout << "xp = " << xp.transpose() << std::endl;
 
-    // Evaluation
-    EXPECT_EQ(function(x,u), (Eigen::VectorX<scalar_t>(2) << 20,29).finished());
+    param.A(0,0) = 7;
+    test.eval_jacobian(x,u);
+    std::cout << "value = " << test.value.transpose() << std::endl;
+    std::cout << "jacobian = \n" << test.jacobian << std::endl;
 
-    // Jacobian
-    EXPECT_EQ(function(x,u,lampc::Jacobian()), 
-        std::make_pair(
-            (Eigen::Vector<scalar_t,2>() << 20,29).finished(),
-            (Eigen::Matrix<scalar_t,2,3>() << 21,2,5,32,4,6).finished()
-        ));
+    param.A(0,0) = 70;
+    test.eval_hessian(x,u);
+    std::cout << "value = " << test.value.transpose() << std::endl;
+    std::cout << "jacobian = \n" << test.jacobian << std::endl;
+    for(int i=0; i<2; i++)
+        std::cout << "hessian[" << i << "] = \n" << test.hessian[i] << std::endl;
 
-    // Hessian
-    EXPECT_EQ(function(x,u,lampc::Hessian()), 
-        std::make_tuple(
-            (Eigen::Vector<scalar_t,2>() << 20,29).finished(),
-            (Eigen::Matrix<scalar_t,2,3>() << 21,2,5,32,4,6).finished(),
-            Function::hessian_t{
-                (Eigen::Matrix<scalar_t,3,3>() << 2,2,5,2,0,0,5,0,0).finished(),
-                (Eigen::Matrix<scalar_t,3,3>() << 6,4,6,4,0,0,6,0,0).finished()
-            }
-        ));
+
 }
 
 }
