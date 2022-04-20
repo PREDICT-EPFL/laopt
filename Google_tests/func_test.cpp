@@ -10,8 +10,8 @@
 
 namespace {
 
-template<typename scalar_t>
-struct TestFunction : public lampc::Hessian<TestFunction<scalar_t>, lampc::FuncInfo<scalar_t, 2, 2,1>>
+template<typename scalar_t, template<typename,typename> class Type>
+struct TestFunction : public Type<TestFunction<scalar_t,Type>, lampc::FuncInfo<scalar_t, 2, 2,1>>
 {
     Eigen::Matrix<scalar_t, 2, 2> A{{0,1},{0,0}};
     Eigen::Matrix<scalar_t, 2, 1> B{{0},{1}};
@@ -28,54 +28,66 @@ struct TestFunction : public lampc::Hessian<TestFunction<scalar_t>, lampc::FuncI
 /**
  * Compute the jacobian and hessian of a function
  */
-TEST(FunctionTest, Construction) {
+TEST(FunctionTest, Eval) {
     using scalar_t = double;
-    TestFunction<scalar_t> test;
+    TestFunction<scalar_t, lampc::Eval> test;
 
-    Eigen::Vector<scalar_t, 2> xp;
     Eigen::Vector<scalar_t, 2> x;
     Eigen::Vector<scalar_t, 1> u;
     x << 1,2;
     u << 3;
-    xp = test.eval(x, u);   
-    std::cout << "xp = " << xp.transpose() << std::endl;
+    test.eval(x, u);
 
-    test.A(0,0) = 7;
-    test.eval_jacobian(x,u);
-    std::cout << "value = " << test.value.transpose() << std::endl;
-    std::cout << "jacobian = \n" << test.jacobian << std::endl;
-
-    test.A(0,0) = 70;
-    test.eval_hessian(x,u);
-    std::cout << "value = " << test.value.transpose() << std::endl;
-    std::cout << "jacobian = \n" << test.jacobian << std::endl;
-    for(int i=0; i<2; i++)
-        std::cout << "hessian[" << i << "] = \n" << test.hessian[i] << std::endl;
-
-    // Run the same test, but for the "easy" defined function
-
-    // TestFunctionMacro<scalar_t,param_t> test(param);
-
-    // Eigen::Vector<scalar_t, 2> xp;
-    // Eigen::Vector<scalar_t, 2> x;
-    // Eigen::Vector<scalar_t, 1> u;
-    // x << 1,2;
-    // u << 3;
-    // xp = test.eval(x, u);   
-    // std::cout << "xp = " << xp.transpose() << std::endl;
-
-    // param.A(0,0) = 7;
-    // test.eval_jacobian(x,u);
-    // std::cout << "value = " << test.value.transpose() << std::endl;
-    // std::cout << "jacobian = \n" << test.jacobian << std::endl;
-
-    // param.A(0,0) = 70;
-    // test.eval_hessian(x,u);
-    // std::cout << "value = " << test.value.transpose() << std::endl;
-    // std::cout << "jacobian = \n" << test.jacobian << std::endl;
-    // for(int i=0; i<2; i++)
-    //     std::cout << "hessian[" << i << "] = \n" << test.hessian[i] << std::endl;
-
+    Eigen::Vector<scalar_t,2> ground;
+    ground << 2,3;
+    EXPECT_EQ(test.value, ground);
 }
+
+TEST(FunctionTest, Jacobian) {
+    using scalar_t = double;
+    TestFunction<scalar_t, lampc::Jacobian> test;
+
+    Eigen::Vector<scalar_t, 2> x;
+    Eigen::Vector<scalar_t, 1> u;
+    x << 1,2;
+    u << 3;
+
+    test.eval_jacobian(x, u);   
+
+    Eigen::Vector<scalar_t,2> val;
+    val << 2,3;
+    EXPECT_EQ(test.value, val);
+
+    Eigen::Matrix<scalar_t,2,3> jac;
+    jac << 2,1,0,3,0,1;
+    EXPECT_EQ(test.jacobian, jac);
+}
+
+TEST(FunctionTest, Hessian) {
+    using scalar_t = double;
+    TestFunction<scalar_t, lampc::Hessian> test;
+
+    Eigen::Vector<scalar_t, 2> x;
+    Eigen::Vector<scalar_t, 1> u;
+    x << 1,2;
+    u << 3;
+
+    test.eval_hessian(x, u);   
+
+    Eigen::Vector<scalar_t,2> val;
+    val << 2,3;
+    EXPECT_EQ(test.value, val);
+
+    Eigen::Matrix<scalar_t,2,3> jac;
+    jac << 2,1,0,3,0,1;
+    EXPECT_EQ(test.jacobian, jac);
+
+    Eigen::Matrix<scalar_t,3,3> H;
+    H << 0,1,0,1,0,0,0,0,0;
+    EXPECT_EQ(test.hessian[0], H);
+    H << 0,0,1,0,0,0,1,0,0;
+    EXPECT_EQ(test.hessian[1], H);
+}
+
 
 }
