@@ -6,23 +6,34 @@
 #include "unsupported/Eigen/AutoDiff"
 
 namespace lampc {
-template<typename _scalar_t, typename _param_t, size_t num_outputs, size_t... input_sizes>
+
+// #define lampc_function_start(name, type) \
+// template<typename Info> \
+// struct _##name : public lampc::type<_##name, Info> \
+// { \
+//     typename Info::param_t& param; \
+//     _TestFunction(typename Info::param_t& param) : param(param) {} \
+
+// #define lampc_function_end(name, out_size, ...) \
+// }; \
+// template<typename scalar_t, typename param_t> \
+// using name = _##name<lampc::FuncInfo<scalar_t,param_t, out_size, __VA_ARGS__>>;
+
+
+
+template<typename _scalar_t, size_t num_outputs, size_t... input_sizes>
 struct FuncInfo
 {
     using scalar_t = _scalar_t;
-    using param_t = _param_t;
     static constexpr int num_inputs = lampc::meta::sum_template<input_sizes...>();  // Total number of inputs
 };
 
-template<template<typename Info> class DerivedT, typename Info>
+template<typename Derived, typename Info>
 struct Eval;
 
-template<template<typename> class DerivedT, typename scalar_t, typename param_t, size_t num_outputs, size_t... input_sizes>
-struct Eval<DerivedT, FuncInfo<scalar_t, param_t, num_outputs, input_sizes...>>
+template<typename Derived, typename scalar_t, size_t num_outputs, size_t... input_sizes>
+struct Eval<Derived, FuncInfo<scalar_t, num_outputs, input_sizes...>>
 {
-    using Info = FuncInfo<scalar_t, param_t, num_outputs, input_sizes...>;
-    using Derived = DerivedT<Info>;
-
     using value_t = Eigen::Vector<scalar_t, num_outputs>;
     value_t value; // Memory to store current value
 
@@ -34,19 +45,14 @@ struct Eval<DerivedT, FuncInfo<scalar_t, param_t, num_outputs, input_sizes...>>
     }
 };
 
-template<template<typename Info> class DerivedT, typename Info>
+template<typename Derived, typename Info>
 struct Jacobian;
 
-template<template<typename> class DerivedT, typename scalar_t, typename param_t, size_t num_outputs, size_t... input_sizes>
-struct Jacobian<DerivedT, FuncInfo<scalar_t, param_t, num_outputs, input_sizes...>>
-            : public Eval<DerivedT, FuncInfo<scalar_t, param_t, num_outputs, input_sizes...>>
+template<typename Derived, typename scalar_t, size_t num_outputs, size_t... input_sizes>
+struct Jacobian<Derived, FuncInfo<scalar_t, num_outputs, input_sizes...>>
+            : public Eval<Derived, FuncInfo<scalar_t, num_outputs, input_sizes...>>
 {
-    using Info = FuncInfo<scalar_t, param_t, num_outputs, input_sizes...>;
-    using Derived = DerivedT<Info>;
-
-    // using eval_t = Eval<DerivedT, FuncInfo<scalar_t, param_t, num_outputs, input_sizes...>>;
-    // using value_t = typename eval_t::value_t;
-    // static constexpr int num_inputs = eval_t::num_inputs;
+    using Info = FuncInfo<scalar_t, num_outputs, input_sizes...>;
 
     using jacobian_t = Eigen::Matrix<scalar_t, num_outputs, Info::num_inputs>;
     jacobian_t jacobian; // Memory to store current jacobian 
@@ -112,15 +118,14 @@ private:
 };
 
 
-template<template<typename Info> class DerivedT, typename Info>
+template<typename Derived, typename Info>
 struct Hessian;
 
-template<template<typename> class DerivedT, typename scalar_t, typename param_t, size_t num_outputs, size_t... input_sizes>
-struct Hessian<DerivedT, FuncInfo<scalar_t, param_t, num_outputs, input_sizes...>>
-            : public Jacobian<DerivedT, FuncInfo<scalar_t, param_t, num_outputs, input_sizes...>>
+template<typename Derived, typename scalar_t, size_t num_outputs, size_t... input_sizes>
+struct Hessian<Derived, FuncInfo<scalar_t, num_outputs, input_sizes...>>
+            : public Jacobian<Derived, FuncInfo<scalar_t, num_outputs, input_sizes...>>
 {
-    using Info = FuncInfo<scalar_t, param_t, num_outputs, input_sizes...>;
-    using Derived = DerivedT<Info>;
+    using Info = FuncInfo<scalar_t, num_outputs, input_sizes...>;
 
     // Hessian for each of the outputs in an array
     using hessian_single_t = Eigen::Matrix<scalar_t, Info::num_inputs, Info::num_inputs>;
