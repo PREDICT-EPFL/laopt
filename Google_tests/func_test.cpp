@@ -90,4 +90,49 @@ TEST(FunctionTest, Hessian) {
 }
 
 
+/**************************
+ * Test the RK4 integrator
+ **************************/
+
+/**
+ * Continuous-time dynamics - double integrator
+ */
+template<typename scalar_t>
+struct sys_t
+{
+    Eigen::Matrix<scalar_t, 2, 2> A{{0,1},{0,0}};
+    Eigen::Matrix<scalar_t, 2, 1> B{{0},{1}};
+
+    template<typename diff_t>
+    EIGEN_STRONG_INLINE Eigen::Vector<diff_t, 2> 
+    impl( const Eigen::Ref< const Eigen::Vector<diff_t, 2> >& x, 
+          const Eigen::Ref< const Eigen::Vector<diff_t, 1> >& u) noexcept        
+    {
+        return A.template cast<diff_t>() * x + B.template cast<diff_t>() * u;
+    }
+};
+
+TEST(RK4Test, SimpleTest) {
+    using scalar_t = double;
+    sys_t<scalar_t> sys;
+    lampc::RK4<sys_t<scalar_t>, lampc::Jacobian, scalar_t, 2, 1> dsys(sys, 0.1);
+
+
+    // Compute the discrete-time system and its jacobian
+    Eigen::Vector<scalar_t, 2> x;
+    Eigen::Vector<scalar_t, 1> u;
+    x << 1,2;
+    u << 3;
+
+    dsys.eval_jacobian(x, u);   
+
+    Eigen::Vector<scalar_t,2> val;
+    val << 1.215, 2.3;
+    EXPECT_TRUE(val.isApprox(dsys.value, 1e-4));
+
+    Eigen::Matrix<scalar_t,2,3> jac;
+    jac << 1,0.1,0.005,0,1,0.1;
+    EXPECT_TRUE(jac.isApprox(dsys.jacobian, 1e-4));
+}
+
 }

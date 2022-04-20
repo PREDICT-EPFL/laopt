@@ -8,6 +8,6 @@
 #include "lampc_function.hpp"
 #include "bsmatrix.hpp"
 // #include "problem.hpp"
-// #include "functions.hpp"
+#include "functions.hpp"
 
 #endif // __LAMPC__HPP
