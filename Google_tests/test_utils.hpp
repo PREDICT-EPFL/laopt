@@ -2,7 +2,7 @@
  * Write sparse matrix in triplet format to cout
  */
 template<typename scalar_t>
-void dump(Eigen::SparseMatrix<scalar_t> S, std::string name="ground")
+void dump_sparse(Eigen::SparseMatrix<scalar_t> S, std::string name="ground")
 {
     std::cout << std::endl;
     std::cout << "auto " << name << " = triplet_to_sparse<" << type_name<scalar_t>() << ">(" << S.rows() << "," << S.cols() << ",";
@@ -10,7 +10,7 @@ void dump(Eigen::SparseMatrix<scalar_t> S, std::string name="ground")
     bool first = true;
     std::cout.precision(5);
     for (int k=0; k<S.outerSize(); ++k)
-      for (typename SparseMatrix<scalar_t>::InnerIterator it(S,k); it; ++it)
+      for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(S,k); it; ++it)
       {
         if(first) first = false; else std::cout << ",";
         std::cout << "{" << it.row() << "," << it.col() << "," << it.value() << "}";
@@ -37,8 +37,8 @@ void dump(const Eigen::MatrixBase<Derived>& S, std::string name="ground", std::s
     std::cout << name << " << ";
     std::cout.precision(5);
     bool first = true;
-    for(int c=0; c<S.cols(); c++)
-      for(int r=0; r<S.rows(); r++)
+    for(int r=0; r<S.rows(); r++)
+      for(int c=0; c<S.cols(); c++)
       {
         if(first) first = false;
         else std::cout << ",";
