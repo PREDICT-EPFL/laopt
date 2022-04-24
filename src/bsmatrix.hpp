@@ -60,7 +60,7 @@ std::ostream &operator<<(std::ostream &os, std::vector<CopyInfo> const &sequence
 }
 
 template<typename scalar_t>
-class BSMatrix
+struct BSMatrix
 {
   Eigen::SparseMatrix<bool> sparsity_structure;
   std::vector<Segment>  segments;
@@ -191,6 +191,8 @@ public:
 
   template<typename RowSlice, typename ColSlice>
   BSMatrix<scalar_t>& operator()(RowSlice rows, ColSlice cols) {return *this;}
+
+  void resize(int rows, int cols) {}
 
   inline auto rows() {return sparsity_structure.rows();}
   inline auto cols() {return sparsity_structure.cols();}
@@ -345,7 +347,8 @@ struct BSMatrixTape : public BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>
     M.conservativeResize(rows, cols);
 
     // Set new elements to that from the sparsity structure
-    M(seq(curr_rows,rows-1), seq(curr_cols,cols-1)) = sparsity_structure(seq(curr_rows,rows-1), seq(curr_cols,cols-1));
+    M(all, seq(curr_cols,cols-1)) = sparsity_structure(seq(0,rows-1), seq(curr_cols,cols-1));
+    M(seq(curr_rows,rows-1), all) = sparsity_structure(seq(curr_rows,rows-1), seq(0,cols-1));
   }
 
 public:
@@ -365,6 +368,8 @@ public:
   void record_copy_sequence(Eigen::VectorX<int> sequence)
   {
     std::vector<Segment> segments;
+
+    // std::cout << "recording sequence " << sequence.transpose()	 << std::endl;
 
     int next_contiguous = -2; // The next value if we're in a contiguous segment
     for(auto i : sequence)
@@ -450,15 +455,18 @@ struct BSMatrixSparsity : public BSSliceSparsity<Eigen::MatrixX<int>, BSMatrixSp
     int curr_rows = M.rows();
     int curr_cols = M.cols();
     M.conservativeResize(rows, cols);
-    M(seq(curr_rows,rows-1), seq(curr_cols,cols-1)).array() = 0; // Set new elements to zero == sparse
+
+    // Set new elements to zero == sparse
+    M(all, seq(curr_cols,last)).array() = 0; 
+    M(seq(curr_rows,last), all).array() = 0; 
   }
 
   /**
    * Create a BSMatrixTape from this sparsity structure
    */
-  BSMatrixTape makeBSTape()
+  BSMatrixTape makeBSTape(size_t rows, size_t cols)
   {
-		return BSMatrixTape(get_sparsity(), rows(), cols());
+		return BSMatrixTape(get_sparsity(), rows, cols);
   }
 
 };
@@ -471,12 +479,12 @@ struct BSMatrixSparsity : public BSSliceSparsity<Eigen::MatrixX<int>, BSMatrixSp
  * rows, cols = initial size of the matrix. (F can resize it)
  */
 template<typename scalar_t, typename F>
-BSMatrix<scalar_t> makeBSMatrix(F f, size_t rows, size_t cols)
+BSMatrix<scalar_t> makeBSMatrix(F f, size_t rows=0, size_t cols=0)
 {
 	BSMatrixSparsity sparsity(rows, cols);
 	f(sparsity); // Extract sparsity pattern
 
-	auto tape = sparsity.makeBSTape();
+	auto tape = sparsity.makeBSTape(rows, cols);
 	f(tape); // Extract operation sequence
 
 	return tape.template makeBSMatrix<scalar_t>();
