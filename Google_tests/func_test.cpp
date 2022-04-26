@@ -139,7 +139,7 @@ struct sys_t
 TEST(RK4Test, SimpleTest) {
     using scalar_t = double;
     sys_t<scalar_t> sys;
-    using dsys_t = lampc::RK4<sys_t<scalar_t>, lampc::MakeJacobian, scalar_t, 2, 1>;
+    using dsys_t = lampc::functions::RK4<sys_t<scalar_t>, lampc::MakeJacobian, scalar_t, 2, 1>;
     dsys_t dsys(sys, 0.1);
 
     // Compute the discrete-time system and its jacobian
@@ -251,6 +251,37 @@ TEST(BSMatrixTest, Jacobian) {
     EXPECT_TRUE(jacobian_g.isApprox(S_jacobian, 1e-4));
 }
 
+/**************************
+ * Test custom functions
+ **************************/
 
+TEST(FunctionsTest, eq) {
+
+    // Discrete dynamics
+    using scalar_t = double;
+    sys_t<scalar_t> sys;
+    using dsys_t = lampc::functions::RK4<sys_t<scalar_t>, lampc::MakeJacobian, scalar_t, 2, 1>;
+    dsys_t dsys(sys, 0.1);
+  
+    // Equality constraint dsys(x,u) - xp
+    using dsys_eq_t = lampc::functions::eq<dsys_t, 2, 2, 1>;
+    dsys_eq_t dsys_eq(dsys);
+
+    dsys_eq_t::value_t value;
+    dsys_eq_t::jacobian_t jacobian;
+
+    Eigen::Vector<scalar_t, 2> xp;
+    Eigen::Vector<scalar_t, 2> x;
+    Eigen::Vector<scalar_t, 1> u;
+    x << 1,2;
+    u << 3;
+    xp << 4,5;
+
+    jacobian.array() = 0;
+    std::tie(value, jacobian) = dsys_eq(lampc::Jacobian(), xp,x,u);    
+
+    std::cout << "value = " << value.transpose() << std::endl;
+    std::cout << "jac \n" << jacobian << std::endl;
+}
 
 }

@@ -14,6 +14,7 @@ using Eigen::seqN;
 using Eigen::all;
 using Eigen::last;
 using Eigen::lastp1;
+using Eigen::fix;
 
 /**
  * Hold a sequence of Eigen seq statements
@@ -39,6 +40,14 @@ struct Segment
   {
   	return other.index == index && other.length == length;
   }
+
+  /**
+   * Return an Eigen ArithmeticSequence representing this Segment
+   */
+	auto seq()
+	{
+		return seqN(index, length);
+	};
 };
 struct CopyInfo
 {
@@ -194,6 +203,11 @@ public:
 
   void resize(int rows, int cols) {}
 
+  /**
+   * Resize the matrix by adding rows rows and cols columns
+   */
+  void extend(int rows, int cols) {}
+
   inline auto rows() {return sparsity_structure.rows();}
   inline auto cols() {return sparsity_structure.cols();}
 };
@@ -312,10 +326,18 @@ struct BSMatrixTape : public BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>
 {
   Eigen::MatrixX<int> sparsity_structure; // Must have been created a-priori
 
+  BSMatrixTape() : BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>(*this, Eigen::MatrixX<int>()) {}
+
   BSMatrixTape(Eigen::MatrixX<bool> structure, size_t rows=0, size_t cols=0) :
-    BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>(*this, Eigen::MatrixX<int>()),
-    sparsity_structure(structure.template cast<int>())
+    BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>(*this, Eigen::MatrixX<int>())
   {
+  	initialize(structure, rows, cols);
+  };
+
+  void initialize(Eigen::MatrixX<bool> structure, size_t rows=0, size_t cols=0)
+  {
+    sparsity_structure.resizeLike(structure);
+
     // We set the zero elements to -1
     // We set the non-zero elements to what their index into the data of a csc-sparse matrix
     // would be
@@ -323,11 +345,12 @@ struct BSMatrixTape : public BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>
     int index = 0;
     for(int c=0; c<sparsity_structure.cols(); c++)
       for(int r=0; r<sparsity_structure.rows(); r++)
-        if(sparsity_structure(r,c) == 0) sparsity_structure(r,c) = index++;
+        if(structure(r,c) == 1) sparsity_structure(r,c) = index++;
 
     // Copy in the sparsity structure for the initial size matrix
     resize(rows,cols); 
   };
+
 
   template<typename Derived>
   auto makeSlice(Derived sub_matrix)
@@ -349,6 +372,14 @@ struct BSMatrixTape : public BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>
     // Set new elements to that from the sparsity structure
     M(all, seq(curr_cols,cols-1)) = sparsity_structure(seq(0,rows-1), seq(curr_cols,cols-1));
     M(seq(curr_rows,rows-1), all) = sparsity_structure(seq(curr_rows,rows-1), seq(0,cols-1));
+  }
+
+  /**
+   * Resize the matrix by adding rows rows and cols columns
+   */
+  void extend(int rows, int cols)
+  {
+  	resize(M.rows() + rows, M.cols() + cols);
   }
 
 public:
@@ -459,6 +490,14 @@ struct BSMatrixSparsity : public BSSliceSparsity<Eigen::MatrixX<int>, BSMatrixSp
     // Set new elements to zero == sparse
     M(all, seq(curr_cols,last)).array() = 0; 
     M(seq(curr_rows,last), all).array() = 0; 
+  }
+
+  /**
+   * Resize the matrix by adding rows rows and cols columns
+   */
+  void extend(int rows, int cols)
+  {
+  	resize(M.rows() + rows, M.cols() + cols);
   }
 
   /**

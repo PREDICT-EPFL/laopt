@@ -21,10 +21,12 @@ struct FuncInfo
 template<typename Derived, typename Info>
 struct MakeEval;
 
-template<typename Derived, typename scalar_t, size_t num_outputs_, size_t... input_sizes>
-struct MakeEval<Derived, FuncInfo<scalar_t, num_outputs_, input_sizes...>>
+template<typename Derived, typename scalar_t_, size_t num_outputs_, size_t... input_sizes>
+struct MakeEval<Derived, FuncInfo<scalar_t_, num_outputs_, input_sizes...>>
 {
 	static constexpr size_t num_outputs = num_outputs_;
+	using scalar_t = scalar_t_;
+
     using value_t = Eigen::Vector<scalar_t, num_outputs>;
 
     /**
@@ -82,7 +84,7 @@ struct MakeJacobian<Derived, FuncInfo<scalar_t, num_outputs, input_sizes...>>
      * Sets the internal value and jacobian buffers
      * Returns the value and dense jacobian of the function
      */
-    EIGEN_STRONG_INLINE std::pair<value_t, jacobian_t>
+    EIGEN_STRONG_INLINE auto
     operator()(lampc::Jacobian, const Eigen::Ref<const Eigen::Vector<scalar_t, input_sizes>>&... args) noexcept
     {
         // Convert to AD variables for the inputs and call our function
