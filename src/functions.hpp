@@ -13,10 +13,10 @@ namespace lampc {
 	/**
 	 * Simple general RK4 integrator
 	 */
-	template<typename ODE, template<typename,typename> class DiffType, typename scalar_t, size_t num_states, size_t... param_sizes>
-	struct RK4 : public DiffType<RK4<ODE,DiffType,scalar_t,num_states,param_sizes...>, lampc::FuncInfo<scalar_t, num_states, num_states, param_sizes...>>
+	template<typename ODE, typename scalar_t, size_t num_states, size_t... param_sizes>
+	struct RK4 : public MakeDifferentiable<RK4<ODE,scalar_t,num_states,param_sizes...>, scalar_t, num_states, num_states, param_sizes...>
 	{
-	  ODE& ode; // Reference to the callable ode object
+	  ODE& ode; // Reference to the callable ode objectp
 	  scalar_t h; // Step size
 
 	  RK4(ODE& ode, scalar_t h) : ode(ode), h(h) {}
@@ -39,42 +39,42 @@ namespace lampc {
 	 * Identity function
 	 */
 	template<typename scalar_t, size_t n>
-	struct id
+	struct id : public MakeDifferentiable<id<scalar_t,n>, scalar_t, n,n>
 	{
+		using MakeDifferentiable<id<scalar_t,n>, scalar_t, n, n>::operator();
+
+    static constexpr size_t num_inputs = n;
 		static constexpr size_t num_outputs = n;
-
-		using value_t = Eigen::Vector<scalar_t, n>;
-		using jacobian_t = Eigen::Matrix<scalar_t, n, n>;
-
-    EIGEN_STRONG_INLINE value_t
-    operator()(lampc::Eval, const Eigen::Ref< const Eigen::Vector<scalar_t, n> >& x) noexcept
-    {
-    	return x;
-    }
 
     template<typename OutValue>
     EIGEN_STRONG_INLINE void
-    operator()(const Eigen::Ref< const Eigen::Vector<scalar_t, n> >& x, OutValue&& outvalue) noexcept
+    operator()(const Eigen::Ref< const Eigen::Vector<scalar_t, n> >& x,
+				     	 OutValue&& outvalue) noexcept
     {
-			outvalue = x;
-    }
-
-    EIGEN_STRONG_INLINE std::pair<value_t, jacobian_t>
-    operator()(lampc::Jacobian, const Eigen::Ref< const Eigen::Vector<scalar_t, n> >& x) noexcept
-    {
-			std::pair<value_t, jacobian_t> ret;
-    	operator()(x,std::get<0>(ret),std::get<1>(ret));
-    	return ret;
+        outvalue = x;
     }
 
     template<typename OutValue, typename OutJacobian>
     EIGEN_STRONG_INLINE void
-    operator()(const Eigen::Ref< const Eigen::Vector<scalar_t, n> >& x,	OutValue&& outvalue, OutJacobian&& outjacobian) noexcept
+    operator()(const Eigen::Ref< const Eigen::Vector<scalar_t, n> >& x,
+		    		   OutValue&& outvalue, OutJacobian&& outjacobian) noexcept
+
     {
     	outvalue = x;
 			for(int i=0; i<n; i++)
 				outjacobian(seqN(i,fix<1>), seqN(i, fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(1);
     }
+
+    template<typename OutValue, typename OutJacobian, typename OutHessianArray>
+    EIGEN_STRONG_INLINE void
+    operator()(const Eigen::Ref<const Eigen::Matrix<scalar_t, n, 1>>& x,
+    		   OutValue&& outvalue, OutJacobian&& outjacobian, OutHessianArray&& outhessian) noexcept
+    {
+    	operator()(x, outvalue, outjacobian);
+      for(int i=0; i<num_outputs; i++)
+      	outhessian[i] = 0;
+    }
+
 	};
 
 	/**
@@ -83,32 +83,19 @@ namespace lampc {
 	 * We assume that x is not in args
 	 */
 	template<typename F, size_t num_outputs_, size_t... input_sizes>
-	struct eq
+	struct eq : public MakeDifferentiable<eq<F,num_outputs_,input_sizes...>, typename F::scalar_t, num_outputs_,num_outputs_,input_sizes...>
 	{
+		using MakeDifferentiable<eq<F,num_outputs_,input_sizes...>, typename F::scalar_t, num_outputs_,num_outputs_,input_sizes...>::operator();
+
 		// We assume F is a callable with tags for Eval, Jacobian and Hessian
 		F& f;
 
 		static constexpr size_t num_outputs = num_outputs_;
 
 		using scalar_t = typename F::scalar_t;
-		static constexpr size_t num_inputs = FuncInfo<scalar_t,num_outputs,input_sizes...>::num_inputs;
-    using value_t = Eigen::Vector<scalar_t, num_outputs>;
-    using jacobian_t = Eigen::Matrix<scalar_t, num_outputs, num_inputs + num_outputs>;
-
+		static constexpr size_t num_inputs = lampc::meta::sum_template<input_sizes...>();  // Total number of inputs
+   
     eq(F& f) : f(f) {}
-
-    /**
-     * Eval forms
-     */
-    EIGEN_STRONG_INLINE value_t
-    operator()(lampc::Eval, 
-    	const Eigen::Ref< const Eigen::Vector<scalar_t, num_outputs> >& x,
-    	const Eigen::Ref< const Eigen::Vector<scalar_t, input_sizes> >&... args) noexcept
-    {
-    	value_t val;
-    	operator()(x,args...,val);
-    	return val;
-    }
 
     template<typename OutValue>
     EIGEN_STRONG_INLINE void
@@ -118,19 +105,6 @@ namespace lampc {
     	OutValue&& outvalue) noexcept
     {
         outvalue = f(lampc::Eval(), args...) - x;
-    }
-
-    /**
-     * Jacobian forms
-     */
-    EIGEN_STRONG_INLINE std::pair<value_t, jacobian_t>
-    operator()(lampc::Jacobian, 
-    	const Eigen::Ref< const Eigen::Vector<scalar_t, num_outputs> >& x,
-    	const Eigen::Ref< const Eigen::Vector<scalar_t, input_sizes> >&... args) noexcept
-    {
-			std::pair<value_t, jacobian_t> ret;
-    	operator()(x,args...,std::get<0>(ret),std::get<1>(ret));
-    	return ret;
     }
 
     template<typename OutValue, typename OutJacobian>
@@ -151,6 +125,27 @@ namespace lampc {
 			for(int i=0; i<num_outputs; i++)
 				outjacobian(seqN(i,fix<1>), seqN(i, fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(-1);
     }
+
+    template<typename OutValue, typename OutJacobian, typename OutHessianArray>
+    EIGEN_STRONG_INLINE void
+    operator()(
+    	const Eigen::Ref< const Eigen::Vector<scalar_t, num_outputs> >& x,
+    	const Eigen::Ref< const Eigen::Vector<scalar_t, input_sizes> >&... args,
+      OutValue&& outvalue, OutJacobian&& outjacobian, OutHessianArray&& outhessian) noexcept
+    {
+    	// Hessian is hessian of f
+    	// Jacobian is [-I jac_f]
+
+			// Set jac_f part
+			f(args..., outvalue, outjacobian(all,seqN(num_outputs,fix<num_inputs>)), outhessian);
+
+			// Add the -x part
+			outvalue -= x;
+			// outjacobian(all,seqN(0,fix<num_outputs>)) = -Eigen::Matrix<scalar_t,num_outputs,num_outputs>::Identity();
+			for(int i=0; i<num_outputs; i++)
+				outjacobian(seqN(i,fix<1>), seqN(i, fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(-1);
+    }
+
 
 	};
 

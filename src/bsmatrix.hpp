@@ -68,6 +68,16 @@ std::ostream &operator<<(std::ostream &os, std::vector<CopyInfo> const &sequence
   return os;
 }
 
+/**
+ * Information required to construct a BSMatrix
+ */
+struct BSMatrixInfo
+{
+  Eigen::SparseMatrix<bool> sparsity_structure;
+  std::vector<Segment> copy_segments;
+  std::vector<CopyInfo> copy_info;
+};
+
 template<typename scalar_t>
 struct BSMatrix
 {
@@ -109,11 +119,15 @@ public:
       copy_index(0)
   {}
 
+  BSMatrix(BSMatrixInfo info)
+  	: sparsity_structure(info.sparsity_structure), segments(info.copy_segments), copies(info.copy_info), copy_index(0)
+  	{}
+
   /**
    * Initialize S to the right sparsity structure and set it
    * as the target
    */
-  void initialize_matrix(Eigen::SparseMatrix<scalar_t>& S)
+  void allocate_memory(Eigen::SparseMatrix<scalar_t>& S)
   {
     S = sparsity_structure.template cast<scalar_t>();
     set_target(S);
@@ -341,7 +355,7 @@ struct BSMatrixTape : public BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>
     // We set the zero elements to -1
     // We set the non-zero elements to what their index into the data of a csc-sparse matrix
     // would be
-    sparsity_structure.array() -= 1; // Zero elements == -1, non-zeros == 0
+    sparsity_structure.array() = -1; // Zero elements == -1, non-zeros == 0
     int index = 0;
     for(int c=0; c<sparsity_structure.cols(); c++)
       for(int r=0; r<sparsity_structure.rows(); r++)
@@ -362,6 +376,8 @@ struct BSMatrixTape : public BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>
    * Resize the matrix M.
    * 
    * Note: Invalidates all slices!
+   * 
+   * Note: Sparsity structure must be set before this is called.
    */
   void resize(int rows, int cols)
   {
@@ -429,6 +445,21 @@ public:
     Eigen::MatrixX<bool> bob = (sparsity_structure.array() >= 0).matrix();
     return BSMatrix<scalar_t>(bob.sparseView(), copy_segments, copy_info);
   }
+
+  /**
+   * Generate the data required to produce a BSMatrix
+   */
+	BSMatrixInfo generate()
+	{
+		BSMatrixInfo info;
+
+    Eigen::MatrixX<bool> bob = (sparsity_structure.array() >= 0).matrix();
+    info.sparsity_structure = bob.sparseView();
+    info.copy_segments = copy_segments;
+    info.copy_info = copy_info;
+
+    return info;
+	}
 };
 /**
  * A slice class where all operators just set the sparsity structure

@@ -15,9 +15,11 @@
 
 namespace {
 
-template<typename scalar_t, template<typename,typename> class Type>
-struct TestFunction : public Type<TestFunction<scalar_t,Type>, lampc::FuncInfo<scalar_t, 2, 2,1>>
+template<typename scalar_t>
+struct TestFunction : public lampc::MakeDifferentiable<TestFunction<scalar_t>, scalar_t, 2, 2,1>
 {
+    // using lampc::MakeDifferentiable<TestFunction<scalar_t>, scalar_t, 2, 2,1>::operator();
+
     Eigen::Matrix<scalar_t, 2, 2> A{{1,2},{3,4}};
     Eigen::Matrix<scalar_t, 2, 1> B{{5},{6}};
 
@@ -34,51 +36,10 @@ struct TestFunction : public Type<TestFunction<scalar_t,Type>, lampc::FuncInfo<s
 /**
  * Compute the jacobian and hessian of a function
  */
-TEST(FunctionTest, Eval) {
-    using scalar_t = double;
-    using test_t = TestFunction<scalar_t, lampc::MakeEval>;
-    test_t test;
-
-    Eigen::Vector<scalar_t, 2> x;
-    Eigen::Vector<scalar_t, 1> u;
-    x << 1,2;
-    u << 3;
-
-    test_t::value_t value = test(lampc::Eval(), x, u);
-
-    Eigen::Vector<scalar_t,2> ground;
-    ground << 20,29;
-    EXPECT_EQ(value, ground);
-}
-
-TEST(FunctionTest, Jacobian) {
-    using scalar_t = double;
-    using test_t = TestFunction<scalar_t, lampc::MakeJacobian>;
-    test_t test;
-
-    Eigen::Vector<scalar_t, 2> x;
-    Eigen::Vector<scalar_t, 1> u;
-    x << 1,2;
-    u << 3;
-
-    test_t::value_t value;
-    test_t::jacobian_t jacobian;
-
-    value = test(lampc::Eval(), x, u);
-    std::tie(value, jacobian) = test(lampc::Jacobian(), x, u);
-
-    Eigen::Vector<scalar_t,2> val;
-    val << 20,29;
-    EXPECT_EQ(value, val);
-
-    Eigen::Matrix<scalar_t,2,3> jac;
-    jac << 1,2,5,3,4,6;
-    EXPECT_EQ(jacobian, jac);
-}
 
 TEST(FunctionTest, Hessian) {
     using scalar_t = double;
-    using test_t = TestFunction<scalar_t, lampc::MakeHessian>;
+    using test_t = TestFunction<scalar_t>;
     test_t test;
 
     Eigen::Vector<scalar_t, 2> x;
@@ -94,7 +55,7 @@ TEST(FunctionTest, Hessian) {
 
     test_t::value_t value;
     test_t::jacobian_t jacobian;
-    test_t::hessian_t hessian;
+    test_t::hessian_array_t hessian;
 
     std::tie(value, jacobian, hessian) = test(lampc::Hessian(), x, u);   
 
@@ -139,7 +100,7 @@ struct sys_t
 TEST(RK4Test, SimpleTest) {
     using scalar_t = double;
     sys_t<scalar_t> sys;
-    using dsys_t = lampc::functions::RK4<sys_t<scalar_t>, lampc::MakeJacobian, scalar_t, 2, 1>;
+    using dsys_t = lampc::functions::RK4<sys_t<scalar_t>, scalar_t, 2, 1>;
     dsys_t dsys(sys, 0.1);
 
     // Compute the discrete-time system and its jacobian
@@ -173,41 +134,9 @@ TEST(RK4Test, SimpleTest) {
  * Test the BSMatrix interface to the functions
  ***********************************************/
 
-TEST(BSMatrixTest, Eval) {
-    using scalar_t = double;
-    TestFunction<scalar_t, lampc::MakeEval> test;
-
-    Eigen::Vector<scalar_t, 2> x;
-    Eigen::Vector<scalar_t, 1> u;
-    x << 1,2;
-    u << 3;
-
-    // Function to run
-    auto f = [&](auto& M)
-    {
-        for(int i=0; i<5; i++)
-        {
-            x(0) = i;
-            M.resize(M.rows() + test.num_outputs,1);
-            test(x, u, M(seqN(i*2,2),0));
-        }
-    };
-
-    auto BS = lampc::template makeBSMatrix<scalar_t>(f);
-    Eigen::SparseMatrix<scalar_t> S;
-    BS.initialize_matrix(S);
-
-    BS.set_zero();
-    f(BS);
-
-    auto ground = triplet_to_sparse<double>(10,1,{{0,0,19},{1,0,26},{2,0,20},{3,0,29},{4,0,21},{5,0,32},{6,0,22},{7,0,35},{8,0,23},{9,0,38}});
-    EXPECT_TRUE(S.isApprox(ground, 1e-4));
-
-}
-
 TEST(BSMatrixTest, Jacobian) {
     using scalar_t = double;
-    TestFunction<scalar_t, lampc::MakeJacobian> test;
+    TestFunction<scalar_t> test;
 
     Eigen::Vector<scalar_t, 2> x;
     Eigen::Vector<scalar_t, 1> u;
@@ -260,7 +189,7 @@ TEST(FunctionsTest, eq) {
     // Discrete dynamics
     using scalar_t = double;
     sys_t<scalar_t> sys;
-    using dsys_t = lampc::functions::RK4<sys_t<scalar_t>, lampc::MakeJacobian, scalar_t, 2, 1>;
+    using dsys_t = lampc::functions::RK4<sys_t<scalar_t>, scalar_t, 2, 1>;
     dsys_t dsys(sys, 0.1);
   
     // Equality constraint dsys(x,u) - xp
@@ -277,8 +206,26 @@ TEST(FunctionsTest, eq) {
     u << 3;
     xp << 4,5;
 
-    jacobian.array() = 0;
     std::tie(value, jacobian) = dsys_eq(lampc::Jacobian(), xp,x,u);    
+
+    std::cout << "value = " << value.transpose() << std::endl;
+    std::cout << "jac \n" << jacobian << std::endl;
+}
+
+TEST(FunctionsTest, id) {
+
+    // Discrete dynamics
+    using scalar_t = double;
+    lampc::functions::id<scalar_t,2> id2;
+  
+    Eigen::Vector<scalar_t, 2> value;
+    Eigen::Matrix<scalar_t, 2, 2> jacobian;
+
+    Eigen::Vector<scalar_t, 2> x;
+    x << 1,2;
+
+    jacobian.array() = 20;
+    std::tie(value, jacobian) = id2(lampc::Jacobian(), x);
 
     std::cout << "value = " << value.transpose() << std::endl;
     std::cout << "jac \n" << jacobian << std::endl;

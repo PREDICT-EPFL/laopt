@@ -35,6 +35,8 @@ TEST(BSMatrix, Construction) {
     lampc::BSMatrixSparsity sparsity(6,8);
     F(sparsity);
 
+    std::cout << "sparsity = \n" << sparsity.get_sparsity() << std::endl;
+
     // Confirm the correct sparsity structure
     {
         Eigen::MatrixX<bool> ground(6,8);
@@ -55,7 +57,7 @@ TEST(BSMatrix, Construction) {
     // Build the BSMatrix
     auto BS = tape.template makeBSMatrix<scalar_t>();
     Eigen::SparseMatrix<scalar_t> S;
-    BS.initialize_matrix(S);
+    BS.allocate_memory(S);
 
     // Run the copy
     BS.set_zero();
@@ -86,7 +88,7 @@ TEST(BSMatrix, Construction_Complex) {
 
     auto BS = lampc::template makeBSMatrix<scalar_t>(F, 20,20);
     Eigen::SparseMatrix<scalar_t> S;
-    BS.initialize_matrix(S);
+    BS.allocate_memory(S);
 
     // Check sparsity structure
     {
@@ -127,7 +129,7 @@ TEST(BSMatrix, SimpleSum) {
 
     auto BS = lampc::template makeBSMatrix<scalar_t>(F, 10,9);
     Eigen::SparseMatrix<scalar_t> S;
-    BS.initialize_matrix(S);
+    BS.allocate_memory(S);
 
     // Confirm the correct sparsity structure
     {

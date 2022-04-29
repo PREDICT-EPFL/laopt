@@ -32,7 +32,7 @@ struct sys_t
 
 // Discretized dynamics
 template<typename scalar_t>
-using dsys_t = lampc::functions::RK4<sys_t<scalar_t>, lampc::MakeJacobian, scalar_t, 2, 1>;
+using dsys_t = lampc::functions::RK4<sys_t<scalar_t>, scalar_t, 2, 1>;
 
 
 // Parameters shared across different elements of the cost function
@@ -44,7 +44,7 @@ struct cost_param_t
 };
 
 template<typename scalar_t>
-struct stage_cost_t : public lampc::MakeHessian<stage_cost_t<scalar_t>, lampc::FuncInfo<scalar_t, 1, 2,2,1,1>>
+struct stage_cost_t : public lampc::MakeDifferentiable<stage_cost_t<scalar_t>, scalar_t, 1, 2,2,1,1>
 {
   cost_param_t<scalar_t>& p;
   stage_cost_t(cost_param_t<scalar_t>& p) : p(p) {}
@@ -61,7 +61,7 @@ struct stage_cost_t : public lampc::MakeHessian<stage_cost_t<scalar_t>, lampc::F
 };
 
 template<typename scalar_t>
-struct terminal_cost_t : public lampc::MakeHessian<terminal_cost_t<scalar_t>, lampc::FuncInfo<scalar_t, 1, 2,2>>
+struct terminal_cost_t : public lampc::MakeDifferentiable<terminal_cost_t<scalar_t>, scalar_t, 1, 2,2>
 {
   cost_param_t<scalar_t>& p;
   terminal_cost_t(cost_param_t<scalar_t>& p) : p(p) {}
@@ -103,90 +103,146 @@ TEST(ProblemTest, OCP_DoubleIntegrator_Functions) {
 
 };
 
-template<typename scalar_t, typename Problem>
-struct OCP_DoubleIntegrator : public Problem
+template<typename OptProblem, typename scalar_t>
+struct OCP_DoubleIntegrator
 {
-  // Tuning parameters
-  cost_param_t<scalar_t> cost_param;
+  using Variable = typename OptProblem::Variable;
 
-  // References into the decision variable
-  using Variable = typename Problem::Variable;
+  // Order here defines the order in the optimization problem
   Variable& x;
   Variable& u;
   Variable& xss;
   Variable& uss;
   const int N;
 
-  using Problem::constraints; // saves us having to write this->constraints everywhere
-
-  Eigen::Vector<scalar_t, 2> x_lb; // Upper and lower state bounds
-  Eigen::Vector<scalar_t, 2> x_ub;
-  Eigen::Vector<scalar_t, 2> x0; // Initial state
-
-  scalar_t u_ub() { return x0.sum() + 3; }
-
-
   // Functions we use to define the problem
   sys_t<scalar_t> sys; // Continuous-time dynamics
   dsys_t<scalar_t> dsys; // Discrete-time dynamics
   lampc::functions::eq<dsys_t<scalar_t>, 2, 2,1> dsys_eq; // dsys(x,u) - xp
 
-  cost_param_t<scalar_t> cost_params;
+  // Tuning parameters
+  cost_param_t<scalar_t> cost_param;
   stage_cost_t<scalar_t> stage_cost;
   terminal_cost_t<scalar_t> terminal_cost;
 
   lampc::functions::id<scalar_t, 2> idx;
 
-  OCP_DoubleIntegrator(int N) : N(N),
-                                x(this->variable(2,N)), // Order here defines the order
-                                u(this->variable(1,N)), // in the optimization problem
-                                xss(this->variable(2)), 
-                                uss(this->variable(1)),
+  OCP_DoubleIntegrator(OptProblem& opt, int N) :
+                                N(N),
+                                u(opt.variable(1,N)),
+                                xss(opt.variable(2)), 
+                                uss(opt.variable(1)),
+                                x(opt.variable(2,N)), 
                                 dsys(sys, 0.1),
                                 dsys_eq(dsys),
                                 stage_cost(cost_param),
                                 terminal_cost(cost_param)
-  {
-    x_lb << -5,-5;
-    x_ub << 5,5;
-  };
+  {};
 
-  template<typename D>
-  void eval_constraints()
+  void eval_constraints(OptProblem& opt)
   {
-    constraints.add(D(), idx, x(0));
+    opt.constraint(idx, x(0));
+    opt.constraint(idx, x(0));
     for(int i=0; i<N-1; i++)
-      constraints.add(D(), dsys_eq, x(i+1), x(i),u(i));
+    {
+      x(i)(0) = i;
+      opt.constraint(dsys_eq, x(i+1), x(i),u(i));
+    }
+    opt.constraint(idx, x(0));
   }
 
   // template<typename D = lampc::Hessian>
   // void eval_objective()
   // {
-  //   this->objective = 0; // Must be called to initialize the object each time
-
   //   for(int i=0; i<x.cols()-1; i++)
-  //     this->objective += this->stage_cost(D(), x(i), xss(0), u(i), uss(0));
-  //   this->objective += this->terminal_cost(D(), x(N-1), xss(0));
+  //     objective.add(D(), stage_cost, x(i), xss(0), u(i), uss(0));
+  //   objective.add(D(), terminal_cost, x(N-1), xss(0));
   // }
 };
 
 
+// template<template<typename> class UserCode, typename... Args>
+// auto makeProblem(Args... args)
+// {
+//   // Compute the sparsity structure
+//   ProblemSparsity sparsity; // Sparsity capture object
+//   UserCode<ProblemSparsity> user_sparsity(sparsity, args...);
+//   Eigen::VectorX<scalar_t> var(sparsity.size);
+//   sparsity.set_variable(var);
+//   user_sparsity.eval_constraints();
+
+//   return user_sparsity;
+
+//   // ProblemTape tape(sparsity.generate());
+//   // UserCode<ProblemTape> user_tape(tape, args...);
+//   // user_tape.set_variable(var);
+
+//   // Problem prob(tape.generate());
+//   // UserCode<Problem> user(prob, args...);
+//   // return user;
+// }
+
+
+// template<typename scalar_t, template<typename,typename> class UserProblem, typename... Args>
+// auto makeProblem(Args... args)
+// {
+//   // Extract sparsity pattern
+//   UserProblem<scalar_t, lampc::ProblemSparsity<scalar_t>> sparsity(args...);
+//   sparsity.initialize();
+//   sparsity.eval_constraints();
+
+//   std::cout << "sparsity =\n" << sparsity.constraint.jacobian.get_sparsity() << std::endl;
+
+//   // Compute copy sequence
+//   UserProblem<scalar_t, lampc::ProblemTape<scalar_t>> tape(args...);
+//   tape.initialize(sparsity.generate());
+//   tape.eval_constraints();
+
+//   // OCP_DoubleIntegrator<scalar_t, lampc::Problem<scalar_t>> problem(args...);
+//   // problem(tape.generate());
+
+//   // return problem;
+// }
+
+
 TEST(ProblemTest, Constraint) {
-  // Test sparsity discovery 
   using scalar_t = double;
 
-  OCP_DoubleIntegrator<scalar_t, lampc::ProblemSparsity<scalar_t>> sparsity(10);  
-  Eigen::VectorX<scalar_t> var(sparsity.size);
-  sparsity.set_variable(var);
-  sparsity.eval_constraints<lampc::Jacobian>();
+  // Compute the sparsity structure
+  lampc::ProblemSparsity<scalar_t> sparsity; // Sparsity capture object
+  OCP_DoubleIntegrator<lampc::ProblemSparsity<scalar_t>, scalar_t> ocp_sparsity(sparsity, 10);
+  ocp_sparsity.eval_constraints(sparsity);
 
-  std::cout << "Constraint jacobian sparsity pattern: \n" << sparsity.constraints.jacobian.get_sparsity() << std::endl;
+  std::cout << "sparsity = \n" << sparsity.constraint.jacobian.get_sparsity() << std::endl;
 
-  // OCP_DoubleIntegrator<scalar_t, lampc::ProblemTape<scalar_t>> tape(10);
-  // tape.constraints.jacobian.initialize(sparsity.constraints.jacobian.get_sparsity())
+  lampc::ProblemTape<scalar_t> tape(sparsity.generate());
+  OCP_DoubleIntegrator<lampc::ProblemTape<scalar_t>, scalar_t> ocp_tape(tape, 10);
+  ocp_tape.eval_constraints(tape);
 
-  // tape.set_variable(var);
-  // tape.eval_constraints<lampc::Jacobian>();
+  std::cout << "jacobian copies = " << tape.constraint.jacobian.copy_segments << std::endl;
+  std::cout << "value copies = " << tape.constraint.value.copy_segments << std::endl;
+  std::cout << "lb copies = " << tape.constraint.lb.copy_segments << std::endl;
+
+  lampc::Problem<scalar_t> prob(tape.generate());
+  OCP_DoubleIntegrator<lampc::Problem<scalar_t>, scalar_t> ocp(prob, 10);
+
+  auto mem = prob.make_problem_memory();
+
+  // Finally, the call!
+  const std::size_t NUM_EXP = 1000;
+  auto start = std::chrono::steady_clock::now();
+  for(int i = 0; i < NUM_EXP; ++i)
+  {
+    ocp.eval_constraints(prob);
+  }
+  auto end = std::chrono::steady_clock::now();
+
+  std::cout << "Jacobian time: "
+      << std::chrono::duration_cast<std::chrono::microseconds>((end - start)/(double)NUM_EXP).count()
+      << " us" << std::endl;
+
+  std::cout << "g = " << mem.g.transpose() << std::endl;
+  std::cout << "g_jacobian = \n" << Eigen::MatrixX<double>(mem.g_jacobian) << std::endl;
 
 };
 

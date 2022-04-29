@@ -41,31 +41,6 @@ struct VariableBase
 	  new (&src) Eigen::Map<Eigen::MatrixX<scalar_t>>(var.data() + offset, n, m);
 	}
 
-	// /** 
-	//  * Return the matrix
-	//  */
-	// inline Eigen::Map<Eigen::MatrixX<scalar_t>> operator[]()
-	// {
-	// 	return src;
-	// }
-
-	// /** 
-	//  * Return a reference to the index'th variable in the matrix
-	//  */
-	// inline Eigen::Ref<Eigen::VectorX<scalar_t>> operator[](int index)
-	// {
-	// 	assert(src_valid && "set_var must be called before using this variable");
-	// 	return src(Eigen::all,index);
-	// }
-
-	// /**
-	//  * Return a pair of {offset, length}
-	//  */
-	// inline Segment operator[](int index)
-	// {
-	// 	return Segment{.index = offset + index * n, .length = n};
-	// }	
-
 protected:
 
 	// Offset into the global variable
@@ -86,11 +61,15 @@ template<typename scalar_t>
 struct VarSliceInfo
 {
 	Segment segment;
-	const Eigen::Ref<const Eigen::VectorX<scalar_t>> vec;
+	Eigen::Ref<Eigen::VectorX<scalar_t>> vec;
 
-	VarSliceInfo(size_t index, size_t length, const Eigen::Ref<const Eigen::VectorX<scalar_t>>& vec)
+	VarSliceInfo(size_t index, size_t length, Eigen::Ref<Eigen::VectorX<scalar_t>> vec)
 	: segment{.index=index, .length=length}, vec(vec) {}
-};
+
+	// Pass through all eigen indexing calls to vec
+	template<typename... Args>
+	EIGEN_STRONG_INLINE auto operator()(Args... args) -> decltype(vec(args...)) {return vec(args...);}
+ };
 
 template<typename scalar_t>
 struct VariableTape : public VariableBase<scalar_t>
@@ -133,23 +112,58 @@ struct Variable : public VariableBase<scalar_t>
 template<typename MatrixType>
 struct ConstraintBase
 {
+	// Used for sparsity discovery
 	ConstraintBase()
 	{
-		// Specify sizes
+		// Specify initial sizes
 		value.resize(0,1);
 		lb.resize(0,1);
 		ub.resize(0,1);
+		lb_x.resize(0,1);
+		ub_x.resize(0,1);
 	}
+
+	// Sparsity structure is specified
+	ConstraintBase(Eigen::MatrixX<bool> jacobian_sparsity_structure)
+		: jacobian(jacobian_sparsity_structure)
+	{
+		// Set the value and the bounds to be dense vectors
+		Eigen::VectorX<bool> dense_vector(jacobian_sparsity_structure.rows());
+		dense_vector.array() = 1;
+		value.initialize(dense_vector, 0, 1);
+		lb.initialize(dense_vector, 0, 1);
+		ub.initialize(dense_vector, 0, 1);
+
+		dense_vector.resize(jacobian_sparsity_structure.cols());
+		dense_vector.array() = 1;
+		lb_x.initialize(dense_vector, 0, 1);
+		ub_x.initialize(dense_vector, 0, 1);
+	}
+
+	// Copy sequence is specified
+	ConstraintBase(BSMatrixInfo value, BSMatrixInfo jacobian, 
+								 BSMatrixInfo lb, BSMatrixInfo ub,
+								 BSMatrixInfo lb_x, BSMatrixInfo ub_x)
+		: value(value), jacobian(jacobian), lb(lb), ub(ub), lb_x(lb_x), ub_x(ub_x)
+		{}
+
 
 	MatrixType value;
 	MatrixType jacobian;
 
+	// Upper/lower bounds of the constraints
 	MatrixType lb;
 	MatrixType ub;
+
+	// Upper/lower bounds of the variables
+	MatrixType lb_x;
+	MatrixType ub_x;
 
 	void add_variable(int var_size)
 	{
 		jacobian.extend(0, var_size);
+		lb_x.extend(var_size, 0);
+		ub_x.extend(var_size, 0);
 	}
 
 	void add_constraint(int rows)
@@ -160,21 +174,17 @@ struct ConstraintBase
 		lb.extend(rows, 0);
 		ub.extend(rows, 0);
 	}
-
-// public:
-// 	// Initial sizes of the constraints
-// 	ConstraintBase(size_t num_constraints, size_t num_vars) :
-// 		value(num_constraints,1), jacobian(num_constraints,num_vars),
-// 		lb(num_constraints), ub(num_constraints)
-// 	{}
 };
 
-template<typename scalar_t, typename MatrixType>
-struct ConstraintTape : public ConstraintBase<MatrixType>
+
+/**
+ * Construction form of the constraint
+ */
+template<typename MatrixType>
+struct ConstraintConstruction : public ConstraintBase<MatrixType>
 {
-	// using Base = ConstraintBase<MatrixType<scalar_t>>;
-	// ConstraintTape() : Base(num_constraints, num_vars)
-	// {}
+	using Base = ConstraintBase<MatrixType>;
+	using Base::Base; // Brings the base constructors into scope
 
 	/**
 	 * Add a block-row to the constraint
@@ -205,106 +215,47 @@ struct ConstraintTape : public ConstraintBase<MatrixType>
 			);
 	}
 
-
-	// template<typename Func>
-	// ConstraintTape<scalar_t>& operator<<(typename lampc::CallTape<Func> call)
-	// {
-	// 	// Push a new constraint on the bottom, and set the columns
-	// 	value(-1, 0);
-
-	// 	// Copy the value to the right place
-	// 	value = call.value;
-	// 	return *this;
-	// }
-
-	// template<typename Func>
-	// ConstraintTape<scalar_t>& operator<<(typename lampc::JacobianTapeCall<Func> call)
-	// {
-	// 	// Push a new constraint on the bottom, and set the columns
-	// 	value(-1, 0);
-	// 	jacobian(-1, call.inputs);
-
-	// 	// Copy the value and jacobian to the right place
-	// 	value = call.value;
-	// 	jacobian = call.jacobian;
-	// 	return *this;
-	// }
-
-	// template<int num_outputs, int... input_sizes>
-	// using JacobianTapeCall = typename lampc::FunctionInfo<scalar_t, num_outputs, input_sizes...>::JacobianCall;
-
-	// template<int num_outputs, int... input_sizes>
-	// ConstraintTape<scalar_t>& operator<<(JacobianTapeCall<num_outputs, input_sizes...>& data)
-	// {
-
-	// }
-
-	/**
-	 * Called when all copy operations have been completed once, which fixes the sparsity structure.
-	 * 
-	 * If rows and cols aren't specified, then they will be taken as large enough to contain all the
-	 * blocks copied in.
-	 */
-	// void finalize_structure(int rows=-1, int cols=-1)
-	// {
-	// 	value.finalize_structure(rows, 1);
-	// 	jacobian.finalize_structure(rows, cols);
-	// }
+	// Default evaluation is to add the constraint with jacobian computation
+	template<typename F, typename... Vars>
+	void operator()(F& f, Vars... x)
+	{
+		add(lampc::Jacobian(), f, x...);
+	}	
 };
 
-// template<typename scalar_t>
-// struct Constraint : public ConstraintBase<scalar_t, Constraint<scalar_t>>
-// {
-// 	using Base = ConstraintBase<scalar_t, Constraint<scalar_t>>;
-// 	friend Base;
+/**
+ * Deployment form of the constraint
+ */
+template<typename scalar_t>
+struct Constraint : public ConstraintBase<BSMatrix<scalar_t>>
+{
+	using Base = ConstraintBase<BSMatrix<scalar_t>>;
+	using Base::Base;
 
-// 	BSMatrix<scalar_t> value;
-// 	BSMatrix<scalar_t> jacobian;
+	/**
+	 * Add a block-row to the constraint
+	 * 
+	 * Vars are of type VarSliceInfo<scalar_t>'s
+	 */
+	template<typename F, typename... Vars>
+	void add(lampc::Eval, F& f, Vars... x)
+	{
+		f(x..., this->value);
+	}
 
-// public:
-// 	Constraint() : Base()
-// 	{}
+	template<typename F, typename... Vars>
+	void add(lampc::Jacobian, F& f, Vars... x)
+	{
+		f(x..., this->value, this->jacobian);
+	}
 
-// 	void initialize_from_tape(ConstraintTape<scalar_t>& tape)
-// 	{
-// 		value.initialize_from_tape(tape.value);
-// 		jacobian.initialize_from_tape(tape.jacobian);
-// 	}
-
-// 	/**
-// 	 * Add a block-row to the constraint
-// 	 */
-// 	template<typename F, typename... Vars>
-// 	void add(lampc::Eval, F& f, Vars... x)
-// 	{
-// 		f(lampc::Eval(), x...);
-// 		value = f.value;
-// 	}
-
-// 	template<typename F, typename... Vars>
-// 	void add(lampc::Jacobian, F& f, Vars... x)
-// 	{
-// 		f(lampc::Jacobian(), x...);
-
-// 		int n = F::num_outputs;
-// 		value.resize(value.rows() + n);
-// 		jacobian.resize(jacobian.rows() + n);
-
-// 		f(x.vec..., value(seqN(last-n,n)), jacobian(seqN(last-n,n),{x.seq...}))
-// 	}
-
-
-// 	/**
-// 	 * Called when all copy operations have been completed once, which fixes the sparsity structure.
-// 	 * 
-// 	 * If rows and cols aren't specified, then they will be taken as large enough to contain all the
-// 	 * blocks copied in.
-// 	 */
-// 	void finalize_structure(int rows=-1, int cols=-1)
-// 	{
-// 	}
-
-// };
+	// Default evaluation is to add the constraint with jacobian computation
+	template<typename F, typename... Vars>
+	void operator()(F& f, Vars... x)
+	{
+		add(lampc::Jacobian(), f, x...);
+	}	
+};
 
 
 // /**
@@ -467,29 +418,80 @@ struct ConstraintTape : public ConstraintBase<MatrixType>
 // 	scalar_t* weight_src;
 // };
 
+/**
+ * Captures all information about the sparsity pattern of a problem.
+ * Input to the ProblemTape.
+ */
+struct ProblemSparsityPattern
+{
+	// ProblemSparsityPattern(filename) // Load from file
+
+  Eigen::MatrixX<bool> constraints_jacobian;
+  Eigen::MatrixX<bool> objective_hessian;
+};
+
+
+/**
+ * Captures all information required to generate a Problem.
+ * Input to the Problem.
+ */
+struct ProblemInfo
+{
+	// ProblemCopySequence(filename) // Load from file
+
+	BSMatrixInfo constraints_jacobian;
+	BSMatrixInfo constraints_value;
+
+	BSMatrixInfo lb;
+	BSMatrixInfo ub;
+
+	BSMatrixInfo lb_x;
+	BSMatrixInfo ub_x;
+};
+
+
 
 template<typename scalar_t, typename _Variable, typename _Constraint, typename _Objective>
 struct ProblemBase
 {
+	// Construct Sparsity discovery
+	ProblemBase() 
+	{}
+
+	// Construct Tape recording
+	ProblemBase(ProblemSparsityPattern pattern) : constraint(pattern.constraints_jacobian) 
+	{}
+
+	// Construct Problem
+	ProblemBase(ProblemInfo info) : constraint(info.constraints_value, info.constraints_jacobian, info.lb, info.ub, info.lb_x, info.ub_x) 
+	{}
+
+
 	using Variable = _Variable;
 	using Constraint = _Constraint;
 	using Objective = _Objective;
 
-	Constraint constraints;
+	Constraint constraint;
 	Objective objective;
 
-	Variable& variable(int n, int m=1)
+	std::shared_ptr<Variable> make_variable(int n, int m=1)
 	{
 		auto v = std::make_shared<Variable>(n,m,size);
 		variables.push_back(v);
 		size = compute_size(); // Update the total size of the problem variable
 
-		// Tell the constraints and objective about this new variable
-		constraints.add_variable(n*m);
-		// objective.add_variable(n*m); // TODO!!!
+	  // Grow all the problem elements
+		constraint.add_variable(n * m);
+		// objective.add_variable(n * m);
+		
+		return v;
+	}
 
+	Variable& variable(int n, int m=1)
+	{
 		// Return with move symantics is required, 
 		// since we need the reference stored in variables to remain valid
+		std::shared_ptr<Variable> v = make_variable(n,m);
 		return *(v.get());
 	}
 
@@ -500,6 +502,16 @@ struct ProblemBase
 		for(auto v: variables)
 			v->set_var(var);
 	}
+
+	// void initialize()
+	// {
+	// 	for(auto v: variables)
+	// 	{
+	// 		// Tell the constraints and objective about this new variable
+	// 		constraint.add_variable(v->rows() * v->cols());
+	// 		// objective.add_variable(n*m); // TODO!!!		
+	// 	}
+	// }
 
 	// void finalize_structure(int rows=-1, int cols=-1)
 	// {
@@ -516,71 +528,179 @@ private:
 	}
 };
 
-template<typename scalar_t>
-struct ProblemTape : public ProblemBase<scalar_t, VariableTape<scalar_t>, ConstraintTape<scalar_t, BSMatrixTape>, double>
+/**
+ * Common class for the sparsity and tape problems
+ */
+template<typename scalar_t, typename Constraint>
+struct ProblemConstruction : public ProblemBase<scalar_t, VariableTape<scalar_t>, Constraint, double>
 {
-	ProblemTape() {}
+	using Base = ProblemBase<scalar_t, VariableTape<scalar_t>, Constraint, double>;
+
+	ProblemConstruction() {}
+	ProblemConstruction(ProblemSparsityPattern pattern) : Base(pattern) {}
+
+	Eigen::VectorX<scalar_t> var;
+
+	/**
+	 * For the construction classes, we also provide the memory used for evaluation within problem.
+	 * As a result, when a new variable is created, we need to re-allocate memory for var
+	 */
+	using Variable = typename Base::Variable;
+	Variable& variable(int n, int m=1)
+	{
+		std::shared_ptr<Variable> new_variable = Base::make_variable(n,m);
+
+		// Grow the size of the variable
+		var.resize(this->size);
+	  this->set_variable(var);
+
+		return *(new_variable.get());
+	}
 };
 
 template<typename scalar_t>
-struct ProblemSparsity : public ProblemBase<scalar_t, VariableTape<scalar_t>, ConstraintTape<scalar_t, BSMatrixSparsity>, double>
+struct ProblemTape : public ProblemConstruction<scalar_t, ConstraintConstruction<BSMatrixTape>>
 {
-	ProblemSparsity() {}
+	using Base = ProblemConstruction<scalar_t, ConstraintConstruction<BSMatrixTape>>;
+	using Base::constraint;
+	ProblemTape(ProblemSparsityPattern pattern) : Base(pattern)
+	{}
+
+	ProblemInfo generate()
+	{
+		ProblemInfo info;
+
+		info.constraints_jacobian = constraint.jacobian.generate();
+		info.constraints_value = constraint.value.generate();
+
+		info.lb = constraint.lb.generate();
+		info.ub = constraint.ub.generate();
+
+		info.lb_x = constraint.lb_x.generate();
+		info.ub_x = constraint.ub_x.generate();
+
+		return info;
+	}
 };
 
-// template<typename scalar_t>
-// struct Problem : public ProblemBase<scalar_t, Variable<scalar_t>, Constraint<scalar_t>, WeightedSum<scalar_t>>
-// {
-// 	Problem() {}
+template<typename scalar_t>
+struct ProblemSparsity : public ProblemConstruction<scalar_t, ConstraintConstruction<BSMatrixSparsity>>
+{
+	using Base = ProblemConstruction<scalar_t, ConstraintConstruction<BSMatrixSparsity>>;
+	using Base::constraint;
 
-// 	void initialize_from_tape(ProblemTape<scalar_t>& tape)
-// 	{
-// 		this->constraints.initialize_from_tape(tape.constraints);
-// 		this->objective.initialize_from_tape(tape.objective);
-// 	}
+	/**
+	 * Produce all sparsity data for this problem
+	 */
+	ProblemSparsityPattern generate()
+	{
+		ProblemSparsityPattern pattern;
+		pattern.constraints_jacobian = constraint.jacobian.get_sparsity();
+		// Add other sparsity patterns here
+		return pattern;
+	}
 
-// 	/**
-// 	 * Allocates memory for this problem, including the sparsity structures
-// 	 */
-// 	void initialize_memory(Eigen::VectorX<scalar_t>& var,
-// 												 Eigen::VectorX<scalar_t>& g,
-// 											   Eigen::SparseMatrix<scalar_t>& g_jacobian,
-// 											   Eigen::VectorX<scalar_t>& obj_gradient,
-// 											   Eigen::SparseMatrix<scalar_t>& obj_hessian,
-// 											   Eigen::VectorX<scalar_t>& obj_weight)
-// 	{
-// 		var.resize(this->size, 1);
-// 		this->constraints.jacobian.initialize_matrix(g_jacobian);
-// 		g.resize(g_jacobian.rows(), 1);
+};
 
-// 		obj_gradient.resize(g_jacobian.cols(), 1);
-// 		this->objective.hessian.initialize_matrix(obj_hessian);
-// 		obj_weight.resize(this->objective.num_weights, 1);
-// 		obj_weight.array() = 1; // Default
-// 	}
+template<typename scalar_t>
+struct Problem : public ProblemBase<scalar_t, Variable<scalar_t>, Constraint<scalar_t>, double>
+{
+	using Base = ProblemBase<scalar_t, Variable<scalar_t>, Constraint<scalar_t>, double>;
+	using Base::constraint;
 
-// 	/**
-// 	 * Sets the memory locations that this problem will read/write to.
-// 	 * 
-// 	 * Assumption: All memory has already been allocated
-// 	 */
-// 	void set_memory_targets(Eigen::VectorX<scalar_t>& var,
-// 													Eigen::VectorX<scalar_t>& g,
-// 											   	Eigen::SparseMatrix<scalar_t>& g_jacobian,
-// 											    Eigen::VectorX<scalar_t>& obj_gradient,
-//  											    Eigen::SparseMatrix<scalar_t>& obj_hessian,
-//  											    Eigen::VectorX<scalar_t>& obj_weight)
-// 	{
-//     this->set_variable(var);
+	const size_t num_constraints;
+	const size_t num_variables;
 
-//     this->constraints.value.set_target(g);
-//     this->constraints.jacobian.set_target(g_jacobian);
+	Problem(ProblemInfo info) : Base(info),
+		num_constraints(constraint.jacobian.rows()),
+		num_variables(constraint.jacobian.cols())
+	{}
 
-//     this->objective.gradient.set_target(obj_gradient);
-//     this->objective.hessian.set_target(obj_hessian);
-//     this->objective.set_weight(obj_weight);
-// 	}
-// };
+	/**
+	 * Sets the memory locations that this problem will read/write to.
+	 * 
+	 * Assumption: All memory has already been allocated
+	 */
+	void set_memory_targets(	  
+		Eigen::Ref<Eigen::VectorX<scalar_t>> var,
+		Eigen::Ref<Eigen::VectorX<scalar_t>> g,
+		Eigen::SparseMatrix<scalar_t>& g_jacobian,
+		Eigen::Ref<Eigen::VectorX<scalar_t>> lb,
+		Eigen::Ref<Eigen::VectorX<scalar_t>> ub,
+		Eigen::Ref<Eigen::VectorX<scalar_t>> lb_x,
+		Eigen::Ref<Eigen::VectorX<scalar_t>> ub_x)
+											    // Eigen::VectorX<scalar_t>& obj_gradient,
+ 											   //  Eigen::SparseMatrix<scalar_t>& obj_hessian,
+ 											   //  Eigen::VectorX<scalar_t>& obj_weight)
+	{
+		std::cout << "set_memory_targets\n";
+    this->set_variable(var);
+
+    this->constraint.value.set_target(g);
+    this->constraint.jacobian.set_target(g_jacobian);
+		this->constraint.lb.set_target(lb);
+		this->constraint.ub.set_target(ub);
+		this->constraint.lb_x.set_target(lb_x);
+		this->constraint.ub_x.set_target(ub_x);
+
+    // this->objective.gradient.set_target(obj_gradient);
+    // this->objective.hessian.set_target(obj_hessian);
+    // this->objective.set_weight(obj_weight);
+	}
+
+	/**
+	 * The Problem class doesn't own any of the memory for the problem.
+	 * This is done because most solvers (e.g., ipopt) own their own
+	 * memory.
+	 * 
+	 * This class is a helper that provides a full set of memory for a given
+	 * problem.
+	 */
+	struct ProblemMemory
+	{
+	  Eigen::VectorX<scalar_t> var;
+
+		Eigen::VectorX<scalar_t> g;
+		Eigen::SparseMatrix<scalar_t> g_jacobian;
+		Eigen::VectorX<scalar_t> lb;
+		Eigen::VectorX<scalar_t> ub;
+		Eigen::VectorX<scalar_t> lb_x;
+		Eigen::VectorX<scalar_t> ub_x;
+
+		ProblemMemory(size_t num_constraints, size_t num_variables) :
+			var(num_variables),
+			g(num_constraints),
+			lb(num_constraints), ub(num_constraints),
+			lb_x(num_variables), ub_x(num_variables)
+			{}
+
+	  // Eigen::VectorX<scalar_t> obj_gradient;
+	  // Eigen::SparseMatrix<scalar_t> obj_hessian;
+	  // Eigen::VectorX<scalar_t> obj_weight;
+	};
+
+	/**
+	 * Allocates and associates problem memory for a given problem.
+	 */
+	ProblemMemory make_problem_memory()
+	{
+		ProblemMemory mem(num_constraints, num_variables);
+		constraint.jacobian.allocate_memory(mem.g_jacobian);
+
+		set_memory_targets(mem.var, mem.g, mem.g_jacobian, mem.lb, mem.ub, mem.lb_x, mem.ub_x);
+
+		mem.var.array() = 0;
+		mem.g.array() = 0;
+		for(int i=0; i<mem.g_jacobian.nonZeros(); i++) mem.g_jacobian.valuePtr()[i] = 0;
+		mem.lb.array() = 0;
+		mem.ub.array() = 0;
+		mem.lb_x.array() = 0;
+		mem.ub_x.array() = 0;
+
+		return mem;
+	}
+
+};
 
 
 // /**
@@ -621,40 +741,6 @@ struct ProblemSparsity : public ProblemBase<scalar_t, VariableTape<scalar_t>, Co
 // }
 
 
-// /**
-//  * The Problem class doesn't own any of the memory for the problem.
-//  * This is done because most solvers (e.g., ipopt) own their own
-//  * memory.
-//  * 
-//  * This class is a helper that provides a full set of memory for a given
-//  * problem.
-//  */
-// template<typename scalar_t>
-// struct ProblemMemory
-// {
-//   Eigen::VectorX<scalar_t> var;
-
-//   Eigen::VectorX<scalar_t> g;
-//   Eigen::SparseMatrix<scalar_t> g_jacobian;
-
-//   Eigen::VectorX<scalar_t> obj_gradient;
-//   Eigen::SparseMatrix<scalar_t> obj_hessian;
-//   Eigen::VectorX<scalar_t> obj_weight;
-// };
-
-// /**
-//  * Allocates and associates problem memory for a given problem.
-//  */
-// template<typename scalar_t, typename P>
-// ProblemMemory<scalar_t> make_problem_memory(P& prob)
-// {
-// 	ProblemMemory<scalar_t> mem;
-
-// 	prob.initialize_memory(mem.var, mem.g, mem.g_jacobian, mem.obj_gradient, mem.obj_hessian, mem.obj_weight);
-// 	prob.set_memory_targets(mem.var, mem.g, mem.g_jacobian, mem.obj_gradient, mem.obj_hessian, mem.obj_weight);
-
-// 	return mem;
-// }
 
 
 };
