@@ -168,7 +168,7 @@ TEST(BSMatrixTest, Jacobian) {
     Eigen::SparseMatrix<scalar_t> S_jacobian;
 
     BS_value.set_target(S_value);
-    BS_jacobian.initialize_matrix(S_jacobian);
+    BS_jacobian.allocate_memory(S_jacobian);
 
     f(BS_value, BS_jacobian);
 
