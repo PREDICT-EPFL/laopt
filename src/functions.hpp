@@ -93,7 +93,7 @@ namespace lampc {
 		static constexpr size_t num_outputs = num_outputs_;
 
 		using scalar_t = typename F::scalar_t;
-		static constexpr size_t num_inputs = lampc::meta::sum_template<input_sizes...>();  // Total number of inputs
+		static constexpr size_t num_inputs = num_outputs + F::num_inputs;  // Total number of inputs
    
     eq(F& f) : f(f) {}
 
@@ -117,7 +117,7 @@ namespace lampc {
     	// Jacobian is [-I jac_f]
 
 			// Set jac_f part
-			f(args..., outvalue, outjacobian(all,seqN(num_outputs,fix<num_inputs>)));
+			f(args..., outvalue, outjacobian(all,seqN(num_outputs,fix<F::num_inputs>)));
 
 			// Add the -x part
 			outvalue -= x;
@@ -137,11 +137,15 @@ namespace lampc {
     	// Jacobian is [-I jac_f]
 
 			// Set jac_f part
-			f(args..., outvalue, outjacobian(all,seqN(num_outputs,fix<num_inputs>)), outhessian);
+			f(args..., outvalue, outjacobian(all,seqN(num_outputs,fix<F::num_inputs>)), outhessian);
 
 			// Add the -x part
 			outvalue -= x;
+
+			// Dense version
 			// outjacobian(all,seqN(0,fix<num_outputs>)) = -Eigen::Matrix<scalar_t,num_outputs,num_outputs>::Identity();
+
+			// Sparse version
 			for(int i=0; i<num_outputs; i++)
 				outjacobian(seqN(i,fix<1>), seqN(i, fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(-1);
     }
