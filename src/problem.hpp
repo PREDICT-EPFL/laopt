@@ -33,7 +33,11 @@ struct VarSlice
 	// Pass through all eigen indexing calls to vec
 	template<typename... Args>
 	EIGEN_STRONG_INLINE auto operator()(Args... args) -> decltype(vec(args...)) {return vec(args...);}
- };
+
+  EIGEN_STRONG_INLINE auto matrix() -> decltype(vec.matrix()) { vec.matrix(); }  
+  EIGEN_STRONG_INLINE auto array() -> decltype(vec.array()) { return vec.array(); }
+  EIGEN_STRONG_INLINE auto transpose() -> decltype(vec.transpose()) { return vec.transpose(); }
+};
 
 
 /**
@@ -148,12 +152,11 @@ struct ConstraintBase
 	template<typename F, typename... Vars>
 	void add(lampc::Eval, F& f, Vars... x)
 	{
-		// Push a new constraint on the bottom, and set the columns
 		auto out_indices = seqN(value.rows(), fix<F::num_outputs>);
 		this->add_constraint(f.num_outputs);
 
 		// Copy the value and jacobian to the right place
-		value(out_indices,0) = f(lampc::Eval(), x.vec...);
+		f(x.vec..., value(out_indices, 0));
 	}
 
 	template<typename F, typename... Vars>
@@ -162,7 +165,7 @@ struct ConstraintBase
 		auto out_indices = seqN(value.rows(), fix<F::num_outputs>);
 		this->add_constraint(f.num_outputs);
 
-		// // Verion 1: Fixed-sized call. Does not exploit any sparsity in the function, but better for small functions.
+		// // Verion 1: Fixed-sized call. Does not exploit any sparsity in the function, but a little better for small functions.
 		// auto out = f(lampc::Jacobian(), x.vec...);
 		// value(out_indices,0) = std::get<0>(out);
 		// this->jacobian(out_indices, lampc::multiSeq_to_index<F::num_inputs>({x.segment...})) = std::get<1>(out);
@@ -213,8 +216,11 @@ struct WeightedSumBase
 	{
 		// Reset all sizes so that the "last" keywords work
 		weight.resize(0,1);
+		gradient.zero_buffer();
 		gradient.resize(0,1);
+		hessian.set_zero();
 		hessian.reset_copy_index();
+		value = 0;
 	}
 
 	// Used for sparsity discovery
@@ -263,44 +269,42 @@ struct WeightedSumBase
 	template<typename F, typename... Vars>
 	void add(lampc::Eval, F& f, Vars... x)
 	{
-		this->add_constraint(f.num_outputs);
-		auto con_rows = seqN(lastp1-f.num_outputs,f.num_outputs);
+		auto con_rows = seqN(weight.rows(), fix<F::num_outputs>);
+		this->add_constraint(F::num_outputs);
 
-		// Copy the value and jacobian to the right place
+		// Copy the value to the right place
 		value += f.weightedsum(x.vec..., weight(con_rows, 0));
 	}
 
 	template<typename F, typename... Vars>
 	void add(lampc::Gradient, F& f, Vars... x)
 	{
-		this->add_constraint(f.num_outputs);
-		auto con_rows = seqN(lastp1-f.num_outputs,f.num_outputs);
+		auto con_rows = seqN(weight.rows(), fix<F::num_outputs>);
+		this->add_constraint(F::num_outputs);
 
-		// Copy the value and jacobian to the right place
-		value += f.weightedsum(x.vec..., gradient(multiSeq(x.segment.seq()...),0),
-													 weight(con_rows,0));
+		// Copy the value and gradient to the right place
+		value += f.weightedsum(x.vec..., weight(con_rows,0),
+													 gradient(lampc::multiSeq_to_index<F::num_inputs>({x.segment...}),0));
 	}
 
 	template<typename F, typename... Vars>
 	void add(lampc::Hessian, F& f, Vars... x)
 	{
-		this->add_constraint(f.num_outputs);
-		auto con_rows = seqN(lastp1-f.num_outputs,f.num_outputs);
+		auto con_rows = seqN(weight.rows(), fix<F::num_outputs>);
+		this->add_constraint(F::num_outputs);
 
 		// Copy the value and jacobian to the right place
-		value += f.weightedsum(x.vec..., 
-									gradient(multiSeq(x.segment.seq()...),0),
-									hessian(multiSeq(x.segment.seq()...), multiSeq(x.segment.seq()...)),
-									weight(con_rows,0));
+		auto inputs = lampc::multiSeq_to_index<F::num_inputs>({x.segment...});
+		value += f.weightedsum(x.vec..., weight(con_rows,0),
+													 gradient(inputs,0), hessian(inputs, inputs));
 	}
 
 	// Default evaluation is to add the constraint with jacobian computation
 	template<typename F, typename... Vars>
 	void operator()(F& f, Vars... x)
 	{
-		add(lampc::Gradient(), f, x...);
+		add(lampc::Hessian(), f, x...);
 	}
-
 };
 
 /**
@@ -446,7 +450,7 @@ struct ProblemTape : public ProblemConstruction<Variable, Constraint, Objective>
 
 		info.constraints_jacobian = constraint.jacobian.generate();
 		info.obj_hessian = objective.hessian.generate();
-		info.obj_num_weights = objective.weight.cols();
+		info.obj_num_weights = objective.weight.size();
 
 		return info;
 	}
@@ -466,7 +470,7 @@ struct ProblemSparsity : public ProblemConstruction<Variable, Constraint, Object
 		ProblemSparsityPattern pattern;
 		pattern.constraints_jacobian = this->constraint.jacobian.get_sparsity();
 		pattern.obj_hessian = this->objective.hessian.get_sparsity();
-		pattern.obj_num_weights = this->objective.weight.cols();
+		pattern.obj_num_weights = this->objective.weight.size();
 		return pattern;
 	}
 

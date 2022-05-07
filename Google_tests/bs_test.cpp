@@ -197,19 +197,9 @@ TEST(BSMatrixDense, Construction)
     ASSERT_DEATH(F(DD), "");
 }
 
-template<typename scalar_t, template<int,int> class Matrix>
-void test_assignment_speeds()
+template<typename Input, typename Target>
+void test_assignment_speeds(Eigen::MatrixBase<Input>& source, Target& target)
 {
-    lampc::BSMatrixDenseDeployment<scalar_t> M;
-    Matrix<10,10> buffer(10,10);
-    M.set_buffer(buffer);
-    M.resize(10,10);
-    Matrix<5,5> target(5,5);
-    Matrix<5,5> source(5,5);
-    scalar_t acc;
-    Eigen::Map<Eigen::Matrix<scalar_t,5,5>> map(buffer.data());
-    Eigen::Map<Eigen::Matrix<scalar_t,10,10>> map_buffer(buffer.data());
-
     const std::array<int, 5> rows{6,7,0,1,2};
     const std::array<int, 5> cols{7,5,3,1,0};
 
@@ -224,64 +214,63 @@ void test_assignment_speeds()
 
     auto start = std::chrono::steady_clock::now();
     auto end = std::chrono::steady_clock::now();
-    std::size_t NUM_EXP = 100;
+    std::size_t NUM_EXP = 1000000;
 
     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
     start = std::chrono::steady_clock::now();
     for(int i = 0; i < NUM_EXP; ++i)
     {
         buffer(6,7) = i+1;
-        target = M(rows, cols);
+        target = source(rows, cols);
         acc += target(0,0);
     }
     end = std::chrono::steady_clock::now();
     // std::cout << " acc = " << acc << std::endl;
-    std::cout << std::setw (40) << "M(rows, cols): "
+    std::cout << std::setw (40) << "source(rows, cols): "
       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-      << " ns" << std::endl;
+      << " ns" << " (" << acc << ")" << std::endl;
 
     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
     start = std::chrono::steady_clock::now();
     for(int i = 0; i < NUM_EXP; ++i)
     {
         buffer(6,7) = i+1;
-        target = M(multiSeq(seqN(6,2),seqN(0,3)), multiSeq(seqN(7,1),seqN(5,1),seqN(3,1),seqN(1,1),seqN(0,1)));
+        target = source(multiSeq(seqN(6,2),seqN(0,3)), multiSeq(seqN(7,1),seqN(5,1),seqN(3,1),seqN(1,1),seqN(0,1)));
         acc += target(0,0);
     }
     end = std::chrono::steady_clock::now();
     // std::cout << " acc = " << acc << std::endl;
-    std::cout << std::setw (40) << "M(multiSeq, multiSeq): "
+    std::cout << std::setw (40) << "source(multiSeq, multiSeq): "
       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-      << " ns" << std::endl;
+      << " ns" << " (" << acc << ")" << std::endl;
 
     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
     start = std::chrono::steady_clock::now();
     for(int i = 0; i < NUM_EXP; ++i)
     {
         buffer(6,7) = i+1;
-        target = M(lampc::multiSeq_to_index<5>({row1, row2}), lampc::multiSeq_to_index<5>({col1, col2, col3, col4, col5}));
+        target = source(lampc::multiSeq_to_index<5>({row1, row2}), lampc::multiSeq_to_index<5>({col1, col2, col3, col4, col5}));
         acc += target(0,0);
     }
     end = std::chrono::steady_clock::now();
     // std::cout << " acc = " << acc << std::endl;
-    std::cout << std::setw (40) << "M(multiSeq array, multiSeq array): "
+    std::cout << std::setw (40) << "source(multiSeq array, multiSeq array): "
       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-      << " ns" << std::endl;
+      << " ns" << " (" << acc << ")" << std::endl;
 
-
-    acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-    start = std::chrono::steady_clock::now();
-    for(int i = 0; i < NUM_EXP; ++i)
-    {
-        source(0,0) = i+1;
-        target = source;
-        acc += target(0,0);
-    }
-    end = std::chrono::steady_clock::now();
-    // std::cout << " acc = " << acc << std::endl;
-    std::cout << std::setw (40) << "source: "
-      << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-      << " ns" << std::endl;
+    // acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+    // start = std::chrono::steady_clock::now();
+    // for(int i = 0; i < NUM_EXP; ++i)
+    // {
+    //     source(0,0) = i+1;
+    //     target = source;
+    //     acc += target(0,0);
+    // }
+    // end = std::chrono::steady_clock::now();
+    // // std::cout << " acc = " << acc << std::endl;
+    // std::cout << std::setw (40) << "source: "
+    //   << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+    //   << " ns" << " (" << acc << ")" << std::endl;
 
     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
     start = std::chrono::steady_clock::now();
@@ -295,7 +284,7 @@ void test_assignment_speeds()
     // std::cout << " acc = " << acc << std::endl;
     std::cout << std::setw (40) << "buffer(rows, cols): "
       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-      << " ns" << std::endl;
+      << " ns" << " (" << acc << ")" << std::endl;
 
     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
     start = std::chrono::steady_clock::now();
@@ -309,7 +298,7 @@ void test_assignment_speeds()
     // std::cout << " acc = " << acc << std::endl;
     std::cout << std::setw (40) << "fixed map: "
       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-      << " ns" << std::endl;
+      << " ns" << " (" << acc << ")" << std::endl;
 
     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
     start = std::chrono::steady_clock::now();
@@ -323,7 +312,7 @@ void test_assignment_speeds()
     // std::cout << " acc = " << acc << std::endl;
     std::cout << std::setw (40) << "fixed map(rows, cols): "
       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-      << " ns" << std::endl;
+      << " ns" << " (" << acc << ")" << std::endl;
 }
 
 
@@ -335,6 +324,24 @@ using MatrixStatic = Eigen::Matrix<double,Rows,Cols>;
 TEST(BSMatrixDense, AccessTime)
 {
     using scalar_t = double;
+
+    lampc::BSMatrixDenseDeployment<scalar_t> M;
+    Matrix<10,10> buffer(10,10);
+    M.set_buffer(buffer);
+    M.resize(10,10);
+
+    Matrix<5,5> target(5,5);
+    // Eigen::Matrix<scalar_t, 20, 20> target_buffer;
+    // auto target = target_buffer(seqN(3,fix<5>), seqN(4,fix<5>));
+
+    std::cout << "type(target) = " << type_name<decltype(target)>() << std::endl;
+
+    Matrix<5,5> source(5,5);
+    scalar_t acc;
+    Eigen::Map<Eigen::Matrix<scalar_t,5,5>> map(buffer.data());
+    Eigen::Map<Eigen::Matrix<scalar_t,10,10>> map_buffer(buffer.data());
+
+
 
     std::cout << "\n\n";
     std::cout << "Assignment to dynamic matrices" << std::endl;

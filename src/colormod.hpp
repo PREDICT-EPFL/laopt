@@ -2,6 +2,9 @@
  * Code to color a stream from Joel Sjögren found on stack overflow
  */
 
+#ifndef __COLORMOD_HPP_
+#define __COLORMOD_HPP_
+
 #include <ostream>
 namespace Color {
     enum Code {
@@ -38,3 +41,5 @@ namespace Color {
         }
     };
 }
+
+#endif 

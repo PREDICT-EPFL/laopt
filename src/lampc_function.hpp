@@ -5,6 +5,9 @@
 #include "Eigen/Dense"
 #include "unsupported/Eigen/AutoDiff"
 
+template<typename Derived>
+struct func_traits;
+
 namespace lampc {
 
 struct Eval {};
@@ -12,27 +15,23 @@ struct Jacobian {};
 struct Hessian {};
 struct Gradient {};
 
+template<typename Arg, typename... Args>
+struct get_scalar
+{
+    using type = typename Arg::Scalar;
+};
+template<typename... Args>
+using get_scalar_t = typename get_scalar<Args...>::type;
 
-template<typename Derived, typename scalar_t_, size_t num_outputs_, size_t... input_sizes>
+
+template<typename Derived>
 struct MakeDifferentiable
 {
-    static constexpr size_t num_inputs = lampc::meta::sum_template<input_sizes...>();  // Total number of inputs
-	static constexpr size_t num_outputs = num_outputs_;
-	using scalar_t = scalar_t_;
-
-	// Output types
-    using value_t = Eigen::Vector<scalar_t, num_outputs>;
-    using jacobian_t = Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
-    using hessian_t = Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
-    using hessian_array_t = std::array<hessian_t, num_outputs>;  // Hessian for each of the outputs in a vector-function
-
-    /**
-     * Writes the output to the vector-like object outvalue 
-     * vector-like = an object that can be assigned a vector of type value_t
-     */
-    template<typename OutValue>
+    template<typename OutValue, typename... Args> //, typename = typename std::enable_if<sizeof...(Args) == num_input_vectors>::type>
     EIGEN_STRONG_INLINE void
-    operator()(const Eigen::Ref< const Eigen::Vector<scalar_t, input_sizes> >&... args, OutValue&& outvalue) noexcept
+    operator()(lampc::Eval, 
+               OutValue&& outvalue, 
+               const Eigen::MatrixBase<Args>&... args) noexcept
     {
         outvalue = static_cast<Derived*>(this)->impl(args...);
     }
@@ -43,38 +42,38 @@ struct MakeDifferentiable
      *   matrix-like = an object that can be assigned and indexed as outjacobian(rows, cols)
      * Does not set the internal value or jacobian buffers
      */
-    template<typename OutValue, typename OutJacobian>
+    template<typename OutValue, typename OutJacobian, typename... Args>
+                    // typename = typename std::enable_if<sizeof...(Args) == num_input_vectors>::type>
     EIGEN_STRONG_INLINE void
-    operator()(const Eigen::Ref<const Eigen::Vector<scalar_t, input_sizes>>&... args, 
-    		   OutValue&& outvalue, OutJacobian&& outjacobian) noexcept
+    operator()(lampc::Jacobian,
+               OutValue&& outvalue, OutJacobian&& outjacobian,
+               const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        // Convert to AD variables for the inputs and call our function
-        AD_output_t out = seed_and_call(make_ad(args)...);
+        constexpr size_t num_inputs = meta::sum_template<Args::RowsAtCompileTime...>();
 
-		value_t value;  // We use temporary buffers here in order to avoid writing directly to BSMatrix objects 1-element at a time
-		jacobian_t jacobian;
+        // Convert to AD variables for the inputs and call our function
+        auto out = seed_and_call(make_ad<num_inputs>(args)...).eval();
+
+        constexpr size_t num_outputs = decltype(out)::RowsAtCompileTime;
+        using scalar_t = get_scalar_t<Args...>;
+        using value_t = typename Eigen::Vector<scalar_t, num_outputs>;
+        using jacobian_t = typename Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
 
         // Copy MakeJacobian into output variables
-        for(int i=0; i<num_outputs; i++)
+        for(int i=0; i<out.rows(); i++)
         {
-            value(i) = out[i].value();
-            jacobian.row(i) = out[i].derivatives();
+            outvalue(i) = out[i].value();
+            outjacobian(i,Eigen::all) = out[i].derivatives().transpose();
         }
-
-        outvalue = value;
-        outjacobian = jacobian;
     }
 
 private:
 
-    // First order derivative
-    using AD_scalar = Eigen::AutoDiffScalar<Eigen::Matrix<scalar_t, num_inputs, 1>>;
-    using AD_output_t = Eigen::Matrix<AD_scalar, num_outputs, 1>;  
-
     // Sets the input derivatives to the identity. 
     // Assumes that the derivative matrix is initially zero
-    template <typename vec>
-    static constexpr int AD_Seed(vec &x, int offset)
+    template<typename Arg>
+    static EIGEN_STRONG_INLINE int 
+    AD_Seed(Eigen::MatrixBase<Arg>& x, int offset)
     {
         for (int i=0; i<x.rows(); i++)
             x[i].derivatives().coeffRef(i + offset) = 1;
@@ -82,13 +81,13 @@ private:
     }
 
     // Take a vector input and return a AD version of the vector
-    template<int n>
-    static EIGEN_STRONG_INLINE 
-    Eigen::Matrix<AD_scalar, n, 1> 
-    make_ad(const Eigen::Ref<const Eigen::Matrix<scalar_t, n, 1>> x)
-    // static EIGEN_STRONG_INLINE auto make_ad(const Arg& x)
+    template<size_t num_inputs, typename X, 
+             typename AD_scalar = Eigen::AutoDiffScalar<Eigen::Vector<typename X::Scalar, num_inputs>>>
+    static EIGEN_STRONG_INLINE auto
+    make_ad(const Eigen::MatrixBase<X>& x)
     {
-        Eigen::Matrix<AD_scalar, n, 1> y;
+        constexpr size_t n = X::RowsAtCompileTime;
+        Eigen::Vector<AD_scalar, n> y;
         y = x;
         for (int i=0; i<y.rows(); i++) {
             y[i].derivatives().setZero();
@@ -96,8 +95,9 @@ private:
         return y;
     }
 
-    EIGEN_STRONG_INLINE Eigen::Matrix<AD_scalar, num_outputs, 1>
-    seed_and_call(Eigen::Matrix<AD_scalar, input_sizes, 1>... args)
+    template<typename... Args>
+    EIGEN_STRONG_INLINE auto
+    seed_and_call(Eigen::MatrixBase<Args>&&... args)
     {
         // Set derivative equal to identity
         int offset = 0;
@@ -107,53 +107,57 @@ private:
                 0
             )...
         };
-        return static_cast<Derived*>(this)->template impl<AD_scalar>(args...);
-    }
 
-    // Second order derivative
-    using outerDerivatives = Eigen::Matrix<AD_scalar, num_inputs, 1>;
-    using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
-    using outerAD_t = Eigen::Matrix<outerADScalar, num_outputs, 1>;  
+        return static_cast<Derived*>(this)->impl(args...);
+    }
 
 public:
 
-    template<typename OutValue, typename OutJacobian, typename OutHessianArray>
+	/**
+	 * Compute the hessian of each output
+     * 
+	 */
+    template<typename OutValue, typename OutJacobian, typename OutHessian, size_t num_outputs, typename... Args>
     EIGEN_STRONG_INLINE void
-    operator()(const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>&... args,
-    		   OutValue&& outvalue, OutJacobian&& outjacobian, OutHessianArray&& outhessian) noexcept
+    operator()(lampc::Hessian,
+               OutValue& outvalue, OutJacobian& outjacobian, std::array<OutHessian, num_outputs>& outhessian,
+               const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        // Convert to AD variables for the inputs and call our function
-        outerAD_t out = seed_and_call2(make_ad2<input_sizes>(args)...);
+        constexpr size_t num_inputs = meta::sum_template<Args::RowsAtCompileTime...>();
 
-        // We use buffers here so we can do block-copies at the end
-        value_t value;
-        jacobian_t jacobian;
-        hessian_array_t hessian;
+        // Second order derivative
+        using scalar_t = get_scalar_t<Args...>;
+        using AD_scalar = Eigen::AutoDiffScalar<Eigen::Vector<scalar_t, num_inputs>>;
+        using outerDerivatives = Eigen::Vector<AD_scalar, num_inputs>;
+        using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
+        using outerAD_t = Eigen::Vector<outerADScalar, num_outputs>;  
+
+        using value_t = typename Eigen::Vector<scalar_t, num_outputs>;
+        using jacobian_t = typename Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
+        using hessian_t = typename Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
+
+        // Convert to AD variables for the inputs and call our function
+        outerAD_t out = seed_and_call2(make_ad2<outerADScalar>(args)...).eval();
 
         // Copy into buffers
         for(int i=0; i<num_outputs; i++)
         {
-            value(i) = out[i].value().value();
-            jacobian.row(i) = out[i].value().derivatives();
+            outvalue(i) = out[i].value().value();
+            outjacobian.row(i) = out[i].value().derivatives();
             for (int j = 0; j < num_inputs; j++) {
-                hessian[i].template middleRows<1>(j) = out[i].derivatives()(j).derivatives().transpose();
+                outhessian[i].template middleRows<1>(j) = out[i].derivatives()(j).derivatives().transpose();
             }
         }
-
-        outvalue = value;
-        outjacobian = jacobian;
-        for(int i=0; i<num_outputs; i++)
-        	outhessian[i] = hessian[i];
     }
 
 private:
 
     // Take a vector input and return a AD version of the vector
-    template<int n>
-    static EIGEN_STRONG_INLINE Eigen::Matrix<outerADScalar, n, 1> 
-        make_ad2(const Eigen::Ref<const Eigen::Matrix<scalar_t, n, 1>> x)
-    {
-        Eigen::Matrix<outerADScalar, n, 1> y;
+    template<typename outerADScalar, typename X>
+    EIGEN_STRONG_INLINE auto make_ad2(const Eigen::MatrixBase<X>& x)
+    {        
+        constexpr size_t n = X::RowsAtCompileTime;
+        Eigen::Vector<outerADScalar, n> y;
         // y = x;
         for (int i=0; i<n; i++) {
             y(i).value().value() = x(i);
@@ -168,10 +172,11 @@ private:
 
     // Sets the input derivatives to the identity. 
     // Assumes that the derivative matrix is initially zero
-    template <typename vec>
-    static constexpr int AD_Seed2(vec &x, int offset)
+    template <typename Arg>
+    EIGEN_STRONG_INLINE int 
+    AD_Seed2(Eigen::MatrixBase<Arg> &x, int offset)
     {
-        for (int i=0; i<x.rows(); i++)
+        for (int i=0; i<Arg::RowsAtCompileTime; i++)
         {
             x(i).value().derivatives().coeffRef(i + offset) = 1;
             x(i).derivatives().coeffRef(i + offset) = 1;
@@ -180,7 +185,8 @@ private:
         return offset + x.rows();
     }
 
-    EIGEN_STRONG_INLINE outerAD_t seed_and_call2(Eigen::Matrix<outerADScalar, input_sizes, 1>... args)
+    template<typename... Args>
+    EIGEN_STRONG_INLINE auto seed_and_call2(Eigen::MatrixBase<Args>&&... args)
     {
         // Set derivative equal to identity
         int offset = 0;
@@ -192,45 +198,10 @@ private:
         };
 
         // Call our function
-        return static_cast<Derived*>(this)->template impl<outerADScalar>(args...);
+        return static_cast<Derived*>(this)->impl(args...);
     }
 
 public:
-
-	/**
-	 * Tagged function calls
-	 */
-
-    EIGEN_STRONG_INLINE value_t
-    operator()(lampc::Eval, const Eigen::Ref< const Eigen::Vector<scalar_t, input_sizes> >&... args) noexcept        
-    {
-    	value_t value;
-    	value.array() = 0;
-    	static_cast<Derived*>(this)->operator()(args..., value);
-    	return value;
-    }
-
-    EIGEN_STRONG_INLINE std::pair<value_t, jacobian_t>
-    operator()(lampc::Jacobian, const Eigen::Ref<const Eigen::Vector<scalar_t, input_sizes>>&... args) noexcept
-    {
-		std::pair<value_t, jacobian_t> ret;
-		std::get<0>(ret).array() = 0;
-		std::get<1>(ret).array() = 0;
-		static_cast<Derived*>(this)->operator()(args..., std::get<0>(ret), std::get<1>(ret));
-		return ret;
-    }
-
-    EIGEN_STRONG_INLINE std::tuple<value_t, jacobian_t, hessian_array_t>
-    operator()(lampc::Hessian, const Eigen::Ref<const Eigen::Matrix<scalar_t, input_sizes, 1>>&... args) noexcept
-    {
-    	std::tuple<value_t, jacobian_t, hessian_array_t> ret;
-		std::get<0>(ret).array() = 0;
-		std::get<1>(ret).array() = 0;
-		for(int i=0; i<num_outputs; i++) std::get<2>(ret)[i].array() = 0;
-    	static_cast<Derived*>(this)->operator()(args..., std::get<0>(ret), std::get<1>(ret), std::get<2>(ret));
-    	return ret;
-    }
-
 	/**
 	 * Define this function as g(x) = w'*f(x), then this computes the value of g
 	 */
@@ -238,41 +209,93 @@ public:
     /**
      * Returns the value w'*f(x)
      */
-    EIGEN_STRONG_INLINE scalar_t
-    weightedsum(const Eigen::Ref<const Eigen::Vector<scalar_t, input_sizes>>&... args,
-    		    const Eigen::Ref<const Eigen::Vector<scalar_t, num_outputs>>& weight) noexcept
+    template<typename Weight, typename... Args>
+    EIGEN_STRONG_INLINE auto
+    weightedsum(lampc::Eval,
+                const Eigen::MatrixBase<Weight>& weight,
+                const Eigen::MatrixBase<Args>&... args) noexcept
     {
-    	return weight.transpose() * operator()(lampc::Eval(), args...);
+        using scalar_t = typename Eigen::MatrixBase<Weight>::Scalar;
+        constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
+
+        // Call the (possibly overloaded) eval
+        Eigen::Vector<scalar_t, num_outputs> value;
+        static_cast<Derived*>(this)->operator()(lampc::Eval(), value, args...);
+    	return weight.dot(value);
     }
 
     /**
-     * Returns the value w'*f(x) and its gradient
+     * Returns the value w'*f(x).
+     * outgradient += gradient(w'*f(x))
      */
-    template<typename OutGradient>
-    EIGEN_STRONG_INLINE scalar_t
-    weightedsum(const Eigen::Ref<const Eigen::Vector<scalar_t, input_sizes>>&... args, 
-    			OutGradient&& outgradient,
-    			const Eigen::Ref<const Eigen::Vector<scalar_t, num_outputs>>& weight) noexcept
+    template<typename OutGradient, typename Weight, typename... Args>
+    EIGEN_STRONG_INLINE auto
+    weightedsum(lampc::Gradient,
+                OutGradient&& outgradient,
+                const Eigen::MatrixBase<Weight>& weight,
+                const Eigen::MatrixBase<Args>&... args) noexcept
     {
-    	auto val = operator()(lampc::Jacobian(), args...);
-    	outgradient += std::get<1>(val).transpose() * weight; // Jacobian
-    	return weight.transpose() * std::get<0>(val); // Value
+        using scalar_t = typename Eigen::MatrixBase<Weight>::Scalar;
+        constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
+        constexpr size_t num_inputs = meta::sum_template<Args::RowsAtCompileTime...>();
+
+        // Call the (possibly overloaded) jacobian
+        Eigen::Vector<scalar_t, num_outputs> value;
+        Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
+        value.array() = 0; jacobian.array() = 0;
+        static_cast<Derived*>(this)->operator()(lampc::Jacobian(), value,jacobian, args...);
+
+        outgradient += jacobian.transpose() * weight;
+        return weight.dot(value);
     }
 
     /**
-     * Returns the value w'*f(x), its gradient and hessian
+     * Returns the value w'*f(x).
+     * outgradient += gradient(w'*f(x))
+     * outhessian += hessian(w'*f(x))
      */
-    template<typename OutGradient, typename OutHessian>
-    EIGEN_STRONG_INLINE scalar_t
-    weightedsum(const Eigen::Ref<const Eigen::Vector<scalar_t, input_sizes>>&... args, 
-    			const Eigen::Ref<const Eigen::Vector<scalar_t, num_outputs>>& weight,
-    			OutGradient&& outgradient, OutHessian&& outhessian) noexcept
+    template<typename OutGradient, typename OutHessian, typename Weight, typename... Args>
+    EIGEN_STRONG_INLINE auto
+    weightedsum(lampc::Hessian,
+                OutGradient&& outgradient, OutHessian&& outhessian,
+                const Eigen::MatrixBase<Weight>& weight,
+                const Eigen::MatrixBase<Args>&... args) noexcept
     {
-    	auto val = operator()(lampc::Hessian(), args...);
-    	outgradient += std::get<1>(val).transpose() * weight; // Jacobian
-    	for(int i=0; i<num_outputs; i++)
-    		outhessian += weight(i) * std::get<2>(val)[i]; // Hessian
-    	return weight.transpose() * std::get<0>(val); // Value
+        using scalar_t = typename Eigen::MatrixBase<Weight>::Scalar;
+        constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
+        constexpr size_t num_inputs = meta::sum_template<Args::RowsAtCompileTime...>();
+
+     	// Note: We re-code this here, rather than call operator()(Hessian) in order
+    	//       to avoid the time overhead of computing the hessian output array.
+
+
+        // Second order derivative
+        using AD_scalar = Eigen::AutoDiffScalar<Eigen::Vector<scalar_t, num_inputs>>;
+        using outerDerivatives = Eigen::Vector<AD_scalar, num_inputs>;
+        using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
+        using outerAD_t = Eigen::Vector<outerADScalar, num_outputs>;  
+
+        using value_t = typename Eigen::Vector<scalar_t, num_outputs>;
+        using jacobian_t = typename Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
+        using hessian_t = typename Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
+
+        // Convert to AD variables for the inputs and call our function
+        outerAD_t out = seed_and_call2(make_ad2<outerADScalar>(args)...).eval();
+
+        scalar_t value = 0;
+
+        // Copy into buffers
+        for(int i=0; i<num_outputs; i++)
+        {
+            value += weight(i) * out[i].value().value();
+			outgradient += weight(i) * out[i].value().derivatives();
+
+            for (int j = 0; j < num_inputs; j++) {
+                outhessian(j,Eigen::all) += weight(i) * out[i].derivatives()(j).derivatives().transpose();
+            }
+        }
+
+    	return value;
     }
 };
 

@@ -98,6 +98,18 @@ inline std::array<int, len> multiSeq_to_index(std::initializer_list<Segment> seg
 	return ret;
 }
 
+// Captures everything that has an operator[] defined (i.e., Eigen::ArithmeticSequence)
+template<int len, typename T>
+inline std::array<int, len> multiSeq_to_index(std::initializer_list<T> segs)
+{
+  std::array<int, len> ret;
+  int i = 0;
+  for(const auto& seg : segs) 
+    for(int j=0; j<seg.size(); j++) ret[i++] = seg[j];
+  return ret;
+}
+
+
 std::ostream &operator<<(std::ostream &os, std::vector<Segment> const &sequence) 
 {
   for(auto& seg: sequence)
@@ -129,7 +141,7 @@ struct BSMatrix
   const std::vector<CopyInfo> copies;
   int copy_index; // Current index into copies
 
-  scalar_t* target; // Where we're going to write the data
+  scalar_t* target = NULL; // Where we're going to write the data
 
   inline void reset_copy_index() { copy_index = 0; }
 
@@ -219,7 +231,8 @@ public:
    */
   void set_zero()
   {
-    Eigen::Map<Eigen::VectorX<scalar_t>>(target, sparsity_structure.nonZeros()).array() = 0;
+  	if(target != NULL)
+	    Eigen::Map<Eigen::VectorX<scalar_t>>(target, sparsity_structure.nonZeros()).array() = 0;
   }
 
   Eigen::SparseMatrix<bool> get_sparsity_structure()
@@ -290,6 +303,14 @@ public:
   template<typename RowSlice, typename ColSlice>
   BSMatrix<scalar_t>& operator()(RowSlice rows, ColSlice cols) {return *this;}
 
+  // Vector format
+  template<typename RowSlice>
+  BSMatrix<scalar_t>& operator()(RowSlice rows) {return *this;}
+
+  auto row(size_t i) { return *this; }
+  auto col(size_t i) { return *this; }
+
+
   void resize(int rows, int cols) {}
 
   /**
@@ -332,6 +353,24 @@ struct BSSlice
   {
     return base.makeSlice(M(rows, cols));
   }
+
+  // Vector format
+  template<typename RowSlice>
+  auto operator()(RowSlice rows) 
+  { 
+    assert(M.cols() == 1 && "YOU APPLIED A VECTOR METHOD TO A MATRIX");
+    return base.makeSlice(M(rows, 0));
+  }
+
+  auto row(size_t i)
+  {
+    return base.makeSlice(M.row(i));
+  }
+  auto col(size_t i)
+  {
+    return base.makeSlice(M.col(i));
+  }
+
 
   size_t rows() {return M.rows();}
   size_t cols() {return M.cols();}
@@ -418,6 +457,7 @@ struct BSMatrixTape : public BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>
     resize(rows,cols); 
   };
 
+  void set_zero() {}
 
   template<typename Derived>
   auto makeSlice(Derived sub_matrix)
@@ -560,6 +600,8 @@ struct BSMatrixSparsity : public BSSliceSparsity<Eigen::MatrixX<int>, BSMatrixSp
     return BSSliceSparsity<Derived, BSMatrixSparsity>(*this, sub_matrix);
   }
 
+  void set_zero() {}
+
   /**
    * Resize the matrix M.
    * 
@@ -630,11 +672,17 @@ struct BSMatrixDenseBase
 	// Current size of the m_matrix
 	inline size_t rows() {return m_rows;}
 	inline size_t cols() {return m_cols;}
+	inline size_t size() {return m_rows * m_cols;}
 
 	// Pre-allocated memory size
 	inline size_t buffer_rows() {return static_cast<Derived*>(this)->m_mat.rows();}
 	inline size_t buffer_cols() {return static_cast<Derived*>(this)->m_mat.cols();}
 
+	// Set buffer to zero
+	inline void zero_buffer()
+	{
+		static_cast<Derived*>(this)->m_mat.array() = 0;
+	}
 
 	// Get the current sub-m_matrix
 	EIGEN_STRONG_INLINE 
@@ -682,6 +730,12 @@ struct BSMatrixDenseBase
   inline auto operator()(const RowSlice rows, const ColSlice cols)
   {
     return value()(rows, cols);
+  }
+
+  template<typename RowSlice>
+  inline auto operator()(const RowSlice rows)
+  {
+    return value()(rows, 0);
   }
 };
 

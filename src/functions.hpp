@@ -13,62 +13,60 @@ namespace lampc {
 	/**
 	 * Simple general RK4 integrator
 	 */
-	template<typename ODE, typename scalar_t, size_t num_states, size_t... param_sizes>
-	struct RK4 : public MakeDifferentiable<RK4<ODE,scalar_t,num_states,param_sizes...>, scalar_t, num_states, num_states, param_sizes...>
+	template<typename ODE, typename scalar_t>
+	struct RK4 : public MakeDifferentiable<RK4<ODE,scalar_t>>
 	{
 	  ODE& ode; // Reference to the callable ode objectp
 	  scalar_t h; // Step size
 
 	  RK4(ODE& ode, scalar_t h) : ode(ode), h(h) {}
 
-	  template<typename diff_t>
-	  EIGEN_STRONG_INLINE Eigen::Vector<diff_t, num_states> 
-	  impl(const Eigen::Ref<const Eigen::Vector<diff_t, num_states>>& x,
-	       const Eigen::Ref<const Eigen::Vector<diff_t, param_sizes>>&... params) noexcept
+	  template<typename X, typename... PARAMS>
+	  EIGEN_STRONG_INLINE auto
+	  impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<PARAMS>&... params) noexcept
 	  {
-	    diff_t _h = static_cast<diff_t>(h);
-	    auto k1 = ode.template impl<diff_t>(x,                               params...);
-	    auto k2 = ode.template impl<diff_t>(x+_h/static_cast<diff_t>(2.0)*k1, params...);
-	    auto k3 = ode.template impl<diff_t>(x+_h/static_cast<diff_t>(2.0)*k2, params...);
-	    auto k4 = ode.template impl<diff_t>(x+_h*k3,                          params...);
-	    return x + _h/static_cast<diff_t>(6.0) * (k1 + static_cast<diff_t>(2.0)*k2 + static_cast<diff_t>(2.0)*k3 + k4);
+	    // diff_t _h = static_cast<diff_t>(h);
+	    auto k1 = ode.impl(x,          params...);
+	    auto k2 = ode.impl(x+h*0.5*k1, params...);
+	    auto k3 = ode.impl(x+h*0.5*k2, params...);
+	    auto k4 = ode.impl(x+h*k3,     params...);
+	    return x + h/6.0 * (k1 + 2.0*k2 + 2.0*k3 + k4);
 	  }
 	};
 
 	/**
 	 * Identity function
 	 */
-	template<typename scalar_t, size_t n>
-	struct id : public MakeDifferentiable<id<scalar_t,n>, scalar_t, n,n>
+	struct id : public MakeDifferentiable<id>
 	{
-		using MakeDifferentiable<id<scalar_t,n>, scalar_t, n, n>::operator();
+		using MakeDifferentiable<id>::operator();
 
-    static constexpr size_t num_inputs = n;
-		static constexpr size_t num_outputs = n;
-
-    template<typename OutValue>
+    template<typename OutValue, typename X>
     EIGEN_STRONG_INLINE void
-    operator()(const Eigen::Ref< const Eigen::Vector<scalar_t, n> >& x,
-				     	 OutValue&& outvalue) noexcept
+    operator()(lampc::Eval,
+    					 OutValue&& outvalue,
+							 const Eigen::MatrixBase<X>& x) noexcept
     {
         outvalue = x;
     }
 
-    template<typename OutValue, typename OutJacobian>
+    template<typename OutValue, typename OutJacobian, typename X>
     EIGEN_STRONG_INLINE void
-    operator()(const Eigen::Ref< const Eigen::Vector<scalar_t, n> >& x,
-		    		   OutValue&& outvalue, OutJacobian&& outjacobian) noexcept
-
+    operator()(lampc::Jacobian,
+    					 OutValue&& outvalue, OutJacobian&& outjacobian,
+							 const Eigen::MatrixBase<X>& x) noexcept
     {
+    	using scalar_t = typename Eigen::MatrixBase<X>::Scalar;
     	outvalue = x;
-			for(int i=0; i<n; i++)
+			for(int i=0; i<outvalue.rows(); i++)
 				outjacobian(seqN(i,fix<1>), seqN(i, fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(1);
     }
 
-    template<typename OutValue, typename OutJacobian, typename OutHessianArray>
+    template<typename OutValue, typename OutJacobian, typename OutHessian, size_t num_outputs, typename X>
     EIGEN_STRONG_INLINE void
-    operator()(const Eigen::Ref<const Eigen::Matrix<scalar_t, n, 1>>& x,
-    		   OutValue&& outvalue, OutJacobian&& outjacobian, OutHessianArray&& outhessian) noexcept
+    operator()(lampc::Hessian,
+    					 OutValue&& outvalue, OutJacobian&& outjacobian, std::array<OutHessian,num_outputs>&& outhessian,
+							 const Eigen::MatrixBase<X>& x) noexcept
     {
     	operator()(x, outvalue, outjacobian);
       for(int i=0; i<num_outputs; i++)
@@ -78,77 +76,77 @@ namespace lampc {
 	};
 
 	/**
-	 * An equation of the form g(x,args...) = f(args...) - x
+	 * An equation of the form g(x,args...) = - x + f(args...)
 	 * 
 	 * We assume that x is not in args
 	 */
-	template<typename F, size_t num_outputs_, size_t... input_sizes>
-	struct eq : public MakeDifferentiable<eq<F,num_outputs_,input_sizes...>, typename F::scalar_t, num_outputs_,num_outputs_,input_sizes...>
+	template<typename F>
+	struct eq : public MakeDifferentiable<eq<F>>
 	{
-		using MakeDifferentiable<eq<F,num_outputs_,input_sizes...>, typename F::scalar_t, num_outputs_,num_outputs_,input_sizes...>::operator();
+		using MakeDifferentiable<eq<F>>::operator();
 
 		// We assume F is a callable with tags for Eval, Jacobian and Hessian
 		F& f;
 
-		static constexpr size_t num_outputs = num_outputs_;
-
-		using scalar_t = typename F::scalar_t;
-		static constexpr size_t num_inputs = num_outputs + F::num_inputs;  // Total number of inputs
-   
     eq(F& f) : f(f) {}
 
-    template<typename OutValue>
+    template<typename OutValue, typename X, typename... Args>
     EIGEN_STRONG_INLINE void
-    operator()(
-    	const Eigen::Ref< const Eigen::Vector<scalar_t, num_outputs> >& x,
-    	const Eigen::Ref< const Eigen::Vector<scalar_t, input_sizes> >&... args,
-    	OutValue&& outvalue) noexcept
+    operator()(lampc::Eval, 
+               OutValue&& outvalue, 
+               const Eigen::MatrixBase<X>& x,
+               const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        outvalue = f(lampc::Eval(), args...) - x;
+    	f(lampc::Eval(), outvalue);
+    	outvalue -= x;
     }
 
-    template<typename OutValue, typename OutJacobian>
+    template<typename OutValue, typename OutJacobian, typename X, typename... Args>
     EIGEN_STRONG_INLINE void
-    operator()(
-    	const Eigen::Ref< const Eigen::Vector<scalar_t, num_outputs> >& x,
-    	const Eigen::Ref< const Eigen::Vector<scalar_t, input_sizes> >&... args,
-			OutValue&& outvalue, OutJacobian&& outjacobian) noexcept
+    operator()(lampc::Jacobian,
+               OutValue&& outvalue, OutJacobian&& outjacobian,
+               const Eigen::MatrixBase<X>& x,
+               const Eigen::MatrixBase<Args>&... args) noexcept
     {
     	// Jacobian is [-I jac_f]
 
 			// Set jac_f part
-			f(args..., outvalue, outjacobian(all,seqN(num_outputs,fix<F::num_inputs>)));
+			f(lampc::Jacobian(),
+				outvalue, outjacobian(all,seqN(outvalue.rows(),fix<meta::sum_template<Args::RowsAtCompileTime...>()>)),
+				args...);
 
 			// Add the -x part
 			outvalue -= x;
+			using scalar_t = typename Eigen::MatrixBase<X>::Scalar;
 			// outjacobian(all,seqN(0,fix<num_outputs>)) = -Eigen::Matrix<scalar_t,num_outputs,num_outputs>::Identity();
-			for(int i=0; i<num_outputs; i++)
+			for(int i=0; i<outvalue.rows(); i++)
 				outjacobian(seqN(i,fix<1>), seqN(i, fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(-1);
     }
 
-    template<typename OutValue, typename OutJacobian, typename OutHessianArray>
-    EIGEN_STRONG_INLINE void
-    operator()(
-    	const Eigen::Ref< const Eigen::Vector<scalar_t, num_outputs> >& x,
-    	const Eigen::Ref< const Eigen::Vector<scalar_t, input_sizes> >&... args,
-      OutValue&& outvalue, OutJacobian&& outjacobian, OutHessianArray&& outhessian) noexcept
-    {
-    	// Hessian is hessian of f
-    	// Jacobian is [-I jac_f]
+   //  template<typename OutValue, typename OutJacobian, typename OutHessian, size_t len, typename X, typename... Args>
+   //  EIGEN_STRONG_INLINE void
+   //  operator()(
+   //  	lampc::Hessian,
+			// OutValue&& outvalue, OutJacobian&& outjacobian, std::array<OutHessian, len>&& outhessian,
+			// const Eigen::MatrixBase<X>& x,
+			// const Eigen::MatrixBase<Args>&... args) noexcept
+   //  {
+   //  	// Hessian is hessian of f
+   //  	// Jacobian is [-I jac_f]
 
-			// Set jac_f part
-			f(args..., outvalue, outjacobian(all,seqN(num_outputs,fix<F::num_inputs>)), outhessian);
+			// // Set jac_f part
+			// f(args..., outvalue, outjacobian(all,seqN(num_outputs,fix<F::num_inputs>)), outhessian);
 
-			// Add the -x part
-			outvalue -= x;
+			// // Add the -x part
+			// outvalue -= x;
 
-			// Dense version
-			// outjacobian(all,seqN(0,fix<num_outputs>)) = -Eigen::Matrix<scalar_t,num_outputs,num_outputs>::Identity();
+			// // Dense version
+			// // outjacobian(all,seqN(0,fix<num_outputs>)) = -Eigen::Matrix<scalar_t,num_outputs,num_outputs>::Identity();
 
-			// Sparse version
-			for(int i=0; i<num_outputs; i++)
-				outjacobian(seqN(i,fix<1>), seqN(i, fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(-1);
-    }
+			// // Sparse version
+			// for(int i=0; i<num_outputs; i++)
+			// 	outjacobian(seqN(i,fix<1>), seqN(i, fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(-1);
+   //  }
 
 
 	};

@@ -16,29 +16,188 @@
 namespace {
 
 template<typename scalar_t>
-struct TestFunction : public lampc::MakeDifferentiable<TestFunction<scalar_t>, scalar_t, 2, 2,1>
+struct TestFunction : public lampc::MakeDifferentiable<TestFunction<scalar_t>>
 {
-    // using lampc::MakeDifferentiable<TestFunction<scalar_t>, scalar_t, 2, 2,1>::operator();
+    using lampc::MakeDifferentiable<TestFunction<scalar_t>>::operator();
 
-    Eigen::Matrix<scalar_t, 2, 2> A{{1,2},{3,4}};
-    Eigen::Matrix<scalar_t, 2, 1> B{{5},{6}};
+    const Eigen::Matrix<scalar_t, 2, 2> A{{1,2},{3,4}};
+    const Eigen::Matrix<scalar_t, 2, 1> B{{5},{6}};
 
-    template<typename diff_t>
-    EIGEN_STRONG_INLINE Eigen::Vector<diff_t, 2> 
-    impl( const Eigen::Ref< const Eigen::Vector<diff_t, 2> >& x, 
-          const Eigen::Ref< const Eigen::Vector<diff_t, 1> >& u) noexcept        
+    template<typename X, typename U, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
+    EIGEN_STRONG_INLINE auto
+    impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u) noexcept
     {
-        // return Eigen::Vector<diff_t,2>::Constant(static_cast<diff_t>(3));
-        return (A.template cast<diff_t>() * x + B.template cast<diff_t>() * u);
+        return x(0)*(A.template cast<Scalar>() * x + B.template cast<Scalar>() * u);
     }
 };
+
 
 /**
  * Compute the jacobian and hessian of a function
  */
-
 TEST(FunctionTest, Hessian) {
     using scalar_t = double;
+    using test_t = TestFunction<scalar_t>;
+    test_t test;
+
+    Eigen::Vector<scalar_t, 2> x;
+    Eigen::Vector<scalar_t, 1> u;
+    x << 2,1;
+    u << 3;
+
+    Eigen::Vector<scalar_t,2> value;
+    Eigen::Matrix<scalar_t,2,3> jacobian;
+    std::array<Eigen::Matrix<scalar_t,3,3>,2> hessian;
+
+    test(lampc::Eval(), value, x,u);
+
+    Eigen::Vector<scalar_t,2> val;
+    val << 38,56;
+    EXPECT_EQ(value, val);
+
+    test(lampc::Jacobian(), value,jacobian, x,u);
+
+    Eigen::Matrix<scalar_t,2,3> jac;
+    jac << 21,4,10,34,8,12;
+    EXPECT_EQ(jacobian, jac);
+
+    test(lampc::Hessian(), value,jacobian,hessian, x,u);
+
+    Eigen::Matrix<scalar_t,3,3> H;
+    H << 2,2,5,2,0,0,5,0,0;
+    EXPECT_EQ(hessian[0], H);
+    H << 6,4,6,4,0,0,6,0,0;
+    EXPECT_EQ(hessian[1], H);
+}
+
+/**
+ * Speed comparison for Jacobian computation of small functions against 
+ * direct EigenDiff calls
+ */
+template<typename InputX, typename InputY, typename Output>
+void test_jacobian(const Eigen::MatrixBase<InputX> &x, const Eigen::MatrixBase<InputY> &y, Output &out)
+{
+    using Scalar = typename Eigen::MatrixBase<InputX>::Scalar;
+
+    Eigen::Matrix<double, 2, 2> A{{1,2},{3,4}};
+    Eigen::Matrix<double, 2, 1> B{{5},{6}};
+
+    out = x(0)*(A.template cast<Scalar>() * x + B.template cast<Scalar>() * y);
+}
+
+
+template<typename Scalar_t = double, int NX = 3>
+struct TestSpeed
+{
+    using Scalar = Scalar_t;
+    /* second order derivative */
+    using Derivatives = Eigen::Matrix<Scalar, NX, 1>;
+    using ADScalar = Eigen::AutoDiffScalar<Derivatives>;
+    using outerDerivatives = Eigen::Matrix<ADScalar, NX, 1>;
+    using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
+    using ADx_t = Eigen::Matrix<outerADScalar, 3, 1>;
+
+    using Jacobian = Eigen::Matrix<Scalar, 2, 3>;
+    using Value = Eigen::Vector<Scalar, 2>;
+    using Hessian = Eigen::Matrix<Scalar, 3, 3>;
+
+    template<typename InputX, typename InputY>
+    void AutoDiff_hessian(const Eigen::MatrixBase<InputX>& x_in, const Eigen::MatrixBase<InputY>& y_in,
+        Value& val,
+        Jacobian& jacobian,
+        std::array<Hessian,2>& hessian)
+    {
+        ADx_t x;
+
+        /* initialize derivatives */
+        for (int i = 0; i < NX; i++) {
+            if(i<2) x(i).value().value() = x_in(i);
+            else    x(i).value().value() = y_in(0);
+            x(i).value().derivatives() = Derivatives::Unit(NX, i);
+            x(i).derivatives() = Derivatives::Unit(NX, i);
+            /* initialize hessian matrix to zero */
+            for (int j = 0; j < NX; j++) {
+                x(i).derivatives()(j).derivatives().setZero();
+            }
+        }
+
+        using outerAD_t = Eigen::Vector<outerADScalar, 2>;  
+        outerAD_t out;
+        test_jacobian(x(seqN(0,fix<2>)), x(seqN(2,fix<1>)), out);
+
+        // Copy into buffers
+        for(int i=0; i<2; i++)
+        {
+            val(i) = out[i].value().value();
+            jacobian.row(i) = out[i].value().derivatives();
+            for (int j = 0; j < 3; j++) {
+                hessian[i].template middleRows<1>(j) = out[i].derivatives()(j).derivatives().transpose();
+            }
+        }
+    }
+
+    template<typename InputX, typename InputY, typename Weight, typename Gradient, typename Hessian>
+    auto wsum_hessian(const Eigen::MatrixBase<InputX>& x_in, const Eigen::MatrixBase<InputY>& y_in,
+        const Eigen::MatrixBase<Weight>& weight,
+        Eigen::MatrixBase<Gradient>& gradient, Eigen::MatrixBase<Hessian>& hessian)
+    {
+        using scalar_t = typename Eigen::MatrixBase<InputX>::Scalar;
+        Eigen::Vector<scalar_t, 2> value;
+        Eigen::Matrix<scalar_t, 2, 3> jacobian;
+        std::array<Eigen::Matrix<scalar_t, 3, 3>, 2> hessian_array;
+
+        AutoDiff_hessian(x_in, y_in, value, jacobian, hessian_array);
+
+        gradient = jacobian.transpose() * weight;
+        hessian = weight(0) * hessian_array[0] + weight(1) * hessian_array[1];
+        return weight.dot(value);
+    }
+
+
+    /* first order derivative */
+    using ADx1_t = Eigen::Matrix<ADScalar, 2, 1>;
+    using ADy1_t = Eigen::Matrix<ADScalar, 1, 1>;
+
+    template<typename InputX, typename InputY>
+    void AutoDiff_jacobian(Eigen::MatrixBase<InputX>& x_in, Eigen::MatrixBase<InputY>& y_in,
+        Value& val,
+        Jacobian& jacobian)
+    {
+        ADx1_t x;
+        x = x_in;
+
+        ADy1_t y;
+        y = y_in;
+
+        /* initialize derivatives */
+        x[0].derivatives().array() = 0;
+        x[1].derivatives().array() = 0;
+        y[0].derivatives().array() = 0;
+        for (int i=0; i<x.rows(); i++) {
+            x[i].derivatives().coeffRef(i) = 1;
+        }
+        y[0].derivatives().coeffRef(2) = 1;
+
+        Eigen::Vector<ADScalar, 2> out;
+        test_jacobian(x, y, out);
+
+        for(int i=0; i<2; i++)
+        {
+            val(i) = out[i].value();
+            jacobian.row(i) = out[i].derivatives();
+        }
+    }
+};
+
+
+#ifdef NDEBUG
+/**
+ * Compare the speed of jacobian and hessian computation for small problems
+ */
+TEST(FunctionTest, Jacobian_Speed) {
+    using scalar_t = double;
+    TestSpeed<> direct;
+
     using test_t = TestFunction<scalar_t>;
     test_t test;
 
@@ -47,33 +206,96 @@ TEST(FunctionTest, Hessian) {
     x << 1,2;
     u << 3;
 
-    // We compute the evaluation sequence for the hessian,
-    // but can compute just the eval or jacobian too.
-    test(lampc::Eval(), x, u);   
-    test(lampc::Jacobian(), x, u);   
-    test(lampc::Hessian(), x, u);   
+    Eigen::Vector<scalar_t,2> value;
+    Eigen::Matrix<scalar_t,2,3> jacobian;
+    std::array<Eigen::Matrix<scalar_t,3,3>,2> hessian;
 
-    test_t::value_t value;
-    test_t::jacobian_t jacobian;
-    test_t::hessian_array_t hessian;
+    std::cout.setf(std::ios::fixed);
+    std::cout.setf(std::ios::showpoint);
+    std::cout.precision(4);
 
-    std::tie(value, jacobian, hessian) = test(lampc::Hessian(), x, u);   
+    double acc = 0;
+    std::size_t NUM_EXP = 1000000;
+    auto start = std::chrono::steady_clock::now();
+    for(int i = 0; i < NUM_EXP; ++i)
+    {
+        x(0) = i;
+        direct.AutoDiff_jacobian(x,u,value,jacobian);
+        acc += value(0);
+    }
+    auto end = std::chrono::steady_clock::now();
 
-    Eigen::Vector<scalar_t,2> val;
-    val << 20,29;
-    EXPECT_EQ(value, val);
+    std::cout << "Time per jacobian (direct): "
+      << std::setw(20) << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+      << " ns" << "  (" << acc << ")" << std::endl;
 
-    Eigen::Matrix<scalar_t,2,3> jac;
-    jac << 1,2,5,3,4,6;
-    EXPECT_EQ(jacobian, jac);
+    double direct_jacobian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
 
-    Eigen::Matrix<scalar_t,3,3> H;
-    H << 0,0,0,0,0,0,0,0,0;
-    EXPECT_EQ(hessian[0], H);
-    H << 0,0,0,0,0,0,0,0,0;
-    EXPECT_EQ(hessian[1], H);
+    acc = 0;
+    start = std::chrono::steady_clock::now();
+    for(int i = 0; i < NUM_EXP; ++i)
+    {
+        x(0) = i;
+        test(lampc::Jacobian(), value,jacobian, x,u); 
+        acc += value(0);
+    }
+    end = std::chrono::steady_clock::now();
+
+    std::cout << "Time per jacobian (lampc ): "
+      << std::setw(20) << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+      << " ns" << "  (" << acc << ")" << std::endl;
+
+    double lampc_jacobian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
+
+    // Less than 30% overhead for LAMPC
+    EXPECT_TRUE((direct_jacobian_time - lampc_jacobian_time) / direct_jacobian_time < 0.3);
+
+    NUM_EXP = 1000000;
+    acc = 0;
+    start = std::chrono::steady_clock::now();
+    for(int i = 0; i < NUM_EXP; ++i)
+    {
+        x(0) = i;
+        test(lampc::Hessian(), value,jacobian,hessian, x,u); 
+        acc += value(0);
+    }
+    end = std::chrono::steady_clock::now();
+
+    std::cout << "Time per hessian  (lampc ): "
+      << std::setw(20) << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+      << " ns" << "  (" << acc << ")" << std::endl;
+
+    double direct_hessian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
+
+    acc = 0;
+    start = std::chrono::steady_clock::now();
+    for(int i = 0; i < NUM_EXP; ++i)
+    {
+        x(0) = i;
+        direct.AutoDiff_hessian(x,u,value,jacobian,hessian);
+        acc += value(0);
+    }
+    end = std::chrono::steady_clock::now();
+
+    std::cout << "Time per hessian  (direct): "
+      << std::setw(20) << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+      << " ns" << "  (" << acc << ")" << std::endl;
+
+    double lampc_hessian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
+
+    // Less than 30% overhead for LAMPC
+    EXPECT_TRUE((direct_hessian_time - lampc_hessian_time) / direct_hessian_time < 0.3);
+
+}
+#else
+
+#include "colormod.hpp"
+TEST(FunctionTest, Jacobian_Speed) {
+std::cout << Color::Modifier(Color::FG_RED) << "Skipping Jacobian_Speed test because we're in debug mode";
+std::cout << Color::Modifier(Color::FG_DEFAULT) << std::endl;
 }
 
+#endif
 
 /**************************
  * Test the RK4 integrator
@@ -88,19 +310,18 @@ struct sys_t
     Eigen::Matrix<scalar_t, 2, 2> A{{0,1},{0,0}};
     Eigen::Matrix<scalar_t, 2, 1> B{{0},{1}};
 
-    template<typename diff_t>
-    EIGEN_STRONG_INLINE Eigen::Vector<diff_t, 2> 
-    impl( const Eigen::Ref< const Eigen::Vector<diff_t, 2> >& x, 
-          const Eigen::Ref< const Eigen::Vector<diff_t, 1> >& u) noexcept        
+    template<typename X, typename U, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
+    EIGEN_STRONG_INLINE auto
+    impl( const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u) noexcept        
     {
-        return A.template cast<diff_t>() * x + B.template cast<diff_t>() * u;
+        return A.template cast<Scalar>() * x + B.template cast<Scalar>() * u;
     }
 };
 
 TEST(RK4Test, SimpleTest) {
     using scalar_t = double;
     sys_t<scalar_t> sys;
-    using dsys_t = lampc::functions::RK4<sys_t<scalar_t>, scalar_t, 2, 1>;
+    using dsys_t = lampc::functions::RK4<sys_t<scalar_t>, scalar_t>;
     dsys_t dsys(sys, 0.1);
 
     // Compute the discrete-time system and its jacobian
@@ -109,11 +330,11 @@ TEST(RK4Test, SimpleTest) {
     x << 1,2;
     u << 3;
 
-    dsys_t::value_t value;
-    dsys_t::jacobian_t jacobian;
+    Eigen::Vector<scalar_t,2> value;
+    Eigen::Matrix<scalar_t,2,3> jacobian;
 
     // Eval only - doesn't compute jacobian
-    value = dsys(lampc::Eval(), x, u); 
+    dsys(lampc::Eval(), value, x,u); 
 
     Eigen::Vector<scalar_t,2> val;
     val << 1.215, 2.3;
@@ -121,7 +342,7 @@ TEST(RK4Test, SimpleTest) {
     EXPECT_TRUE(val.isApprox(value, 1e-4));
 
     // Compute jacobian and evaluation
-    std::tie(value, jacobian) = dsys(lampc::Jacobian(), x, u);   
+    dsys(lampc::Jacobian(), value,jacobian, x,u);   
 
     Eigen::Matrix<scalar_t,2,3> jac;
     jac << 1,0.1,0.005,0,1,0.1;
@@ -149,34 +370,38 @@ TEST(BSMatrixTest, Jacobian) {
         for(int i=0; i<5; i++)
         {
             x(0) = i;
-            test(x, u, value(seqN(i*2,2),0), jacobian(seqN(i*2,2),multiSeq(seqN(i*2,2),seqN(10+i,1))));
+            x(1) = 2*i;
+            u(0) = 3*i;
+            test(lampc::Jacobian(), 
+                 value(seqN(i*2,2)), jacobian(seqN(i*2,2), lampc::multiSeq_to_index<3>({seqN(i*2,2),seqN(10+i,1)})),
+                 x, u);
         }
     };
 
-    lampc::BSMatrixSparsity sparsity_value(10, 1);
+    lampc::BSMatrixDenseConstruction<scalar_t> construct_value;
+    construct_value.resize(10,1);
     lampc::BSMatrixSparsity sparsity_jacobian(10, 15);
-    f(sparsity_value, sparsity_jacobian); // Extract sparsity pattern
+    f(construct_value, sparsity_jacobian); // Extract sparsity pattern
 
-    auto value_tape = sparsity_value.makeBSTape(10, 1);
+    Eigen::VectorX<scalar_t> value_buffer(construct_value.rows());
+    lampc::BSMatrixDenseDeployment<scalar_t> value(value_buffer);
+
     auto jacobian_tape = sparsity_jacobian.makeBSTape(10, 15);
-    f(value_tape, jacobian_tape); // Extract operation sequence
+    value.resize(10,1);
+    f(value, jacobian_tape); // Extract operation sequence
 
-    auto BS_value = value_tape.template makeBSMatrix<scalar_t>();
     auto BS_jacobian = jacobian_tape.template makeBSMatrix<scalar_t>();
 
-    Eigen::Vector<scalar_t, 10> S_value;
     Eigen::SparseMatrix<scalar_t> S_jacobian;
-
-    BS_value.set_target(S_value);
     BS_jacobian.allocate_memory(S_jacobian);
 
-    f(BS_value, BS_jacobian);
+    f(value, BS_jacobian);
 
     Eigen::MatrixX<scalar_t> value_g(10,1);
-    value_g << 19,26,20,29,21,32,22,35,23,38;
-    EXPECT_TRUE(value_g.isApprox(S_value, 1e-4));
+    value_g << 0,0,20,29,80,116,180,261,320,464;
+    EXPECT_TRUE(value_g.isApprox(value.value(), 1e-4));
 
-    auto jacobian_g = triplet_to_sparse<double>(10,15,{{0,0,1},{1,0,3},{0,1,2},{1,1,4},{2,2,1},{3,2,3},{2,3,2},{3,3,4},{4,4,1},{5,4,3},{4,5,2},{5,5,4},{6,6,1},{7,6,3},{6,7,2},{7,7,4},{8,8,1},{9,8,3},{8,9,2},{9,9,4},{0,10,5},{1,10,6},{2,11,5},{3,11,6},{4,12,5},{5,12,6},{6,13,5},{7,13,6},{8,14,5},{9,14,6}});
+    auto jacobian_g = triplet_to_sparse<double>(10,15,{{0,0,0},{1,0,0},{0,1,0},{1,1,0},{2,2,21},{3,2,32},{2,3,2},{3,3,4},{4,4,42},{5,4,64},{4,5,4},{5,5,8},{6,6,63},{7,6,96},{6,7,6},{7,7,12},{8,8,84},{9,8,128},{8,9,8},{9,9,16},{0,10,0},{1,10,0},{2,11,5},{3,11,6},{4,12,10},{5,12,12},{6,13,15},{7,13,18},{8,14,20},{9,14,24}});
     EXPECT_TRUE(jacobian_g.isApprox(S_jacobian, 1e-4));
 }
 
@@ -189,15 +414,15 @@ TEST(FunctionsTest, eq) {
     // Discrete dynamics
     using scalar_t = double;
     sys_t<scalar_t> sys;
-    using dsys_t = lampc::functions::RK4<sys_t<scalar_t>, scalar_t, 2, 1>;
+    using dsys_t = lampc::functions::RK4<sys_t<scalar_t>, scalar_t>;
     dsys_t dsys(sys, 0.1);
   
     // Equality constraint dsys(x,u) - xp
-    using dsys_eq_t = lampc::functions::eq<dsys_t, 2, 2, 1>;
+    using dsys_eq_t = lampc::functions::eq<dsys_t>;
     dsys_eq_t dsys_eq(dsys);
 
-    dsys_eq_t::value_t value;
-    dsys_eq_t::jacobian_t jacobian;
+    Eigen::Vector<scalar_t,2> value;
+    Eigen::Matrix<scalar_t,2,5> jacobian;
 
     Eigen::Vector<scalar_t, 2> xp;
     Eigen::Vector<scalar_t, 2> x;
@@ -206,17 +431,26 @@ TEST(FunctionsTest, eq) {
     u << 3;
     xp << 4,5;
 
-    std::tie(value, jacobian) = dsys_eq(lampc::Jacobian(), xp,x,u);    
+    value.array() = 0;
+    jacobian.array() = 0;
 
-    std::cout << "value = " << value.transpose() << std::endl;
-    std::cout << "jac \n" << jacobian << std::endl;
+    dsys_eq(lampc::Jacobian(), value,jacobian, xp,x,u);
+
+    Eigen::MatrixX<scalar_t> value_g(2,1);
+    value_g << -2.785,-2.7;
+
+    Eigen::MatrixX<scalar_t> jacobian_g(2,5);
+    jacobian_g << -1,0,1,0.1,0.005,0,-1,0,1,0.1;
+
+    EXPECT_TRUE(value_g.isApprox(value, 1e-4));
+    EXPECT_TRUE(jacobian_g.isApprox(jacobian, 1e-4));
 }
 
 TEST(FunctionsTest, id) {
 
     // Discrete dynamics
     using scalar_t = double;
-    lampc::functions::id<scalar_t,2> id2;
+    lampc::functions::id id;
   
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 2> jacobian;
@@ -224,11 +458,152 @@ TEST(FunctionsTest, id) {
     Eigen::Vector<scalar_t, 2> x;
     x << 1,2;
 
-    jacobian.array() = 20;
-    std::tie(value, jacobian) = id2(lampc::Jacobian(), x);
+    jacobian.array() = 0;
+    id(lampc::Jacobian(), value,jacobian, x);
 
-    std::cout << "value = " << value.transpose() << std::endl;
-    std::cout << "jac \n" << jacobian << std::endl;
+    Eigen::MatrixX<scalar_t> value_g(2,1);
+    value_g << 1,2;
+
+    Eigen::MatrixX<scalar_t> jacobian_g(2,2);
+    jacobian_g << 1,0,0,1;
+
+    EXPECT_TRUE(value_g.isApprox(value, 1e-4));
+    EXPECT_TRUE(jacobian_g.isApprox(jacobian, 1e-4));
 }
+
+
+/**************************
+ * Test weighted sum
+ **************************/
+
+struct wsum_func_t : public lampc::MakeDifferentiable<wsum_func_t>
+{
+    Eigen::Matrix2d Q{{2,1},{1,4}};
+
+    template<typename X, typename Z, typename Scalar = typename X::Scalar>
+    EIGEN_STRONG_INLINE auto impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<Z>& z) noexcept
+    {
+        Eigen::Vector<Scalar, 2> out;
+        out(0) = 0.5*(x-z).dot(Q.template cast<Scalar>() * x);
+        out(1) = 2.0*(z-x).dot(Q.template cast<Scalar>() * x);
+        return out;
+    }
+};
+
+TEST(WeightedSum, Basic)
+{
+    wsum_func_t func;
+
+    using scalar_t = double;
+    Eigen::Vector<scalar_t,2> x;
+    Eigen::Vector<scalar_t,2> z;
+    Eigen::Vector<scalar_t,2> weight;
+
+    x << 1,2;
+    z << 3,4;
+    weight << 1,1;
+
+    scalar_t value;
+    Eigen::Vector<scalar_t,4> gradient;
+    Eigen::Matrix<scalar_t,4,4> hessian;
+
+    Eigen::Vector<scalar_t,4> gradient_g;
+    gradient_g << 3,1.5,6,13.5;
+
+    Eigen::Matrix<scalar_t,4,4> hessian_g;
+    hessian_g << -6,-3,3,1.5,-3,-12,1.5,6,3,1.5,0,0,1.5,6,0,0;
+
+    value = func.weightedsum(lampc::Eval(), weight, x,z);
+    EXPECT_EQ(value, 39);
+
+    gradient.array() = 0;
+    value = func.weightedsum(lampc::Gradient(), gradient, weight, x,z);
+    EXPECT_EQ(value, 39);
+    EXPECT_TRUE(gradient.isApprox(gradient_g, 1e-4));
+
+    hessian.array() = 0;
+    gradient.array() = 0;
+    value = func.weightedsum(lampc::Hessian(), gradient,hessian, weight, x,z);
+    EXPECT_EQ(value, 39);
+    EXPECT_TRUE(gradient.isApprox(gradient_g, 1e-4));
+    EXPECT_TRUE(hessian.isApprox(hessian_g, 1e-4));
+}
+
+
+/**
+ * Speed comparison for hessian computation against 
+ * direct EigenDiff calls
+ */
+#ifdef NDEBUG
+TEST(Functions, TestSpeed)
+{
+    using scalar_t = double;
+    TestSpeed<> direct;
+
+    using test_t = TestFunction<scalar_t>;
+    test_t test;
+
+    Eigen::Vector<scalar_t, 2> x;
+    Eigen::Vector<scalar_t, 1> u;
+    Eigen::Vector<scalar_t, 2> weight;
+    x << 1,2;
+    u << 3;
+    weight << 1,1;
+
+    scalar_t value;
+    Eigen::Vector<scalar_t,3> gradient;
+    Eigen::Matrix<scalar_t,3,3> hessian;
+
+    std::cout.setf(std::ios::fixed);
+    std::cout.setf(std::ios::showpoint);
+    std::cout.precision(4);
+
+    double acc = 0;
+    std::size_t NUM_EXP = 1000000;
+    auto start = std::chrono::steady_clock::now();
+    for(int i = 0; i < NUM_EXP; ++i)
+    {
+        x(0) = i;
+        gradient.array() = 0; hessian.array() = 0;
+        value = direct.wsum_hessian(x,u,weight,gradient,hessian);
+        acc += value;
+    }
+    auto end = std::chrono::steady_clock::now();
+
+    std::cout << "Time per weighted sum hessian (direct): "
+      << std::setw(20) << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+      << " ns" << "  (" << acc << ")" << std::endl;
+
+    double direct_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
+
+    acc = 0;
+    start = std::chrono::steady_clock::now();
+    for(int i = 0; i < NUM_EXP; ++i)
+    {
+        x(0) = i;
+        gradient.array() = 0; hessian.array() = 0;
+        value = test.weightedsum(lampc::Hessian(), gradient,hessian, weight, x,u);
+        acc += value;
+    }
+    end = std::chrono::steady_clock::now();
+
+    std::cout << "Time per weighted sum hessian (lampc ): "
+      << std::setw(20) << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+      << " ns" << "  (" << acc << ")" << std::endl;
+
+    double lampc_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
+
+    EXPECT_TRUE(fabs(direct_time - lampc_time)/direct_time < 0.1); // Less than 10% overhead for lampc
+}
+#else
+
+#include "colormod.hpp"
+TEST(Functions, TestSpeed)
+{
+    std::cout << Color::Modifier(Color::FG_RED) << "Skipping weighted sum Hessian speeed test because we're in debug mode";
+    std::cout << Color::Modifier(Color::FG_DEFAULT) << std::endl;
+}
+
+#endif
 
 }
