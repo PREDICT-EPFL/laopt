@@ -542,9 +542,10 @@ public:
   /**
    * Generate the data required to produce a BSMatrix
    */
-	BSMatrixInfo generate()
+  using Info = BSMatrixInfo;
+	Info generate()
 	{
-		BSMatrixInfo info;
+		Info info;
 
     Eigen::MatrixX<bool> bob = (sparsity_structure.array() >= 0).matrix();
     info.sparsity_structure = bob.sparseView();
@@ -632,6 +633,15 @@ struct BSMatrixSparsity : public BSSliceSparsity<Eigen::MatrixX<int>, BSMatrixSp
   BSMatrixTape makeBSTape(size_t rows, size_t cols)
   {
 		return BSMatrixTape(get_sparsity(), rows, cols);
+  }
+
+  /**
+   * Return a structure that can be passed to a BSMatrixTape to initialize it
+   */
+  using Info = Eigen::MatrixX<bool>;
+  Info generate()
+  {
+    return get_sparsity();
   }
 
 };
@@ -737,6 +747,22 @@ struct BSMatrixDenseBase
   {
     return value()(rows, 0);
   }
+
+  /**
+   * Return information required to initialize a BSDenseMatrix
+   */
+  struct Info
+  {
+    int rows, cols;
+  };
+
+  Info generate()
+  {
+    Info info;
+    info.rows = rows();
+    info.cols = cols();
+    return info;
+  }
 };
 
 
@@ -753,6 +779,9 @@ protected:
 public:
 	BSMatrixDenseConstruction() : m_mat(0,0)
 	{}
+
+  BSMatrixDenseConstruction(const typename BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>::Info& info) : m_mat(0,0)
+  {}
 
 	void resize(Eigen::Index rows, Eigen::Index cols)
 	{
@@ -776,13 +805,16 @@ struct BSMatrixDenseDeployment : public BSMatrixDenseBase<BSMatrixDenseDeploymen
 	friend BSMatrixDenseBase<BSMatrixDenseDeployment<scalar_t>>;
 
 protected:
-	// Buffer for the matrix during construction
+	// Buffer for the matrix 
 	Eigen::Map<Eigen::MatrixX<scalar_t>> m_mat;
 
 public:
 
 	BSMatrixDenseDeployment() : m_mat(NULL,0,0)
 	{}
+
+  BSMatrixDenseDeployment(const typename BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>::Info& info) : m_mat(NULL,0,0)
+  {}
 
 	BSMatrixDenseDeployment(Eigen::Ref<Eigen::MatrixX<scalar_t>> mat) : m_mat(mat.data(),mat.rows(),mat.cols())
 	{
@@ -798,6 +830,7 @@ public:
 	{
 		this->m_rows = rows; this->m_cols = cols;
 	}
+
 };
 
 };

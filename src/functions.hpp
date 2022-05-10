@@ -41,6 +41,14 @@ namespace lampc {
 	{
 		using MakeDifferentiable<id>::operator();
 
+		// Used to determine output size at compile time
+    template<typename X>
+    EIGEN_STRONG_INLINE X
+    impl( const Eigen::MatrixBase<X>& x) noexcept        
+    {
+      return NULL;
+    }
+
     template<typename OutValue, typename X>
     EIGEN_STRONG_INLINE void
     operator()(lampc::Eval,
@@ -89,6 +97,15 @@ namespace lampc {
 		F& f;
 
     eq(F& f) : f(f) {}
+
+		// Used to determine output size at compile time
+    template<typename X, typename... Args>
+    EIGEN_STRONG_INLINE X
+    impl(const Eigen::MatrixBase<X>& x,
+         const Eigen::MatrixBase<Args>&... args) noexcept
+    {
+    	return NULL;
+    }
 
     template<typename OutValue, typename X, typename... Args>
     EIGEN_STRONG_INLINE void

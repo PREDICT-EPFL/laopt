@@ -12,353 +12,170 @@
 
 namespace {
 
-/**
- * Continuous-time dynamics - double integrator
- */
-template<typename scalar_t>
-struct sys_t
+template<typename scalar_t, int N>
+struct OCP_DoubleIntegrator
 {
+  /**
+   * Continuous-time dynamics - double integrator
+   */
+  struct sys_t
+  {
     Eigen::Matrix<scalar_t, 2, 2> A{{0,1},{0,0}};
     Eigen::Matrix<scalar_t, 2, 1> B{{0},{1}};
 
-    template<typename diff_t>
-    EIGEN_STRONG_INLINE Eigen::Vector<diff_t, 2> 
-    impl( const Eigen::Ref< const Eigen::Vector<diff_t, 2> >& x, 
-          const Eigen::Ref< const Eigen::Vector<diff_t, 1> >& u) noexcept        
+    template<typename X, typename U, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
+    EIGEN_STRONG_INLINE auto
+    impl( const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u) noexcept        
     {
-        return (A.template cast<diff_t>() * x + B.template cast<diff_t>() * u);
+        return A.template cast<Scalar>() * x + B.template cast<Scalar>() * u;
     }
-};
+  };
 
-// Discretized dynamics
-template<typename scalar_t>
-using dsys_t = lampc::functions::RK4<sys_t<scalar_t>, scalar_t, 2, 1>;
+  // Discretized dynamics
+  using dsys_t = lampc::functions::RK4<sys_t, scalar_t>;
 
+  struct stage_cost_t : public lampc::MakeDifferentiable<stage_cost_t>
+  {
+    OCP_DoubleIntegrator& p;
+    stage_cost_t(OCP_DoubleIntegrator& p) : p(p) {}
 
-/**
- * Discrete-time dynamics - example with custom jacobian
- */
-template<typename scalar_t>
-struct dsys_custom_t : public lampc::MakeDifferentiable<dsys_custom_t<scalar_t>>
-{
-  static constexpr NumInputs = 3;
-  static constexpr NumOutputs = 2;
-
-    Eigen::Matrix<scalar_t, 2, 2> A{{1,2},{3,4}};
-    Eigen::Matrix<scalar_t, 2, 1> B{{5},{6}};
-
-    template<typename diff_t>
-    EIGEN_STRONG_INLINE Eigen::Vector<diff_t, 2> 
-    impl( const Eigen::Ref< const Eigen::Vector<diff_t, 2> >& x, 
-          const Eigen::Ref< const Eigen::Vector<diff_t, 1> >& u) noexcept        
+    template<typename X, typename U, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
+    EIGEN_STRONG_INLINE auto impl(
+      const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<X>& xss,
+      const Eigen::MatrixBase<U>& u, const Eigen::MatrixBase<U>& uss) noexcept
     {
-      // std::cout << "impl type = " << type_name<diff_t>() << std::endl;
-        return (A.template cast<diff_t>() * x + B.template cast<diff_t>() * u);
+      return (x-xss).dot(p.Q.template cast<Scalar>()*(x-xss)) + (u-uss).dot(p.R.template cast<Scalar>()*(u-uss));
     }
+  };
 
+  struct terminal_cost_t : public lampc::MakeDifferentiable<terminal_cost_t>
+  {
+    OCP_DoubleIntegrator& p;
+    terminal_cost_t(OCP_DoubleIntegrator& p) : p(p) {}
 
-    template<typename X, typename U, typename OUT>
-    EIGEN_STRONG_INLINE void
-    operator()( const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u, Eigen::MatrixBase<OUT>& out) noexcept        
+    template<typename X, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
+    EIGEN_STRONG_INLINE auto impl(
+      const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<X>& xss) noexcept
     {
-      out = A.template cast<X::Scalar>() * x + B.template cast<X::Scalar>() * u;
+      return 20*(x-xss).dot(p.Q.template cast<Scalar>()*(x-xss));
     }
+  };
 
+  static constexpr int nx = 2;
+  static constexpr int nu = 1;
 
+  template<size_t n>
+  using Variable = lampc::Variable<scalar_t, n>;
+  std::array<Variable<nx>, N>   X;
+  std::array<Variable<nu>, N-1> U;
+  Variable<nx> xss;
+  Variable<nu> uss;
 
-    // Specify custom jacobian
-    template<typename OutValue, typename OutJacobian>
-    EIGEN_STRONG_INLINE void
-    operator()(
-      const Eigen::Ref< const Eigen::Vector<scalar_t, 2> >& x,
-      const Eigen::Ref< const Eigen::Vector<scalar_t, 1> >& u,
-      OutValue&& outvalue, OutJacobian&& outjacobian) noexcept
-    {
-      outvalue = impl<scalar_t>(x,u);
-      outjacobian(all,seqN(0,2)) = A;
-      outjacobian(all,seqN(2,1)) = B;
-    }
-};
-
-
-// Parameters shared across different elements of the cost function
-template<typename scalar_t>
-struct cost_param_t
-{
+  // Parameters shared across different elements of the cost function
   Eigen::Matrix<scalar_t, 2, 2> Q{{1,0},{0,1}};
   Eigen::Matrix<scalar_t, 1, 1> R{2};
-};
-
-template<typename scalar_t>
-struct stage_cost_t : public lampc::MakeDifferentiable<stage_cost_t<scalar_t>, scalar_t, 1, 2,2,1,1>
-{
-  cost_param_t<scalar_t>& p;
-  stage_cost_t(cost_param_t<scalar_t>& p) : p(p) {}
-
-  template<typename diff_t>
-  EIGEN_STRONG_INLINE Eigen::Vector<diff_t,1> impl(
-          const Eigen::Ref<const Eigen::Vector<diff_t, 2>>& x,
-          const Eigen::Ref<const Eigen::Vector<diff_t, 2>>& xss,
-          const Eigen::Ref<const Eigen::Vector<diff_t, 1>>& u,
-          const Eigen::Ref<const Eigen::Vector<diff_t, 1>>& uss) noexcept
-  {
-    // return (x).transpose()*(p.Q.template cast<diff_t>())*(x) + (u).transpose()*(p.R.template cast<diff_t>())*(u);
-    return (x-xss).transpose()*(p.Q.template cast<diff_t>())*(x-xss) + (u-uss).transpose()*(p.R.template cast<diff_t>())*(u-uss);
-  }
-
-  // /**
-  //  * Specify custom hessian
-  //  */
-  // template<typename OutGradient, typename OutHessian>
-  // EIGEN_STRONG_INLINE scalar_t
-  // weightedsum(          
-  //         const Eigen::Ref<const Eigen::Vector<scalar_t, 2>>& x,
-  //         const Eigen::Ref<const Eigen::Vector<scalar_t, 2>>& xss,
-  //         const Eigen::Ref<const Eigen::Vector<scalar_t, 1>>& u,
-  //         const Eigen::Ref<const Eigen::Vector<scalar_t, 1>>& uss,
-  //         const Eigen::Ref<const Eigen::Vector<scalar_t, 1>>& weight,
-  //         OutGradient&& outgradient, OutHessian&& outhessian) noexcept
-  // {
-  //   outgradient(0) = weight(0)*2*p.Q(0,0)*x(0);
-  //   outgradient(1) = weight(0)*2*p.Q(1,1)*x(1);
-  //   outgradient(4) = weight(0)*2*p.R*u;
-
-  //   outhessian = Eigen::Matrix<scalar_t,6,6>::Constant(2.3);
-
-  //   // outhessian(0,0) = Eigen::Matrix<scalar_t,1,1>::Constant(3.3);
-  //   // outhessian({0,1},{0,1}) = p.Q;
-  //   // outhessian({4},{4}) = p.R;
-
-  //   // outhessian(0,0) = weight(0)*Eigen::Matrix<scalar_t,1,1>::Constant(p.Q(0,0));
-  //   // outhessian(1,1) = weight(0)*Eigen::Matrix<scalar_t,1,1>::Constant(p.Q(1,1));
-  //   // outhessian(4,4) = weight(0)*Eigen::Matrix<scalar_t,1,1>::Constant(p.R(1,1));
-
-  //   return weight.transpose() * impl<scalar_t>(x,xss,u,uss);
-  // }
-};
-
-template<typename scalar_t>
-struct terminal_cost_t : public lampc::MakeDifferentiable<terminal_cost_t<scalar_t>, scalar_t, 1, 2,2>
-{
-  cost_param_t<scalar_t>& p;
-  terminal_cost_t(cost_param_t<scalar_t>& p) : p(p) {}
-
-  template<typename diff_t>
-  EIGEN_STRONG_INLINE Eigen::Vector<diff_t,1> impl(
-          const Eigen::Ref<const Eigen::Vector<diff_t, 2>>& x,
-          const Eigen::Ref<const Eigen::Vector<diff_t, 2>>& xss) noexcept
-  {
-    return static_cast<diff_t>(20)*(x-xss).transpose()*(p.Q.template cast<diff_t>())*(x-xss);
-  }
-
-  // /**
-  //  * Specify custom hessian
-  //  */
-  // template<typename OutGradient, typename OutHessian>
-  // EIGEN_STRONG_INLINE scalar_t
-  // weightedsum(          
-  //         const Eigen::Ref<const Eigen::Vector<scalar_t, 2>>& x,
-  //         const Eigen::Ref<const Eigen::Vector<scalar_t, 2>>& xss,
-  //         const Eigen::Ref<const Eigen::Vector<scalar_t, 1>>& weight,
-  //         OutGradient&& outgradient, OutHessian&& outhessian) noexcept
-  // {
-  //   outgradient(0) = 40*p.Q(0,0)*x(0);
-  //   outgradient(1) = 40*p.Q(1,1)*x(1);
-  //   outgradient(2) = 40*p.Q(0,0)*xss(0);
-  //   outgradient(3) = 40*p.Q(1,1)*xss(1);
-
-  //   outhessian = Eigen::Matrix<scalar_t,4,4>::Constant(2.3);
-
-  //   // outhessian(0,0) = Eigen::Matrix<scalar_t,1,1>::Constant(3.3);
-  //   // outhessian({0,1},{0,1}) = p.Q;
-  //   // outhessian({4},{4}) = p.R;
-
-  //   // outhessian(0,0) = weight(0)*Eigen::Matrix<scalar_t,1,1>::Constant(p.Q(0,0));
-  //   // outhessian(1,1) = weight(0)*Eigen::Matrix<scalar_t,1,1>::Constant(p.Q(1,1));
-  //   // outhessian(4,4) = weight(0)*Eigen::Matrix<scalar_t,1,1>::Constant(p.R(1,1));
-
-  //   return impl<scalar_t>(x,xss)(0);
-  // }
-};
-
-
-// // Test the individual functions making up the problem
-// TEST(ProblemTest, OCP_DoubleIntegrator_Functions) {
-//   using scalar_t = double;
-//   // sys_t<scalar_t> sys; // Continuous-time dynamics
-//   // dsys_t<scalar_t> dsys(sys, 0.1); // Discrete-time dynamics
-//   dsys_t<scalar_t> dsys;
-
-//   cost_param_t<scalar_t> cost_params;  
-//   stage_cost_t<scalar_t> stage_cost(cost_params);
-//   terminal_cost_t<scalar_t> terminal_cost(cost_params);
-
-//   Eigen::Vector<scalar_t, 2> x;
-//   Eigen::Vector<scalar_t, 1> u;
-//   x << 1,2;
-//   u << 3;
-
-//   dsys(lampc::Jacobian(), x,u);
-
-//   Eigen::Vector<scalar_t, 2> xss;
-//   Eigen::Vector<scalar_t, 1> uss;
-//   xss << 4,5;
-//   uss << 6;
-
-//   stage_cost(lampc::Hessian(), x,xss,u,uss);
-//   terminal_cost(lampc::Hessian(), x,xss);
-
-// };
-
-template<typename OptProblem>
-struct OCP_DoubleIntegrator
-{
-  using Variable = typename OptProblem::Variable;
-  using scalar_t = typename OptProblem::scalar_t;
-
-  // Order here defines the order in the optimization problem
-  Variable& x;
-  Variable& u;
-  Variable& xss;
-  Variable& uss;
-  const int N;
 
   // Functions we use to define the problem
-  sys_t<scalar_t> sys; // Continuous-time dynamics
-  dsys_t<scalar_t> dsys; // Discrete-time dynamics
+  sys_t sys; // Continuous-time dynamics
+  dsys_t dsys; // Discrete-time dynamics
 
-  lampc::functions::eq<dsys_t<scalar_t>, 2, 2,1> dsys_eq; // dsys(x,u) - xp
+  lampc::functions::eq<dsys_t> dsys_eq; // dsys(x,u) - xp
 
   // Tuning parameters
-  cost_param_t<scalar_t> cost_param;
-  stage_cost_t<scalar_t> stage_cost;
-  terminal_cost_t<scalar_t> terminal_cost;
+  stage_cost_t stage_cost;
+  terminal_cost_t terminal_cost;
 
-  lampc::functions::id<scalar_t, 2> idx;
+  lampc::functions::id id; // Identity
 
-  OCP_DoubleIntegrator(OptProblem& opt, int N) :
-                                N(N),
-                                u(opt.variable(1,N-1)),
-                                xss(opt.variable(2)), 
-                                uss(opt.variable(1)),
-                                x(opt.variable(2,N)), 
-                                dsys(sys, 0.1),
-                                dsys_eq(dsys),
-                                stage_cost(cost_param),
-                                terminal_cost(cost_param)
-  {};
-
-  void eval_constraints(OptProblem& opt)
+  template<typename OptProblem>
+  OCP_DoubleIntegrator(OptProblem& opt) :
+                      dsys(sys, 0.1),
+                      dsys_eq(dsys),
+                      stage_cost(*this),
+                      terminal_cost(*this)
   {
-    opt.constraint.initialize();
+    for(auto& x : X) opt.add_variable(x);
+    for(auto& u : U) opt.add_variable(u);
+    opt.add_variable(xss);
+    opt.add_variable(uss);
+  };
 
-    opt.constraint(idx, x(0));
-    opt.constraint(idx, x(0));
+  template<typename Constraints>
+  void eval_constraints(Constraints& con)
+  {
+    // con.initialize();
+
+    con(id, X[0]);
     for(int i=0; i<N-1; i++)
     {
-      x(i)(0) = i;
-      opt.constraint(dsys_eq, x(i+1), x(i),u(i));
+      X[i] << i,2*i;
+      con(dsys_eq, X[i+1], X[i], U[i]);
     }
-    opt.constraint(idx, x(0));
+    con(id, U[0]);
   }
 
-  void eval_objective(OptProblem& opt)
-  {
-    opt.objective.initialize();
+  // void eval_objective(OptProblem& opt)
+  // {
+  //   opt.objective.initialize();
 
-    for(int i=0; i<x.cols()-1; i++)
-      opt.objective(stage_cost, x(i), xss(0), u(i), uss(0));
-    opt.objective(terminal_cost, x(N-1), xss(0));
-  }
+  //   for(int i=0; i<x.cols()-1; i++)
+  //     opt.objective(stage_cost, x(i), xss(0), u(i), uss(0));
+  //   opt.objective(terminal_cost, x(N-1), xss(0));
+  // }
 };
-
-
-// template<template<typename> class UserCode, typename... Args>
-// auto makeProblem(Args... args)
-// {
-//   // Compute the sparsity structure
-//   ProblemSparsity sparsity; // Sparsity capture object
-//   UserCode<ProblemSparsity> user_sparsity(sparsity, args...);
-//   Eigen::VectorX<scalar_t> var(sparsity.size);
-//   sparsity.set_variable(var);
-//   user_sparsity.eval_constraints();
-
-//   return user_sparsity;
-
-//   // ProblemTape tape(sparsity.generate());
-//   // UserCode<ProblemTape> user_tape(tape, args...);
-//   // user_tape.set_variable(var);
-
-//   // Problem prob(tape.generate());
-//   // UserCode<Problem> user(prob, args...);
-//   // return user;
-// }
-
-
-// template<typename scalar_t, template<typename,typename> class UserProblem, typename... Args>
-// auto makeProblem(Args... args)
-// {
-//   // Extract sparsity pattern
-//   UserProblem<scalar_t, lampc::ProblemSparsity<scalar_t>> sparsity(args...);
-//   sparsity.initialize();
-//   sparsity.eval_constraints();
-
-//   std::cout << "sparsity =\n" << sparsity.constraint.jacobian.get_sparsity() << std::endl;
-
-//   // Compute copy sequence
-//   UserProblem<scalar_t, lampc::ProblemTape<scalar_t>> tape(args...);
-//   tape.initialize(sparsity.generate());
-//   tape.eval_constraints();
-
-//   // OCP_DoubleIntegrator<scalar_t, lampc::Problem<scalar_t>> problem(args...);
-//   // problem(tape.generate());
-
-//   // return problem;
-// }
 
 
 TEST(ProblemTest, Constraint) {
   using scalar_t = double;
+  const int N = 10;
 
-  // Compute the sparsity structure
-  lampc::ProblemSparsity<scalar_t> sparsity; // Sparsity capture object
-  OCP_DoubleIntegrator<lampc::ProblemSparsity<scalar_t>> ocp_sparsity(sparsity, 10);
-  ocp_sparsity.eval_constraints(sparsity);
-  ocp_sparsity.eval_objective(sparsity);
+  lampc::Problem<scalar_t, lampc::BSMatrixSparsity, lampc::BSMatrixDenseConstruction<scalar_t>> opt_sparsity;
+  OCP_DoubleIntegrator<scalar_t, N> ocp_sparsity(opt_sparsity);
 
-  std::cout << "jacobian sparsity = \n" << sparsity.constraint.jacobian.get_sparsity() << std::endl;
-  std::cout << "hessian sparsity = \n" << sparsity.objective.hessian.get_sparsity() << std::endl;
+  // Create global decision variable
+  Eigen::VectorX<scalar_t> var(opt_sparsity.num_variables());
+  var.array() = 0;
+  opt_sparsity.set_decision_variable(var);
+  ocp_sparsity.eval_constraints(opt_sparsity.constraints);
 
-  lampc::ProblemTape<scalar_t> tape(sparsity.generate());
-  OCP_DoubleIntegrator<lampc::ProblemTape<scalar_t>> ocp_tape(tape, 10);
-  ocp_tape.eval_constraints(tape);
-  ocp_tape.eval_objective(tape);
+  // std::cout << "Jacobian sparsity structure \n" << opt_sparsity.constraints.jacobian.get_sparsity() << std::endl;
 
-  std::cout << "jacobian copies = " << tape.constraint.jacobian.copy_segments << std::endl;
-  std::cout << "hessian copies = " << tape.objective.hessian.copy_segments << std::endl;
+  auto info = opt_sparsity.generate();
+  std::cout << info << std::endl;
 
-  lampc::Problem<scalar_t> prob(tape.generate());
-  OCP_DoubleIntegrator<lampc::Problem<scalar_t>> ocp(prob, 10);
+  lampc::Problem<scalar_t, lampc::BSMatrixTape, lampc::BSMatrixDenseConstruction<scalar_t>> tape(opt_sparsity.generate());
+  OCP_DoubleIntegrator<scalar_t, N> ocp_tape(tape);
 
-  auto mem = prob.make_problem_memory();
+  var.array() = 0;
+  tape.set_decision_variable(var);
+  ocp_tape.eval_constraints(tape.constraints);
 
-  for(int i=0; i<10; i++)
-    ocp.x(i).array() = i;
-  ocp.xss(0).array() = 6;
-  ocp.uss(0).array() = 7;
+  auto info_tape = tape.generate();
+  std::cout << info_tape << std::endl;
 
-  std::cout << "xss = " << ocp.xss(0).transpose() << std::endl;
+  lampc::Problem<scalar_t, lampc::BSMatrix<scalar_t>, lampc::BSMatrixDenseDeployment<scalar_t>> opt(tape.generate());
+  OCP_DoubleIntegrator<scalar_t, N> ocp(opt);
 
-  mem.obj_weight.array() = 1;
-  std::cout << "weight = " << mem.obj_weight.transpose() << std::endl;
+  lampc::FunctionMemory<scalar_t> mem(opt.constraints, info_tape.constraints);
+
+  var.array() = 0;
+  opt.set_decision_variable(var);
+  ocp.eval_constraints(opt.constraints);
+
+  std::cout << "mem.value = "  << mem.value.transpose() << std::endl;
+  std::cout << "mem.jacobian = \n"  << Eigen::MatrixX<scalar_t>(mem.jacobian) << std::endl;
 
   // Finally, the call!
-  const std::size_t NUM_EXP = 1;
+  const std::size_t NUM_EXP = 1000000;
+  double acc = 0;
   auto start = std::chrono::steady_clock::now();
   for(int i = 0; i < NUM_EXP; ++i)
   {
-    ocp.eval_constraints(prob);
-    ocp.eval_objective(prob);
+    ocp.X[3] << i,i+1;
+    opt.constraints.initialize();
+    ocp.eval_constraints(opt.constraints);
+    // ocp.eval_objective(prob);
+    acc += mem.value(4);
   }
   auto end = std::chrono::steady_clock::now();
 
@@ -366,52 +183,52 @@ TEST(ProblemTest, Constraint) {
       << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)/(double)NUM_EXP).count()
       << " ns" << std::endl;
 
-  // Finally, the call!
-  Eigen::VectorX<scalar_t> xp(2);
-  Eigen::VectorX<scalar_t> x(2);
-  Eigen::VectorX<scalar_t> u(1);
-  Eigen::VectorX<scalar_t> xss(2);
-  Eigen::VectorX<scalar_t> uss(1);
-  Eigen::VectorX<scalar_t> weight_stage(1);
-  Eigen::VectorX<scalar_t> weight_term(1);
-  xp << 1,2; x << 3,4; u << 5; xss << 6,7; uss << 8;
-  weight_stage << 1;
-  weight_term << 1;
+  // // Finally, the call!
+  // Eigen::Vector<scalar_t,2> xp(2);
+  // Eigen::Vector<scalar_t,2> x(2);
+  // Eigen::Vector<scalar_t,1> u(1);
+  // Eigen::Vector<scalar_t,2> xss(2);
+  // Eigen::Vector<scalar_t,1> uss(1);
+  // Eigen::Vector<scalar_t,1> weight_stage(1);
+  // Eigen::Vector<scalar_t,1> weight_term(1);
+  // xp << 1,2; x << 3,4; u << 5; xss << 6,7; uss << 8;
+  // weight_stage << 1;
+  // weight_term << 1;
 
-  Eigen::MatrixX<scalar_t> J(2,5);
-  Eigen::VectorX<scalar_t> V(2);
+  // Eigen::MatrixX<scalar_t> J(2,5);
+  // Eigen::VectorX<scalar_t> V(2);
 
-  Eigen::VectorX<scalar_t> G_stage(6);
-  Eigen::MatrixX<scalar_t> H_stage(6,6);
-  Eigen::VectorX<scalar_t> G_term(4);
-  Eigen::MatrixX<scalar_t> H_term(4,4);
+  // // Eigen::VectorX<scalar_t> G_stage(6);
+  // // Eigen::MatrixX<scalar_t> H_stage(6,6);
+  // // Eigen::VectorX<scalar_t> G_term(4);
+  // // Eigen::MatrixX<scalar_t> H_term(4,4);
 
-  start = std::chrono::steady_clock::now();
-  scalar_t acc = 0;
-  for(int i = 0; i < NUM_EXP; ++i)
-  {
-    // for(int j=0; j<9; j++)
-    // {
-    //   x(0) = i + j;
-    //   ocp.dsys_eq(xp,x,u,V,J);
-    //   acc += V(0);
+  // start = std::chrono::steady_clock::now();
+  // acc = 0;
+  // for(int i = 0; i < NUM_EXP; ++i)
+  // {
+  //   for(int j=0; j<9; j++)
+  //   {
+  //     x(0) = i + j;
+  //     ocp.dsys_eq(lampc::Jacobian(), V,J, xp,x,u);
+  //     acc += V(0);
 
-    //   acc += ocp.stage_cost.weightedsum(x, xss, u, uss, weight_stage, G_stage, H_stage);
-    // }
-    acc += ocp.terminal_cost.weightedsum(x, xss, weight_term, G_term, H_term);
-  }
-  end = std::chrono::steady_clock::now();
-  std::cout << "acc = " << acc << std::endl;
+  //     // acc += ocp.stage_cost.weightedsum(x, xss, u, uss, weight_stage, G_stage, H_stage);
+  //   }
+  //   // acc += ocp.terminal_cost.weightedsum(x, xss, weight_term, G_term, H_term);
+  // }
+  // end = std::chrono::steady_clock::now();
+  // std::cout << "acc = " << acc << std::endl;
 
-  std::cout << "Direct computation of constraints time: "
-      << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)/(double)NUM_EXP).count()
-      << " ns" << std::endl;
+  // std::cout << "Direct computation of constraints time: "
+  //     << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)/(double)NUM_EXP).count()
+  //     << " ns" << std::endl;
 
-  std::cout << "g = " << mem.g.transpose() << std::endl;
-  std::cout << "g_jacobian = \n" << Eigen::MatrixX<double>(mem.g_jacobian) << std::endl;
-  std::cout << "obj = " << prob.objective.value << std::endl;
-  std::cout << "obj_gradient = " << mem.obj_gradient.transpose() << std::endl;
-  std::cout << "obj_hessian = \n" << Eigen::MatrixX<double>(mem.obj_hessian) << std::endl;
+  // std::cout << "g = " << mem.g.transpose() << std::endl;
+  // std::cout << "g_jacobian = \n" << Eigen::MatrixX<double>(mem.g_jacobian) << std::endl;
+  // std::cout << "obj = " << prob.objective.value << std::endl;
+  // std::cout << "obj_gradient = " << mem.obj_gradient.transpose() << std::endl;
+  // std::cout << "obj_hessian = \n" << Eigen::MatrixX<double>(mem.obj_hessian) << std::endl;
 
   // Eigen::Vector<scalar_t,6> xxx;
   // Eigen::Vector<scalar_t,1> yyy;

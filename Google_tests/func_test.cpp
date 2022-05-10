@@ -70,6 +70,23 @@ TEST(FunctionTest, Hessian) {
     EXPECT_EQ(hessian[1], H);
 }
 
+
+/**
+ * Confirm that we can compute the size of the output at compile time
+ */
+TEST(FunctionTest, GetOutput)
+{
+    using scalar_t = double;
+    using test_t = TestFunction<scalar_t>;
+
+    using Arg1 = Eigen::Vector<scalar_t, 2>;
+    using Arg2 = Eigen::Vector<scalar_t, 1>;
+
+    using Ret = decltype(std::declval<TestFunction<scalar_t>>().impl(std::declval<Arg1>(), std::declval<Arg2>()));
+    std::cout << "return type = " << type_name<Ret>() << std::endl;
+    std::cout << "num_output = " << Ret::RowsAtCompileTime << std::endl;
+}
+
 /**
  * Speed comparison for Jacobian computation of small functions against 
  * direct EigenDiff calls
@@ -215,7 +232,7 @@ TEST(FunctionTest, Jacobian_Speed) {
     std::cout.precision(4);
 
     double acc = 0;
-    std::size_t NUM_EXP = 1000000;
+    std::size_t NUM_EXP = 100000000;
     auto start = std::chrono::steady_clock::now();
     for(int i = 0; i < NUM_EXP; ++i)
     {
@@ -248,9 +265,9 @@ TEST(FunctionTest, Jacobian_Speed) {
     double lampc_jacobian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
 
     // Less than 30% overhead for LAMPC
-    EXPECT_TRUE((direct_jacobian_time - lampc_jacobian_time) / direct_jacobian_time < 0.3);
+    EXPECT_TRUE((direct_jacobian_time - lampc_jacobian_time) / direct_jacobian_time < 0.1);
 
-    NUM_EXP = 1000000;
+    NUM_EXP = 10000000;
     acc = 0;
     start = std::chrono::steady_clock::now();
     for(int i = 0; i < NUM_EXP; ++i)
@@ -284,7 +301,7 @@ TEST(FunctionTest, Jacobian_Speed) {
     double lampc_hessian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
 
     // Less than 30% overhead for LAMPC
-    EXPECT_TRUE((direct_hessian_time - lampc_hessian_time) / direct_hessian_time < 0.3);
+    EXPECT_TRUE((direct_hessian_time - lampc_hessian_time) / direct_hessian_time < 0.1);
 
 }
 #else
@@ -559,7 +576,7 @@ TEST(Functions, TestSpeed)
     std::cout.precision(4);
 
     double acc = 0;
-    std::size_t NUM_EXP = 1000000;
+    std::size_t NUM_EXP = 10000000;
     auto start = std::chrono::steady_clock::now();
     for(int i = 0; i < NUM_EXP; ++i)
     {
