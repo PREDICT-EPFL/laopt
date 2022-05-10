@@ -51,6 +51,16 @@ target_link_libraries(
   gtest
 )
 
+add_executable(
+  indexedvector_test
+  indexedvector_test.cpp
+)
+target_link_libraries(
+  indexedvector_test
+  gtest_main
+  gtest
+)
+
 include(GoogleTest)
 gtest_discover_tests(func_test)
 gtest_discover_tests(bs_test)

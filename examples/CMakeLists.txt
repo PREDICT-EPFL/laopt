@@ -55,5 +55,7 @@ target_link_libraries(double_integrator)
 # add_executable(ipopt_test_nlp ipopt_test_nlp.cpp)
 # target_link_libraries(ipopt_test_nlp ipopt)
 
+
+# add_library(notes_lib notes_lib.cpp)
 add_executable(notes notes.cpp)
-# target_link_libraries(qp ipopt)
+# target_link_libraries(notes notes_lib)
