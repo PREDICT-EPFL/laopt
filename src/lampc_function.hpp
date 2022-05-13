@@ -15,6 +15,38 @@ struct Jacobian {};
 struct Hessian {};
 struct Gradient {};
 
+
+/**
+ * Compute the number of inputs and outputs of the function F
+ * given the argument types Vars.
+ */
+template<typename F, typename... Vars>
+struct FuncInfo
+{
+  using raw_return_t = decltype(std::declval<F>().impl(std::declval<Vars>()...));
+  static constexpr int num_inputs = meta::sum_template<meta::matrix_info<Vars>::RowsAtCompileTime...>();
+  static constexpr int num_outputs = meta::matrix_info<raw_return_t>::RowsAtCompileTime;
+
+  using scalar_t = typename meta::matrix_info<raw_return_t>::Scalar;
+
+  using return_t = Eigen::Vector<scalar_t, num_outputs>;
+  using jacobian_t = Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
+  using gradient_t = Eigen::Vector<scalar_t, num_inputs>;
+  using hessian_t = Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
+
+  using is_return_matrix = typename meta::matrix_info<raw_return_t>::is_matrix_t;
+
+  static_assert(num_outputs > 0 && num_inputs > 0, "The function cannot have a dynamic size.");
+};
+
+
+/**
+ * Compute the scalar type of the arguments
+ * 
+ * Note: We take the scalar type of the first argument, and assume that the
+ * rest are the same, or can be auto-cast to be the same.
+ * We should likely test them all at compile time...
+ */
 template<typename Arg, typename... Args>
 struct get_scalar
 {
@@ -27,13 +59,46 @@ using get_scalar_t = typename get_scalar<Args...>::type;
 template<typename Derived>
 struct MakeDifferentiable
 {
-    template<typename OutValue, typename... Args> //, typename = typename std::enable_if<sizeof...(Args) == num_input_vectors>::type>
+    /**
+     * Call the user-defined impl function.
+     * 
+     * We differentiate between two cases here:
+     * - impl returns scalar
+     * - impl returns an Eigen Vector
+     * 
+     * The scalar version is wrapped in an Eigen 1x1 matrix before being returned.
+     */
+    template<typename... Args>
+    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Args...>::return_t
+    call_impl_helper(meta::IsScalar, const Eigen::MatrixBase<Args>&... args) noexcept
+    {
+        Eigen::Matrix<get_scalar_t<Args...>, 1, 1> outvalue;
+        outvalue << static_cast<Derived*>(this)->impl(args...);
+        return outvalue;
+    }
+
+    template<typename... Args>
+    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Args...>::return_t
+    call_impl_helper(meta::IsMatrix, const Eigen::MatrixBase<Args>&... args) noexcept
+    {
+        return static_cast<Derived*>(this)->impl(args...);
+    }
+
+    template<typename... Args>
+    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Args...>::return_t
+    call_impl(const Eigen::MatrixBase<Args>&... args) noexcept
+    {
+        using F = FuncInfo<Derived, Args...>;
+        return call_impl_helper(typename F::is_return_matrix(), args...);
+    }
+
+    template<typename OutValue, typename... Args>
     EIGEN_STRONG_INLINE void
     operator()(lampc::Eval, 
                OutValue&& outvalue, 
                const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        outvalue = static_cast<Derived*>(this)->impl(args...);
+        outvalue = call_impl(args...);
     }
 
     /**
@@ -53,11 +118,6 @@ struct MakeDifferentiable
 
         // Convert to AD variables for the inputs and call our function
         auto out = seed_and_call(make_ad<num_inputs>(args)...).eval();
-
-        constexpr size_t num_outputs = decltype(out)::RowsAtCompileTime;
-        using scalar_t = get_scalar_t<Args...>;
-        using value_t = typename Eigen::Vector<scalar_t, num_outputs>;
-        using jacobian_t = typename Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
 
         // Copy MakeJacobian into output variables
         for(int i=0; i<out.rows(); i++)
@@ -108,7 +168,7 @@ private:
             )...
         };
 
-        return static_cast<Derived*>(this)->impl(args...);
+        return call_impl(args...);
     }
 
 public:
@@ -198,7 +258,7 @@ private:
         };
 
         // Call our function
-        return static_cast<Derived*>(this)->impl(args...);
+        return call_impl(args...);
     }
 
 public:
@@ -219,7 +279,9 @@ public:
         constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
 
         // Call the (possibly overloaded) eval
-        Eigen::Vector<scalar_t, num_outputs> value;
+        using F = FuncInfo<Derived, Args...>;
+        // typename F::return_t value;
+        Eigen::Vector<scalar_t, F::num_outputs> value;
         static_cast<Derived*>(this)->operator()(lampc::Eval(), value, args...);
     	return weight.dot(value);
     }

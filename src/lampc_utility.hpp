@@ -3,6 +3,7 @@
 
 #include <limits>
 #include "Eigen/Dense"
+#include <type_traits>
 
 namespace lampc
 {
@@ -36,6 +37,49 @@ namespace lampc
                 0)...};
             return ind;
         }
+
+        /**
+         * Extracts compile time info about an Eigen matrix. 
+         * If the type passed in is not a matrix (i.e., it's a scalar), 
+         * then its shape is 1 x 1 and is_matrix is false.
+         */
+
+        // Tags telling us if a return value is a scalar or an Eigen Matrix
+        struct IsScalar {};
+        struct IsMatrix {};
+
+        /**
+         * has_eval<T>::value == true if and only if T has a member function "eval"
+         * We use this to test if T is an Eigen expression or matrix
+         */
+        template <typename T>
+        struct has_eval
+        {
+          template<typename U> static decltype(std::declval<U>().eval(), std::true_type{}) test (std::remove_reference_t<U>*); 
+          template<typename U> static std::false_type test (...);
+          using  type = decltype(test<T>(nullptr));
+          static constexpr bool value { type::value };
+        };
+
+        template < class Type, bool is_eigen = has_eval<Type>::value > struct matrix_info;
+
+        template < class Type >
+        struct matrix_info<Type, false> {
+            using Scalar = Type;
+            static constexpr int RowsAtCompileTime = 1;
+            static constexpr int ColsAtCompileTime = 1;
+
+            using is_matrix_t = IsScalar;
+        };
+
+        template < class Type >
+        struct matrix_info<Type, true> {
+            using Scalar = typename Type::Scalar;
+            static constexpr int RowsAtCompileTime = Type::RowsAtCompileTime;
+            static constexpr int ColsAtCompileTime = Type::ColsAtCompileTime;
+
+            using is_matrix_t = IsMatrix;
+        };
         
     };
 

@@ -197,161 +197,160 @@ TEST(BSMatrixDense, Construction)
     ASSERT_DEATH(F(DD), "");
 }
 
-template<typename Input, typename Target>
-void test_assignment_speeds(Eigen::MatrixBase<Input>& source, Target& target)
-{
-    const std::array<int, 5> rows{6,7,0,1,2};
-    const std::array<int, 5> cols{7,5,3,1,0};
+// template<typename Input, typename Target>
+// void test_assignment_speeds(Eigen::MatrixBase<Input>& source, Target& target)
+// {
+//     const std::array<int, 5> rows{6,7,0,1,2};
+//     const std::array<int, 5> cols{7,5,3,1,0};
 
-    const lampc::Segment row1{.index=6, .length=2};
-    const lampc::Segment row2{.index=0, .length=3};
+//     const lampc::Segment row1{.index=6, .length=2};
+//     const lampc::Segment row2{.index=0, .length=3};
 
-    const lampc::Segment col1{.index=7, .length=1};
-    const lampc::Segment col2{.index=5, .length=1};
-    const lampc::Segment col3{.index=3, .length=1};
-    const lampc::Segment col4{.index=1, .length=1};
-    const lampc::Segment col5{.index=0, .length=1};
+//     const lampc::Segment col1{.index=7, .length=1};
+//     const lampc::Segment col2{.index=5, .length=1};
+//     const lampc::Segment col3{.index=3, .length=1};
+//     const lampc::Segment col4{.index=1, .length=1};
+//     const lampc::Segment col5{.index=0, .length=1};
 
-    auto start = std::chrono::steady_clock::now();
-    auto end = std::chrono::steady_clock::now();
-    std::size_t NUM_EXP = 1000000;
+//     auto start = std::chrono::steady_clock::now();
+//     auto end = std::chrono::steady_clock::now();
+//     std::size_t NUM_EXP = 1000000;
 
-    acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-    start = std::chrono::steady_clock::now();
-    for(int i = 0; i < NUM_EXP; ++i)
-    {
-        buffer(6,7) = i+1;
-        target = source(rows, cols);
-        acc += target(0,0);
-    }
-    end = std::chrono::steady_clock::now();
-    // std::cout << " acc = " << acc << std::endl;
-    std::cout << std::setw (40) << "source(rows, cols): "
-      << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-      << " ns" << " (" << acc << ")" << std::endl;
+//     double acc;
+//     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+//     start = std::chrono::steady_clock::now();
+//     for(int i = 0; i < NUM_EXP; ++i)
+//     {
+//         buffer(6,7) = i+1;
+//         target = source(rows, cols);
+//         acc += target(0,0);
+//     }
+//     end = std::chrono::steady_clock::now();
+//     // std::cout << " acc = " << acc << std::endl;
+//     std::cout << std::setw (40) << "source(rows, cols): "
+//       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+//       << " ns" << " (" << acc << ")" << std::endl;
 
-    acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-    start = std::chrono::steady_clock::now();
-    for(int i = 0; i < NUM_EXP; ++i)
-    {
-        buffer(6,7) = i+1;
-        target = source(multiSeq(seqN(6,2),seqN(0,3)), multiSeq(seqN(7,1),seqN(5,1),seqN(3,1),seqN(1,1),seqN(0,1)));
-        acc += target(0,0);
-    }
-    end = std::chrono::steady_clock::now();
-    // std::cout << " acc = " << acc << std::endl;
-    std::cout << std::setw (40) << "source(multiSeq, multiSeq): "
-      << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-      << " ns" << " (" << acc << ")" << std::endl;
+//     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+//     start = std::chrono::steady_clock::now();
+//     for(int i = 0; i < NUM_EXP; ++i)
+//     {
+//         buffer(6,7) = i+1;
+//         target = source(multiSeq(seqN(6,2),seqN(0,3)), multiSeq(seqN(7,1),seqN(5,1),seqN(3,1),seqN(1,1),seqN(0,1)));
+//         acc += target(0,0);
+//     }
+//     end = std::chrono::steady_clock::now();
+//     // std::cout << " acc = " << acc << std::endl;
+//     std::cout << std::setw (40) << "source(multiSeq, multiSeq): "
+//       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+//       << " ns" << " (" << acc << ")" << std::endl;
 
-    acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-    start = std::chrono::steady_clock::now();
-    for(int i = 0; i < NUM_EXP; ++i)
-    {
-        buffer(6,7) = i+1;
-        target = source(lampc::multiSeq_to_index<5>({row1, row2}), lampc::multiSeq_to_index<5>({col1, col2, col3, col4, col5}));
-        acc += target(0,0);
-    }
-    end = std::chrono::steady_clock::now();
-    // std::cout << " acc = " << acc << std::endl;
-    std::cout << std::setw (40) << "source(multiSeq array, multiSeq array): "
-      << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-      << " ns" << " (" << acc << ")" << std::endl;
+//     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+//     start = std::chrono::steady_clock::now();
+//     for(int i = 0; i < NUM_EXP; ++i)
+//     {
+//         buffer(6,7) = i+1;
+//         target = source(lampc::multiSeq_to_index<5>({row1, row2}), lampc::multiSeq_to_index<5>({col1, col2, col3, col4, col5}));
+//         acc += target(0,0);
+//     }
+//     end = std::chrono::steady_clock::now();
+//     // std::cout << " acc = " << acc << std::endl;
+//     std::cout << std::setw (40) << "source(multiSeq array, multiSeq array): "
+//       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+//       << " ns" << " (" << acc << ")" << std::endl;
 
-    // acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-    // start = std::chrono::steady_clock::now();
-    // for(int i = 0; i < NUM_EXP; ++i)
-    // {
-    //     source(0,0) = i+1;
-    //     target = source;
-    //     acc += target(0,0);
-    // }
-    // end = std::chrono::steady_clock::now();
-    // // std::cout << " acc = " << acc << std::endl;
-    // std::cout << std::setw (40) << "source: "
-    //   << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-    //   << " ns" << " (" << acc << ")" << std::endl;
+//     // acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+//     // start = std::chrono::steady_clock::now();
+//     // for(int i = 0; i < NUM_EXP; ++i)
+//     // {
+//     //     source(0,0) = i+1;
+//     //     target = source;
+//     //     acc += target(0,0);
+//     // }
+//     // end = std::chrono::steady_clock::now();
+//     // // std::cout << " acc = " << acc << std::endl;
+//     // std::cout << std::setw (40) << "source: "
+//     //   << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+//     //   << " ns" << " (" << acc << ")" << std::endl;
 
-    acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-    start = std::chrono::steady_clock::now();
-    for(int i = 0; i < NUM_EXP; ++i)
-    {
-        buffer(6,7) = i+1;
-        target = buffer(rows, cols);
-        acc += target(0,0);
-    }
-    end = std::chrono::steady_clock::now();
-    // std::cout << " acc = " << acc << std::endl;
-    std::cout << std::setw (40) << "buffer(rows, cols): "
-      << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-      << " ns" << " (" << acc << ")" << std::endl;
+//     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+//     start = std::chrono::steady_clock::now();
+//     for(int i = 0; i < NUM_EXP; ++i)
+//     {
+//         buffer(6,7) = i+1;
+//         target = buffer(rows, cols);
+//         acc += target(0,0);
+//     }
+//     end = std::chrono::steady_clock::now();
+//     // std::cout << " acc = " << acc << std::endl;
+//     std::cout << std::setw (40) << "buffer(rows, cols): "
+//       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+//       << " ns" << " (" << acc << ")" << std::endl;
 
-    acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-    start = std::chrono::steady_clock::now();
-    for(int i = 0; i < NUM_EXP; ++i)
-    {
-        source(0,0) = i+1;
-        target = map;
-        acc += target(0,0);
-    }
-    end = std::chrono::steady_clock::now();
-    // std::cout << " acc = " << acc << std::endl;
-    std::cout << std::setw (40) << "fixed map: "
-      << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-      << " ns" << " (" << acc << ")" << std::endl;
+//     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+//     start = std::chrono::steady_clock::now();
+//     for(int i = 0; i < NUM_EXP; ++i)
+//     {
+//         source(0,0) = i+1;
+//         target = map;
+//         acc += target(0,0);
+//     }
+//     end = std::chrono::steady_clock::now();
+//     // std::cout << " acc = " << acc << std::endl;
+//     std::cout << std::setw (40) << "fixed map: "
+//       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+//       << " ns" << " (" << acc << ")" << std::endl;
 
-    acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-    start = std::chrono::steady_clock::now();
-    for(int i = 0; i < NUM_EXP; ++i)
-    {
-        map(6,7) = i+1;
-        target = map(rows, cols);
-        acc += target(0,0);
-    }
-    end = std::chrono::steady_clock::now();
-    // std::cout << " acc = " << acc << std::endl;
-    std::cout << std::setw (40) << "fixed map(rows, cols): "
-      << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-      << " ns" << " (" << acc << ")" << std::endl;
-}
-
-
-template<int Rows, int Cols>
-using MatrixDynamic = Eigen::MatrixX<double>;
-template<int Rows, int Cols>
-using MatrixStatic = Eigen::Matrix<double,Rows,Cols>;
-
-TEST(BSMatrixDense, AccessTime)
-{
-    using scalar_t = double;
-
-    lampc::BSMatrixDenseDeployment<scalar_t> M;
-    Matrix<10,10> buffer(10,10);
-    M.set_buffer(buffer);
-    M.resize(10,10);
-
-    Matrix<5,5> target(5,5);
-    // Eigen::Matrix<scalar_t, 20, 20> target_buffer;
-    // auto target = target_buffer(seqN(3,fix<5>), seqN(4,fix<5>));
-
-    std::cout << "type(target) = " << type_name<decltype(target)>() << std::endl;
-
-    Matrix<5,5> source(5,5);
-    scalar_t acc;
-    Eigen::Map<Eigen::Matrix<scalar_t,5,5>> map(buffer.data());
-    Eigen::Map<Eigen::Matrix<scalar_t,10,10>> map_buffer(buffer.data());
+//     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+//     start = std::chrono::steady_clock::now();
+//     for(int i = 0; i < NUM_EXP; ++i)
+//     {
+//         map(6,7) = i+1;
+//         target = map(rows, cols);
+//         acc += target(0,0);
+//     }
+//     end = std::chrono::steady_clock::now();
+//     // std::cout << " acc = " << acc << std::endl;
+//     std::cout << std::setw (40) << "fixed map(rows, cols): "
+//       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+//       << " ns" << " (" << acc << ")" << std::endl;
+// }
 
 
+// template<int Rows, int Cols>
+// using MatrixDynamic = Eigen::MatrixX<double>;
+// template<int Rows, int Cols>
+// using MatrixStatic = Eigen::Matrix<double,Rows,Cols>;
 
-    std::cout << "\n\n";
-    std::cout << "Assignment to dynamic matrices" << std::endl;
-    test_assignment_speeds<scalar_t, MatrixDynamic>();
-    std::cout << "\n\n";
+// TEST(BSMatrixDense, AccessTime)
+// {
+//     using scalar_t = double;
 
-    std::cout << "Assignment to static matrices" << std::endl;
-    test_assignment_speeds<scalar_t, MatrixStatic>();
-    std::cout << "\n\n";
-}
+//     lampc::BSMatrixDenseDeployment<scalar_t> M;
+//     Matrix<10,10> buffer(10,10);
+//     M.set_buffer(buffer);
+//     M.resize(10,10);
+
+//     Matrix<5,5> target(5,5);
+//     // Eigen::Matrix<scalar_t, 20, 20> target_buffer;
+//     // auto target = target_buffer(seqN(3,fix<5>), seqN(4,fix<5>));
+
+//     std::cout << "type(target) = " << type_name<decltype(target)>() << std::endl;
+
+//     Matrix<5,5> source(5,5);
+//     scalar_t acc;
+//     Eigen::Map<Eigen::Matrix<scalar_t,5,5>> map(buffer.data());
+//     Eigen::Map<Eigen::Matrix<scalar_t,10,10>> map_buffer(buffer.data());
+
+//     std::cout << "\n\n";
+//     std::cout << "Assignment to dynamic matrices" << std::endl;
+//     test_assignment_speeds<scalar_t, MatrixDynamic>();
+//     std::cout << "\n\n";
+
+//     std::cout << "Assignment to static matrices" << std::endl;
+//     test_assignment_speeds<scalar_t, MatrixStatic>();
+//     std::cout << "\n\n";
+// }
 
 
 // // /**

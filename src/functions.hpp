@@ -135,6 +135,7 @@ namespace lampc {
 			// Add the -x part
 			outvalue -= x;
 			using scalar_t = typename Eigen::MatrixBase<X>::Scalar;
+			// constexpr int num_outputs = X::RowsAtCompileTime;
 			// outjacobian(all,seqN(0,fix<num_outputs>)) = -Eigen::Matrix<scalar_t,num_outputs,num_outputs>::Identity();
 			for(int i=0; i<outvalue.rows(); i++)
 				outjacobian(seqN(i,fix<1>), seqN(i, fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(-1);

@@ -796,6 +796,14 @@ public:
 
 		this->m_rows = rows; this->m_cols = cols;
 	}
+
+  /**
+   * Clear the matrix to all zeros
+   */
+  void set_zero()
+  {
+    m_mat.array() = 0;
+  }
 };
 
 template<typename scalar_t_>
