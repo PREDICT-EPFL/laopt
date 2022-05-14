@@ -128,6 +128,7 @@ std::ostream &operator<<(std::ostream &os, std::vector<CopyInfo> const &sequence
  */
 struct BSMatrixInfo
 {
+  int rows, cols;
   Eigen::SparseMatrix<bool> sparsity_structure;
   std::vector<Segment> copy_segments;
   std::vector<CopyInfo> copy_info;
@@ -251,7 +252,7 @@ public:
 
   // Assumption: The input matrix is contiguous.
   template<typename Derived>
-  void operator=(const Eigen::MatrixBase<Derived>& block)
+  void inline operator=(const Eigen::MatrixBase<Derived>& block)
   {
   	// MatrixBase may or may not be an expression. As a result, we call
   	// eval, which evaluates into a contiguous temporary if required, 
@@ -270,7 +271,7 @@ public:
 
   // Assumption: The input matrix is contiguous. Don't change this to a Ref.
   template<typename Derived>
-  void operator+=(const Derived& block)
+  void inline operator+=(const Derived& block)
   {
     execute_operation([](auto& a, auto& b){a+=b;}, block.eval().data());
   }
@@ -546,6 +547,9 @@ public:
 	Info generate()
 	{
 		Info info;
+
+    info.rows = rows();
+    info.cols = cols();
 
     Eigen::MatrixX<bool> bob = (sparsity_structure.array() >= 0).matrix();
     info.sparsity_structure = bob.sparseView();
@@ -838,6 +842,14 @@ public:
 	{
 		this->m_rows = rows; this->m_cols = cols;
 	}
+
+  /**
+   * Clear the matrix to all zeros
+   */
+  void set_zero()
+  {
+    m_mat.array() = 0;
+  }
 
 };
 

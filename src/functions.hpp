@@ -22,7 +22,7 @@ namespace lampc {
 	  RK4(ODE& ode, scalar_t h) : ode(ode), h(h) {}
 
 	  template<typename X, typename... PARAMS>
-	  EIGEN_STRONG_INLINE auto
+	  EIGEN_STRONG_INLINE Eigen::Vector<typename Eigen::MatrixBase<X>::Scalar, Eigen::MatrixBase<X>::RowsAtCompileTime>
 	  impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<PARAMS>&... params) noexcept
 	  {
 	    // diff_t _h = static_cast<diff_t>(h);

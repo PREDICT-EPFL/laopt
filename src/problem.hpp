@@ -57,20 +57,6 @@ public:
 };
 
 
-/**
- * Compute the shape of a function (inputs / outputs).
- * 
- * Inputs must be fixed-size, and function output must be a fixed
- * size given the inputs.
- */
-template<typename F, typename... Vars>
-struct FuncShape
-{
-	static constexpr int num_outputs = decltype(std::declval<F>().impl(std::declval<Vars>()...))::RowsAtCompileTime;
-	static constexpr int num_inputs = meta::sum_template<Vars::RowsAtCompileTime...>();
-
-	static_assert(num_outputs > 0 && num_inputs > 0, "The function cannot have a dynamic size.");
-};
 
 
 /**
@@ -128,6 +114,11 @@ public:
 		jacobian.resize(0,0);
 		lb.resize(0,1);
 		ub.resize(0,1);
+
+		value.set_zero();
+		jacobian.set_zero();
+		lb.set_zero();
+		ub.set_zero();
 	}
 
 	VectorFunction() { initialize(); }
@@ -158,34 +149,55 @@ public:
 	 */
 
 	template<typename F, typename... Vars>
-	void operator()(lampc::Eval, F f, Vars... vars)
+	VectorFunction<Matrix,Vector>& operator()(lampc::Eval, F f, Vars... vars)
 	{
-		static constexpr int num_outputs = FuncShape<F,Vars...>::num_outputs;
+		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
 
 		auto out_indices = seqN(value.rows(), fix<num_outputs>);
 		this->extend(num_outputs, 0);
 
     f(lampc::Eval(), value(out_indices), vars...);
+    return *this;
 	}
 
 	template<typename F, typename... Vars>
-	void operator()(lampc::Jacobian, F f, Vars... vars)
+	VectorFunction<Matrix,Vector>& operator()(lampc::Jacobian, F f, Vars... vars)
 	{
-		static constexpr int num_outputs = FuncShape<F,Vars...>::num_outputs;
+		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
 
 		auto out_indices = seqN(value.rows(), fix<num_outputs>);
 		auto in_indices = concantenate_indices(vars.indices()...);
 		this->extend(num_outputs, 0);
 
     f(lampc::Jacobian(), value(out_indices), jacobian(out_indices, in_indices), vars...);
+    return *this;
 	}
 
 	// Defaults to jacobian computation
 	template<typename F, typename... Vars>
-	void operator()(F f, Vars... vars)
+	VectorFunction<Matrix,Vector>& operator()(F f, Vars... vars)
 	{
 		operator()(lampc::Jacobian(), f, vars...);
+    return *this;
 	}	
+
+	/**
+	 * Set the upper and lower bounds
+	 * 
+	 * Assumes that the length of ub is the correct size
+	 * for the last constraint added. So we set the last
+	 * _ub.size() values of ub.
+	 */
+	template<typename Derived>
+	void set_ub(const Eigen::MatrixBase<Derived>& _ub)
+	{
+		ub(seqN(ub.rows() - _ub.rows(), _ub.rows())) = _ub;
+	}
+	template<typename Derived>
+	void set_lb(const Eigen::MatrixBase<Derived>& _lb)
+	{
+		lb(seqN(lb.rows() - _lb.rows(), _lb.rows())) = _lb;
+	}
 
 	FunctionInfo<Matrix,Vector> generate()
 	{
@@ -203,44 +215,196 @@ public:
 	}
 };
 
+/**
+ * Constraint functions
+ */
+template<typename Matrix, typename Vector, typename Derived>
+VectorFunction<Matrix,Vector>& operator<=(VectorFunction<Matrix,Vector>& f, const Eigen::MatrixBase<Derived>& ub)
+{
+	f.set_ub(ub);
+	return f;
+}
+template<typename Matrix, typename Vector, typename Derived>
+VectorFunction<Matrix,Vector>& operator<=(const Eigen::MatrixBase<Derived>& lb, VectorFunction<Matrix,Vector>& f)
+{
+	f.set_lb(lb);
+	return f;
+}
+template<typename Matrix, typename Vector, typename Derived>
+VectorFunction<Matrix,Vector>& operator>=(const Eigen::MatrixBase<Derived>& ub, VectorFunction<Matrix,Vector>& f)
+{
+	f.set_ub(ub);
+	return f;
+}
+template<typename Matrix, typename Vector, typename Derived>
+VectorFunction<Matrix,Vector>& operator>=(VectorFunction<Matrix,Vector>& f, const Eigen::MatrixBase<Derived>& lb)
+{
+	f.set_lb(lb);
+	return f;
+}
+template<typename Matrix, typename Vector, typename Derived>
+VectorFunction<Matrix,Vector>& operator==(VectorFunction<Matrix,Vector>& f, const Eigen::MatrixBase<Derived>& eq)
+{
+	f.set_ub(eq);
+	f.set_lb(eq);
+	return f;
+}
+template<typename Matrix, typename Vector, typename Derived>
+VectorFunction<Matrix,Vector>& operator==(const Eigen::MatrixBase<Derived>& eq, VectorFunction<Matrix,Vector>& f)
+{
+	f.set_ub(eq);
+	f.set_lb(eq);
+	return f;
+}
+
+
+
+/**
+ * Information about a weighted sum function.
+ * 
+ * Either sparsity or tape informaation, depending on Matrix and Vector
+ */
+template<typename Matrix, typename Vector>
+struct WeightedSumInfo
+{
+	int rows, cols;
+	typename Matrix::Info hessian;
+	typename Vector::Info gradient;
+	typename Vector::Info weights;
+};
+
+/**
+ * A scalar function of the form f(x) = sum wi fi(x), with a sparse hessian.
+ */
+template<typename Matrix, typename Vector>
+class WeightedSum
+{
+public:
+	using scalar_t = typename Vector::scalar_t;
+	Matrix hessian;
+	Vector gradient;
+	scalar_t value;
+	Vector weights;
+
+public:
+
+	/**
+	 * Increase the number of rows and/or the number of inputs
+	 */
+	void extend(int rows, int variables=0)
+	{
+		hessian.extend(variables, variables);
+		gradient.extend(variables, 0);
+		weights.extend(rows, 0);
+	}
+
+	void initialize()
+	{
+		hessian.resize(0,0);
+		gradient.resize(0,1);
+		weights.resize(0,1);
+
+		value = 0;
+		gradient.set_zero();
+		hessian.set_zero();
+	}
+
+	/**
+	 * Sparsity discovery constructor
+	 */
+	WeightedSum() { initialize(); }
+
+	/**
+	 * Constructor for tape recording or deloyment
+	 */
+	template<typename _Matrix, typename _Vector>
+	WeightedSum(const WeightedSumInfo<_Matrix, _Vector>& info) :
+		hessian(info.hessian), gradient(info.gradient), weights(info.weights)
+	{
+		initialize();
+	}
+
+	template<typename F, typename... Vars>
+	void add(lampc::Eval, F f, Vars... vars)
+	{
+		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
+
+		auto out_indices = seqN(weights.rows(), fix<num_outputs>);
+		this->extend(num_outputs, 0);
+
+    value += f.weightedsum(lampc::Eval(), weights(out_indices), value(out_indices), vars...);
+	}
+
+	template<typename F, typename... Vars>
+	void add(lampc::Gradient, F f, Vars... vars)
+	{
+		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
+
+		auto out_indices = seqN(weights.rows(), fix<num_outputs>);
+		auto in_indices = concantenate_indices(vars.indices()...);
+		this->extend(num_outputs, 0);
+
+    value += f.weightedsum(lampc::Gradient(), gradient(in_indices), weights(out_indices), vars...);
+	}
+
+	template<typename F, typename... Vars>
+	void add(lampc::Hessian, F f, Vars... vars)
+	{
+		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
+
+		auto out_indices = seqN(weights.rows(), fix<num_outputs>);
+		auto in_indices = concantenate_indices(vars.indices()...);
+		this->extend(num_outputs, 0);
+
+    value += f.weightedsum(lampc::Hessian(), 
+    	       							 gradient(in_indices), hessian(in_indices, in_indices), 
+    											 weights(out_indices), vars...);
+	}
+
+	// Defaults to hessian computation
+	template<typename F, typename... Vars>
+	void add(F f, Vars... vars)
+	{
+		add(lampc::Hessian(), f, vars...);
+	}	
+
+	WeightedSumInfo<Matrix,Vector> generate()
+	{
+		WeightedSumInfo<Matrix,Vector> info;
+
+		info.rows = weights.rows();
+		info.cols = hessian.cols();
+
+		info.hessian = hessian.generate();
+		info.gradient = gradient.generate();
+		info.weights = weights.generate();
+
+		return info;
+	}
+};
+
+
+
+
 template<typename Matrix, typename Vector>
 struct ProblemInfo
 {
 	FunctionInfo<Matrix,Vector> constraints;
+	WeightedSumInfo<Matrix,Vector> objective;
 	typename Vector::Info lb_x;
 	typename Vector::Info ub_x;
-	// TODO: Add objective, etc
 
 	int num_variables;
 	int num_constraints;
 };
 
-/**
- * A helper class that can be used to create all the required memory for 
- * a VectorFunction if the memory isn't held externally.
- */
-template<typename scalar_t>
-struct FunctionMemory
+template<typename _scalar_t, typename Matrix, typename Vector>
+class ProblemBase
 {
-	Eigen::SparseMatrix<scalar_t> jacobian;
-	Eigen::VectorX<scalar_t> value;
-	Eigen::VectorX<scalar_t> lb;
-	Eigen::VectorX<scalar_t> ub;
+public:
+	using scalar_t = _scalar_t;
 
-	template<typename Matrix, typename Vector, typename _Matrix, typename _Vector>
-	FunctionMemory(VectorFunction<Matrix,Vector>& f, FunctionInfo<_Matrix,_Vector>& info)
-	{
-		f.jacobian.allocate_memory(jacobian);
-		value.resize(info.rows, 1); f.value.set_buffer(value);
-		lb.resize(info.rows, 1); f.lb.set_buffer(lb);
-		ub.resize(info.rows, 1); f.ub.set_buffer(ub);
-	}
-};
-
-
-template<typename scalar_t, typename Matrix, typename Vector>
-class Problem
-{
+protected:
 	// Callbacks used to register the global decision variable with each variable
 	std::vector<std::function<void(scalar_t*)>> variable_callbacks;
 
@@ -254,7 +418,7 @@ public:
 	/**
 	 * Default constructor for sparsity discovery
 	 */
-	Problem()
+	ProblemBase()
 	{
 		lb_x.extend(0,1);
 		ub_x.extend(0,1);
@@ -264,14 +428,15 @@ public:
 	 * Constructor for tape recording and deployment
 	 */
 	template<typename _Matrix, typename _Vector>
-	Problem(const ProblemInfo<_Matrix,_Vector>& info) :
-		constraints(info.constraints), lb_x(info.lb_x), ub_x(info.ub_x)
+	ProblemBase(const ProblemInfo<_Matrix,_Vector>& info) :
+		constraints(info.constraints), objective(info.objective), lb_x(info.lb_x), ub_x(info.ub_x)
 	{
 		lb_x.extend(0,1);
 		ub_x.extend(0,1);
 	}
 
 	VectorFunction<Matrix, Vector> constraints;
+	WeightedSum<Matrix, Vector> objective;
 
 	/**
 	 * Add the variable to the optimization problem.
@@ -286,6 +451,7 @@ public:
 		m_num_variables += n;
 
 		constraints.extend(0, n);
+		objective.extend(0, n);
 		lb_x.extend(n, 0);
 		ub_x.extend(n, 0);
 	}
@@ -311,6 +477,8 @@ public:
 		ProblemInfo<Matrix,Vector> info;
 
 		info.constraints = constraints.generate();
+		info.objective = objective.generate();
+
 		info.lb_x = lb_x.generate();
 		info.ub_x = ub_x.generate();
 
@@ -320,16 +488,126 @@ public:
 	}
 };
 
+template<typename scalar_t>
+using ProblemSparsity = ProblemBase<scalar_t, BSMatrixSparsity, BSMatrixDenseConstruction<scalar_t>>;
+
+template<typename scalar_t>
+using ProblemTape = ProblemBase<scalar_t, BSMatrixTape, BSMatrixDenseConstruction<scalar_t>>;
+
+template<typename scalar_t>
+using Problem = ProblemBase<scalar_t, BSMatrix<scalar_t>, BSMatrixDenseDeployment<scalar_t>>;
+
+template<typename Problem, typename OCP>
+auto generate_problem(Problem&& prob, OCP&& ocp)
+{
+  ocp.define_variables(prob);
+
+  Eigen::VectorX<typename Problem::scalar_t> var(prob.num_variables());
+  var.array() = 0;
+  prob.set_decision_variable(var);
+  ocp.eval_constraints(prob.constraints);
+  ocp.eval_objective(prob.objective);
+
+  return prob.generate();
+}
+
+
+/**
+ * A helper class that can be used to create all the required memory for 
+ * a VectorFunction if the memory isn't held externally.
+ */
+template<typename scalar_t>
+struct FunctionMemory
+{
+	Eigen::SparseMatrix<scalar_t> jacobian;
+	Eigen::VectorX<scalar_t> value;
+	Eigen::VectorX<scalar_t> lb;
+	Eigen::VectorX<scalar_t> ub;
+
+	template<typename Matrix, typename Vector, typename _Matrix, typename _Vector>
+	FunctionMemory(VectorFunction<Matrix,Vector>& f, FunctionInfo<_Matrix,_Vector>& info)
+	{
+		f.jacobian.allocate_memory(jacobian);
+		value.resize(info.rows, 1); f.value.set_buffer(value);
+		lb.resize(info.rows, 1); f.lb.set_buffer(lb);
+		ub.resize(info.rows, 1); f.ub.set_buffer(ub);
+
+		// Set this memory as the buffer for the function
+		f.jacobian.set_target(jacobian);
+		f.value.set_buffer(value);
+		f.lb.set_buffer(lb);
+		f.ub.set_buffer(ub);
+	}
+};
+
+/**
+ * A helper class that can be used to create all the required memory for 
+ * a WeightedSum if the memory isn't held externally.
+ */
+template<typename scalar_t>
+struct WeightedSumMemory
+{
+	Eigen::SparseMatrix<scalar_t> hessian;
+	Eigen::VectorX<scalar_t> gradient;
+	Eigen::VectorX<scalar_t> weights;
+
+	template<typename WSum, typename Info>
+	WeightedSumMemory(WSum& w, Info& info)
+	{
+		w.hessian.allocate_memory(hessian);
+		gradient.resize(info.cols, 1); w.gradient.set_buffer(gradient);
+		weights.resize(info.weights.rows, 1); w.weights.set_buffer(weights);
+
+		// Set this memory as the buffer for the function
+		w.hessian.set_target(hessian);
+		w.gradient.set_buffer(gradient);
+		w.weights.set_buffer(weights);
+	}
+};
+
+/**
+ * A helper class that can be used to create all the required memory for 
+ * a Problem if the memory isn't held externally.
+ */
+template<typename scalar_t>
+struct ProblemMemory
+{
+	FunctionMemory<scalar_t> constraints;
+	WeightedSumMemory<scalar_t> objective;
+
+  Eigen::VectorX<scalar_t> var;
+
+	template<typename Problem, typename Info>
+	ProblemMemory(Problem& prob, Info& info) :
+		constraints(prob.constraints, info.constraints), objective(prob.objective, info.objective),
+		var(prob.num_variables())
+	{
+		// Zero everything
+		prob.constraints.initialize();
+		prob.objective.initialize();
+	  var.array() = 0;
+	  prob.set_decision_variable(var);
+
+	  for(int i=0; i<objective.hessian.nonZeros(); i++) objective.hessian.valuePtr()[i] = i;
+	  for(int i=0; i<constraints.jacobian.nonZeros(); i++) constraints.jacobian.valuePtr()[i] = i;
+	}
+};
+
+
 
 template <typename scalar_t>
 std::ostream& operator<<(std::ostream& o, const ProblemInfo<BSMatrixSparsity,BSMatrixDenseConstruction<scalar_t>>& info)
 {
 	o << "==== Problem Sparsity Information ====\n";
 	o << "Variables    : " << info.num_variables << std::endl;
-	o << "Constraints  : " << info.constraints.rows << std::endl;
 
+	o << "Constraints  : " << info.constraints.rows << std::endl;
   Eigen::SparseMatrix<bool> sparsity_structure = (info.constraints.jacobian.array() > 0).matrix().sparseView();  
   o << "  Non-zeros  : " << sparsity_structure.nonZeros() << std::endl;
+
+	o << "Objective    : " << info.objective.hessian.rows() << std::endl;
+  Eigen::SparseMatrix<bool> hessian_sparsity_structure = (info.objective.hessian.array() > 0).matrix().sparseView();  
+  o << "  Non-zeros  : " << hessian_sparsity_structure.nonZeros() << std::endl;
 
   return o;
 }
@@ -342,6 +620,9 @@ std::ostream& operator<<(std::ostream& o, const ProblemInfo<BSMatrixTape,BSMatri
 	o << "Constraints  : " << info.constraints.rows << std::endl;
   o << "  Non-zeros  : " << info.constraints.jacobian.sparsity_structure.nonZeros() << std::endl;
   o << "  Tape length: " << info.constraints.jacobian.copy_segments.size() << std::endl;
+	o << "Objective    : " << info.objective.rows << std::endl;
+  o << "  Non-zeros  : " << info.objective.hessian.sparsity_structure.nonZeros() << std::endl;
+  o << "  Tape length: " << info.objective.hessian.copy_segments.size() << std::endl;
 
   return o;
 }
@@ -354,6 +635,15 @@ std::ostream& operator<<(std::ostream& o, const std::array<T, N>& arr)
     copy(arr.cbegin(), arr.cend(), std::ostream_iterator<T>(o, " "));
     return o;
 }
+
+
+
+
+
+
+
+
+
 
 // /**
 //  * Vector function g(x) = [g1(x); ...; gN(x)]

@@ -316,14 +316,13 @@ public:
      * outgradient += gradient(w'*f(x))
      * outhessian += hessian(w'*f(x))
      */
-    template<typename OutGradient, typename OutHessian, typename Weight, typename... Args>
-    EIGEN_STRONG_INLINE auto
+    template<typename OutGradient, typename OutHessian, typename Weight, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    EIGEN_STRONG_INLINE scalar_t
     weightedsum(lampc::Hessian,
                 OutGradient&& outgradient, OutHessian&& outhessian,
                 const Eigen::MatrixBase<Weight>& weight,
                 const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        using scalar_t = typename Eigen::MatrixBase<Weight>::Scalar;
         constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
         constexpr size_t num_inputs = meta::sum_template<Args::RowsAtCompileTime...>();
 
