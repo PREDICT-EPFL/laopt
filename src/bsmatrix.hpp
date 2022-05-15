@@ -722,23 +722,23 @@ struct BSMatrixDenseBase
 		static_cast<Derived*>(this)->resize(BSMatrixDenseBase::rows() + rows, BSMatrixDenseBase::cols() + cols);
 	}
 
-  template<typename... RowSlice, typename... ColSlice>
-  auto operator()(std::tuple<RowSlice...> rows, std::tuple<ColSlice...> cols)
-  {
-    return value()(MultiSeq::to_index(rows, this->rows()), MultiSeq::to_index(cols, this->cols()));
-  }
+  // template<typename... RowSlice, typename... ColSlice>
+  // auto operator()(std::tuple<RowSlice...> rows, std::tuple<ColSlice...> cols)
+  // {
+  //   return value()(MultiSeq::to_index(rows, this->rows()), MultiSeq::to_index(cols, this->cols()));
+  // }
 
-  template<typename... RowSlice, typename ColSlice>
-  auto operator()(std::tuple<RowSlice...> rows, ColSlice cols)
-  {
-    return value()(MultiSeq::to_index(rows, this->rows()), cols);
-  }
+  // template<typename... RowSlice, typename ColSlice>
+  // auto operator()(std::tuple<RowSlice...> rows, ColSlice cols)
+  // {
+  //   return value()(MultiSeq::to_index(rows, this->rows()), cols);
+  // }
 
-  template<typename RowSlice, typename... ColSlice>
-  auto operator()(RowSlice rows, std::tuple<ColSlice...> cols)
-  {
-    return value()(rows, MultiSeq::to_index(cols, this->cols()));
-  }
+  // template<typename RowSlice, typename... ColSlice>
+  // auto operator()(RowSlice rows, std::tuple<ColSlice...> cols)
+  // {
+  //   return value()(rows, MultiSeq::to_index(cols, this->cols()));
+  // }
 
   template<typename RowSlice, typename ColSlice>
   inline auto operator()(const RowSlice rows, const ColSlice cols)

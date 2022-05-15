@@ -32,6 +32,7 @@ else()
   message(STATUS "Building debug version")
 endif()
 
+add_compile_options(-Wno-unused-comparison)
 
 
 include_directories(src bsmatrix src/examples /usr/local/include/)

@@ -99,6 +99,29 @@ struct FunctionInfo
 };
 
 /**
+ * The return type of a constraint "add" function. 
+ * 
+ * Contains references to the upper/lower bounds for the object, 
+ * the value and jacobian and the indices.
+ * 
+ * Can be saved by the user in order to refer to the constraint
+ * later on, or used to set the constraints.
+ */
+template<typename scalar_t>
+struct BoundRef
+{
+	Eigen::Ref<Eigen::VectorX<scalar_t>> lb;
+	Eigen::Ref<Eigen::VectorX<scalar_t>> ub;
+
+	BoundRef(
+		Eigen::Ref<Eigen::VectorX<scalar_t>> _lb,
+		Eigen::Ref<Eigen::VectorX<scalar_t>> _ub)
+			:	lb(_lb), ub(_ub)
+	{}
+};
+
+
+/**
  * A vector-valued function with a sparse jacobian.
  */
 template<typename Matrix, typename Vector>
@@ -148,9 +171,8 @@ public:
 	/**
 	 * Add constraints to the problem
 	 */
-
-	template<typename F, typename... Vars>
-	VectorFunction<Matrix,Vector>& add(lampc::Eval, F f, Vars... vars)
+	template<typename F, typename... Vars, typename scalar_t = meta::get_scalar_t<Vars...>>
+	BoundRef<scalar_t> add(lampc::Eval, F f, Vars... vars)
 	{
 		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
 
@@ -158,11 +180,11 @@ public:
 		this->extend(num_outputs, 0);
 
     f(lampc::Eval(), value(out_indices), vars...);
-    return *this;
+    return BoundRef<scalar_t>(lb(out_indices), ub(out_indices));
 	}
 
-	template<typename F, typename... Vars>
-	VectorFunction<Matrix,Vector>& add(lampc::Jacobian, F f, Vars... vars)
+	template<typename F, typename... Vars, typename scalar_t = meta::get_scalar_t<Vars...>>
+	BoundRef<scalar_t> add(lampc::Jacobian, F f, Vars... vars)
 	{
 		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
 
@@ -171,33 +193,7 @@ public:
 		this->extend(num_outputs, 0);
 
     f(lampc::Jacobian(), value(out_indices), jacobian(out_indices, in_indices), vars...);
-    return *this;
-	}
-
-	// // Defaults to jacobian computation
-	// template<typename F, typename... Vars>
-	// VectorFunction<Matrix,Vector>& add(F f, Vars... vars)
-	// {
-	// 	add(lampc::Jacobian(), f, vars...);
- //    return *this;
-	// }	
-
-	/**
-	 * Set the upper and lower bounds
-	 * 
-	 * Assumes that the length of ub is the correct size
-	 * for the last constraint added. So we set the last
-	 * _ub.size() values of ub.
-	 */
-	template<typename Derived>
-	void set_ub(const Eigen::MatrixBase<Derived>& _ub)
-	{
-		ub(seqN(ub.rows() - _ub.rows(), _ub.rows())) = _ub;
-	}
-	template<typename Derived>
-	void set_lb(const Eigen::MatrixBase<Derived>& _lb)
-	{
-		lb(seqN(lb.rows() - _lb.rows(), _lb.rows())) = _lb;
+    return BoundRef<scalar_t>(lb(out_indices), ub(out_indices));
 	}
 
 	FunctionInfo<Matrix,Vector> generate()
@@ -219,44 +215,126 @@ public:
 /**
  * Constraint functions
  */
-template<typename Matrix, typename Vector, typename Derived>
-VectorFunction<Matrix,Vector>& operator<=(VectorFunction<Matrix,Vector>& f, const Eigen::MatrixBase<Derived>& ub)
+template<typename scalar_t, typename Derived>
+BoundRef<scalar_t> operator<=(BoundRef<scalar_t> f, const Eigen::MatrixBase<Derived>& ub) 
+{ f.ub = ub; return f; }
+
+template<typename scalar_t, typename Derived>
+BoundRef<scalar_t> operator<=(const Eigen::MatrixBase<Derived>& lb, BoundRef<scalar_t> f)
+{ f.lb = lb; return f; }
+
+template<typename scalar_t, typename Derived>
+BoundRef<scalar_t> operator>=(const Eigen::MatrixBase<Derived>& ub, BoundRef<scalar_t> f)
+{ f.ub = ub; return f; }
+
+template<typename scalar_t, typename Derived>
+BoundRef<scalar_t> operator>=(BoundRef<scalar_t> f, const Eigen::MatrixBase<Derived>& lb)
+{ f.lb = lb; return f; }
+
+template<typename scalar_t, typename Derived>
+BoundRef<scalar_t> operator==(BoundRef<scalar_t> f, const Eigen::MatrixBase<Derived>& eq)
 {
-	f.set_ub(ub);
+	f.ub = eq;
+	f.lb = eq;
 	return f;
 }
-template<typename Matrix, typename Vector, typename Derived>
-VectorFunction<Matrix,Vector>& operator<=(const Eigen::MatrixBase<Derived>& lb, VectorFunction<Matrix,Vector>& f)
+template<typename scalar_t, typename Derived>
+BoundRef<scalar_t> operator==(const Eigen::MatrixBase<Derived>& eq, BoundRef<scalar_t> f)
 {
-	f.set_lb(lb);
+	f.ub = eq;
+	f.lb = eq;
 	return f;
 }
-template<typename Matrix, typename Vector, typename Derived>
-VectorFunction<Matrix,Vector>& operator>=(const Eigen::MatrixBase<Derived>& ub, VectorFunction<Matrix,Vector>& f)
+
+// Broadcast versions
+template<typename scalar_t, typename Scalar>
+BoundRef<scalar_t> operator<=(BoundRef<scalar_t> f, const Scalar ub) 
+{ f.ub.array() = ub; return f; }
+
+template<typename scalar_t, typename Scalar>
+BoundRef<scalar_t> operator<=(const Scalar lb, BoundRef<scalar_t> f)
+{ f.lb.array() = lb; return f; }
+
+template<typename scalar_t, typename Scalar>
+BoundRef<scalar_t> operator>=(const Scalar ub, BoundRef<scalar_t> f)
+{ f.ub.array() = ub; return f; }
+
+template<typename scalar_t, typename Scalar>
+BoundRef<scalar_t> operator>=(BoundRef<scalar_t> f, const Scalar lb)
+{ f.lb.array() = lb; return f; }
+
+template<typename scalar_t, typename Scalar>
+BoundRef<scalar_t> operator==(BoundRef<scalar_t> f, const Scalar eq)
 {
-	f.set_ub(ub);
+	f.ub.array() = eq;
+	f.lb.array() = eq;
 	return f;
 }
-template<typename Matrix, typename Vector, typename Derived>
-VectorFunction<Matrix,Vector>& operator>=(VectorFunction<Matrix,Vector>& f, const Eigen::MatrixBase<Derived>& lb)
+template<typename scalar_t, typename Scalar>
+BoundRef<scalar_t> operator==(const Scalar eq, BoundRef<scalar_t> f)
 {
-	f.set_lb(lb);
+	f.ub.array() = eq;
+	f.lb.array() = eq;
 	return f;
 }
-template<typename Matrix, typename Vector, typename Derived>
-VectorFunction<Matrix,Vector>& operator==(VectorFunction<Matrix,Vector>& f, const Eigen::MatrixBase<Derived>& eq)
+
+
+/**
+ * A class used by the WeightedSum class to enumlate
+ * the behaviour of BoundRef when a constraint is being 
+ * called as a weighted sum (i.e, for the lagrangian)
+ * 
+ * In this case, we want any calls on the bounds to just
+ * be ignored.
+ */
+struct BoundRefFake
 {
-	f.set_ub(eq);
-	f.set_lb(eq);
-	return f;
-}
-template<typename Matrix, typename Vector, typename Derived>
-VectorFunction<Matrix,Vector>& operator==(const Eigen::MatrixBase<Derived>& eq, VectorFunction<Matrix,Vector>& f)
-{
-	f.set_ub(eq);
-	f.set_lb(eq);
-	return f;
-}
+	struct ignoreme
+	{
+		BoundRefFake& operator=(BoundRefFake& other)  { return other; }
+		BoundRefFake& operator=(BoundRefFake&& other) { return other; }
+	};
+
+	ignoreme lb;
+	ignoreme ub;
+
+	BoundRefFake() {}
+};
+
+/**
+ * Constraint functions
+ */
+template<typename Derived>
+BoundRefFake operator<=(BoundRefFake f, const Eigen::MatrixBase<Derived>& ub) { return f; }
+
+template<typename Derived>
+BoundRefFake operator<=(const Eigen::MatrixBase<Derived>& lb, BoundRefFake f) { return f; }
+
+template<typename Derived>
+BoundRefFake operator>=(const Eigen::MatrixBase<Derived>& ub, BoundRefFake f) { return f; }
+
+template<typename Derived>
+BoundRefFake operator>=(BoundRefFake f, const Eigen::MatrixBase<Derived>& lb) { return f; }
+
+template<typename Derived>
+BoundRefFake operator==(BoundRefFake f, const Eigen::MatrixBase<Derived>& eq) { return f; }
+
+template<typename Derived>
+BoundRefFake operator==(const Eigen::MatrixBase<Derived>& eq, BoundRefFake f) { return f; }
+
+template<typename scalar_t>
+BoundRefFake operator<=(BoundRefFake f, const scalar_t ub) { return f; }
+template<typename scalar_t>
+BoundRefFake operator<=(const scalar_t lb, BoundRefFake f) { return f; }
+template<typename scalar_t>
+BoundRefFake operator>=(const scalar_t ub, BoundRefFake f) { return f; }
+template<typename scalar_t>
+BoundRefFake operator>=(BoundRefFake f, const scalar_t lb) { return f; }
+template<typename scalar_t>
+BoundRefFake operator==(BoundRefFake f, const scalar_t eq) { return f; }
+template<typename scalar_t>
+BoundRefFake operator==(const scalar_t eq, BoundRefFake f) { return f; }
+
 
 
 
@@ -326,7 +404,7 @@ public:
 	}
 
 	template<typename F, typename... Vars>
-	void add(lampc::Eval, F f, Vars... vars)
+	BoundRefFake add(lampc::Eval, F f, Vars... vars)
 	{
 		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
 
@@ -334,10 +412,11 @@ public:
 		this->extend(num_outputs, 0);
 
     value += f.weightedsum(lampc::Eval(), weights(out_indices), value(out_indices), vars...);
+    return BoundRefFake();
 	}
 
 	template<typename F, typename... Vars>
-	void add(lampc::Gradient, F f, Vars... vars)
+	BoundRefFake add(lampc::Gradient, F f, Vars... vars)
 	{
 		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
 
@@ -346,10 +425,11 @@ public:
 		this->extend(num_outputs, 0);
 
     value += f.weightedsum(lampc::Gradient(), gradient(in_indices), weights(out_indices), vars...);
+    return BoundRefFake();
 	}
 
 	template<typename F, typename... Vars>
-	void add(lampc::Hessian, F f, Vars... vars)
+	BoundRefFake add(lampc::Hessian, F f, Vars... vars)
 	{
 		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
 
@@ -360,13 +440,14 @@ public:
     value += f.weightedsum(lampc::Hessian(), 
     	       							 gradient(in_indices), hessian(in_indices, in_indices), 
     											 weights(out_indices), vars...);
+    return BoundRefFake();
 	}
 
 	// Defaults to hessian computation
 	template<typename F, typename... Vars>
-	void add(F f, Vars... vars)
+	BoundRefFake add(F f, Vars... vars)
 	{
-		add(lampc::Hessian(), f, vars...);
+		return add(lampc::Hessian(), f, vars...);
 	}	
 
 	WeightedSumInfo<Matrix,Vector> generate()
@@ -509,6 +590,7 @@ auto generate_problem(Problem&& prob, OCP&& ocp)
   Eigen::VectorX<typename Problem::scalar_t> var(prob.num_variables());
   var.array() = 0;
   prob.set_decision_variable(var);
+
   ocp.eval_constraints(Jacobian(), prob.constraints);
   ocp.eval_objective(Hessian(), prob.objective);
 

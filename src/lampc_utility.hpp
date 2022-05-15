@@ -81,6 +81,21 @@ namespace lampc
             using is_matrix_t = IsMatrix;
         };
         
+
+        /**
+         * Compute the scalar type of the arguments
+         * 
+         * Note: We take the scalar type of the first argument, and assume that the
+         * rest are the same, or can be auto-cast to be the same.
+         * We should likely test them all at compile time...
+         */
+        template<typename Arg, typename... Args>
+        struct get_scalar
+        {
+            using type = typename Arg::Scalar;
+        };
+        template<typename... Args>
+        using get_scalar_t = typename get_scalar<Args...>::type;
     };
 
 }

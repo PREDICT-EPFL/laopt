@@ -101,6 +101,8 @@ struct OCP_DoubleIntegrator
   Eigen::Matrix<scalar_t, 2, 2> Q{{1,0},{0,1}};
   Eigen::Matrix<scalar_t, 1, 1> R{2};
 
+  Eigen::Vector<scalar_t, 2> x0; // Initial state
+
   // Functions we use to define the problem
   sys_t sys; // Continuous-time dynamics
   dsys_t dsys; // Discrete-time dynamics
@@ -118,8 +120,7 @@ struct OCP_DoubleIntegrator
                       dsys_eq(dsys),
                       stage_cost(*this),
                       terminal_cost(*this)
-  {
-  };
+  {};
 
   template<typename OptProblem>
   void define_variables(OptProblem& problem)
@@ -137,17 +138,15 @@ struct OCP_DoubleIntegrator
   template<typename Constraints, typename Dtype>
   void eval_constraints(Dtype dtype, Constraints& con)
   {
-    // con.add(D(), id, X[0]) <= Eigen::Vector<scalar_t, 2>{1,2};
-    // for(int i=0; i<N-1; i++)
-    //   Eigen::Vector<scalar_t,2>{i,2*i} == con.add(D(), dsys_eq, X[i+1], X[i], U[i]);
+    // Initial state
+    con.add(dtype, id, X[0]) == x0;
 
-    // con.add(D(), id, U[0]);
+    // Dynamics
+    for(int i=0; i<N-1; i++) con.add(dtype, dsys_eq, X[i+1], X[i], U[i]) == 0;
 
-    con.add(dtype, id, X[0]);
-    for(int i=0; i<N-1; i++)
-      con.add(dtype, dsys_eq, X[i+1], X[i], U[i]);
-
-    con.add(dtype, id, U[0]);
+    // Add constraints on the variables
+    for(auto& u : U) -1 <= con.add(dtype, id, u) <= 1;
+    for(auto& x : X) -5 <= con.add(dtype, id, x) <= 5;
   }
 
   template<typename Objective, typename Dtype>
@@ -185,6 +184,7 @@ TEST(ProblemTest, DoubleIntegrator) {
   mem.objective.weights.array() = 1;
   mem.lagrangian.weights.array() = 1;
 
+  ocp.x0 << 1,2;
   for(int i=0; i<N; i++) ocp.X[i] << i,i+1;
   for(int i=0; i<N-1; i++) ocp.U[i] << i;
   ocp.xss << 3,4;

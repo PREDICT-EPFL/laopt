@@ -40,22 +40,6 @@ struct FuncInfo
 };
 
 
-/**
- * Compute the scalar type of the arguments
- * 
- * Note: We take the scalar type of the first argument, and assume that the
- * rest are the same, or can be auto-cast to be the same.
- * We should likely test them all at compile time...
- */
-template<typename Arg, typename... Args>
-struct get_scalar
-{
-    using type = typename Arg::Scalar;
-};
-template<typename... Args>
-using get_scalar_t = typename get_scalar<Args...>::type;
-
-
 template<typename Derived>
 struct MakeDifferentiable
 {
@@ -72,7 +56,7 @@ struct MakeDifferentiable
     EIGEN_STRONG_INLINE typename FuncInfo<Derived, Args...>::return_t
     call_impl_helper(meta::IsScalar, const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        Eigen::Matrix<get_scalar_t<Args...>, 1, 1> outvalue;
+        Eigen::Matrix<meta::get_scalar_t<Args...>, 1, 1> outvalue;
         outvalue << static_cast<Derived*>(this)->impl(args...);
         return outvalue;
     }
@@ -186,7 +170,7 @@ public:
         constexpr size_t num_inputs = meta::sum_template<Args::RowsAtCompileTime...>();
 
         // Second order derivative
-        using scalar_t = get_scalar_t<Args...>;
+        using scalar_t = meta::get_scalar_t<Args...>;
         using AD_scalar = Eigen::AutoDiffScalar<Eigen::Vector<scalar_t, num_inputs>>;
         using outerDerivatives = Eigen::Vector<AD_scalar, num_inputs>;
         using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
