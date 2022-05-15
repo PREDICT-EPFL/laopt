@@ -269,13 +269,12 @@ public:
     /**
      * Returns the value w'*f(x)
      */
-    template<typename Weight, typename... Args>
-    EIGEN_STRONG_INLINE auto
+    template<typename Weight, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    EIGEN_STRONG_INLINE scalar_t
     weightedsum(lampc::Eval,
                 const Eigen::MatrixBase<Weight>& weight,
                 const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        using scalar_t = typename Eigen::MatrixBase<Weight>::Scalar;
         constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
 
         // Call the (possibly overloaded) eval
@@ -290,14 +289,13 @@ public:
      * Returns the value w'*f(x).
      * outgradient += gradient(w'*f(x))
      */
-    template<typename OutGradient, typename Weight, typename... Args>
-    EIGEN_STRONG_INLINE auto
+    template<typename OutGradient, typename Weight, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    EIGEN_STRONG_INLINE scalar_t
     weightedsum(lampc::Gradient,
                 OutGradient&& outgradient,
                 const Eigen::MatrixBase<Weight>& weight,
                 const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        using scalar_t = typename Eigen::MatrixBase<Weight>::Scalar;
         constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
         constexpr size_t num_inputs = meta::sum_template<Args::RowsAtCompileTime...>();
 

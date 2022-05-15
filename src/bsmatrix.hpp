@@ -840,6 +840,8 @@ public:
 
 	void resize(Eigen::Index rows, Eigen::Index cols)
 	{
+    assert((rows * cols == 0 || rows <= this->buffer_rows() && cols <= this->buffer_cols()) && "You're resizing during deployment to a size larger than the buffer!");
+
 		this->m_rows = rows; this->m_cols = cols;
 	}
 

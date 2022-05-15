@@ -21,16 +21,16 @@ namespace lampc {
 
 	  RK4(ODE& ode, scalar_t h) : ode(ode), h(h) {}
 
-	  template<typename X, typename... PARAMS>
+	  template<typename X, typename... PARAMS, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
 	  EIGEN_STRONG_INLINE Eigen::Vector<typename Eigen::MatrixBase<X>::Scalar, Eigen::MatrixBase<X>::RowsAtCompileTime>
 	  impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<PARAMS>&... params) noexcept
 	  {
-	    // diff_t _h = static_cast<diff_t>(h);
+	    Scalar _h = static_cast<Scalar>(h);
 	    auto k1 = ode.impl(x,          params...);
-	    auto k2 = ode.impl(x+h*0.5*k1, params...);
-	    auto k3 = ode.impl(x+h*0.5*k2, params...);
-	    auto k4 = ode.impl(x+h*k3,     params...);
-	    return x + h/6.0 * (k1 + 2.0*k2 + 2.0*k3 + k4);
+	    auto k2 = ode.impl(x+_h*static_cast<Scalar>(0.5)*k1, params...);
+	    auto k3 = ode.impl(x+_h*static_cast<Scalar>(0.5)*k2, params...);
+	    auto k4 = ode.impl(x+_h*k3,     params...);
+	    return x + _h/static_cast<Scalar>(6.0) * (k1 + static_cast<Scalar>(2.0)*k2 + static_cast<Scalar>(2.0)*k3 + k4);
 	  }
 	};
 
@@ -81,6 +81,50 @@ namespace lampc {
       	outhessian[i] = 0;
     }
 
+    /**
+     * Returns the value w'*x
+     */
+    template<typename Weight, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    EIGEN_STRONG_INLINE scalar_t
+    weightedsum(lampc::Eval,
+                const Eigen::MatrixBase<Weight>& weight,
+                const Eigen::MatrixBase<X>& x) noexcept
+    {
+    	return weight.dot(x);
+    }
+
+    /**
+     * Returns the value w'*x.
+     * outgradient += gradient(w'*x)
+     */
+    template<typename OutGradient, typename Weight, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    EIGEN_STRONG_INLINE scalar_t
+    weightedsum(lampc::Gradient,
+                OutGradient&& outgradient,
+                const Eigen::MatrixBase<Weight>& weight,
+                const Eigen::MatrixBase<X>& x) noexcept
+    {
+    	outgradient += weight;
+    	return weight.dot(x);
+    }
+
+    /**
+     * Returns the value w'*x.
+     * outgradient += gradient(w'*x)
+     * outhessian += hessian(w'*x)
+     */
+    template<typename OutGradient, typename OutHessian, typename Weight, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    EIGEN_STRONG_INLINE scalar_t
+    weightedsum(lampc::Hessian,
+                OutGradient&& outgradient, OutHessian&& outhessian,
+                const Eigen::MatrixBase<Weight>& weight,
+                const Eigen::MatrixBase<X>& x) noexcept
+    {
+    	outgradient += weight;
+    	outhessian(all,all) += Eigen::Matrix<scalar_t,Eigen::MatrixBase<X>::RowsAtCompileTime,Eigen::MatrixBase<X>::RowsAtCompileTime>::Constant(0);
+    	return weight.dot(x);
+    }
+
 	};
 
 	/**
@@ -99,12 +143,12 @@ namespace lampc {
     eq(F& f) : f(f) {}
 
 		// Used to determine output size at compile time
-    template<typename X, typename... Args>
-    EIGEN_STRONG_INLINE X
+    template<typename X, typename... Args, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
+    EIGEN_STRONG_INLINE Eigen::Vector<Scalar, Eigen::MatrixBase<X>::RowsAtCompileTime>
     impl(const Eigen::MatrixBase<X>& x,
          const Eigen::MatrixBase<Args>&... args) noexcept
     {
-    	return NULL;
+    	return f.impl(args...) - x;
     }
 
     template<typename OutValue, typename X, typename... Args>
@@ -166,6 +210,66 @@ namespace lampc {
 			// 	outjacobian(seqN(i,fix<1>), seqN(i, fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(-1);
    //  }
 
+
+    // /**
+    //  * Returns the value w'*(- x + f(args...)) = -w_x'x + w_f'*f(args...)
+    //  */
+    // template<typename Weight, typename X, typename... Args, 
+    // 				 typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    // EIGEN_STRONG_INLINE scalar_t
+    // weightedsum(lampc::Eval,
+    //             const Eigen::MatrixBase<Weight>& weight,
+    //             const Eigen::MatrixBase<X>& x,
+    //             const Eigen::MatrixBase<Args>&... args) noexcept
+    // {
+    // 	auto weight_x = weight(seqN(0, Eigen::MatrixBase<X>::RowsAtCompileTime));
+    // 	auto weight_f = weight(seqN(Eigen::MatrixBase<X>::RowsAtCompileTime, Weight::RowsAtCompileTime - Eigen::MatrixBase<X>::RowsAtCompileTime));
+    // 	return f.weightedsum(lampc::Eval(), weight_f, args...) - weight_x.dot(x);
+    // }
+
+    // *
+    //  * Returns the value w'*(- x + f(args...)) = -w_x'x + w_f'*f(args...)
+    //  * outgradient_x -= w_x
+    //  * outgradient_f += w_f'*Jacobian(f)
+     
+    // template<typename OutGradient, typename Weight, typename X, typename... Args, 
+    // 				 typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    // EIGEN_STRONG_INLINE scalar_t
+    // weightedsum(lampc::Gradient,
+    //             OutGradient&& outgradient,
+    //             const Eigen::MatrixBase<Weight>& weight,
+    //             const Eigen::MatrixBase<X>& x,
+    //             const Eigen::MatrixBase<Args>&... args) noexcept
+    // {
+    // 	auto weight_x = weight(seqN(0, Eigen::MatrixBase<X>::RowsAtCompileTime));
+    // 	auto weight_f = weight(seqN(Eigen::MatrixBase<X>::RowsAtCompileTime, Weight::RowsAtCompileTime - Eigen::MatrixBase<X>::RowsAtCompileTime));
+    // 	scalar_t ret = f.weightedsum(lampc::Gradient(), outgradient, weight_f, args...) - weight_x.dot(x);
+    // 	outgradient -= weight_x;
+    // 	return ret;
+    // }
+
+    // // /**
+    //  * Returns the value w'*(- x + f(args...)) = -w_x'x + w_f'*f(args...)
+    //  * outgradient += -w + w'*Jacobian(f)
+    //  * outhessian += hessian(w'*f(args...))
+    //  */
+    // template<typename OutGradient, typename OutHessian, typename Weight, typename X, typename... Args, 
+    // 				 typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    // EIGEN_STRONG_INLINE scalar_t
+    // weightedsum(lampc::Hessian,
+    //             OutGradient&& outgradient, OutHessian&& outhessian,
+    //             const Eigen::MatrixBase<Weight>& weight,
+    //             const Eigen::MatrixBase<X>& x,
+    //             const Eigen::MatrixBase<Args>&... args) noexcept
+    // {    
+    // 	// auto weight_x = weight(seqN(0, Eigen::MatrixBase<X>::RowsAtCompileTime));
+    // 	// auto weight_f = weight(seqN(Eigen::MatrixBase<X>::RowsAtCompileTime, Weight::RowsAtCompileTime - Eigen::MatrixBase<X>::RowsAtCompileTime));
+
+    // 	// scalar_t ret = f.weightedsum(lampc::Hessian(), outgradient,outhessian, weight_f, args...) - weight_x.dot(x);
+    // 	// outgradient -= weight_x;
+    // 	// return ret;
+    // 	return 3;
+    // }
 
 	};
 

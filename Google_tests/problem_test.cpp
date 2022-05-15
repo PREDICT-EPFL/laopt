@@ -27,7 +27,7 @@ struct OCP_DoubleIntegrator
     EIGEN_STRONG_INLINE Eigen::Vector<Scalar, 2>
     impl( const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u) noexcept        
     {
-        return A.template cast<Scalar>() * x + B.template cast<Scalar>() * u;
+      return x(0)*(A.template cast<Scalar>() * x + B.template cast<Scalar>() * u);
     }
   };
 
@@ -134,22 +134,28 @@ struct OCP_DoubleIntegrator
     problem.add_variable(uss);
   }
 
-  template<typename Constraints, typename D=lampc::Jacobian>
-  void eval_constraints(Constraints& con)
+  template<typename Constraints, typename Dtype>
+  void eval_constraints(Dtype dtype, Constraints& con)
   {
-    con(D(), id, X[0]) <= Eigen::Vector<scalar_t, 2>{1,2};
-    for(int i=0; i<N-1; i++)
-      Eigen::Vector<scalar_t,2>{i,2*i} == con(D(), dsys_eq, X[i+1], X[i], U[i]);
+    // con.add(D(), id, X[0]) <= Eigen::Vector<scalar_t, 2>{1,2};
+    // for(int i=0; i<N-1; i++)
+    //   Eigen::Vector<scalar_t,2>{i,2*i} == con.add(D(), dsys_eq, X[i+1], X[i], U[i]);
 
-    con(D(), id, U[0]);
+    // con.add(D(), id, U[0]);
+
+    con.add(dtype, id, X[0]);
+    for(int i=0; i<N-1; i++)
+      con.add(dtype, dsys_eq, X[i+1], X[i], U[i]);
+
+    con.add(dtype, id, U[0]);
   }
 
-  template<typename Objective, typename D=lampc::Hessian>
-  void eval_objective(Objective& obj)
+  template<typename Objective, typename Dtype>
+  void eval_objective(Dtype dtype, Objective& obj)
   {
     for(int i=0; i<X.size()-1; i++)
-      obj.add(D(), stage_cost, X[i], xss, U[i], uss);
-    obj.add(D(), terminal_cost, X[N-1], xss);
+      obj.add(dtype, stage_cost, X[i], xss, U[i], uss);
+    obj.add(dtype, terminal_cost, X[N-1], xss);
   }
 };
 
@@ -165,16 +171,19 @@ TEST(ProblemTest, DoubleIntegrator) {
 
   std::cout << "Jacobian sparsity structure \n" << sparsity.constraints.jacobian << std::endl;
   std::cout << "Hessian sparsity structure \n" << sparsity.objective.hessian << std::endl;
+  std::cout << "Lagrangian sparsity structure \n" << sparsity.lagrangian.hessian << std::endl;
   std::cout << sparsity << std::endl;
   std::cout << "\n\n";
 
   auto tape = lampc::generate_problem(lampc::ProblemTape<scalar_t>(sparsity), ocp);
   std::cout << tape << std::endl;
 
-  lampc::Problem<scalar_t> prob(tape);  
+  lampc::Problem<scalar_t> prob(tape);
   lampc::ProblemMemory<scalar_t> mem(prob, tape);
+
   ocp.define_variables(prob);
   mem.objective.weights.array() = 1;
+  mem.lagrangian.weights.array() = 1;
 
   for(int i=0; i<N; i++) ocp.X[i] << i,i+1;
   for(int i=0; i<N-1; i++) ocp.U[i] << i;
@@ -183,13 +192,16 @@ TEST(ProblemTest, DoubleIntegrator) {
 
   prob.constraints.initialize();
   prob.objective.initialize();
-  ocp.eval_constraints(prob.constraints);
-  ocp.eval_objective(prob.objective);
-
+  prob.lagrangian.initialize();
+  ocp.eval_constraints(lampc::Jacobian(), prob.constraints);
+  ocp.eval_objective(lampc::Hessian(), prob.objective);
+  ocp.eval_objective(lampc::Hessian(), prob.lagrangian);
+  ocp.eval_constraints(lampc::Hessian(), prob.lagrangian);
+ 
   std::cout << "prob.constraints.ub = " << mem.constraints.ub.transpose() << std::endl;
   std::cout << "prob.constraints.lb = " << mem.constraints.lb.transpose() << std::endl;
 
-  // std::cout << std::setprecision(2) << std::defaultfloat;
+  std::cout << std::setprecision(2) << std::defaultfloat;
   std::cout << "constraints\n";
   std::cout << "\tvalue = " << mem.constraints.value.transpose() << std::endl;
   std::cout << "\tjacobian\n" << Eigen::MatrixX<scalar_t>(mem.constraints.jacobian) << std::endl;
@@ -198,6 +210,11 @@ TEST(ProblemTest, DoubleIntegrator) {
   std::cout << "\tvalue = " << prob.objective.value << std::endl;
   std::cout << "\tgradient\n" << mem.objective.gradient.transpose() << std::endl;
   std::cout << "\thessian\n" << Eigen::MatrixX<scalar_t>(mem.objective.hessian) << std::endl;
+
+  std::cout << "lagrangian\n";
+  std::cout << "\tvalue = " << prob.lagrangian.value << std::endl;
+  std::cout << "\tgradient\n" << mem.lagrangian.gradient.transpose() << std::endl;
+  std::cout << "\thessian\n" << Eigen::MatrixX<scalar_t>(mem.lagrangian.hessian) << std::endl;
 };
 
 
@@ -216,6 +233,7 @@ TEST(ProblemTest, SpeedTest) {
   lampc::ProblemMemory<scalar_t> mem(prob, tape);
   ocp.define_variables(prob);
   mem.objective.weights.array() = 1;
+  mem.lagrangian.weights.array() = 1;
 
   for(int i=0; i<N; i++) ocp.X[i] << i,i+1;
   for(int i=0; i<N-1; i++) ocp.U[i] << i;
@@ -224,8 +242,11 @@ TEST(ProblemTest, SpeedTest) {
 
   prob.constraints.initialize();
   prob.objective.initialize();
-  ocp.eval_constraints(prob.constraints);
-  ocp.eval_objective(prob.objective);
+  prob.lagrangian.initialize();
+  ocp.eval_constraints(lampc::Jacobian(), prob.constraints);
+  ocp.eval_objective(lampc::Hessian(), prob.objective);
+  ocp.eval_constraints(lampc::Hessian(), prob.lagrangian);
+  ocp.eval_objective(lampc::Hessian(), prob.lagrangian);
 
   // Finally, the call!
   const std::size_t NUM_EXP = 1000000;
@@ -236,8 +257,8 @@ TEST(ProblemTest, SpeedTest) {
     ocp.X[3] << i,i+1;
     prob.constraints.initialize();
     prob.objective.initialize();
-    ocp.eval_constraints(prob.constraints);
-    ocp.eval_objective(prob.objective);
+    ocp.eval_constraints(lampc::Jacobian(), prob.constraints);
+    ocp.eval_objective(lampc::Hessian(), prob.objective);
     acc += mem.constraints.value(4);
   }
   auto end = std::chrono::steady_clock::now();
@@ -310,8 +331,4 @@ TEST(ProblemTest, SpeedTest) {
 }
 
 #endif
-
-
-
-
 }
