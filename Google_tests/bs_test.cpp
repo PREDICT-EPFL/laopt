@@ -67,6 +67,14 @@ TEST(BSMatrix, Construction) {
         auto ground = triplet_to_sparse<double>(6,8,{{0,0,1},{1,0,4},{0,1,2},{1,1,5},{0,2,3},{1,2,6},{2,3,7},{3,3,12},{4,3,17},{5,3,22},{2,4,8},{3,4,13},{4,4,18},{5,4,23},{2,5,9},{3,5,14},{4,5,19},{5,5,24},{2,6,10},{3,6,15},{4,6,20},{5,6,25},{2,7,11},{3,7,16},{4,7,21},{5,7,26}});
         EXPECT_TRUE(ground.isApprox(S, 0));
     }
+
+    // std::cout << "resizeing..." << std::endl;
+    // for(int j=0; j<1000; j++)
+    // for(int i=0; i<100; i++)
+    // {
+    //     sparsity.resize(10,10);
+    //     sparsity.resize(10+i,10+i);
+    // }
 }
 
 /**
@@ -82,8 +90,9 @@ TEST(BSMatrix, Construction_Complex) {
 
     // Partitioning and assembly function
     auto F = [&](auto& tape){
-        tape(seqN(10,A.rows()),multiSeq(seqN(10,2),seqN(5,1))) = A;
-        tape(multiSeq(seqN(6,2),seqN(0,3)), multiSeq(seqN(7,1),seqN(5,1),seqN(3,1),seqN(1,1),seqN(0,1))) = B;
+        tape(seqN(10,A.rows()),concantenate_indices(Eigen::Vector<int,2>{10,11},Eigen::Vector<int,1>{5})) = A;
+        tape(concantenate_indices(Eigen::Vector<int,2>{6,7}, Eigen::Vector<int,3>{0,1,2}),
+             concantenate_indices(Eigen::Vector<int,1>{7},Eigen::Vector<int,1>{5},Eigen::Vector<int,1>{3},Eigen::Vector<int,1>{1},Eigen::Vector<int,1>{0})) = B;
     };
 
     auto BS = lampc::template makeBSMatrix<scalar_t>(F, 20,20);
@@ -197,225 +206,225 @@ TEST(BSMatrixDense, Construction)
     ASSERT_DEATH(F(DD), "");
 }
 
-// template<typename Input, typename Target>
-// void test_assignment_speeds(Eigen::MatrixBase<Input>& source, Target& target)
-// {
-//     const std::array<int, 5> rows{6,7,0,1,2};
-//     const std::array<int, 5> cols{7,5,3,1,0};
+template<typename scalar_t, template<int,int> class Matrix>
+void test_assignment_speeds()
+{
+    const std::array<int, 5> rows{6,7,0,1,2};
+    const std::array<int, 5> cols{7,5,3,1,0};
 
-//     const lampc::Segment row1{.index=6, .length=2};
-//     const lampc::Segment row2{.index=0, .length=3};
+    const lampc::Segment row1{.index=6, .length=2};
+    const lampc::Segment row2{.index=0, .length=3};
 
-//     const lampc::Segment col1{.index=7, .length=1};
-//     const lampc::Segment col2{.index=5, .length=1};
-//     const lampc::Segment col3{.index=3, .length=1};
-//     const lampc::Segment col4{.index=1, .length=1};
-//     const lampc::Segment col5{.index=0, .length=1};
+    const lampc::Segment col1{.index=7, .length=1};
+    const lampc::Segment col2{.index=5, .length=1};
+    const lampc::Segment col3{.index=3, .length=1};
+    const lampc::Segment col4{.index=1, .length=1};
+    const lampc::Segment col5{.index=0, .length=1};
 
-//     auto start = std::chrono::steady_clock::now();
-//     auto end = std::chrono::steady_clock::now();
-//     std::size_t NUM_EXP = 1000000;
+    lampc::BSMatrixDenseDeployment<scalar_t> M;
+    Matrix<10,10> buffer(10,10);
+    M.set_buffer(buffer);
+    M.resize(10,10);
 
-//     double acc;
-//     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-//     start = std::chrono::steady_clock::now();
-//     for(int i = 0; i < NUM_EXP; ++i)
-//     {
-//         buffer(6,7) = i+1;
-//         target = source(rows, cols);
-//         acc += target(0,0);
-//     }
-//     end = std::chrono::steady_clock::now();
-//     // std::cout << " acc = " << acc << std::endl;
-//     std::cout << std::setw (40) << "source(rows, cols): "
-//       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-//       << " ns" << " (" << acc << ")" << std::endl;
+    Matrix<5,5> target(5,5);
+    // Eigen::Matrix<scalar_t, 20, 20> target_buffer;
+    // auto target = target_buffer(seqN(3,fix<5>), seqN(4,fix<5>));
 
-//     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-//     start = std::chrono::steady_clock::now();
-//     for(int i = 0; i < NUM_EXP; ++i)
-//     {
-//         buffer(6,7) = i+1;
-//         target = source(multiSeq(seqN(6,2),seqN(0,3)), multiSeq(seqN(7,1),seqN(5,1),seqN(3,1),seqN(1,1),seqN(0,1)));
-//         acc += target(0,0);
-//     }
-//     end = std::chrono::steady_clock::now();
-//     // std::cout << " acc = " << acc << std::endl;
-//     std::cout << std::setw (40) << "source(multiSeq, multiSeq): "
-//       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-//       << " ns" << " (" << acc << ")" << std::endl;
+    std::cout << "type(target) = " << type_name<decltype(target)>() << std::endl;
 
-//     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-//     start = std::chrono::steady_clock::now();
-//     for(int i = 0; i < NUM_EXP; ++i)
-//     {
-//         buffer(6,7) = i+1;
-//         target = source(lampc::multiSeq_to_index<5>({row1, row2}), lampc::multiSeq_to_index<5>({col1, col2, col3, col4, col5}));
-//         acc += target(0,0);
-//     }
-//     end = std::chrono::steady_clock::now();
-//     // std::cout << " acc = " << acc << std::endl;
-//     std::cout << std::setw (40) << "source(multiSeq array, multiSeq array): "
-//       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-//       << " ns" << " (" << acc << ")" << std::endl;
+    Matrix<5,5> source(5,5);
+    Eigen::Map<Eigen::Matrix<scalar_t,5,5>> map(buffer.data());
+    Eigen::Map<Eigen::Matrix<scalar_t,10,10>> map_buffer(buffer.data());
 
-//     // acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-//     // start = std::chrono::steady_clock::now();
-//     // for(int i = 0; i < NUM_EXP; ++i)
-//     // {
-//     //     source(0,0) = i+1;
-//     //     target = source;
-//     //     acc += target(0,0);
-//     // }
-//     // end = std::chrono::steady_clock::now();
-//     // // std::cout << " acc = " << acc << std::endl;
-//     // std::cout << std::setw (40) << "source: "
-//     //   << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-//     //   << " ns" << " (" << acc << ")" << std::endl;
+    auto start = std::chrono::steady_clock::now();
+    auto end = std::chrono::steady_clock::now();
+    std::size_t NUM_EXP = 1000000;
 
-//     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-//     start = std::chrono::steady_clock::now();
-//     for(int i = 0; i < NUM_EXP; ++i)
-//     {
-//         buffer(6,7) = i+1;
-//         target = buffer(rows, cols);
-//         acc += target(0,0);
-//     }
-//     end = std::chrono::steady_clock::now();
-//     // std::cout << " acc = " << acc << std::endl;
-//     std::cout << std::setw (40) << "buffer(rows, cols): "
-//       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-//       << " ns" << " (" << acc << ")" << std::endl;
+    double acc;
+    acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+    start = std::chrono::steady_clock::now();
+    for(int i = 0; i < NUM_EXP; ++i)
+    {
+        buffer(6,7) = i+1;
+        target = source(rows, cols);
+        acc += target(0,0);
+    }
+    end = std::chrono::steady_clock::now();
+    // std::cout << " acc = " << acc << std::endl;
+    std::cout << std::setw (40) << "source(rows, cols): "
+      << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+      << " ns" << " (" << acc << ")" << std::endl;
 
-//     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-//     start = std::chrono::steady_clock::now();
-//     for(int i = 0; i < NUM_EXP; ++i)
-//     {
-//         source(0,0) = i+1;
-//         target = map;
-//         acc += target(0,0);
-//     }
-//     end = std::chrono::steady_clock::now();
-//     // std::cout << " acc = " << acc << std::endl;
-//     std::cout << std::setw (40) << "fixed map: "
-//       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-//       << " ns" << " (" << acc << ")" << std::endl;
+    // acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+    // start = std::chrono::steady_clock::now();
+    // for(int i = 0; i < NUM_EXP; ++i)
+    // {
+    //     buffer(6,7) = i+1;
+    //     target = source(multiSeq(seqN(6,2),seqN(0,3)), multiSeq(seqN(7,1),seqN(5,1),seqN(3,1),seqN(1,1),seqN(0,1)));
+    //     acc += target(0,0);
+    // }
+    // end = std::chrono::steady_clock::now();
+    // // std::cout << " acc = " << acc << std::endl;
+    // std::cout << std::setw (40) << "source(multiSeq, multiSeq): "
+    //   << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+    //   << " ns" << " (" << acc << ")" << std::endl;
 
-//     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
-//     start = std::chrono::steady_clock::now();
-//     for(int i = 0; i < NUM_EXP; ++i)
-//     {
-//         map(6,7) = i+1;
-//         target = map(rows, cols);
-//         acc += target(0,0);
-//     }
-//     end = std::chrono::steady_clock::now();
-//     // std::cout << " acc = " << acc << std::endl;
-//     std::cout << std::setw (40) << "fixed map(rows, cols): "
-//       << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
-//       << " ns" << " (" << acc << ")" << std::endl;
-// }
+    // acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+    // start = std::chrono::steady_clock::now();
+    // for(int i = 0; i < NUM_EXP; ++i)
+    // {
+    //     buffer(6,7) = i+1;
+    //     target = source(lampc::multiSeq_to_index<5>({row1, row2}), lampc::multiSeq_to_index<5>({col1, col2, col3, col4, col5}));
+    //     acc += target(0,0);
+    // }
+    // end = std::chrono::steady_clock::now();
+    // // std::cout << " acc = " << acc << std::endl;
+    // std::cout << std::setw (40) << "source(multiSeq array, multiSeq array): "
+    //   << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+    //   << " ns" << " (" << acc << ")" << std::endl;
 
+    // acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+    // start = std::chrono::steady_clock::now();
+    // for(int i = 0; i < NUM_EXP; ++i)
+    // {
+    //     source(0,0) = i+1;
+    //     target = source;
+    //     acc += target(0,0);
+    // }
+    // end = std::chrono::steady_clock::now();
+    // // std::cout << " acc = " << acc << std::endl;
+    // std::cout << std::setw (40) << "source: "
+    //   << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+    //   << " ns" << " (" << acc << ")" << std::endl;
 
-// template<int Rows, int Cols>
-// using MatrixDynamic = Eigen::MatrixX<double>;
-// template<int Rows, int Cols>
-// using MatrixStatic = Eigen::Matrix<double,Rows,Cols>;
+    acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+    start = std::chrono::steady_clock::now();
+    for(int i = 0; i < NUM_EXP; ++i)
+    {
+        buffer(6,7) = i+1;
+        target = buffer(rows, cols);
+        acc += target(0,0);
+    }
+    end = std::chrono::steady_clock::now();
+    // std::cout << " acc = " << acc << std::endl;
+    std::cout << std::setw (40) << "buffer(rows, cols): "
+      << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+      << " ns" << " (" << acc << ")" << std::endl;
 
-// TEST(BSMatrixDense, AccessTime)
-// {
-//     using scalar_t = double;
+    acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+    start = std::chrono::steady_clock::now();
+    for(int i = 0; i < NUM_EXP; ++i)
+    {
+        source(0,0) = i+1;
+        target = map;
+        acc += target(0,0);
+    }
+    end = std::chrono::steady_clock::now();
+    // std::cout << " acc = " << acc << std::endl;
+    std::cout << std::setw (40) << "fixed map: "
+      << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+      << " ns" << " (" << acc << ")" << std::endl;
 
-//     lampc::BSMatrixDenseDeployment<scalar_t> M;
-//     Matrix<10,10> buffer(10,10);
-//     M.set_buffer(buffer);
-//     M.resize(10,10);
-
-//     Matrix<5,5> target(5,5);
-//     // Eigen::Matrix<scalar_t, 20, 20> target_buffer;
-//     // auto target = target_buffer(seqN(3,fix<5>), seqN(4,fix<5>));
-
-//     std::cout << "type(target) = " << type_name<decltype(target)>() << std::endl;
-
-//     Matrix<5,5> source(5,5);
-//     scalar_t acc;
-//     Eigen::Map<Eigen::Matrix<scalar_t,5,5>> map(buffer.data());
-//     Eigen::Map<Eigen::Matrix<scalar_t,10,10>> map_buffer(buffer.data());
-
-//     std::cout << "\n\n";
-//     std::cout << "Assignment to dynamic matrices" << std::endl;
-//     test_assignment_speeds<scalar_t, MatrixDynamic>();
-//     std::cout << "\n\n";
-
-//     std::cout << "Assignment to static matrices" << std::endl;
-//     test_assignment_speeds<scalar_t, MatrixStatic>();
-//     std::cout << "\n\n";
-// }
+    acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
+    start = std::chrono::steady_clock::now();
+    for(int i = 0; i < NUM_EXP; ++i)
+    {
+        map_buffer(6,7) = i+1;
+        target = map_buffer(rows, cols);
+        acc += target(0,0);
+    }
+    end = std::chrono::steady_clock::now();
+    // std::cout << " acc = " << acc << std::endl;
+    std::cout << std::setw (40) << "fixed map(rows, cols): "
+      << std::setw(10) << std::fixed << std::setprecision(2) << std::right << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
+      << " ns" << " (" << acc << ")" << std::endl;
+}
 
 
-// // /**
-// //  * Test the weighted sum
-// //  */
-// // TEST(WeightedSum, Simple) {
-// //     WeightedSumTape<double> wsum_tape;
+template<int Rows, int Cols>
+using MatrixDynamic = Eigen::MatrixX<double>;
+template<int Rows, int Cols>
+using MatrixStatic = Eigen::Matrix<double,Rows,Cols>;
 
-// //     Eigen::VectorX<scalar_t> A(2);
-// //     Eigen::VectorX<scalar_t> B(4);
+template<int Rows, int Cols>
+using Matrix = MatrixStatic<Rows,Cols>;
 
-// //     Eigen::MatrixX<scalar_t> JA(2,3);
-// //     Eigen::MatrixX<scalar_t> JB(4,5);
+TEST(BSMatrixDense, AccessTime)
+{
+    using scalar_t = double;
 
-// //     Eigen::MatrixX<scalar_t> HA(3,3);
-// //     Eigen::MatrixX<scalar_t> HB(5,5);
+    std::cout << "\n\n";
+    std::cout << "Assignment to dynamic matrices" << std::endl;
+    test_assignment_speeds<scalar_t, MatrixDynamic>();
+    std::cout << "\n\n";
 
-// //     Index obj_index; 
-
-// //      // Create the matrix blkdiag(A,B)
-// //     auto F = [&](auto& wsum){
-// //         wsum += wsum.weight(rows) * std::make_tuple(A, JA, HA);
-// //         wsum += wsum.weight(-1) * std::make_tuple(B, JB, HB);
-// //     };
-
-
-// //     auto F = [&](auto& wsum){
-// //         wsum(0)  += wsum.weight(-1) * std::make_tuple(A, JA, HA);
-// //         wsum(-1) += wsum.weight(-1) * std::make_tuple(B, JB, HB);
-// //     };
+    std::cout << "Assignment to static matrices" << std::endl;
+    test_assignment_speeds<scalar_t, MatrixStatic>();
+    std::cout << "\n\n";
+}
 
 
-// //     F(wsum_tape);
-// //     wsum_tape.finalize_structure();
-// //     F(wsum_tape);
+// /**
+//  * Test the weighted sum
+//  */
+// TEST(WeightedSum, Simple) {
+//     WeightedSumTape<double> wsum_tape;
+
+//     Eigen::VectorX<scalar_t> A(2);
+//     Eigen::VectorX<scalar_t> B(4);
+
+//     Eigen::MatrixX<scalar_t> JA(2,3);
+//     Eigen::MatrixX<scalar_t> JB(4,5);
+
+//     Eigen::MatrixX<scalar_t> HA(3,3);
+//     Eigen::MatrixX<scalar_t> HB(5,5);
+
+//     Index obj_index; 
+
+//      // Create the matrix blkdiag(A,B)
+//     auto F = [&](auto& wsum){
+//         wsum += wsum.weight(rows) * std::make_tuple(A, JA, HA);
+//         wsum += wsum.weight(-1) * std::make_tuple(B, JB, HB);
+//     };
+
+
+//     auto F = [&](auto& wsum){
+//         wsum(0)  += wsum.weight(-1) * std::make_tuple(A, JA, HA);
+//         wsum(-1) += wsum.weight(-1) * std::make_tuple(B, JB, HB);
+//     };
+
+
+//     F(wsum_tape);
+//     wsum_tape.finalize_structure();
+//     F(wsum_tape);
  
-// //   template<typename D, typename T>
-// //   void objective(T& lag)
-// //   {
-// //     // for(int i=0; i<x().cols()-1; i++)
-// //     //   obj({x[i],u[i]}) += obj.w(-1) * stage_cost(D(),x(i),u(i));
-// //     // obj({x[i],u[i],xs,us}) += obj.w(-1) * terminal_cost(D(),x(i),u(i),xs,us);
+//   template<typename D, typename T>
+//   void objective(T& lag)
+//   {
+//     // for(int i=0; i<x().cols()-1; i++)
+//     //   obj({x[i],u[i]}) += obj.w(-1) * stage_cost(D(),x(i),u(i));
+//     // obj({x[i],u[i],xs,us}) += obj.w(-1) * terminal_cost(D(),x(i),u(i),xs,us);
 
-// //     // for(int i=0; i<x().cols()-1; i++)
-// //     //   lagrangian({x[i],u[i]}) += lagrangian.w(-1) * stage_cost(D(),x(i),u(i));
-// //     // lagrangian({x[i],u[i],xs,us}) += lagrangian.w(-1) * terminal_cost(D(),x(i),u(i),xs,us);
+//     // for(int i=0; i<x().cols()-1; i++)
+//     //   lagrangian({x[i],u[i]}) += lagrangian.w(-1) * stage_cost(D(),x(i),u(i));
+//     // lagrangian({x[i],u[i],xs,us}) += lagrangian.w(-1) * terminal_cost(D(),x(i),u(i),xs,us);
 
-// //     // lag = obj + lag.w(-1) * equalities + lag.w(-1) * inequalities;
-// //     lag = obj + dual_eq * equalities + dual_ineq * inequalities;
-// //   };
+//     // lag = obj + lag.w(-1) * equalities + lag.w(-1) * inequalities;
+//     lag = obj + dual_eq * equalities + dual_ineq * inequalities;
+//   };
 
-// //   template<typename D, typename T>
-// //   void constraints(T& g)
-// //   {
-// //     for(int i=0; i<x().cols()-1; i++)
-// //       g(-1,{x[i+1],x[i],u[i]}).con(i,"name") = this->dsys_equality(D(),x(i+1),x(i),u(i)); // Sets both the value and the jacobian
-// //   };
-
-
-// //     auto dual_eq = lag.w(-1);
-// //     auto dual_ineq = lag.w(-1);
+//   template<typename D, typename T>
+//   void constraints(T& g)
+//   {
+//     for(int i=0; i<x().cols()-1; i++)
+//       g(-1,{x[i+1],x[i],u[i]}).con(i,"name") = this->dsys_equality(D(),x(i+1),x(i),u(i)); // Sets both the value and the jacobian
+//   };
 
 
+//     auto dual_eq = lag.w(-1);
+//     auto dual_ineq = lag.w(-1);
 
-// // }
+// }
 
 
 }

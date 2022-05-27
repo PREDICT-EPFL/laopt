@@ -4,18 +4,19 @@ project(lampc_test)
 add_subdirectory(lib)
 include_directories(${gtest_SOURCE_DIR}/include ${gtest_SOURCE_DIR})
 
+
 include_directories(
 	include 
 	/usr/local/include/ 
 	${EIGEN3_INCLUDE_DIR} 
-	/opt/homebrew/Cellar/ipopt/3.14.2/include/coin-or/ 
+	/opt/homebrew/include/coin-or/
 	/opt/homebrew/Cellar/fmt/8.0.1/include
 	/Users/cnjones/git/lampc/src
 )
 
 link_directories(
 	/Users/cnjones/git/lampc 
-	/opt/homebrew/Cellar/ipopt/3.14.2/lib/ 
+	/opt/homebrew/lib/
 	/opt/homebrew/Cellar/fmt/8.0.1/lib
 )
 
@@ -60,6 +61,18 @@ target_link_libraries(
   gtest_main
   gtest
 )
+
+add_executable(
+  ipopt_test
+  ipopt_test.cpp
+)
+target_link_libraries(
+  ipopt_test
+  gtest_main
+  gtest
+  ipopt
+)
+
 
 include(GoogleTest)
 gtest_discover_tests(func_test)

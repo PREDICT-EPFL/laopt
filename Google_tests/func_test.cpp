@@ -447,7 +447,7 @@ TEST(BSMatrixTest, Jacobian) {
             x(1) = 2*i;
             u(0) = 3*i;
             test(lampc::Jacobian(), 
-                 value(seqN(i*2,2)), jacobian(seqN(i*2,2), lampc::multiSeq_to_index<3>({seqN(i*2,2),seqN(10+i,1)})),
+                 value(seqN(i*2,2)), jacobian(seqN(i*2,2), lampc::multiSeq_to_index(seqN(i*2,fix<2>),seqN(10+i,fix<1>))),
                  x, u);
         }
     };

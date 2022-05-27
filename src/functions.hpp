@@ -158,7 +158,7 @@ namespace lampc {
                const Eigen::MatrixBase<X>& x,
                const Eigen::MatrixBase<Args>&... args) noexcept
     {
-    	f(lampc::Eval(), outvalue);
+    	f(lampc::Eval(), outvalue, args...);
     	outvalue -= x;
     }
 

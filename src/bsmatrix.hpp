@@ -6,6 +6,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
+#include "lampc_utility.hpp"
+
 /**
  * Bring all the Eigen seq commands into the global namespace for convenience
  */
@@ -17,40 +19,63 @@ using Eigen::lastp1;
 using Eigen::fix;
 
 
-template<typename... Seq>
-std::tuple<Seq...> multiSeq(Seq... seq)
+
+/**
+ * Takes a paramater pack of Eigen::Vector's and concantenantes
+ * them into a single Eigen::Vector.
+ * Everything must be fixed-size.
+ */
+template<int... n>
+Eigen::Vector<int, lampc::meta::sum_template<n...>()>
+concantenate_indices(const Eigen::Vector<int, n>&... args)
 {
-  return std::make_tuple(seq...);
+  Eigen::Vector<int, lampc::meta::sum_template<n...>()> out;
+  int offset = 0;
+  auto l = {
+    (
+      out(seqN(offset,n)) = args,
+      offset += n,
+      0
+    )...
+  };
+  return out;
 }
 
-struct MultiSeq
-{
-  /**
-   * Convert a multi-sequence to a list-of-integer sequence
-   */
-  template<typename... Seq>
-  static std::vector<size_t> to_index(std::tuple<Seq...> mseq, size_t size)
-  {
-    return to_index_impl(mseq, size, std::make_index_sequence<sizeof... (Seq)>());
-  }
 
-  template<typename... Seq, size_t... I>
-  static std::vector<size_t> to_index_impl(std::tuple<Seq...> mseq, size_t size, std::index_sequence<I...>)
-  {
-    Eigen::VectorXi index(size);
-    index.setLinSpaced(size,0,size-1);
-    std::vector<size_t> ret;
+// template<typename... Seq>
+// std::tuple<Seq...> multiSeq(Seq... seq)
+// {
+//   return std::make_tuple(seq...);
+// }
 
-    auto extend_ret = [&ret](auto sub)
-    {
-      ret.insert(ret.end(), sub.begin(), sub.end());
-    };
+// struct MultiSeq
+// {
+//   /**
+//    * Convert a multi-sequence to a list-of-integer sequence
+//    */
+//   template<typename... Seq>
+//   static std::vector<size_t> to_index(std::tuple<Seq...> mseq, size_t size)
+//   {
+//     return to_index_impl(mseq, size, std::make_index_sequence<sizeof... (Seq)>());
+//   }
 
-    auto l = { (extend_ret(index(std::get<I>(mseq))), 0)...};
+//   template<typename... Seq, size_t... I>
+//   static std::vector<size_t> to_index_impl(std::tuple<Seq...> mseq, size_t size, std::index_sequence<I...>)
+//   {
+//     Eigen::VectorXi index(size);
+//     index.setLinSpaced(size,0,size-1);
+//     std::vector<size_t> ret;
 
-    return ret;
-  }
-};
+//     auto extend_ret = [&ret](auto sub)
+//     {
+//       ret.insert(ret.end(), sub.begin(), sub.end());
+//     };
+
+//     auto l = { (extend_ret(index(std::get<I>(mseq))), 0)...};
+
+//     return ret;
+//   }
+// };
 
 namespace lampc
 {
@@ -87,27 +112,57 @@ struct CopyInfo
  * 
  * Note: Must know the length of the list at compile time
  */
-template<int len>
-inline std::array<int, len> multiSeq_to_index(std::initializer_list<Segment> segs)
+// template<int n>
+// inline Eigen::Vector<int, n> multiSeq_to_index(std::initializer_list<Segment> segs)
+// {
+// 	Eigen::Vector<int, n> ret;
+// 	int i = 0;
+// 	for(const auto& seg : segs) 
+// 		for(int j=seg.index; j<seg.index+seg.length; j++)
+// 			ret[i++] = j;
+// 	return ret;
+// }
+
+constexpr bool is_all_positive(std::initializer_list<int> values)
 {
-	std::array<int, len> ret;
-	int i = 0;
-	for(const auto& seg : segs) 
-		for(int j=seg.index; j<seg.index+seg.length; j++)
-			ret[i++] = j;
-	return ret;
+  for(auto i : values) if(i < 0) return false;
+  return true;
 }
 
-// Captures everything that has an operator[] defined (i.e., Eigen::ArithmeticSequence)
-template<int len, typename T>
-inline std::array<int, len> multiSeq_to_index(std::initializer_list<T> segs)
+template<typename... T, int n=meta::sum_template<T::SizeAtCompileTime...>()>
+inline Eigen::Vector<int, n> multiSeq_to_index(T... segs)
 {
-  std::array<int, len> ret;
+  static_assert(is_all_positive({T::SizeAtCompileTime...}), "SIZES OF ARITHMETIC SEQUENCES MUST BE FIXED");
+
+  Eigen::Vector<int, n> ret;
   int i = 0;
-  for(const auto& seg : segs) 
-    for(int j=0; j<seg.size(); j++) ret[i++] = seg[j];
+
+  auto fillme = [&i, &ret](auto seg){
+    for(int j=0; j<decltype(seg)::SizeAtCompileTime; j++)
+      ret[i++] = seg[j];
+  };
+
+  auto l = {
+    (fillme(segs), 0)...
+  };
+
+  // for(const auto& seg : segs) 
+  //   for(int j=seg.index; j<seg.index+seg.length; j++)
+  //     ret[i++] = j;
   return ret;
 }
+
+
+// // Captures everything that has an operator[] defined (i.e., Eigen::ArithmeticSequence)
+// template<int len, typename T>
+// inline std::array<int, len> multiSeq_to_index(std::initializer_list<T> segs)
+// {
+//   std::array<int, len> ret;
+//   int i = 0;
+//   for(const auto& seg : segs) 
+//     for(int j=0; j<seg.size(); j++) ret[i++] = seg[j];
+//   return ret;
+// }
 
 
 std::ostream &operator<<(std::ostream &os, std::vector<Segment> const &sequence) 
@@ -210,7 +265,8 @@ public:
    */
   void allocate_memory(Eigen::SparseMatrix<scalar_t>& S)
   {
-    S = sparsity_structure.template cast<scalar_t>();
+    // std::cout << "sparsity_structure = " << sparsity_structure << std::endl;
+    S = sparsity_structure.eval().template cast<scalar_t>();
     set_target(S);
   }
 
@@ -331,23 +387,23 @@ struct BSSlice
 
   BSSlice(Base& base, T M) : base(base), M(M) {}
 
-  template<typename... RowSlice, typename... ColSlice>
-  auto operator()(std::tuple<RowSlice...> rows, std::tuple<ColSlice...> cols)
-  {
-    return base.makeSlice(M(MultiSeq::to_index(rows, M.rows()), MultiSeq::to_index(cols, M.cols())));
-  }
+  // template<typename... RowSlice, typename... ColSlice>
+  // auto operator()(std::tuple<RowSlice...> rows, std::tuple<ColSlice...> cols)
+  // {
+  //   return base.makeSlice(M(MultiSeq::to_index(rows, M.rows()), MultiSeq::to_index(cols, M.cols())));
+  // }
 
-  template<typename... RowSlice, typename ColSlice>
-  auto operator()(std::tuple<RowSlice...> rows, ColSlice cols)
-  {
-    return base.makeSlice(M(MultiSeq::to_index(rows, M.rows()), cols));
-  }
+  // template<typename... RowSlice, typename ColSlice>
+  // auto operator()(std::tuple<RowSlice...> rows, ColSlice cols)
+  // {
+  //   return base.makeSlice(M(MultiSeq::to_index(rows, M.rows()), cols));
+  // }
 
-  template<typename RowSlice, typename... ColSlice>
-  auto operator()(RowSlice rows, std::tuple<ColSlice...> cols)
-  {
-    return base.makeSlice(M(rows, MultiSeq::to_index(cols, M.cols())));
-  }
+  // template<typename RowSlice, typename... ColSlice>
+  // auto operator()(RowSlice rows, std::tuple<ColSlice...> cols)
+  // {
+  //   return base.makeSlice(M(rows, MultiSeq::to_index(cols, M.cols())));
+  // }
 
   template<typename RowSlice, typename ColSlice>
   auto operator()(RowSlice rows, ColSlice cols)
@@ -616,11 +672,14 @@ struct BSMatrixSparsity : public BSSliceSparsity<Eigen::MatrixX<int>, BSMatrixSp
   {
     int curr_rows = M.rows();
     int curr_cols = M.cols();
-    M.conservativeResize(rows, cols);
+    if(curr_rows == 0 || curr_cols == 0)
+        M.resize(rows, cols);
+    else
+        M.conservativeResize(rows, cols);
 
     // Set new elements to zero == sparse
-    M(all, seq(curr_cols,last)).array() = 0; 
-    M(seq(curr_rows,last), all).array() = 0; 
+    if(cols > curr_cols) M(all, seq(curr_cols,last)).array() = 0;
+    if(rows > curr_rows) M(seq(curr_rows,last), all).array() = 0;
   }
 
   /**
@@ -789,13 +848,10 @@ public:
 
 	void resize(Eigen::Index rows, Eigen::Index cols)
 	{
-		if(rows > this->m_rows || cols > this->m_cols)
+		if((rows > this->m_rows || cols > this->m_cols) && rows > 0 && cols > 0)
 		{
 			// This should never happen during deployment
 			m_mat.conservativeResize(rows, cols);
-			this->m_rows = rows;
-			this->m_cols = cols;
-			return;
 		}
 
 		this->m_rows = rows; this->m_cols = cols;
@@ -840,7 +896,7 @@ public:
 
 	void resize(Eigen::Index rows, Eigen::Index cols)
 	{
-    assert((rows * cols == 0 || rows <= this->buffer_rows() && cols <= this->buffer_cols()) && "You're resizing during deployment to a size larger than the buffer!");
+    // assert((rows * cols == 0 || rows <= this->buffer_rows() && cols <= this->buffer_cols()) && "You're resizing during deployment to a size larger than the buffer!");
 
 		this->m_rows = rows; this->m_cols = cols;
 	}
