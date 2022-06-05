@@ -140,6 +140,14 @@ struct OCP_DoubleIntegrator
     problem.add_variable(uss);
   }
 
+  template<typename Bounds>
+  void eval_variable_bounds(Bounds& bnd)
+  {
+    // Add constraints on the variables
+    for(auto& u : U) -1 <= bnd.add(u) <= 1;
+    for(auto& x : X) -5 <= bnd.add(x) <= 5;
+  }
+
   template<typename Constraints, typename Dtype>
   void eval_constraints(Dtype dtype, Constraints& con)
   {
@@ -148,10 +156,6 @@ struct OCP_DoubleIntegrator
 
     // Dynamics
     for(int i=0; i<N-1; i++) con.add(dtype, dsys_eq, X[i+1], X[i], U[i]) == 0;
-
-    // Add constraints on the variables
-    for(auto& u : U) -1 <= con.add(dtype, id, u) <= 1;
-    for(auto& x : X) -5 <= con.add(dtype, id, x) <= 5;
   }
 
   template<typename Objective, typename Dtype>
@@ -184,48 +188,16 @@ TEST(ProblemTest, DoubleIntegrator) {
   std::cout << tape << std::endl;
 
   lampc::Problem<OCP> prob(ocp, tape);
-  lampc::ProblemMemory<scalar_t> mem(prob);
-
-  // Specify problem weights and current variable values
-  mem.objective.weights.array() = 1;
-  mem.lagrangian.weights.array() = 1;
-
-  ocp.x0 << 1,2;
-  for(int i=0; i<N; i++) ocp.X[i] << i,i+1;
-  for(int i=0; i<N-1; i++) ocp.U[i] << i;
-  ocp.xss << 3,4;
-  ocp.uss << 1;
 
   std::cout << std::setprecision(2) << std::defaultfloat;
-
-  prob.eval_constraints(lampc::Jacobian());
- 
-  std::cout << "prob.constraints.ub = " << mem.constraints.ub.transpose() << std::endl;
-  std::cout << "prob.constraints.lb = " << mem.constraints.lb.transpose() << std::endl;
-
-  std::cout << "constraints\n";
-  std::cout << "\tvalue = " << mem.constraints.value.transpose() << std::endl;
-  std::cout << "\tjacobian\n" << Eigen::MatrixX<scalar_t>(mem.constraints.jacobian) << std::endl;
-
-  prob.eval_objective(lampc::Hessian());
-
-  std::cout << "objective\n";
-  std::cout << "\tvalue = " << prob.objective.value << std::endl;
-  std::cout << "\tgradient\n" << mem.objective.gradient.transpose() << std::endl;
-  std::cout << "\thessian\n" << Eigen::MatrixX<scalar_t>(mem.objective.hessian) << std::endl;
-
-  prob.eval_lagrangian(lampc::Hessian());
-
-  std::cout << "lagrangian\n";
-  std::cout << "\tvalue = " << prob.lagrangian.value << std::endl;
-  std::cout << "\tgradient\n" << mem.lagrangian.gradient.transpose() << std::endl;
-  std::cout << "\thessian\n" << Eigen::MatrixX<scalar_t>(mem.lagrangian.hessian) << std::endl;
-
 
   // Test computation into pre-allocated vectors
   Eigen::VectorX<scalar_t> con(prob.constraints.rows());
   Eigen::VectorX<scalar_t> lb(prob.constraints.rows());
   Eigen::VectorX<scalar_t> ub(prob.constraints.rows());
+
+  Eigen::VectorX<scalar_t> lb_x(prob.num_variables());
+  Eigen::VectorX<scalar_t> ub_x(prob.num_variables());
 
   scalar_t obj;
   Eigen::VectorX<scalar_t> gradient(prob.num_variables());
@@ -267,6 +239,7 @@ TEST(ProblemTest, DoubleIntegrator) {
   std::cout << "\n\n" << "=== Evaluating constraints and jacobian into reference buffers ===" << std::endl;
   Eigen::VectorX<scalar_t> jac_buffer(prob.constraints.jacobian.sparsity_structure.nonZeros());
   prob.eval_constraints(lampc::Jacobian(), var, con,lb,ub,jac_buffer);
+  prob.eval_variable_bounds(lb_x, ub_x);
   obj = prob.eval_objective(lampc::Hessian(), var, weights,gradient,hessian);
   lag = prob.eval_lagrangian(lampc::Hessian(), var, lag_weights,lag_gradient,lag_hessian);
   std::cout << "con = " << con.transpose() << std::endl;
@@ -279,29 +252,41 @@ TEST(ProblemTest, DoubleIntegrator) {
   std::cout << "lag = " << lag << std::endl;
   std::cout << "lag_gradient = " << lag_gradient.transpose() << std::endl;
   std::cout << "lag_hessian_buffer = " << Eigen::Map<Eigen::VectorX<scalar_t>>(lag_hessian.valuePtr(),lag_hessian.nonZeros()).transpose() << std::endl;
+  std::cout << "lb_x = " << lb_x.transpose() << std::endl;
+  std::cout << "ub_x = " << ub_x.transpose() << std::endl;
 
   // Test computation into memory structure
-  lampc::ProblemMemory<scalar_t> memX(prob);
+  lampc::ProblemMemory<scalar_t> mem(prob);
 
-  prob.set_decision_variable(memX.var);
+  prob.set_decision_variable(mem.var);
   ocp.x0 << 1,2;
   for(int i=0; i<N; i++) ocp.X[i] << i,i+1;
   for(int i=0; i<N-1; i++) ocp.U[i] << i;
   ocp.xss << 3,4;
   ocp.uss << 1;
 
+  mem.objective.weights.array() = 1;
+  mem.lagrangian.weights.array() = 1;
+
   std::cout << "\n\n" << "=== Evaluating constraints into memory structure ===" << std::endl;
-  prob.eval_constraints(lampc::Jacobian(), memX.var, memX.constraints.value, memX.constraints.lb, memX.constraints.ub, memX.constraints.jacobian);
-  std::cout << "con = " << memX.constraints.value.transpose() << std::endl;
-  std::cout << "lb = " << memX.constraints.lb.transpose() << std::endl;
-  std::cout << "ub = " << memX.constraints.ub.transpose() << std::endl;
-  std::cout << "jacobian_buffer = " << memX.constraints.jacobian_buffer.transpose() << std::endl;
+  prob.eval_constraints(lampc::Jacobian(), mem.var, mem.constraints.value, mem.constraints.lb, mem.constraints.ub, mem.constraints.jacobian);
+  prob.eval_variable_bounds(mem.variable_bounds.lb, mem.variable_bounds.ub);
+  obj = prob.eval_objective(lampc::Hessian(), mem.var, mem.objective.weights,mem.objective.gradient,mem.objective.hessian);
+  lag = prob.eval_lagrangian(lampc::Hessian(), mem.var, mem.lagrangian.weights,mem.lagrangian.gradient,mem.lagrangian.hessian);
+  std::cout << "con = " << mem.constraints.value.transpose() << std::endl;
+  std::cout << "lb = " << mem.constraints.lb.transpose() << std::endl;
+  std::cout << "ub = " << mem.constraints.ub.transpose() << std::endl;
+  std::cout << "jacobian_buffer = " << mem.constraints.jacobian_buffer.transpose() << std::endl;
+  std::cout << "obj = " << obj << std::endl;
+  std::cout << "gradient = " << mem.objective.gradient.transpose() << std::endl;
+  std::cout << "hessian_buffer = " << mem.objective.hessian_buffer.transpose() << std::endl;
+  std::cout << "lag = " << lag << std::endl;
+  std::cout << "lag_gradient = " << mem.lagrangian.gradient.transpose() << std::endl;
+  std::cout << "lag_hessian_buffer = " << mem.lagrangian.hessian_buffer.transpose() << std::endl;
 
-
-
+  std::cout << "lb_x = " << mem.variable_bounds.lb.transpose() << std::endl;
+  std::cout << "ub_x = " << mem.variable_bounds.ub.transpose() << std::endl;
 };
-
-
 
 // #ifdef NDEBUG
 // TEST(ProblemTest, SpeedTest) {

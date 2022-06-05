@@ -767,6 +767,11 @@ struct BSMatrixDenseBase
 		return static_cast<Derived*>(this)->m_mat.topLeftCorner(m_rows,m_cols);
 	}
 
+  auto data()
+  {
+    return static_cast<Derived*>(this)->m_mat.data();
+  }
+
 	// // Pass through all eigen indexing calls to m_mat
 	// template<typename... Args>
 	// EIGEN_STRONG_INLINE 
