@@ -273,6 +273,26 @@ namespace lampc {
 
 	};
 
+  /**
+   * Discrete-time steady-state condition x - f(x,u) == 0
+   */
+  template<typename sys_t>
+  struct dsteady_state_t : public lampc::MakeDifferentiable<dsteady_state_t<sys_t>>
+  {
+    sys_t& sys;
+
+    dsteady_state_t(sys_t& _sys) : sys(_sys) 
+    {}
+
+    template<typename X, typename U, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
+    EIGEN_STRONG_INLINE Eigen::Vector<Scalar, 2>
+    impl( const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u) noexcept        
+    {
+      return sys.impl(x,u) - x;
+    }
+  };
+
+
 };
 };
 

@@ -165,13 +165,13 @@ inline Eigen::Vector<int, n> multiSeq_to_index(T... segs)
 // }
 
 
-std::ostream &operator<<(std::ostream &os, std::vector<Segment> const &sequence) 
+inline std::ostream &operator<<(std::ostream &os, std::vector<Segment> const &sequence) 
 {
   for(auto& seg: sequence)
     os << "(" << seg.index << "," << seg.length << ")";
   return os;
 }
-std::ostream &operator<<(std::ostream &os, std::vector<CopyInfo> const &sequence) 
+inline std::ostream &operator<<(std::ostream &os, std::vector<CopyInfo> const &sequence) 
 {
   for(auto& seg: sequence)
     os << "(" << seg.segment_index << "," << seg.num_segments_to_copy << ")";
@@ -280,6 +280,7 @@ public:
   }
   void set_target(Eigen::Ref<Eigen::MatrixX<scalar_t>> S)
   {
+    assert(S.rows() * S.cols() == sparsity_structure.nonZeros() && "Buffer size too small");
     target = S.data();
   }
 
@@ -896,6 +897,7 @@ public:
 
 	void set_buffer(Eigen::Ref<Eigen::MatrixX<scalar_t>> mat)
 	{
+    // assert(this->rows() == mat.rows() && this->cols() == mat.cols() && "Buffer is the wrong size in set_buffer");
 		new (&m_mat) Eigen::Map<Eigen::MatrixX<scalar_t>>(mat.data(),mat.rows(),mat.cols());
 	}
 

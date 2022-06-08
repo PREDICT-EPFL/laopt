@@ -83,6 +83,9 @@ struct FunctionInfo
 	typename Vector::Info ub;
 };
 
+template<typename scalar_t>
+struct FunctionMemory;
+
 /**
  * A vector-valued function with a sparse jacobian.
  */
@@ -166,6 +169,20 @@ public:
 	{
 		lb.set_buffer(_lb);
 		ub.set_buffer(_ub);
+	}
+
+	// Put computed values into the structure mem
+	void set_memory(Eval, FunctionMemory<scalar_t>& mem)
+	{
+		set_memory(lampc::Eval(), mem.value, mem.lb, mem.ub);
+	}
+	void set_memory(Jacobian, FunctionMemory<scalar_t>& mem)
+	{
+		set_memory(lampc::Jacobian(), mem.value, mem.lb, mem.ub, mem.jacobian_buffer);
+	}
+	void set_memory(FunctionMemory<scalar_t>& mem)
+	{
+		set_memory(mem.lb, mem.ub);
 	}
 
 	VectorFunction() { initialize(); }
@@ -254,6 +271,20 @@ public:
 		info.lb = lb.generate();
 		info.ub = ub.generate();
 
+		// std::cout << std::endl << std::endl;
+		// std::cout << "info.rows = " << info.rows << std::endl;
+		// std::cout << "info.variables = " << info.variables << std::endl;
+
+		// std::cout << "type(info.jacobian) = " << type_name<decltype(info.jacobian)>() << std::endl;
+		// // std::cout << "type(info.value) = " << type_name<decltype(info.value)>() << std::endl;
+		// // std::cout << "type(info.lb) = " << type_name<decltype(info.lb)>() << std::endl;
+		// // std::cout << "type(info.ub) = " << type_name<decltype(info.ub)>() << std::endl;
+
+		// // std::cout << "jacobian.shape = " << info.jacobian.rows() << " x " << info.jacobian.cols() << std::endl;
+		// std::cout << "value.shape = " << info.value.rows << " x " << info.value.cols << std::endl;
+		// std::cout << "lb.shape = " << info.lb.rows << " x " << info.lb.cols << std::endl;
+		// std::cout << "ub.shape = " << info.ub.rows << " x " << info.ub.cols << std::endl;
+
 		return info;
 	}
 };
@@ -307,19 +338,31 @@ struct BoundRef
  */
 template<typename Index, typename Function, typename Derived>
 BoundRef<Index,Function> operator<=(BoundRef<Index,Function> f, const Derived& ub) 
-{ f.set_ub(ub); return f; }
+{ 
+	f.set_ub(ub); 
+	return f; 
+}
 
 template<typename Index, typename Function, typename Derived>
 BoundRef<Index,Function> operator<=(const Derived& lb, BoundRef<Index,Function> f)
-{ f.set_lb(lb); return f; }
-
-template<typename Index, typename Function, typename Derived>
-BoundRef<Index,Function> operator>=(const Derived& ub, BoundRef<Index,Function> f)
-{ f.set_ub(ub); return f; }
+{ 
+	f.set_lb(lb); 
+	return f; 
+}
 
 template<typename Index, typename Function, typename Derived>
 BoundRef<Index,Function> operator>=(BoundRef<Index,Function> f, const Derived& lb)
-{ f.set_lb(lb); return f; }
+{ 
+	f.set_lb(lb); 
+	return f; 
+}
+
+template<typename Index, typename Function, typename Derived>
+BoundRef<Index,Function> operator>=(const Derived& ub, BoundRef<Index,Function> f)
+{ 
+	f.set_ub(ub); 
+	return f; 
+}
 
 template<typename Index, typename Function, typename Derived>
 BoundRef<Index,Function> operator==(BoundRef<Index,Function> f, const Derived& eq)
@@ -409,6 +452,9 @@ struct WeightedSumInfo
 	typename Vector::Info gradient;
 	typename Vector::Info weights;
 };
+
+template<typename scalar_t>
+struct WeightedSumMemory;
 
 /**
  * A scalar function of the form f(x) = sum wi fi(x), with a sparse hessian.
@@ -504,6 +550,21 @@ public:
 	{
 		set_memory(Hessian(), _weights, _gradient, Eigen::Map<Eigen::VectorX<scalar_t>>(_hessian.valuePtr(), _hessian.nonZeros()));
 	}
+
+	void set_memory(Eval, Eigen::Ref<Eigen::VectorX<scalar_t>> weights, WeightedSumMemory<scalar_t>& mem) 
+	{
+		set_memory(lampc::Eval(), weights);
+	}
+	
+	void set_memory(Gradient, Eigen::Ref<Eigen::VectorX<scalar_t>> weights, WeightedSumMemory<scalar_t>& mem) 
+	{
+		set_memory(lampc::Eval(), weights, mem.gradient);
+	}
+	void set_memory(Hessian, Eigen::Ref<Eigen::VectorX<scalar_t>> weights, WeightedSumMemory<scalar_t>& mem) 
+	{
+		set_memory(lampc::Hessian(), weights, mem.gradient, mem.hessian_buffer);
+	}
+
 
 
 	/**
@@ -755,15 +816,15 @@ public:
 	 */
 	int num_equalities()
 	{
-	  // Eigen::VectorX<scalar_t> _value(constraints.rows());
-	  // Eigen::VectorX<scalar_t> _lb(constraints.rows());
-	  // Eigen::VectorX<scalar_t> _ub(constraints.rows());
-	  // Eigen::VectorX<scalar_t> _var(num_variables());
-	  // eval_constraints(Eval(), _var, _value, _lb, _ub);
+	  Eigen::VectorX<scalar_t> _value(constraints.rows());
+	  Eigen::VectorX<scalar_t> _lb(constraints.rows());
+	  Eigen::VectorX<scalar_t> _ub(constraints.rows());
+	  Eigen::VectorX<scalar_t> _var(num_variables());
+	  eval_constraints(Eval(), _var, _value, _lb, _ub);
 
 	  int n=0;
-	  // for(int i=0; i<_lb.rows(); i++)
-	  // 	if(_lb[i] == _ub[i]) n++;
+	  for(int i=0; i<_lb.rows(); i++)
+	  	if(_lb[i] == _ub[i]) n++;
 	  return n;
 	}
 
@@ -786,7 +847,7 @@ public:
   }
 
   template<typename... Args> 
-  void eval_variable_bounds(Args&... args)
+  void eval_variable_bounds(Args&&... args)
   {
   	variable_bounds.set_memory(args...);
   	variable_bounds.set_zero();
@@ -800,30 +861,57 @@ public:
   									  Args&... args)
   {
 	  set_decision_variable(var);
-  	objective.set_memory(dtype, args...);
+
+	  // Weights for the objective are always 1
+		Eigen::VectorX<scalar_t> weights(objective.rows());
+		weights.array() = 1;
+
+  	objective.set_memory(dtype, weights, args...);
   	objective.initialize();
 		objective.set_zero();
   	usercode.eval_objective(dtype, objective);
   	return objective.value;
   }
 
+  /**
+   * Compute the lagrangian function.
+   * 
+   * Note that we actually compute the lagrangian of
+   *   L(prim,dual) = obj(prim) + dual'*g(prima)
+   * i.e., we ignore the variable bounds.
+   * This is done at the moment because IPOpt only uses the hessian of the lagrangian, so it
+   * doesn't matter, but this needs to be fixed.
+   */
   template<typename DType, typename... Args> 
   scalar_t eval_lagrangian(DType dtype, 
   										     Eigen::Ref<Eigen::VectorX<scalar_t>> var, 
+  										     scalar_t obj_factor, // Weight to multiply the objective by [normally 1]
+  										     Eigen::Ref<Eigen::VectorX<scalar_t>> dual, // Dual variable
   									       Args&... args)
   {
+  	assert(dual.rows() == constraints.rows() && "Dual vector is the wrong length");
+
+		Eigen::VectorX<scalar_t> weights(lagrangian.rows());
+		weights(seqN(0,objective.rows())).array() = obj_factor;
+		weights.tail(constraints.rows()) = dual;
+
 	  set_decision_variable(var);
-  	lagrangian.set_memory(dtype, args...);
+  	lagrangian.set_memory(dtype, weights, args...);
   	lagrangian.initialize();
 		lagrangian.set_zero();
+
+		// std::cout << "****************************** eval_lagrangian ******************************" << std::endl;
+		// std::cout << "dual = " << dual.transpose() << std::endl;
+		// std::cout << "obj_factor = " << obj_factor << std::endl;
+		// std::cout << "weights = " << weights.transpose() << std::endl;
+
   	usercode.eval_objective(dtype, lagrangian);
   	usercode.eval_constraints(dtype, lagrangian);
 
-// TODO : Evaluate variable bounds in lagrangian fashion
+// TODO : Evaluate variable bounds in lagrangian function
 
   	return lagrangian.value;
   }
-
 
 
 	/**
@@ -841,7 +929,7 @@ public:
 		constraints.extend_variables(n);
 		objective.extend_variables(n);
 		lagrangian.extend_variables(n);
-		// variable_bounds.extend_variables(n);
+		variable_bounds.extend_variables(n);
 		variable_bounds.extend_rows(n); // The rows of the variable_bounds are the variables, so this one is backwards
 	}
 
@@ -929,7 +1017,6 @@ TapeInfo<UserCode> generate_tape(UserCode& usercode, SparsityInfo<UserCode> spar
 
   return prob.generate();
 }
-
 
 /**
  * Generates tape and sparsity information for the given user code, and then creates a problem.

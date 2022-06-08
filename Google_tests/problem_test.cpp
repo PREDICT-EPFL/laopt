@@ -220,12 +220,12 @@ TEST(ProblemTest, DoubleIntegrator) {
   ocp.uss << 1;
 
   lag_weights.array() = 1;
-  weights.array() = 1;
+  // weights.array() = 1;
 
   std::cout << "\n\n" << "=== Evaluating constraints into reference buffers ===" << std::endl;
   prob.eval_constraints(lampc::Eval(), var, con,lb,ub);
-  obj = prob.eval_objective(lampc::Eval(), var, weights);
-  obj = prob.eval_objective(lampc::Gradient(), var, weights,gradient);
+  obj = prob.eval_objective(lampc::Eval(), var);
+  obj = prob.eval_objective(lampc::Gradient(), var, gradient);
   lag = prob.eval_lagrangian(lampc::Eval(), var, lag_weights);
   lag = prob.eval_lagrangian(lampc::Gradient(), var, lag_weights,lag_gradient);
   std::cout << "con = " << con.transpose() << std::endl;
@@ -240,7 +240,7 @@ TEST(ProblemTest, DoubleIntegrator) {
   Eigen::VectorX<scalar_t> jac_buffer(prob.constraints.jacobian.sparsity_structure.nonZeros());
   prob.eval_constraints(lampc::Jacobian(), var, con,lb,ub,jac_buffer);
   prob.eval_variable_bounds(lb_x, ub_x);
-  obj = prob.eval_objective(lampc::Hessian(), var, weights,gradient,hessian);
+  obj = prob.eval_objective(lampc::Hessian(), var, gradient,hessian);
   lag = prob.eval_lagrangian(lampc::Hessian(), var, lag_weights,lag_gradient,lag_hessian);
   std::cout << "con = " << con.transpose() << std::endl;
   std::cout << "lb = " << lb.transpose() << std::endl;
@@ -271,7 +271,7 @@ TEST(ProblemTest, DoubleIntegrator) {
   std::cout << "\n\n" << "=== Evaluating constraints into memory structure ===" << std::endl;
   prob.eval_constraints(lampc::Jacobian(), mem.var, mem.constraints.value, mem.constraints.lb, mem.constraints.ub, mem.constraints.jacobian);
   prob.eval_variable_bounds(mem.variable_bounds.lb, mem.variable_bounds.ub);
-  obj = prob.eval_objective(lampc::Hessian(), mem.var, mem.objective.weights,mem.objective.gradient,mem.objective.hessian);
+  obj = prob.eval_objective(lampc::Hessian(), mem.var, mem.objective.gradient,mem.objective.hessian);
   lag = prob.eval_lagrangian(lampc::Hessian(), mem.var, mem.lagrangian.weights,mem.lagrangian.gradient,mem.lagrangian.hessian);
   std::cout << "con = " << mem.constraints.value.transpose() << std::endl;
   std::cout << "lb = " << mem.constraints.lb.transpose() << std::endl;
