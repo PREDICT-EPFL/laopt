@@ -9,6 +9,13 @@
 
 using namespace Ipopt;
 
+// void printvec(std::string name, const double* x, int len)
+// {
+//     std::cout << std::setw(10) << name << " = ";
+//     std::cout << std::setfill(' ') << std::fixed << std::setprecision(3);
+//     for(int i=0; i<len; i++) std::cout << std::setw(8) << x[i] << " "; 
+// }
+
 namespace lampc
 {
 
@@ -20,12 +27,13 @@ struct Solver_IPOpt: public TNLP
 
 	// IPOPT only wants the lower triangular part of the hessian
 	// So we need to keep a full buffer for the computation
-	Eigen::VectorX<scalar_t> lag_hessian_buffer;
+	Eigen::SparseMatrix<scalar_t> lag_hessian;
 
 public:
 
 	// User-set initial value for the primal variable
 	Eigen::VectorX<scalar_t> init_primal;
+	Eigen::VectorX<scalar_t> init_dual;
 
 	// User-set initial value for the primal variable
 	Eigen::VectorX<scalar_t> sol_primal;
@@ -37,10 +45,13 @@ public:
 	/* Constructor. */
 	Solver_IPOpt(UserProblem& _prob) : prob(_prob), 
 									   init_primal(prob.num_variables()),
-									   sol_primal(prob.num_variables()),
-									   lag_hessian_buffer(prob.lagrangian.hessian.sparsity_structure.nonZeros())
+									   init_dual(prob.constraints.rows()),
+									   sol_primal(prob.num_variables())
 	{ 
 		init_primal.array() = 0; // Default to zero if user doesn't set
+		init_dual.array() = 0;
+
+		prob.lagrangian.hessian.allocate_memory(lag_hessian);
 	}
 
 	bool get_nlp_info(
@@ -111,19 +122,14 @@ public:
 	   Number* lambda
 	)
 	{
-		// Here, we assume we only have starting values for x, if you code
-		// your own NLP, you can provide starting values for the others if
-		// you wish.
-		assert(init_x == true);
-		assert(init_z == false);
-		assert(init_lambda == false);
-
 		// Initialize to user-specified value
-		Eigen::Map<Eigen::VectorX<scalar_t>>(x,n) = init_primal;
-
+		if(init_x)
+			Eigen::Map<Eigen::VectorX<scalar_t>>(x,n) = init_primal;
+		if(init_lambda)
+			Eigen::Map<Eigen::VectorX<scalar_t>>(lambda,m) = init_dual;
 		return true;
 	}
-
+ 
 	bool eval_f(
 	   Index         n,
 	   const Number* x,
@@ -133,7 +139,6 @@ public:
 	{
 		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x),n);
 		obj_value = prob.eval_objective(lampc::Eval(), var);
-
 		return true;
 	}
 
@@ -147,8 +152,7 @@ public:
 		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x),n);
 		Eigen::Map<Eigen::VectorX<scalar_t>> grad(grad_f,n);
 		prob.eval_objective(lampc::Gradient(), var, grad);
-
-	   return true;
+		return true;
 	}
 
 	bool eval_g(
@@ -255,16 +259,17 @@ public:
 			Eigen::VectorX<scalar_t> gradient(n); // Ignored
 
 			auto dual = Eigen::Map<Eigen::VectorX<scalar_t>>(const_cast<Number*>(lambda), prob.constraints.rows());
-			prob.eval_lagrangian(lampc::Hessian(), var, obj_factor, dual, gradient, lag_hessian_buffer);
+			prob.eval_lagrangian(lampc::Hessian(), var, obj_factor, dual, gradient, lag_hessian);
 
 			// Copy the lower triangular part into the ipopt buffer
-			auto S = prob.lagrangian.hessian.sparsity_structure;
+			// auto S = prob.lagrangian.hessian.sparsity_structure;
+			auto S = lag_hessian;
 			int i=0;
 			for (int col=0; col<S.outerSize(); ++col)
 				for (typename Eigen::SparseMatrix<typename decltype(S)::Scalar>::InnerIterator it(S,col); it; ++it)
 					if( it.row() >= it.col() )
 					{
-						values[i] = lag_hessian_buffer[i];
+						values[i] = it.value();
 						i++;
 					}
 	   }

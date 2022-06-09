@@ -252,7 +252,7 @@ public:
 	/**
 	 * Used to set variable bounds
 	 */
-	template<typename Var, typename scalar_t = typename Var::scalar_t>
+	template<typename Var, typename scalar_t = typename Var::Scalar>
 	auto add(Var var)
 	{
     return make_boundref(*this, var.indices());
@@ -899,11 +899,6 @@ public:
   	lagrangian.set_memory(dtype, weights, args...);
   	lagrangian.initialize();
 		lagrangian.set_zero();
-
-		// std::cout << "****************************** eval_lagrangian ******************************" << std::endl;
-		// std::cout << "dual = " << dual.transpose() << std::endl;
-		// std::cout << "obj_factor = " << obj_factor << std::endl;
-		// std::cout << "weights = " << weights.transpose() << std::endl;
 
   	usercode.eval_objective(dtype, lagrangian);
   	usercode.eval_constraints(dtype, lagrangian);

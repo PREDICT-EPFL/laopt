@@ -48,6 +48,8 @@ TEST(BSMatrix, Construction) {
     lampc::BSMatrixTape tape(sparsity.get_sparsity(), sparsity.rows(), sparsity.cols());
     F(tape);
 
+    std::cout << "copy sequence = " << tape.copy_segments << std::endl;
+
     // Confirm the correct copy sequence
     {
         std::vector<lampc::Segment> ground = {lampc::Segment{0,6}, lampc::Segment{6,20}};
@@ -62,6 +64,8 @@ TEST(BSMatrix, Construction) {
     // Run the copy
     BS.set_zero();
     F(BS);
+
+    std::cout << "result = " << Eigen::MatrixX<scalar_t>(S) << std::endl;
 
     {
         auto ground = triplet_to_sparse<double>(6,8,{{0,0,1},{1,0,4},{0,1,2},{1,1,5},{0,2,3},{1,2,6},{2,3,7},{3,3,12},{4,3,17},{5,3,22},{2,4,8},{3,4,13},{4,4,18},{5,4,23},{2,5,9},{3,5,14},{4,5,19},{5,5,24},{2,6,10},{3,6,15},{4,6,20},{5,6,25},{2,7,11},{3,7,16},{4,7,21},{5,7,26}});

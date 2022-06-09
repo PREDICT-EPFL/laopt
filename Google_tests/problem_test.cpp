@@ -207,7 +207,7 @@ TEST(ProblemTest, DoubleIntegrator) {
 
   scalar_t lag;
   Eigen::VectorX<scalar_t> lag_gradient(prob.num_variables());
-  Eigen::VectorX<scalar_t> lag_weights(prob.lagrangian.rows());
+  Eigen::VectorX<scalar_t> lag_weights(prob.constraints.rows());
   Eigen::SparseMatrix<scalar_t> lag_hessian;
   prob.lagrangian.hessian.allocate_memory(lag_hessian);
 
@@ -220,14 +220,13 @@ TEST(ProblemTest, DoubleIntegrator) {
   ocp.uss << 1;
 
   lag_weights.array() = 1;
-  // weights.array() = 1;
 
   std::cout << "\n\n" << "=== Evaluating constraints into reference buffers ===" << std::endl;
   prob.eval_constraints(lampc::Eval(), var, con,lb,ub);
   obj = prob.eval_objective(lampc::Eval(), var);
   obj = prob.eval_objective(lampc::Gradient(), var, gradient);
-  lag = prob.eval_lagrangian(lampc::Eval(), var, lag_weights);
-  lag = prob.eval_lagrangian(lampc::Gradient(), var, lag_weights,lag_gradient);
+  lag = prob.eval_lagrangian(lampc::Eval(), var, 1, lag_weights);
+  lag = prob.eval_lagrangian(lampc::Gradient(), var, 1, lag_weights,lag_gradient);
   std::cout << "con = " << con.transpose() << std::endl;
   std::cout << "lb = " << lb.transpose() << std::endl;
   std::cout << "ub = " << ub.transpose() << std::endl;
@@ -241,7 +240,7 @@ TEST(ProblemTest, DoubleIntegrator) {
   prob.eval_constraints(lampc::Jacobian(), var, con,lb,ub,jac_buffer);
   prob.eval_variable_bounds(lb_x, ub_x);
   obj = prob.eval_objective(lampc::Hessian(), var, gradient,hessian);
-  lag = prob.eval_lagrangian(lampc::Hessian(), var, lag_weights,lag_gradient,lag_hessian);
+  lag = prob.eval_lagrangian(lampc::Hessian(), var, 1, lag_weights,lag_gradient,lag_hessian);
   std::cout << "con = " << con.transpose() << std::endl;
   std::cout << "lb = " << lb.transpose() << std::endl;
   std::cout << "ub = " << ub.transpose() << std::endl;
@@ -269,10 +268,10 @@ TEST(ProblemTest, DoubleIntegrator) {
   mem.lagrangian.weights.array() = 1;
 
   std::cout << "\n\n" << "=== Evaluating constraints into memory structure ===" << std::endl;
-  prob.eval_constraints(lampc::Jacobian(), mem.var, mem.constraints.value, mem.constraints.lb, mem.constraints.ub, mem.constraints.jacobian);
-  prob.eval_variable_bounds(mem.variable_bounds.lb, mem.variable_bounds.ub);
-  obj = prob.eval_objective(lampc::Hessian(), mem.var, mem.objective.gradient,mem.objective.hessian);
-  lag = prob.eval_lagrangian(lampc::Hessian(), mem.var, mem.lagrangian.weights,mem.lagrangian.gradient,mem.lagrangian.hessian);
+  prob.eval_constraints(lampc::Jacobian(), mem.var, mem.constraints);
+  prob.eval_variable_bounds(mem.variable_bounds);
+  obj = prob.eval_objective(lampc::Hessian(), mem.var, mem.objective);
+  lag = prob.eval_lagrangian(lampc::Hessian(), mem.var, 1, mem.lagrangian.weights,mem.lagrangian);
   std::cout << "con = " << mem.constraints.value.transpose() << std::endl;
   std::cout << "lb = " << mem.constraints.lb.transpose() << std::endl;
   std::cout << "ub = " << mem.constraints.ub.transpose() << std::endl;
@@ -293,14 +292,15 @@ TEST(ProblemTest, DoubleIntegrator) {
 //   using scalar_t = double;
 //   const int N = 10;
 
-//   OCP_DoubleIntegrator<scalar_t, N> ocp;
+//   using OCP = OCP_DoubleIntegrator<scalar_t, N>;
+//   OCP ocp;
 
-//   auto sparsity = lampc::generate_problem(lampc::ProblemSparsity<scalar_t>(), ocp);
-//   auto tape = lampc::generate_problem(lampc::ProblemTape<scalar_t>(sparsity), ocp);
+//   using Problem = lampc::Problem<OCP>;
+//   Problem prob = lampc::generate(ocp);  
 
-//   lampc::Problem<scalar_t> prob(tape);  
-//   lampc::ProblemMemory<scalar_t> mem(prob, tape);
-//   ocp.define_variables(prob);
+//   lampc::ProblemMemory<scalar_t> mem(prob);
+//   prob.set_decision_variable(mem.var);
+
 //   mem.objective.weights.array() = 1;
 //   mem.lagrangian.weights.array() = 1;
 
@@ -324,8 +324,6 @@ TEST(ProblemTest, DoubleIntegrator) {
 //   for(int i = 0; i < NUM_EXP; ++i)
 //   {
 //     ocp.X[3] << i,i+1;
-//     prob.constraints.initialize();
-//     prob.objective.initialize();
 //     ocp.eval_constraints(lampc::Jacobian(), prob.constraints);
 //     ocp.eval_objective(lampc::Hessian(), prob.objective);
 //     acc += mem.constraints.value(4);

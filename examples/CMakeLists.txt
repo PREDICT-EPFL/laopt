@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 
+find_package(casadi)
+
 include_directories(
   include 
   /usr/local/include/ 
@@ -22,6 +24,7 @@ add_executable(
 )
 target_link_libraries(
   double_integrator_discrete_ipopt
+  casadi
   ipopt
 )
 
@@ -32,6 +35,28 @@ add_executable(
 )
 target_link_libraries(
   ipopt_example
+  casadi
   ipopt
 )
 
+add_library(
+  double_integrator_tape
+  double_integrator_tape.cpp
+)
+
+add_library(
+  double_integrator_problem
+  double_integrator_problem.cpp
+)
+
+add_executable(
+  double_integrator
+  double_integrator.cpp
+)
+target_link_libraries(
+  double_integrator
+  double_integrator_tape
+  double_integrator_problem
+  casadi
+  ipopt
+)
