@@ -9,8 +9,8 @@ add_executable(
 )
 target_link_libraries(
   func_test
-  GTest::gtest_main
-  GTest::gtest
+  GTest::Main
+  GTest::GTest
 )
 
 add_executable(
@@ -19,8 +19,8 @@ add_executable(
 )
 target_link_libraries(
   bs_test
-  GTest::gtest_main
-  GTest::gtest
+  GTest::Main
+  GTest::GTest
 )
 
 add_executable(
@@ -29,8 +29,8 @@ add_executable(
 )
 target_link_libraries(
   problem_test
-  GTest::gtest_main
-  GTest::gtest
+  GTest::Main
+  GTest::GTest
 )
 
 add_executable(
@@ -39,8 +39,8 @@ add_executable(
 )
 target_link_libraries(
   indexedvector_test
-  GTest::gtest_main
-  GTest::gtest
+  GTest::Main
+  GTest::GTest
 )
 
 add_executable(
@@ -50,8 +50,8 @@ add_executable(
 target_link_libraries(
   ipopt_test
   ${Ipopt_LIBRARIES}
-  GTest::gtest_main
-  GTest::gtest
+  GTest::Main
+  GTest::GTest
 )
 
 include(GoogleTest)
