@@ -36,7 +36,7 @@ struct IpOpt_example
     EIGEN_STRONG_INLINE Eigen::Vector<Scalar, 1>
     impl( const Eigen::MatrixBase<X>& x1, const Eigen::MatrixBase<X>& x2) noexcept        
     {
-      return (-(x1*x1 + x2).array() + static_cast<Scalar>(1.0)).matrix();
+      return (-(x1*x1 + x2).array() + 1.0).matrix();
     }
 
     // // Bring all the calls that we're not overloading into scope
@@ -61,7 +61,7 @@ struct IpOpt_example
     EIGEN_STRONG_INLINE Scalar impl(
       const Eigen::MatrixBase<X>& x1, const Eigen::MatrixBase<X>& x2) noexcept
     {
-      return -(x2(0)-static_cast<Scalar>(2.0)) * (x2(0)-static_cast<Scalar>(2.0));
+      return -(x2(0)-2.0) * (x2(0)-2.0);
     }
 
     // // Bring all the calls that we're not overloading into scope
@@ -183,7 +183,7 @@ struct OCP_DoubleIntegrator
     EIGEN_STRONG_INLINE Eigen::Vector<Scalar, 2>
     impl( const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u) noexcept        
     {
-      return A.template cast<Scalar>() * x + B.template cast<Scalar>() * u;
+      return A * x + B * u;
     }
   };
 
@@ -200,7 +200,7 @@ struct OCP_DoubleIntegrator
       const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<X>& xss,
       const Eigen::MatrixBase<U>& u, const Eigen::MatrixBase<U>& uss) noexcept
     {
-      return (x-xss).dot(p.Q.template cast<Scalar>()*(x-xss)) + (u-uss).dot(p.R.template cast<Scalar>()*(u-uss));
+      return (x-xss).dot(p.Q*(x-xss)) + (u-uss).dot(p.R*(u-uss));
     }
 
     // // Bring all the calls that we're not overloading into scope
@@ -242,7 +242,7 @@ struct OCP_DoubleIntegrator
     EIGEN_STRONG_INLINE Scalar impl(
       const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<X>& xss) noexcept
     {
-      return 20*(x-xss).dot(p.Q.template cast<Scalar>()*(x-xss));
+      return 20*(x-xss).dot(p.Q*(x-xss));
     }
   };
 

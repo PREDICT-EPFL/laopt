@@ -3,6 +3,7 @@
 
 #include "Eigen/Dense"
 #include "unsupported/Eigen/AutoDiff"
+#include "eigen_autodiff_fix.hpp"
 
 #include "IpIpoptApplication.hpp"
 #include "IpTNLP.hpp"

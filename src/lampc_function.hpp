@@ -4,6 +4,7 @@
 // Defines differentiable dense functions
 #include "Eigen/Dense"
 #include "unsupported/Eigen/AutoDiff"
+#include "eigen_autodiff_fix.hpp"
 
 template<typename Derived>
 struct func_traits;

@@ -7,6 +7,7 @@
 
 #include "Eigen/Dense"
 #include "unsupported/Eigen/AutoDiff"
+#include "eigen_autodiff_fix.hpp"
 
 namespace lampc {
 	namespace functions {
@@ -25,12 +26,11 @@ namespace lampc {
 	  EIGEN_STRONG_INLINE Eigen::Vector<typename Eigen::MatrixBase<X>::Scalar, Eigen::MatrixBase<X>::RowsAtCompileTime>
 	  impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<PARAMS>&... params) noexcept
 	  {
-	    Scalar _h = static_cast<Scalar>(h);
 	    auto k1 = ode.impl(x,          params...);
-	    auto k2 = ode.impl(x+_h*static_cast<Scalar>(0.5)*k1, params...);
-	    auto k3 = ode.impl(x+_h*static_cast<Scalar>(0.5)*k2, params...);
-	    auto k4 = ode.impl(x+_h*k3,     params...);
-	    return x + _h/static_cast<Scalar>(6.0) * (k1 + static_cast<Scalar>(2.0)*k2 + static_cast<Scalar>(2.0)*k3 + k4);
+	    auto k2 = ode.impl(x+h*0.5*k1, params...);
+	    auto k3 = ode.impl(x+h*0.5*k2, params...);
+	    auto k4 = ode.impl(x+h*k3,     params...);
+	    return x + h/6.0 * (k1 + 2.0*k2 + 2.0*k3 + k4);
 	  }
 	};
 
