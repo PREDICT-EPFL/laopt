@@ -2,6 +2,7 @@
 #define __PROBLEM_HPP
 
 #include <numeric>
+#include <iterator>
 
 namespace lampc
 {

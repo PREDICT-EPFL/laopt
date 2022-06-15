@@ -131,25 +131,44 @@ namespace lampc
 //     return Eigen::Map<map_to>(x);
 // }
 
+int constexpr str_length(const char* str) {
+    return *str ? 1 + str_length(str + 1) : 0;
+}
+
 template <typename T>
 constexpr auto type_name() noexcept {
-  std::string_view name = "Error: unsupported compiler", prefix, suffix;
 #ifdef __clang__
-  name = __PRETTY_FUNCTION__;
-  prefix = "auto type_name() [T = ";
-  suffix = "]";
+    constexpr auto name = __PRETTY_FUNCTION__;
+    constexpr char prefix[] = "auto type_name() [T = ";
+    constexpr char suffix[] = "]";
 #elif defined(__GNUC__)
-  name = __PRETTY_FUNCTION__;
-  prefix = "constexpr auto type_name() [with T = ";
-  suffix = "]";
+    constexpr auto name = __PRETTY_FUNCTION__;
+    constexpr char prefix[] = "constexpr auto type_name() [with T = ";
+    constexpr char suffix[] = "]";
 #elif defined(_MSC_VER)
-  name = __FUNCSIG__;
-  prefix = "auto __cdecl type_name<";
-  suffix = ">(void) noexcept";
+    constexpr auto name = __FUNCSIG__;
+    constexpr char prefix[] = "auto __cdecl type_name<";
+    constexpr char suffix[] = ">(void) noexcept";
+#else
+    constexpr char name[] = "Error: unsupported compiler";
+    constexpr char prefix[] = "";
+    constexpr char suffix[] = "";
 #endif
-  name.remove_prefix(prefix.size());
-  name.remove_suffix(suffix.size());
-  return name;
+    constexpr int new_length = length(name) - str_length(prefix) - str_length(suffix);
+    std::array<char, new_length> trimmed;
+    for (int i = 0; i < new_length; i++) {
+        trimmed[i] = name[i + str_length(prefix)];
+    }
+    return trimmed;
+}
+
+template<size_t N>
+std::ostream& operator<<(std::ostream& os, const std::array<char, N>& arr)
+{
+    for (const auto& c : arr) {
+        std::cout << c;
+    }
+    return os;
 }
 
 // /*
