@@ -5,11 +5,10 @@ set(CMAKE_MODULE_PATH /usr/local/share/cmake/Modules/)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH};${PROJECT_SOURCE_DIR}/cmake)
 
 if(NOT DEFINED EIGEN3_INCLUDE_DIR)
-  find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+  find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 endif()
 find_package(CASADI REQUIRED)
 find_package(Ipopt REQUIRED)
-find_package(GTest REQUIRED)
 
 # Show message stating path to Eigen3
 message(STATUS "Using Eigen3 library found at ${EIGEN3_INCLUDE_DIR}")
@@ -35,7 +34,7 @@ else()
   message(STATUS "Building debug version")
 endif()
 
-include_directories(src ${EIGEN3_INCLUDE_DIRS} ${CASADI_INCLUDE_DIR} ${Ipopt_INCLUDE_DIRS})
+include_directories(src ${EIGEN3_INCLUDE_DIR} ${CASADI_INCLUDE_DIR} ${Ipopt_INCLUDE_DIRS})
 
 add_subdirectory(examples)
 add_subdirectory(transpiler)
