@@ -10,7 +10,6 @@ if(NOT DEFINED EIGEN3_INCLUDE_DIR)
 endif()
 find_package(CASADI REQUIRED)
 find_package(Ipopt REQUIRED)
-find_package(GTest REQUIRED)
 
 # Show message stating path to Eigen3 and IPOPT
 message(STATUS "Using Eigen3 library found at ${EIGEN3_INCLUDE_DIR}")
