@@ -42,3 +42,5 @@ target_link_libraries(
   ${CASADI_LIBRARIES}
   ${Ipopt_LIBRARIES}
 )
+
+add_subdirectory(double_integrator_v0)

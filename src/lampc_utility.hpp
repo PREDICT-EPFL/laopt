@@ -1,6 +1,7 @@
 #ifndef LAMPC_UTILITY
 #define LAMPC_UTILITY
 
+#include <iostream>
 #include <limits>
 #include "Eigen/Dense"
 #include <type_traits>
