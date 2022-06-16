@@ -154,7 +154,7 @@ constexpr auto type_name() noexcept {
     constexpr char prefix[] = "";
     constexpr char suffix[] = "";
 #endif
-    constexpr int new_length = length(name) - str_length(prefix) - str_length(suffix);
+    constexpr int new_length = str_length(name) - str_length(prefix) - str_length(suffix);
     std::array<char, new_length> trimmed;
     for (int i = 0; i < new_length; i++) {
         trimmed[i] = name[i + str_length(prefix)];
