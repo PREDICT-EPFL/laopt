@@ -132,44 +132,26 @@ namespace lampc
 //     return Eigen::Map<map_to>(x);
 // }
 
-int constexpr str_length(const char* str) {
-    return *str ? 1 + str_length(str + 1) : 0;
-}
-
 template <typename T>
-constexpr auto type_name() noexcept {
+auto type_name() noexcept {
 #ifdef __clang__
-    constexpr auto name = __PRETTY_FUNCTION__;
-    constexpr char prefix[] = "auto type_name() [T = ";
-    constexpr char suffix[] = "]";
+    std::string name = __PRETTY_FUNCTION__;
+    std::string prefix = "auto type_name() [T = ";
+    std::string suffix = "]";
 #elif defined(__GNUC__)
-    constexpr auto name = __PRETTY_FUNCTION__;
-    constexpr char prefix[] = "constexpr auto type_name() [with T = ";
-    constexpr char suffix[] = "]";
+    std::string name = __PRETTY_FUNCTION__;
+    std::string prefix = "auto type_name() [with T = ";
+    std::string suffix = "]";
 #elif defined(_MSC_VER)
-    constexpr auto name = __FUNCSIG__;
-    constexpr char prefix[] = "auto __cdecl type_name<";
-    constexpr char suffix[] = ">(void) noexcept";
+    std::string name = __FUNCSIG__;
+    std::string prefix = "auto __cdecl type_name<";
+    std::string suffix = ">(void) noexcept";
 #else
-    constexpr char name[] = "Error: unsupported compiler";
-    constexpr char prefix[] = "";
-    constexpr char suffix[] = "";
+    std::string name = "Error: unsupported compiler";
+    std::string prefix = "";
+    std::string suffix = "";
 #endif
-    constexpr int new_length = str_length(name) - str_length(prefix) - str_length(suffix);
-    std::array<char, new_length> trimmed;
-    for (int i = 0; i < new_length; i++) {
-        trimmed[i] = name[i + str_length(prefix)];
-    }
-    return trimmed;
-}
-
-template<size_t N>
-std::ostream& operator<<(std::ostream& os, const std::array<char, N>& arr)
-{
-    for (const auto& c : arr) {
-        std::cout << c;
-    }
-    return os;
+    return name.substr(prefix.length(), name.length() - prefix.length() - suffix.length());
 }
 
 // /*
