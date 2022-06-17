@@ -3,6 +3,7 @@
  */
 
 #include <iostream>
+#include <chrono>
 
 #include "lampc_utility.hpp"
 #include "lampc_function.hpp"

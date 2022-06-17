@@ -4,8 +4,6 @@
 
 #include <iostream>
 #include "lampc.hpp"
-#define FMT_HEADER_ONLY
-#include "fmt/format.h"
 
 #include "test_utils.hpp"
 #include "gtest/gtest.h"
