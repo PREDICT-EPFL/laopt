@@ -20,7 +20,7 @@ message(STATUS "Using IPOPT library found at ${Ipopt_INCLUDE_DIRS}")
 #set(Ipopt_LIBRARIES
 #	${Ipopt_LIBRARIES}
 #	${BLAS_LIBRARIES}
-#  	${LAPACK_LIBRARIES}
+#	${LAPACK_LIBRARIES}
 #	/usr/local/lib/libcoinmumps.so # How to find it other than by hardcoding?
 #	/usr/local/lib/libcoinmetis.so # How to find it other than by hardcoding?
 #	dl

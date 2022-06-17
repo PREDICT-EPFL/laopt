@@ -7,52 +7,50 @@
 
 int main()
 {
-    using OCP = DoubleIntegratorOCP;
-    OCP ocp;
+    /* Choose OCP and Transcription */
+    using Ocp = DoubleIntegratorOCP;
+    const int N = 30;
+    using Transcription = MultipleShootingTranscription<Ocp, N>;
 
-    static const int N = 30;
-    using Transcription = MultipleShootingTranscription<OCP, N>;
+    /* Define specific Tape, LAMPC, and IPOPT problem types for the resulting NLP */
+    using Tape = lampc::TapeInfo<Transcription>;
+    using LaProblem = lampc::Problem<Transcription>;
+    using IpoptProblem = lampc::Solver_IPOpt<LaProblem>;
+
+    /* Construct OCP and transcription, optionally generate/store tape for that combination */
+    Ocp ocp;
     Transcription transcription(ocp);
+    Tape tape = lampc::generate_tape(transcription, lampc::generate_sparsity(transcription));
 
-    lampc::TapeInfo<Transcription> tape = lampc::generate_tape(transcription, lampc::generate_sparsity(transcription));
-    using Problem = lampc::Problem<Transcription>;
-    Problem prob(transcription, tape);
+    /* Construct LAMPC and IPOPT problems for transcribed OCP using according tape, link decision variables between problems */
+    LaProblem nlp(transcription, tape); // Tape is optional here and could also be generated internally
+    SmartPtr<IpoptProblem> ipopt_nlp = new IpoptProblem(nlp);
+    nlp.set_decision_variable(ipopt_nlp->init_primal);
 
-    // Create the IPOpt solver
-    SmartPtr<lampc::Solver_IPOpt<Problem>> mynlp = new lampc::Solver_IPOpt<Problem>(prob);
-    SmartPtr<IpoptApplication> app = IpoptApplicationFactory();
-
-    // app->Options()->SetStringValue("hessian_approximation", "limited-memory");
-    app->Options()->SetIntegerValue("print_level", 5);
-
-    // Initialize the IpoptApplication and process the options
-    ApplicationReturnStatus status;
-    status = app->Initialize();
-    if( status != Solve_Succeeded )
-    {
-        std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl;
-    }
-
-    // Set the initial primal variable
-    prob.set_decision_variable(mynlp->init_primal);
+    /* Create IPOPT solver, setup, and initialize */
+    SmartPtr<IpoptApplication> ipopt_solver = IpoptApplicationFactory();
+    // ipopt_solver->Options()->SetStringValue("hessian_approximation", "limited-memory");
+    ipopt_solver->Options()->SetIntegerValue("print_level", 5);
+    ApplicationReturnStatus ipopt_status = ipopt_solver->Initialize();
+    if( ipopt_status != Solve_Succeeded ) { std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl; }
+ 
+    /* Set initial state and solve the problem */
     ocp.x0 << 1, 1;
+    ipopt_status = ipopt_solver->OptimizeTNLP(ipopt_nlp);
+    if( ipopt_status != Solve_Succeeded ) { std::cout << std::endl << std::endl << "*** Error during solution!" << std::endl; }
 
-    // Solve the problem
-    status = app->OptimizeTNLP(mynlp);
-
+    /* Print out the solution */
     std::cout << std::endl << std::endl << std::endl << std::endl;
-
-    // Print out the solution
     std::cout << std::setprecision(2) << std::defaultfloat;
 
-    Eigen::Matrix<OCP::scalar_t, 2, N> X;
-    Eigen::Matrix<OCP::scalar_t, 1, N - 1> U;
+    Eigen::Matrix<Ocp::scalar_t, 2, N> X;
+    Eigen::Matrix<Ocp::scalar_t, 1, N - 1> U;
     int i = 0; for(auto& x: transcription.X) X.col(i++) << x;
     i = 0; for(auto& u: transcription.U) U.col(i++) << u;
 
     std::cout << "X = \n" << X << std::endl;
     std::cout << "U = \n" << U << std::endl;
-    std::cout << "obj = " << prob.eval_objective(lampc::Eval(), mynlp->sol_primal) << std::endl;
+    std::cout << "obj = " << nlp.eval_objective(lampc::Eval(), ipopt_nlp->sol_primal) << std::endl;
 
     return 0;
 }
