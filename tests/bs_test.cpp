@@ -205,9 +205,9 @@ TEST(BSMatrixDense, Construction)
     F(DD);
     EXPECT_EQ(DD.value(), ground);
 
-    Eigen::MatrixX<scalar_t> mat3(2,2);
-    DD.set_buffer(mat3);
-    ASSERT_DEATH(F(DD), "");
+//    Eigen::MatrixX<scalar_t> mat3(2,2);
+//    DD.set_buffer(mat3);
+//    ASSERT_DEATH(F(DD), "");
 }
 
 template<typename scalar_t, template<int,int> class Matrix>
