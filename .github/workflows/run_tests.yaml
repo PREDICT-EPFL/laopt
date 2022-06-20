@@ -26,7 +26,10 @@ jobs:
       - name: Install Ipopt
         working-directory: build_external
         shell: bash
-        run: ../ci/shared/install_ipopt.sh
+        run: |
+          pwd
+          ls -la
+          ../ci/shared/install_ipopt.sh
 
       - name: Install Casadi
         working-directory: build_external
