@@ -24,26 +24,26 @@ jobs:
           submodules: 'recursive'
 
       - name: Install Ipopt
-        working-directory: ./build_external
+        working-directory: build_external
         shell: bash
         run: ../ci/shared/install_ipopt.sh
 
       - name: Install Casadi
-        working-directory: ./build_external
+        working-directory: build_external
         shell: bash
         run: ../ci/shared/install_casadi.sh
 
       - name: Install Eigen
-        working-directory: ./build_external
+        working-directory: build_external
         shell: bash
         run: ../ci/shared/install_eigen.sh
 
       - name: Build
-        working-directory: ./build
+        working-directory: build
         run: |
           cmake .. -DBUILD_RELEASE=$BUILD_RELEASE
           make -j4
 
       - name: Test
-        working-directory: ./build
+        working-directory: build
         run: ctest --test-dir tests --verbose
