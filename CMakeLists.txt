@@ -14,18 +14,6 @@ find_package(CASADI REQUIRED)
 find_package(Ipopt REQUIRED)
 message(STATUS "Using IPOPT library found at ${Ipopt_INCLUDE_DIRS}")
 
-# On Linux with ipopt from source: Add secondary libraries to Ipopt libraries path
-#find_package(BLAS REQUIRED)
-#find_package(LAPACK REQUIRED)
-#set(Ipopt_LIBRARIES
-#	${Ipopt_LIBRARIES}
-#	${BLAS_LIBRARIES}
-#	${LAPACK_LIBRARIES}
-#	/usr/local/lib/libcoinmumps.so # How to find it other than by hardcoding?
-#	/usr/local/lib/libcoinmetis.so # How to find it other than by hardcoding?
-#	dl
-#)
-
 add_definitions(-DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB - For both Windows and UNIX
 
 # include_directories(polympc/src)
