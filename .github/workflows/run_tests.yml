@@ -28,6 +28,9 @@ jobs:
           mkdir -p build_external
           mkdir -p build
 
+      - name: Install dependencies
+        run: sudo apt-get -y install libyaml-cpp-dev
+
       - name: Cache Ipopt
         id: cache-ipopt
         uses: actions/cache@v3
