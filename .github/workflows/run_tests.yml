@@ -42,7 +42,7 @@ jobs:
 
       - name: Install Ipopt
         working-directory: build_external/coinbrew
-        run: sudo ./coinbrew install Ipopt
+        run: sudo ./coinbrew install Ipopt --build-dir build-ipopt --prefix=/usr/local
 
       - name: Cache Casadi
         id: cache-casadi
