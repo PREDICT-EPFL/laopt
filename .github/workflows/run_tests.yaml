@@ -23,13 +23,15 @@ jobs:
         with:
           submodules: 'recursive'
 
+      - name: Setup working directories
+        run: |
+          mkdir -p build_external
+          mkdir -p build
+
       - name: Install Ipopt
         working-directory: build_external
         shell: bash
-        run: |
-          pwd
-          ls -la
-          ../ci/shared/install_ipopt.sh
+        run: ../ci/shared/install_ipopt.sh
 
       - name: Install Casadi
         working-directory: build_external
@@ -44,7 +46,7 @@ jobs:
       - name: Build
         working-directory: build
         run: |
-          cmake .. -DBUILD_RELEASE=$BUILD_RELEASE
+          cmake .. -DBUILD_RELEASE=$BUILD_RELEASE -DEIGEN3_INCLUDE_DIR=../build_external/eigen
           make -j4
 
       - name: Test
