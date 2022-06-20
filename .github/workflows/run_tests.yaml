@@ -30,18 +30,15 @@ jobs:
 
       - name: Install Ipopt
         working-directory: build_external
-        shell: bash
-        run: ../ci/shared/install_ipopt.sh
+        run: bash ../ci/shared/install_ipopt.sh
 
       - name: Install Casadi
         working-directory: build_external
-        shell: bash
-        run: ../ci/shared/install_casadi.sh
+        run: bash  ../ci/shared/install_casadi.sh
 
       - name: Install Eigen
         working-directory: build_external
-        shell: bash
-        run: ../ci/shared/install_eigen.sh
+        run: bash  ../ci/shared/install_eigen.sh
 
       - name: Build
         working-directory: build
