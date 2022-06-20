@@ -668,7 +668,7 @@ TEST(Functions, TestSpeed)
 
     double lampc_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
 
-    EXPECT_TRUE(fabs(direct_time - lampc_time)/direct_time < 0.1); // Less than 10% overhead for lampc
+    EXPECT_TRUE((lampc_time - direct_time)/direct_time < 0.1); // Less than 10% overhead for lampc
 }
 #else
 
