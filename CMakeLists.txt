@@ -4,7 +4,6 @@ project(lampc)
 set(CMAKE_MODULE_PATH /usr/local/share/cmake/Modules/)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH};${PROJECT_SOURCE_DIR}/cmake)
 
-#set(EIGEN3_INCLUDE_DIR /home/johannes/dev/eigen) # If find_package does not find required package, clone eigen source, checkout v3.4 or higher, and set the path here
 if(NOT DEFINED EIGEN3_INCLUDE_DIR)
   find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 endif()

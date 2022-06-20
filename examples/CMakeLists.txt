@@ -44,3 +44,4 @@ target_link_libraries(
 )
 
 add_subdirectory(double_integrator_v0)
+add_subdirectory(fixed_wing_longitudinal)
