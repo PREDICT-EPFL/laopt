@@ -28,13 +28,37 @@ jobs:
           mkdir -p build_external
           mkdir -p build
 
-      - name: Install Ipopt
+      - name: Cache Ipopt
+        id: cache-ipopt
+        uses: actions/cache@v3
+        with:
+          path: build_external/coinbrew
+          key: ${{ runner.os }}-ipopt${{ env.IPOPT_VERSION }}
+
+      - name: Build Ipopt
+        if: steps.cache-ipopt.outputs.cache-hit != 'true'
         working-directory: build_external
         run: bash ../ci/shared/install_ipopt.sh
 
-      - name: Install Casadi
+      - name: Install Ipopt
+        working-directory: build_external/coinbrew
+        run: sudo ./coinbrew install Ipopt
+
+      - name: Cache Casadi
+        id: cache-casadi
+        uses: actions/cache@v3
+        with:
+          path: build_external/casadi
+          key: ${{ runner.os }}-casadi${{ env.CASADI_VERSION }}
+
+      - name: Build Casadi
+        if: steps.cache-casadi.outputs.cache-hit != 'true'
         working-directory: build_external
         run: bash  ../ci/shared/install_casadi.sh
+
+      - name: Install Casadi
+        working-directory: build_external/casadi/build
+        run: sudo make install
 
       - name: Install Eigen
         working-directory: build_external
@@ -43,7 +67,7 @@ jobs:
       - name: Build
         working-directory: build
         run: |
-          cmake .. -DBUILD_RELEASE=$BUILD_RELEASE -DEIGEN3_INCLUDE_DIR=../build_external/eigen
+          cmake .. -DBUILD_RELEASE=$BUILD_RELEASE -DEIGEN3_INCLUDE_DIR=$GITHUB_WORKSPACE/build_external/eigen
           make -j4
 
       - name: Test
