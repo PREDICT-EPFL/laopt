@@ -1,0 +1,49 @@
+name: Build and Run Tests
+
+on:
+  push:
+    branches:
+      - '*'
+  pull_request:
+    branches:
+      - '*'
+
+env:
+  IPOPT_VERSION: 3.14.6
+  CASADI_VERSION: 3.3.5
+  EIGEN_VERSION: 3.4.0
+  BUILD_RELEASE: ON
+
+jobs:
+  build_and_run_tests:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: 'recursive'
+
+      - name: Install Ipopt
+        working-directory: ./build_external
+        shell: bash
+        run: ../ci/shared/install_ipopt.sh
+
+      - name: Install Casadi
+        working-directory: ./build_external
+        shell: bash
+        run: ../ci/shared/install_casadi.sh
+
+      - name: Install Eigen
+        working-directory: ./build_external
+        shell: bash
+        run: ../ci/shared/install_eigen.sh
+
+      - name: Build
+        working-directory: ./build
+        run: |
+          cmake .. -DBUILD_RELEASE=$BUILD_RELEASE
+          make -j4
+
+      - name: Test
+        working-directory: ./build
+        run: ctest --test-dir tests --verbose
