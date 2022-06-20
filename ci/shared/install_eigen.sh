@@ -1,0 +1,9 @@
+#!/bin/bash
+
+EIGEN_VERSION=${EIGEN_VERSION:-3.4.0};
+
+echo "Installing EIGEN..."
+
+git clone https://gitlab.com/libeigen/eigen.git eigen
+cd eigen
+git checkout "$EIGEN_VERSION"

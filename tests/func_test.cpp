@@ -304,7 +304,7 @@ TEST(FunctionTest, Jacobian_Speed) {
       << std::setw(20) << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
       << " ns" << "  (" << acc << ")" << std::endl;
 
-    double direct_jacobian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
+    double lampc_jacobian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
 
     acc = 0;
     start = std::chrono::steady_clock::now();
@@ -320,10 +320,10 @@ TEST(FunctionTest, Jacobian_Speed) {
       << std::setw(20) << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
       << " ns" << "  (" << acc << ")" << std::endl;
 
-    double lampc_jacobian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
+    double direct_jacobian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
 
     // Less than 30% overhead for LAMPC
-    EXPECT_TRUE((lampc_jacobian_time - direct_jacobian_time) / direct_jacobian_time < 0.15);
+    EXPECT_TRUE((lampc_jacobian_time - direct_jacobian_time) / direct_jacobian_time < 0.3);
 
     NUM_EXP = 10000000;
     acc = 0;
@@ -340,7 +340,7 @@ TEST(FunctionTest, Jacobian_Speed) {
       << std::setw(20) << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
       << " ns" << "  (" << acc << ")" << std::endl;
 
-    double direct_hessian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
+    double lampc_hessian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
 
     acc = 0;
     start = std::chrono::steady_clock::now();
@@ -356,10 +356,10 @@ TEST(FunctionTest, Jacobian_Speed) {
       << std::setw(20) << std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP
       << " ns" << "  (" << acc << ")" << std::endl;
 
-    double lampc_hessian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
+    double direct_hessian_time = std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count()/(double)NUM_EXP;
 
     // Less than 30% overhead for LAMPC
-    EXPECT_TRUE((lampc_hessian_time - direct_hessian_time) / direct_hessian_time < 0.15);
+    EXPECT_TRUE((lampc_hessian_time - direct_hessian_time) / direct_hessian_time < 0.3);
 
 }
 #else
