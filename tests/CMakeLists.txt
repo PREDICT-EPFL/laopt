@@ -64,6 +64,12 @@ target_link_libraries(
   gtest
 )
 
+add_executable(
+  tag_test
+  tag_test.cpp
+)
+
+
 include(GoogleTest)
 gtest_discover_tests(func_test)
 gtest_discover_tests(bs_test)
