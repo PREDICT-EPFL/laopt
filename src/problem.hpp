@@ -510,7 +510,18 @@ public:
 	/**
 	 * Sets all values to zero
 	 */
-	void set_zero()
+    void set_zero(Eval)
+    {
+        value = 0;
+    }
+
+    void set_zero(Gradient)
+    {
+        value = 0;
+        gradient.set_zero();
+    }
+
+	void set_zero(Hessian)
 	{
 		value = 0;
 		gradient.set_zero();
@@ -581,7 +592,7 @@ public:
 		hessian(info.hessian), gradient(info.gradient), weights(info.weights)
 	{
 		initialize();
-		set_zero();
+		set_zero(Hessian{});
 
 		m_rows = info.rows;
 	}
@@ -800,14 +811,14 @@ public:
 	template<typename DType> void __eval_objective_construction(DType dtype) 
 	{
 		objective.initialize();
-		objective.set_zero();
+		objective.set_zero(dtype);
 		usercode.eval_objective(dtype, objective);
 	}
 
 	template<typename DType> void __eval_lagrangian_construction(DType dtype) 
 	{
 		lagrangian.initialize();
-		lagrangian.set_zero();
+		lagrangian.set_zero(dtype);
 		usercode.eval_objective(dtype, lagrangian);
 		usercode.eval_constraints(dtype, lagrangian);
 	}
@@ -869,7 +880,7 @@ public:
 
   	objective.set_memory(dtype, weights, args...);
   	objective.initialize();
-		objective.set_zero();
+    objective.set_zero(dtype);
   	usercode.eval_objective(dtype, objective);
   	return objective.value;
   }
@@ -899,7 +910,7 @@ public:
 	  set_decision_variable(var);
   	lagrangian.set_memory(dtype, weights, args...);
   	lagrangian.initialize();
-		lagrangian.set_zero();
+    lagrangian.set_zero(dtype);
 
   	usercode.eval_objective(dtype, lagrangian);
   	usercode.eval_constraints(dtype, lagrangian);
