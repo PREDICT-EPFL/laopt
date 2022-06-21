@@ -17,7 +17,7 @@ int main()
     using LaProblem = lampc::Problem<Transcription>;
     using IpoptProblem = lampc::Solver_IPOpt<LaProblem>;
 
-    /* Construct OCP and transcription, optionally generate/store tape for that combination */
+    /* Construct and setup OCP */
     Ocp ocp;
     ocp.model.load_params_from_yaml("eg4_xflr-Pvw-YR.yaml");
     ocp.objectives[lon_ocp::TrackAngle] = true;
@@ -25,6 +25,15 @@ int main()
     ocp.objectives[lon_ocp::MinimizeControl] = true;
     ocp.tf = 2.0;
 
+    ocp.mayer_multiplier = 10;
+    ocp.W_pitch_err = 10;
+    ocp.W_Va_err = 1;
+    ocp.R << 1, 0.1;
+
+    //ocp.ubu << ocp.model.u_physical_ubound;
+    //ocp.lbu << ocp.model.u_physical_lbound;
+
+    /* Transcribe OCP */
     Transcription transcription(ocp);
     Tape tape = lampc::generate_tape(transcription, lampc::generate_sparsity(transcription));
 
@@ -40,7 +49,10 @@ int main()
     ApplicationReturnStatus ipopt_status = ipopt_solver->Initialize();
     if( ipopt_status != Solve_Succeeded ) { std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl; }
 
-    /* Set initial state and solve the problem */
+    /* Set initial guess for state trajectory */
+    for(auto& x: transcription.X) x(seqN(0, 1)) << 10.0;
+
+    /* Set initial state and solve the problem (loop later) */
     ocp.x0 << ocp.model.get_default_initial_state();
     ipopt_status = ipopt_solver->OptimizeTNLP(ipopt_nlp);
     if( ipopt_status != Solve_Succeeded ) { std::cout << std::endl << std::endl << "*** Error during solution!" << std::endl; }
