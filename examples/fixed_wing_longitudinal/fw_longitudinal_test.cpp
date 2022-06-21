@@ -28,7 +28,7 @@ int main()
     ocp.mayer_multiplier = 10;
     ocp.W_pitch_err = 10;
     ocp.W_Va_err = 1;
-    ocp.R << 1, 0.1;
+    ocp.R.diagonal() << 1, 0.1;
 
     //ocp.ubu << ocp.model.u_physical_ubound;
     //ocp.lbu << ocp.model.u_physical_lbound;
