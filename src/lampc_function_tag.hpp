@@ -1,7 +1,9 @@
 
-// namespace lampc
-// {
+namespace lampc
+{
 
+inline namespace tags
+{
 struct Eigen_autodiff{};
 
 // Tag used if the user has written a custom jacobian, etc
@@ -20,10 +22,11 @@ struct Tag
   // Overload if user or custom versions are defined
   using function = USER;
   using jacobian = Eigen_autodiff;
-  using gradient = Eigen_autodiff;
+
+  using wsum     = CUSTOM; // inner product <w, f>
+  using gradient = CUSTOM;
   using hessian  = Eigen_autodiff;
 };
-
 
 /**********************************
  * Define a set of useful functions
@@ -67,6 +70,8 @@ struct RK4 : Tag
 
   using function = CUSTOM;
 };
+
+}; // namespace tags
 
 
 // /**
@@ -161,6 +166,73 @@ struct Differentiable
     jacobian_impl(std::forward<Tag>(tag), typename Tag::jacobian(), std::forward<Args>(args)...);
   }
 
+  // User-specified wsum code
+  template <typename Tag, typename Weight, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+  typename std::enable_if<std::is_same<typename Tag::wsum, USER>::value == true, scalar_t>::type
+  wsum(Tag&& tag, const Eigen::MatrixBase<Weight>& w, Args&&... args)
+  {
+    return static_cast<Derived*>(this)->wsum_impl(std::forward<Tag>(tag), USER{}, w, std::forward<Args>(args)...);
+  }
+
+  // Tag-dispatch based on Tag::wsum
+  template <typename Tag, typename Weight, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+  typename std::enable_if<std::is_same<typename Tag::wsum, USER>::value == false, scalar_t>::type
+  wsum(Tag&& tag, const Eigen::MatrixBase<Weight>& w, Args&&... args)
+  {
+    return wsum_impl(std::forward<Tag>(tag), typename Tag::wsum(), w, std::forward<Args>(args)...);
+  }
+
+  // User-specified wsum gradient code
+  template <typename Tag, typename Weight, typename Gradient, 
+            typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+  typename std::enable_if<std::is_same<typename Tag::wsum, USER>::value == true, scalar_t>::type
+  gradient(Tag&& tag, 
+           Gradient&& gradient, 
+           const Eigen::MatrixBase<Weight>& w, 
+           Args&&... args)
+  {
+    return static_cast<Derived*>(this)->gradient_impl(std::forward<Tag>(tag), USER{}, 
+                gradient, w, std::forward<Args>(args)...);
+  }
+
+  // Tag-dispatch based on Tag::wsum gradient 
+  template <typename Tag, typename Weight, typename Gradient, 
+            typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+  typename std::enable_if<std::is_same<typename Tag::wsum, USER>::value == false, scalar_t>::type
+  gradient(Tag&& tag, 
+           Gradient&& gradient, 
+           const Eigen::MatrixBase<Weight>& w, 
+           Args&&... args)
+  {
+    return gradient_impl(std::forward<Tag>(tag), typename Tag::gradient(), 
+                gradient, w, std::forward<Args>(args)...);
+  }
+
+  // User-specified wsum hessian
+  template <typename Tag, typename Weight, typename Gradient, typename Hessian, 
+            typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+  typename std::enable_if<std::is_same<typename Tag::wsum, USER>::value == true, scalar_t>::type
+  hessian(Tag&& tag, 
+           Gradient&& gradient, Hessian&& hessian,
+           const Eigen::MatrixBase<Weight>& w, 
+           Args&&... args)
+  {
+    return static_cast<Derived*>(this)->hessian_impl(std::forward<Tag>(tag), USER{}, 
+                gradient,hessian, w, std::forward<Args>(args)...);
+  }
+
+  // Tag-dispatch based on Tag::wsum hessian
+  template <typename Tag, typename Weight, typename Gradient, typename Hessian, 
+            typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+  typename std::enable_if<std::is_same<typename Tag::wsum, USER>::value == false, scalar_t>::type
+  hessian(Tag&& tag, 
+           Gradient&& gradient, Hessian&& hessian,
+           const Eigen::MatrixBase<Weight>& w, 
+           Args&&... args)
+  {
+    return hessian_impl(std::forward<Tag>(tag), typename Tag::hessian(), 
+                gradient,hessian, w, std::forward<Args>(args)...);
+  }
 
 private:
 
@@ -225,6 +297,8 @@ private:
   //   val -= xss;
   // }
 
+
+
   //
   // Eigen Autodiff Implementations
   //
@@ -265,6 +339,7 @@ private:
     }
   }
 
+private:
   // Sets the input derivatives to the identity. 
   // Assumes that the derivative matrix is initially zero
   template<typename Arg>
@@ -308,6 +383,150 @@ private:
   }
 
 
+public:
+
+
+  /**
+   * Returns the value w'*f(x).
+   * outgradient += gradient(w'*f(x))
+   * outhessian += hessian(w'*f(x))
+   */
+  template<typename Tag, typename Weight, typename Gradient, typename Hessian,
+           typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+  inline scalar_t
+  hessian_impl(Tag&& tag, Eigen_autodiff,
+       Gradient&& gradient, Hessian&& hessian,
+       const Eigen::MatrixBase<Weight>& weight,
+       const Eigen::MatrixBase<Args>&... args) noexcept
+  {
+    constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
+    constexpr size_t num_inputs = meta::sum_template<Args::RowsAtCompileTime...>();
+
+    // Second order derivative
+    using AD_scalar = Eigen::AutoDiffScalar<Eigen::Vector<scalar_t, num_inputs>>;
+    using outerDerivatives = Eigen::Vector<AD_scalar, num_inputs>;
+    using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
+    using outerAD_t = Eigen::Vector<outerADScalar, num_outputs>;  
+
+    // using value_t = typename Eigen::Vector<scalar_t, num_outputs>;
+    // using jacobian_t = typename Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
+    // using hessian_t = typename Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
+
+    // Convert to AD variables for the inputs and call our function
+    outerAD_t out;
+    seed_and_call2(std::forward<Tag>(tag), out, make_ad2<outerADScalar>(args)...);
+
+    scalar_t value = 0;
+
+    // Copy into buffers
+    for(int i=0; i<num_outputs; i++)
+    {
+      value += weight(i) * out[i].value().value();
+      gradient += weight(i) * out[i].value().derivatives();
+
+      for (int j = 0; j < num_inputs; j++) {
+        hessian(j,Eigen::all) += weight(i) * out[i].derivatives()(j).derivatives().transpose();
+      }
+    }
+
+    return value;
+  }
+
+
+private:
+
+  // Take a vector input and return a AD version of the vector
+  template<typename outerADScalar, typename X>
+  EIGEN_STRONG_INLINE auto make_ad2(const Eigen::MatrixBase<X>& x)
+  {        
+      constexpr size_t n = X::RowsAtCompileTime;
+      Eigen::Vector<outerADScalar, n> y;
+      // y = x;
+      for (int i=0; i<n; i++) {
+          y(i).value().value() = x(i);
+          y(i).value().derivatives().setZero();
+          y(i).derivatives().setZero();
+          for (int j = 0; j < n; j++) {
+              y(i).derivatives()(j).derivatives().setZero();
+          }
+      }
+      return y;
+  }
+
+  // Sets the input derivatives to the identity. 
+  // Assumes that the derivative matrix is initially zero
+  template <typename Arg>
+  EIGEN_STRONG_INLINE int 
+  AD_Seed2(Eigen::MatrixBase<Arg> &x, int offset)
+  {
+      for (int i=0; i<Arg::RowsAtCompileTime; i++)
+      {
+          x(i).value().derivatives().coeffRef(i + offset) = 1;
+          x(i).derivatives().coeffRef(i + offset) = 1;
+      }
+
+      return offset + x.rows();
+  }
+
+  template<typename Tag, typename Output, typename... Args>
+  EIGEN_STRONG_INLINE void seed_and_call2(Tag&& tag, Output& out, Eigen::MatrixBase<Args>&&... args)
+  {
+      // Set derivative equal to identity
+      int offset = 0;
+      (void)std::initializer_list<int>{ 
+          (
+              offset = AD_Seed2(args, offset), // Set to unit vectors
+              0
+          )...
+      };
+
+      // Call our functionxxx
+      function(std::forward<std::decay_t<Tag>>(tag), out, std::forward<Args>(args)...);
+  }
+
+
+
+public:
+    /**
+     * Returns the value w'*f(x)
+     */
+    template<typename Tag, typename Weight, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    inline scalar_t
+    wsum_impl(Tag&& tag, CUSTOM,
+         const Eigen::MatrixBase<Weight>& weight,
+         const Eigen::MatrixBase<Args>&... args) noexcept
+    {
+      constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
+      Eigen::Vector<scalar_t, num_outputs> value;
+      function(std::forward<Tag>(tag), value, std::forward<Args>(args)...);
+      return weight.dot(value);
+    }
+
+    /**
+     * Returns the value w'*f(x) and *adds* the gradient to gradient
+     */
+    template<typename Tag, typename Weight, typename Gradient,
+             typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    inline scalar_t
+    gradient_impl(Tag&& tag, CUSTOM,
+         Gradient&& gradient,
+         const Eigen::MatrixBase<Weight>& weight,
+         const Eigen::MatrixBase<Args>&... args) noexcept
+    {
+        constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
+        constexpr size_t num_inputs = meta::sum_template<Args::RowsAtCompileTime...>();
+
+        // Call the (possibly overloaded) jacobian
+        Eigen::Vector<scalar_t, num_outputs> value;
+        Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
+        value.array() = 0; jacobian.array() = 0;
+        this->jacobian(std::forward<Tag>(tag), value,jacobian, args...);
+        gradient += weight.transpose() * jacobian;
+        return weight.dot(value);
+    }
+
+
+
 };
 
-// }; // namespace lampc
+}; // namespace lampc

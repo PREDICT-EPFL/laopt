@@ -5,8 +5,10 @@
 #include "lampc.hpp"
 #include "lampc_function_tag.hpp"
 
+using namespace lampc::tags;
+
 template<typename scalar_t>
-struct User : public Differentiable<User<scalar_t>>
+struct User : public lampc::Differentiable<User<scalar_t>>
 {
   static constexpr int nx = 2;
   static constexpr int nu = 1;
@@ -67,6 +69,16 @@ struct User : public Differentiable<User<scalar_t>>
     jac(all,seqN(0, nx)) = A;
     jac(all,seqN(nx,nu)) = B;
   }
+
+  struct NLSys : Tag {};
+  template<typename T, typename OutValue>
+  inline void 
+  function_impl(NLSys, OutValue&& dotx,
+           const Eigen::Ref<const state_t<T>>& x, const Eigen::Ref<const input_t<T>>& u) noexcept
+  {
+    dotx = x(0)*u(0)*(A * x + B * u);
+  }
+
 };
 
 
@@ -184,6 +196,20 @@ int main()
   user.jacobian(RK4<RK4<RK4<User::Sys, double>,double>,double>{0.2,0.3,0.4}, val,J, x,u);
   std::cout << "Jeq = \n" << Jeq << std::endl;
 
+  std::cout << "\n=== TESTING Weighted sum ===" << std::endl;
+  Eigen::Vector<double, 2> w;
+  w << 1,2;
+  std::cout << "wsum = " << user.wsum(User::NLSys{}, w, x,u) << std::endl;
+
+  Eigen::Vector<double, 3> grad; grad.array() = 0;
+  std::cout << "wsum = " << user.gradient(User::NLSys{}, grad, w,x,u) << std::endl;
+  std::cout << "grad = " << grad.transpose() << std::endl;
+
+  Eigen::Matrix<double, 3,3> H; 
+  H.array() = 0; grad.array() = 0;
+  std::cout << "wsum = " << user.hessian(User::NLSys{}, grad,H, w,x,u) << std::endl;
+  std::cout << "grad = " << grad.transpose() << std::endl;
+  std::cout << "hessian = \n" << H << std::endl;
 
   return 0;
 }
