@@ -6,10 +6,6 @@ inline namespace tags
 {
 struct Eigen_autodiff{};
 
-// Tag used if the user has written a custom jacobian, etc
-// This triggers an _impl call into the Derived class
-struct USER {};
-
 // Tag used if we have a custom implementation not written by the user
 // This triggers an _impl call in the Differentiable class
 struct CUSTOM {};
@@ -19,10 +15,8 @@ struct CUSTOM {};
  */
 struct Tag
 {
-  // Overload if user or custom versions are defined
-  using function = USER;
+  // Overload if custom internal versions are defined
   using jacobian = Eigen_autodiff;
-
   using wsum     = CUSTOM; // inner product <w, f>
   using gradient = CUSTOM;
   using hessian  = Eigen_autodiff;
@@ -40,13 +34,12 @@ struct Tag
 template<typename F>
 struct EQ : Tag
 {
-  F f; 
+  using jacobian = CUSTOM;
+
+  F f;
   template<typename... Args>
   EQ(Args&&... args) : f(std::forward<Args>(args)...) {} // If parameters are needed
   EQ() {} // Parameter free version
-
-  using function = CUSTOM;
-  using jacobian = CUSTOM;
 };
 
 
@@ -59,16 +52,14 @@ struct RK4 : Tag
   using scalar_t = _scalar_t;
 
   Ode ode;
+  scalar_t step_size;
+
   template<typename... Args>
   RK4(scalar_t step_size, Args&&... args) : 
         ode(std::forward<Args>(args)...),
         step_size(step_size)
      {} // If parameters are needed
   RK4(scalar_t step_size) : step_size(step_size) {} // Parameter free version
-
-  scalar_t step_size;
-
-  using function = CUSTOM;
 };
 
 }; // namespace tags
@@ -115,9 +106,16 @@ struct Differentiable
   /**
    * Call the function
    */
+  template<typename T, typename Tag, typename OutValue, typename... Args>
+  static auto test_user_function(int) -> decltype(std::declval<T>().template function_impl<lampc::meta::get_scalar_t<std::decay_t<Args>...>>(std::declval<Tag>(), std::declval<OutValue>(), std::declval<Args>()...), std::true_type{});
+  template<typename T, typename... Args>
+  static auto test_user_function(long) -> std::false_type;
+  template<typename T, typename Tag, typename OutValue, typename... Args>
+  struct has_user_function : decltype(test_user_function<T, Tag, OutValue, Args...>(0)){};
+
   template<typename Tag, typename OutValue, typename... Args>
   EIGEN_STRONG_INLINE 
-  typename std::enable_if<std::is_same<typename Tag::function, USER>::value == true, void>::type
+  typename std::enable_if<has_user_function<Derived, Tag, OutValue, Args...>() == true, void>::type
   function(Tag&& tag, OutValue&& outvalue, Args&&... args) noexcept
   {
     using Scalar = lampc::meta::get_scalar_t<std::decay_t<Args>...>;
@@ -129,7 +127,7 @@ struct Differentiable
 
   template<typename Tag, typename OutValue, typename... Args>
   EIGEN_STRONG_INLINE 
-  typename std::enable_if<std::is_same<typename Tag::function, USER>::value == false, void>::type
+  typename std::enable_if<has_user_function<Derived, Tag, OutValue, Args...>() == false, void>::type
   function(Tag&& tag, OutValue&& outvalue, Args&&... args) noexcept
   {
     using Scalar = lampc::meta::get_scalar_t<std::decay_t<Args>...>;
@@ -150,55 +148,75 @@ struct Differentiable
    * of Derived, in which case we wouldn't need these enable_if's
    */
 
+  template<typename T, typename Tag, typename... Args>
+  static auto test_user_jacobian(int) -> decltype(std::declval<T>().jacobian_impl(std::declval<Tag>(), std::declval<Args>()...), std::true_type{});
+  template<typename T, typename... Args>
+  static auto test_user_jacobian(long) -> std::false_type;
+  template<typename T, typename Tag, typename... Args>
+  struct has_user_jacobian : decltype(test_user_jacobian<T, Tag, Args...>(0)){};
+
   // User-specified jacobian code
   template <typename Tag, typename... Args>
-  typename std::enable_if<std::is_same<typename Tag::jacobian, USER>::value == true, void>::type
+  typename std::enable_if<has_user_jacobian<Derived, Tag, Args...>() == true, void>::type
   jacobian(Tag&& tag, Args&&... args)
   {
-    static_cast<Derived*>(this)->jacobian_impl(std::forward<Tag>(tag), USER{}, std::forward<Args>(args)...);
+    static_cast<Derived*>(this)->jacobian_impl(std::forward<Tag>(tag), std::forward<Args>(args)...);
   }
 
   // Tag-dispatch based on Tag::jacobian
   template <typename Tag, typename... Args>
-  typename std::enable_if<std::is_same<typename Tag::jacobian, USER>::value == false, void>::type
+  typename std::enable_if<has_user_jacobian<Derived, Tag, Args...>() == false, void>::type
   jacobian(Tag&& tag, Args&&... args)
   {
     jacobian_impl(std::forward<Tag>(tag), typename Tag::jacobian(), std::forward<Args>(args)...);
   }
 
+  template<typename T, typename Tag, typename... Args>
+  static auto test_user_wsum(int) -> decltype(std::declval<T>().wsum_impl(std::declval<Tag>(), std::declval<Args>()...), std::true_type{});
+  template<typename T, typename... Args>
+  static auto test_user_wsum(long) -> std::false_type;
+  template<typename T, typename Tag, typename... Args>
+  struct has_user_wsum : decltype(test_user_wsum<T, Tag, Args...>(0)){};
+
   // User-specified wsum code
   template <typename Tag, typename Weight, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-  typename std::enable_if<std::is_same<typename Tag::wsum, USER>::value == true, scalar_t>::type
+  typename std::enable_if<has_user_wsum<Derived, Tag, Eigen::MatrixBase<Weight>, Args...>() == true, scalar_t>::type
   wsum(Tag&& tag, const Eigen::MatrixBase<Weight>& w, Args&&... args)
   {
-    return static_cast<Derived*>(this)->wsum_impl(std::forward<Tag>(tag), USER{}, w, std::forward<Args>(args)...);
+    return static_cast<Derived*>(this)->wsum_impl(std::forward<Tag>(tag), w, std::forward<Args>(args)...);
   }
 
   // Tag-dispatch based on Tag::wsum
   template <typename Tag, typename Weight, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-  typename std::enable_if<std::is_same<typename Tag::wsum, USER>::value == false, scalar_t>::type
+  typename std::enable_if<has_user_wsum<Derived, Tag, Eigen::MatrixBase<Weight>, Args...>() == false, scalar_t>::type
   wsum(Tag&& tag, const Eigen::MatrixBase<Weight>& w, Args&&... args)
   {
     return wsum_impl(std::forward<Tag>(tag), typename Tag::wsum(), w, std::forward<Args>(args)...);
   }
 
+  template<typename T, typename Tag, typename... Args>
+  static auto test_user_gradient(int) -> decltype(std::declval<T>().gradient_impl(std::declval<Tag>(), std::declval<Args>()...), std::true_type{});
+  template<typename T, typename... Args>
+  static auto test_user_gradient(long) -> std::false_type;
+  template<typename T, typename Tag, typename... Args>
+  struct has_user_gradient : decltype(test_user_gradient<T, Tag, Args...>(0)){};
+
   // User-specified wsum gradient code
   template <typename Tag, typename Weight, typename Gradient, 
             typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-  typename std::enable_if<std::is_same<typename Tag::wsum, USER>::value == true, scalar_t>::type
+  typename std::enable_if<has_user_gradient<Derived, Tag, Gradient, Eigen::MatrixBase<Weight>, Args...>() == true, scalar_t>::type
   gradient(Tag&& tag, 
            Gradient&& gradient, 
            const Eigen::MatrixBase<Weight>& w, 
            Args&&... args)
   {
-    return static_cast<Derived*>(this)->gradient_impl(std::forward<Tag>(tag), USER{}, 
-                gradient, w, std::forward<Args>(args)...);
+    return static_cast<Derived*>(this)->gradient_impl(std::forward<Tag>(tag), gradient, w, std::forward<Args>(args)...);
   }
 
   // Tag-dispatch based on Tag::wsum gradient 
   template <typename Tag, typename Weight, typename Gradient, 
             typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-  typename std::enable_if<std::is_same<typename Tag::wsum, USER>::value == false, scalar_t>::type
+  typename std::enable_if<has_user_gradient<Derived, Tag, Gradient, Eigen::MatrixBase<Weight>, Args...>() == false, scalar_t>::type
   gradient(Tag&& tag, 
            Gradient&& gradient, 
            const Eigen::MatrixBase<Weight>& w, 
@@ -208,23 +226,29 @@ struct Differentiable
                 gradient, w, std::forward<Args>(args)...);
   }
 
+  template<typename T, typename Tag, typename... Args>
+  static auto test_user_hessian(int) -> decltype(std::declval<T>().hessian_impl(std::declval<Tag>(), std::declval<Args>()...), std::true_type{});
+  template<typename T, typename... Args>
+  static auto test_user_hessian(long) -> std::false_type;
+  template<typename T, typename Tag, typename... Args>
+  struct has_user_hessian : decltype(test_user_hessian<T, Tag, Args...>(0)){};
+
   // User-specified wsum hessian
   template <typename Tag, typename Weight, typename Gradient, typename Hessian, 
             typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-  typename std::enable_if<std::is_same<typename Tag::wsum, USER>::value == true, scalar_t>::type
+  typename std::enable_if<has_user_hessian<Derived, Tag, Gradient, Hessian, Eigen::MatrixBase<Weight>, Args...>() == true, scalar_t>::type
   hessian(Tag&& tag, 
            Gradient&& gradient, Hessian&& hessian,
            const Eigen::MatrixBase<Weight>& w, 
            Args&&... args)
   {
-    return static_cast<Derived*>(this)->hessian_impl(std::forward<Tag>(tag), USER{}, 
-                gradient,hessian, w, std::forward<Args>(args)...);
+    return static_cast<Derived*>(this)->hessian_impl(std::forward<Tag>(tag), gradient, hessian, w, std::forward<Args>(args)...);
   }
 
   // Tag-dispatch based on Tag::wsum hessian
   template <typename Tag, typename Weight, typename Gradient, typename Hessian, 
             typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-  typename std::enable_if<std::is_same<typename Tag::wsum, USER>::value == false, scalar_t>::type
+  typename std::enable_if<has_user_hessian<Derived, Tag, Gradient, Hessian, Eigen::MatrixBase<Weight>, Args...>() == false, scalar_t>::type
   hessian(Tag&& tag, 
            Gradient&& gradient, Hessian&& hessian,
            const Eigen::MatrixBase<Weight>& w, 

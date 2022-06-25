@@ -49,9 +49,7 @@ struct User : public lampc::Differentiable<User<scalar_t>>
   }
 
   // Example of function with user-defined jacobian
-  struct SysX : Tag {
-    using jacobian = USER;
-  };
+  struct SysX : Tag {};
   template<typename T, typename OutValue>
   inline void 
   function_impl(SysX, OutValue&& dotx,
@@ -61,7 +59,7 @@ struct User : public lampc::Differentiable<User<scalar_t>>
   }
 
   template<typename OutValue, typename OutJacobian>
-  inline void jacobian_impl(SysX, USER, OutValue&& out, OutJacobian&& jac,
+  inline void jacobian_impl(SysX, OutValue&& out, OutJacobian&& jac,
            const Eigen::Ref<const state_t<scalar_t>>& x, const Eigen::Ref<const input_t<scalar_t>>& u) noexcept
   {
     function_impl(SysX{}, out, x,u);
