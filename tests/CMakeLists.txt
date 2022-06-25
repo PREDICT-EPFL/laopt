@@ -69,6 +69,11 @@ add_executable(
   tag_test.cpp
 )
 
+add_executable(
+  crazy_example
+  crazy_example.cpp
+)
+
 
 include(GoogleTest)
 gtest_discover_tests(func_test)
