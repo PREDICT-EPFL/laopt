@@ -4,117 +4,235 @@
 
 #include "lampc_utility.hpp"
 
-struct Eigen_autodiff{};
-struct CUSTOM {};
 
-struct Tag
+
+/**
+ * Base class to clean up CRTP definitions with multiple
+ * base types
+ * 
+ * This is from https://www.fluentcpp.com/2017/05/19/crtp-helper/
+ * 
+ */
+template <typename T, template<typename> class crtpType>
+struct crtp
 {
-  // Overload if custom internal versions are defined
-  using jacobian = Eigen_autodiff;
-  using wsum     = CUSTOM; // inner product <w, f>
-  using gradient = CUSTOM;
-  using hessian  = Eigen_autodiff;
+    constexpr T& call() { return static_cast<T&>(*this); }
+    constexpr T const& call() const { return static_cast<T const&>(*this); }
+private:
+    crtp(){}
+    friend crtpType<T>;
 };
 
-
+/**
+ * This is a recursive way of calling "using" on each 
+ * of the list of arguments and pulling them all into
+ * scope.
+ */
 template <typename Handler0, typename... Handlers>
 struct TheCaller : Handler0, TheCaller<Handlers...>
 {
-    using Handler0::function_impl;
-    using TheCaller<Handlers...>::function_impl;
+    using Handler0::function;
+    using TheCaller<Handlers...>::function;
+
+    using Handler0::jacobian;
+    using TheCaller<Handlers...>::jacobian;
 };
 
 template <typename Handler>
 struct TheCaller<Handler> : Handler
 {
-    using Handler::function_impl;
+    using Handler::function;
+    using Handler::jacobian;
 };
 
-template <typename Derived>
-struct BaseFunctions
+
+/**
+ * This is the main class the the user would see
+ * It just collects all the given crtp classes together
+ * and brings their functions into scope.
+ */
+template<template<typename> class... Libraries>
+struct Differentiator : public TheCaller<Libraries<Differentiator<Libraries...>>...>
 {
-  template<typename T, typename... Args>
-  int function_impl(CUSTOM, Args... args)
-  {
-    std::cout << "In MidLayer calling function_impl" << std::endl;
-    return 1;
-  }
+	using TheCaller<Libraries<Differentiator<Libraries...>>...>::function;
+	using TheCaller<Libraries<Differentiator<Libraries...>>...>::jacobian;
+
+	// template<typename Tag>
+	// void jacobian(Tag)
+	// {
+	// 	std::cout << "In Default jacobian - catches all tags" << std::endl;
+	// 	function(Tag{});
+	// }
 };
 
-template<typename Derived, template<typename> class... Libraries>
-struct MidLayer : public Libraries<Derived>...
+struct EigenTag{};
+struct IgnoreTag{};
+struct Tag
 {
-  // Builds a class recursively that has all the function_impl's in scope
-  TheCaller<BaseFunctions<Derived>, Libraries<Derived>...> caller;
-
-  template<typename T, typename Tag, typename... Args>
-  static auto test_user_function(int) -> decltype(std::declval<T>().template function_impl<int>(std::declval<Tag>(), std::declval<Args>()...), std::true_type{});
-  template<typename T, typename... Args>
-  static auto test_user_function(long) -> std::false_type;
-  template<typename T, typename Tag, typename... Args>
-  struct has_user_function : decltype(test_user_function<T, Tag, Args...>(0)){};
-
-  template<typename Tag, typename... Args>
-  typename std::enable_if<has_user_function<Derived, Tag, Args...>() == true, int>::type
-  function(Tag t, Args... args)
-  {
-    std::cout << "In function calling function_impl from Derived" << std::endl;
-    return static_cast<Derived*>(this)->template function_impl<int>(t, args...);
-  }
-
-  template<typename Tag, typename... Args>
-  typename std::enable_if<has_user_function<Derived, Tag, Args...>() == false, int>::type
-  function(Tag t, Args... args)
-  {
-    std::cout << "In function calling function_impl from MidLayer" << std::endl;
-    return caller.template function_impl<int>(t, args...);
-  }
-
+  // Overload if custom internal versions are defined
+  using jacobian = EigenTag;
 };
 
 
-// A library with some useful functions in it
+/**
+ * Library code is the same as user-level code.
+ * 
+ * The Library is crtp derived from the Differentiator class
+ */
+struct Lib2Tag : Tag {};
 struct LibraryTag : Tag {};
-template<typename Derived>
-struct MyLibrary
+template <typename T>
+struct Library : crtp<T, Library>
 {
-  template<typename T, typename... Args>
-  int function_impl(LibraryTag, Args... args)
+	/**
+	 * We define function directly - no more impl
+	 */
+  void function(LibraryTag)
   {
-    std::cout << "In MyLibrary calling function_impl" << std::endl;
-    return 1;
+  	std::cout << "in library. Calling another library function." << std::endl;
+  	this->call().function(Lib2Tag{});
+  }
+
+  /**
+   * If the function is not defined, then an ignore call needs
+   * to be added (also for user-level code).
+   * We could perhaps get rid of this with some meta-foo
+   */
+  struct IgnoreTag{};
+  void jacobian(IgnoreTag) {};
+};
+
+/**
+ * A second library that we could swap in if desired
+ */
+template <typename T>
+struct Library2 : crtp<T, Library2>
+{
+  void function(Lib2Tag)
+  {
+  	std::cout << "in library 2" << std::endl;
+  }
+
+  void jacobian(Lib2Tag)
+  {
+  	std::cout << "jacobian in library 2" << std::endl;
+  }
+};
+
+/**
+ * Library defining default autodiff via Eigen
+ */
+template <typename T>
+struct EigenDiff : crtp<T, EigenDiff>
+{
+	void function(IgnoreTag) {}
+
+	template<typename Tag>
+  void jacobian(Tag t)
+  {
+  	std::cout << "In EigenAutoDiff. Calling function." << std::endl;
+  	this->call().function(t);
+  }
+};
+
+/**
+ * Library defining default autodiff via some other method
+ */
+template <typename T>
+struct OtherDiff : crtp<T, OtherDiff>
+{
+	struct IgnoreTag{};
+	void function(IgnoreTag) {}
+
+	template<typename Tag>
+  void jacobian(Tag t)
+  {
+  	std::cout << "In OtherDiff. Calling function." << std::endl;
+  	this->call().function(t);
   }
 };
 
 
-// User-level code
-struct User : public MidLayer<User, MyLibrary>
+
+/**
+ * This is the user-level code.
+ *
+ * It's the same as library code.
+ */
+
+struct UserTagDefault : Tag {};
+struct UserTagCustom : Tag {};
+
+template <typename T>
+struct User : crtp<T, User>
 {
-  struct TagUser : Tag {};
-  template<typename T, typename... Args>
-  int function_impl(TagUser, Args... args)
-  {
-    std::cout << "In user TagUser" << std::endl;
-    return 1;
-  }
+    void function(UserTagDefault)
+    {
+    	std::cout << "in user. Calling library." << std::endl;
+    	// This is the one downside of this approach... 
+    	// This is how a user calls library "function" or "jacobian" 
+    	// from within their own class.
+      this->call().function(LibraryTag{});
+    }
+
+    /**
+     * Overload the jacobian just by defining it at the user level.
+     */
+    void jacobian(UserTagCustom)
+    {
+    	std::cout << "User specified jacobian" << std::endl;
+    }
+
+    void function(UserTagCustom)
+    {
+    	std::cout << "In UserTagCustom function." << std::endl;
+    }
 };
 
 
 int main()
 {
-  User user;
+	std::cout << "========= Calling with Eigen Differentiator =========" << std::endl;
+	Differentiator<User, Library, Library2, EigenDiff>	s;
 
-  std::cout << "In main calling function with TagUser" << std::endl;
-  user.function(User::TagUser{});
+	std::cout << std::endl << "Calling function(LibraryTag)" << std::endl;
+	s.function(LibraryTag{});
 
-  std::cout << std::endl << std::endl;  
+	std::cout << std::endl << "Calling jacobian(LibraryTag)" << std::endl;
+	s.jacobian(LibraryTag{});
 
-  std::cout << "In main calling function with CUSTOM" << std::endl;
-  user.function(CUSTOM{});
+	std::cout << std::endl << "Calling function(UserTagDefault)" << std::endl;
+	s.function(UserTagDefault{});
 
-  std::cout << std::endl << std::endl;  
+	std::cout << std::endl << "Calling jacobian(UserTagDefault)" << std::endl;
+	s.jacobian(UserTagDefault{});
 
-  std::cout << "In main calling function with LibraryTag" << std::endl;
-  user.function(LibraryTag{});
+	std::cout << std::endl << "Calling function(UserTagCustom)" << std::endl;
+	s.function(UserTagCustom{});
 
+	std::cout << std::endl << "Calling jacobian(UserTagCustom)" << std::endl;
+	s.jacobian(UserTagCustom{});
+
+
+	std::cout << std::endl << std::endl;
+	std::cout << "========= Calling with Other Differentiator =========" << std::endl;
+	Differentiator<User, Library, Library2, OtherDiff>	s2;
+
+	std::cout << std::endl << "Calling function(LibraryTag)" << std::endl;
+	s2.function(LibraryTag{});
+
+	std::cout << std::endl << "Calling jacobian(LibraryTag)" << std::endl;
+	s2.jacobian(LibraryTag{});
+
+	std::cout << std::endl << "Calling function(UserTagDefault)" << std::endl;
+	s2.function(UserTagDefault{});
+
+	std::cout << std::endl << "Calling jacobian(UserTagDefault)" << std::endl;
+	s2.jacobian(UserTagDefault{});
+
+	std::cout << std::endl << "Calling function(UserTagCustom)" << std::endl;
+	s2.function(UserTagCustom{});
+
+	std::cout << std::endl << "Calling jacobian(UserTagCustom)" << std::endl;
+	s2.jacobian(UserTagCustom{});
 }
