@@ -702,8 +702,8 @@ private:
         x_default << 12, -0.05, -0.05, -0.05; // {Va/vx} {aoa/vz} {wy}, {pitch/gamma})
 
         // Physical control bounds
-        u_trim_ubound << 21.0 * M_PI / 180.0, 1;
-        u_trim_lbound << -21.0 * M_PI / 180.0, 0;
+        u_physical_ubound << 21.0 * M_PI / 180.0, 1;
+        u_physical_lbound << -21.0 * M_PI / 180.0, 0;
 
         // Trim bounds - state
         // Va
