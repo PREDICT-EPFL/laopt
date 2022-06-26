@@ -16,11 +16,16 @@
 template <typename T, template<typename> class crtpType>
 struct crtp
 {
-    constexpr T& call() { return static_cast<T&>(*this); }
-    constexpr T const& call() const { return static_cast<T const&>(*this); }
+  constexpr T& call() { return static_cast<T&>(*this); }
+  constexpr T const& call() const { return static_cast<T const&>(*this); }
+
+  struct IgnoreTag{};
+  void jacobian(IgnoreTag) {};
+  void function(IgnoreTag) {};
+
 private:
-    crtp(){}
-    friend crtpType<T>;
+  crtp(){}
+  friend crtpType<T>;
 };
 
 /**
@@ -66,7 +71,6 @@ struct Differentiator : public TheCaller<Libraries<Differentiator<Libraries...>>
 };
 
 struct EigenTag{};
-struct IgnoreTag{};
 struct Tag
 {
   // Overload if custom internal versions are defined
@@ -92,14 +96,6 @@ struct Library : crtp<T, Library>
   	std::cout << "in library. Calling another library function." << std::endl;
   	this->call().function(Lib2Tag{});
   }
-
-  /**
-   * If the function is not defined, then an ignore call needs
-   * to be added (also for user-level code).
-   * We could perhaps get rid of this with some meta-foo
-   */
-  struct IgnoreTag{};
-  void jacobian(IgnoreTag) {};
 };
 
 /**
@@ -125,8 +121,6 @@ struct Library2 : crtp<T, Library2>
 template <typename T>
 struct EigenDiff : crtp<T, EigenDiff>
 {
-	void function(IgnoreTag) {}
-
 	template<typename Tag>
   void jacobian(Tag t)
   {
@@ -141,10 +135,7 @@ struct EigenDiff : crtp<T, EigenDiff>
 template <typename T>
 struct OtherDiff : crtp<T, OtherDiff>
 {
-	struct IgnoreTag{};
-	void function(IgnoreTag) {}
-
-	template<typename Tag>
+		template<typename Tag>
   void jacobian(Tag t)
   {
   	std::cout << "In OtherDiff. Calling function." << std::endl;
