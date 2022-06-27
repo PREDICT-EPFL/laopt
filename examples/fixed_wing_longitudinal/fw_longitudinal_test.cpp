@@ -19,19 +19,25 @@ int main()
 
     /* Construct and setup OCP */
     Ocp ocp;
+    ocp.model.set_state_representation(kite_model::LongitudinalFlightPath);
     ocp.model.load_params_from_yaml("eg4_xflr-Pvw-YR.yaml");
+
     ocp.objectives[lon_ocp::TrackAngle] = true;
 //    ocp.objectives[lon_ocp::TrackVa] = true;
     ocp.objectives[lon_ocp::MinimizeControl] = true;
-    ocp.tf = 2.0;
+
+    ocp.tf = 1.5;
+
+    ocp.pitch_ref = -20.0 * M_PI / 180.0;
+    ocp.Va_ref = 11.0;
 
     ocp.mayer_multiplier = 10;
     ocp.W_pitch_err = 10;
     ocp.W_Va_err = 1;
     ocp.R.diagonal() << 1, 0.1;
 
-    ocp.ubu << ocp.model.u_physical_ubound;
-    ocp.lbu << ocp.model.u_physical_lbound;
+    ocp.ubu << 0.8 * ocp.model.u_physical_ubound(0), 0.001;
+    ocp.lbu << 0.8 * ocp.model.u_physical_lbound(0), 0;
 
     /* Transcribe OCP */
     Transcription transcription(ocp);
@@ -50,7 +56,7 @@ int main()
     if( ipopt_status != Solve_Succeeded ) { std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl; }
 
     /* Set initial guess for state trajectory */
-    for(auto& x: transcription.X) x(seqN(0, 1)) << 10.0;
+    for(auto& x: transcription.X) { x << ocp.model.get_default_initial_state(); }
 
     /* Set initial state and solve the problem (loop later) */
     ocp.x0 << ocp.model.get_default_initial_state();
@@ -59,13 +65,15 @@ int main()
 
     /* Print out the solution */
     std::cout << std::endl << std::endl << std::endl << std::endl;
-    std::cout << std::setprecision(2) << std::defaultfloat;
+    std::cout << std::setprecision(6) << std::defaultfloat;
 
-    Eigen::Matrix<Ocp::scalar_t, Ocp::NX, N> X;
-    Eigen::Matrix<Ocp::scalar_t, Ocp::NU, N - 1> U;
-    int i = 0; for(auto& x: transcription.X) X.col(i++) << x;
+    Eigen::Matrix<Ocp::scalar_t, Ocp::NX, transcription.X.size()> X;
+    Eigen::Matrix<Ocp::scalar_t, Ocp::NU, transcription.U.size()> U;
+    int i{0};
+    i = 0; for(auto& x: transcription.X) X.col(i++) << x;
     i = 0; for(auto& u: transcription.U) U.col(i++) << u;
 
+    std::cout << "T = \n" << transcription.T.transpose() << std::endl;
     std::cout << "X = \n" << X << std::endl;
     std::cout << "U = \n" << U << std::endl;
     std::cout << "obj = " << nlp.eval_objective(lampc::Eval(), ipopt_nlp->sol_primal) << std::endl;

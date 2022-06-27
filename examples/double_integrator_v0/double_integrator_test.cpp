@@ -41,13 +41,15 @@ int main()
 
     /* Print out the solution */
     std::cout << std::endl << std::endl << std::endl << std::endl;
-    std::cout << std::setprecision(2) << std::defaultfloat;
+    std::cout << std::setprecision(6) << std::defaultfloat;
 
-    Eigen::Matrix<Ocp::scalar_t, 2, N> X;
-    Eigen::Matrix<Ocp::scalar_t, 1, N - 1> U;
-    int i = 0; for(auto& x: transcription.X) X.col(i++) << x;
+    Eigen::Matrix<Ocp::scalar_t, Ocp::NX, transcription.X.size()> X;
+    Eigen::Matrix<Ocp::scalar_t, Ocp::NU, transcription.U.size()> U;
+    int i{0};
+    i = 0; for(auto& x: transcription.X) X.col(i++) << x;
     i = 0; for(auto& u: transcription.U) U.col(i++) << u;
 
+    std::cout << "T = \n" << transcription.T.transpose() << std::endl;
     std::cout << "X = \n" << X << std::endl;
     std::cout << "U = \n" << U << std::endl;
     std::cout << "obj = " << nlp.eval_objective(lampc::Eval(), ipopt_nlp->sol_primal) << std::endl;

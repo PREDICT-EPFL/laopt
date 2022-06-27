@@ -4,7 +4,7 @@
 #include <Eigen/Dense>
 #include "lampc.hpp"
 
-// Advanced user level
+// Advanced user (level 2)
 
 template<typename OCP, int N>
 class MultipleShootingTranscription
@@ -31,10 +31,11 @@ public:
             internal_ocp.template dynamics_impl<Scalar>(x, u, x_dot);
             return x_dot;
         }
-    };
+    } sys;
 
     // Discretized dynamics
     using dsys_t = lampc::functions::RK4<sys_t, scalar_t>;
+    dsys_t dsys;
 
     struct stage_cost_t : public lampc::MakeDifferentiable<stage_cost_t>
     {
@@ -49,7 +50,7 @@ public:
             internal_ocp.template lagrange_term_impl<Scalar>(x, u, lagrange);
             return lagrange;
         }
-    };
+    } stage_cost;
 
     struct terminal_cost_t : public lampc::MakeDifferentiable<terminal_cost_t>
     {
@@ -64,20 +65,16 @@ public:
             internal_ocp.template mayer_term_impl<Scalar>(x, mayer);
             return mayer;
         }
-    };
+    } terminal_cost;
 
     template<size_t n>
     using Variable = lampc::Variable<scalar_t, n>;
 
-    std::array<Variable<OCP::NX>, N>   X;
-    std::array<Variable<OCP::NU>, N-1> U;
+    Eigen::Vector<scalar_t, N+1> T;
+    std::array<Variable<OCP::NX>, N+1> X;
+    std::array<Variable<OCP::NU>, N+1> U;
 
     // Functions we use to define the problem
-    sys_t sys; // Continuous-time dynamics
-    dsys_t dsys; // Discrete-time dynamics
-    stage_cost_t stage_cost;
-    terminal_cost_t terminal_cost;
-
     lampc::functions::eq<dsys_t> dsys_eq; // dsys(x,u) - xp
 
     lampc::functions::id id; // Identity
@@ -88,17 +85,19 @@ public:
     dsys(sys, ocp.tf / N),
     stage_cost(ocp),
     terminal_cost(ocp),
-    dsys_eq(dsys) {};
+    dsys_eq(dsys)
+    {
+        for(int i = 0; i < N+1; i++) { T(i) = i * ocp.tf / N; }
+    };
 
     template<typename OptProblem>
     void define_variables(OptProblem& problem)
     {
-        for(int i = 0; i < N - 1; i++)
+        for(int i = 0; i < N+1; i++)
         {
             problem.add_variable(X[i]);
             problem.add_variable(U[i]);
         }
-        problem.add_variable(X[N - 1]);
     }
 
     template<typename Bounds>
@@ -116,15 +115,17 @@ public:
         con.add(dtype, id, X[0]) == ocp.x0;
 
         // Dynamics
-        for(int i=0; i<N-1; i++) con.add(dtype, dsys_eq, X[i+1], X[i], U[i]) == 0;
+        for(int i=0; i<N; i++) con.add(dtype, dsys_eq, X[i+1], X[i], U[i]) == 0;
+
+        // Last input
+        con.add(dtype, id, U[N]) == U[N-1];
     }
 
     template<typename Objective, typename Dtype>
     void eval_objective(Dtype dtype, Objective& obj)
     {
-        for(int i=0; i<X.size()-1; i++)
-            obj.add(dtype, stage_cost, X[i], U[i]);
-        obj.add(dtype, terminal_cost, X[N-1]);
+        for(int i=0; i<N; i++) { obj.add(dtype, stage_cost, X[i], U[i]); }
+        obj.add(dtype, terminal_cost, X[N]);
     }
 };
 

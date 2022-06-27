@@ -5,21 +5,25 @@
 #include "LonOcpSettings.hpp"
 #include "kite.hpp"
 
+// Basic user (level 1)
+
 namespace lon_ocp {
 
-using Model = kite_model::eigen_model::LonKiteDynamics;
+using LonKite = kite_model::eigen_model::LonKiteDynamics;
 
-class LonFlightOCP : public lampc::OCPBase<double, Model::nx + 0, Model::nu + 0>
+class LonFlightOCP : public lampc::OCPBase<double, LonKite::nx + 0, LonKite::nu + 0>
 {
 public:
     ~LonFlightOCP() = default;
+
+    using Model = LonKite;
     Model model;
     Model::SystemMat A;     // Linearized dynamics
     Model::ControlMat B;    // Linearized dynamics
     Model::State x_trim;    // Linearized dynamics
     Model::Control u_trim;  // Linearized dynamics
 
-    ControlObjectives objectives;
+    ControlObjectives objectives{};
 
     double mayer_multiplier{10};
 
@@ -80,9 +84,8 @@ public:
     }
 
     template<typename T>
-    inline void dynamics_impl(const Eigen::Ref<const state_t <T>> &x, const Eigen::Ref<const control_t <T>> &u,
-                              Eigen::Ref<state_t < T>>
-    xdot) const noexcept
+    inline void dynamics_impl(const Eigen::Ref<const state_t<T>> &x, const Eigen::Ref<const control_t<T>> &u,
+                              Eigen::Ref<state_t<T>> xdot) const noexcept
     {
 //         Linear(ized) dynamics
 //        xdot = A.template cast<T>() * (x - x_trim.template cast<T>()) +
