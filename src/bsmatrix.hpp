@@ -1,43 +1,32 @@
 #ifndef __BSMATRIX_HPP
 #define __BSMATRIX_HPP
 
-#include <functional>
-
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
+#include <functional>
+#include <utility>
 
 #include "lampc_utility.hpp"
 
 /**
- * Bring all the Eigen seq commands into the global namespace for convenience
- */
-using Eigen::seq;
-using Eigen::seqN;
-using Eigen::all;
-using Eigen::last;
-using Eigen::lastp1;
-using Eigen::fix;
-
-
-
-/**
- * Takes a paramater pack of Eigen::Vector's and concantenantes
+ * Takes a parameter pack of Eigen::Vector's and concatenates
  * them into a single Eigen::Vector.
  * Everything must be fixed-size.
  */
 template<int... n>
 Eigen::Vector<int, lampc::meta::sum_template<n...>()>
-concantenate_indices(const Eigen::Vector<int, n>&... args)
+concatenate_indices(const Eigen::Vector<int, n>&... args)
 {
   Eigen::Vector<int, lampc::meta::sum_template<n...>()> out;
   int offset = 0;
   auto l = {
     (
-      out(seqN(offset,n)) = args,
+      out(Eigen::seqN(offset,n)) = args,
       offset += n,
       0
     )...
   };
+  (void) l; // get rid of unused variable warning
   return out;
 }
 
@@ -98,7 +87,7 @@ struct Segment
    */
 	inline auto seq() const
 	{
-		return seqN(index, length);
+		return Eigen::seqN(index, length);
 	};
 };
 struct CopyInfo
@@ -145,6 +134,7 @@ inline Eigen::Vector<int, n> multiSeq_to_index(T... segs)
   auto l = {
     (fillme(segs), 0)...
   };
+  (void) l; // get rid of unused variable warning
 
   // for(const auto& seg : segs) 
   //   for(int j=seg.index; j<seg.index+seg.length; j++)
@@ -219,43 +209,21 @@ struct BSMatrix
     if(copy_index == copies.size()) reset_copy_index();
   }
 
-
-  // Execute the next copy in the sequence
-  inline void copy_operation(const scalar_t *source)
-  {
-    int segment_index = copies[copy_index].segment_index;
-    for(int i=0; i<copies[copy_index].num_segments_to_copy; i++)
-    {
-      size_t length = segments[segment_index + i].length;
-      size_t index = segments[segment_index + i].index;
-
-      memcpy(target+index, source, length * sizeof(scalar_t));
-
-      // auto tgt = Eigen::Map<Eigen::VectorX<scalar_t>>(target+index, length);
-      // const auto src = Eigen::Map<const Eigen::VectorX<scalar_t>>(source, length);
-      // op(tgt, src);
-      source += length;
-    }
-    copy_index++;
-    if(copy_index == copies.size()) reset_copy_index();
-  }
-
-
 public:
   /**
    * Note: The BSMatrix owns no memory, and so set_target must be called 
    * before any operations are done!
    */
-  BSMatrix(Eigen::SparseMatrix<bool> sparsity_structure, 
-           std::vector<Segment> copy_segments, 
+  BSMatrix(const Eigen::SparseMatrix<bool>& sparsity_structure,
+           std::vector<Segment>  copy_segments,
            std::vector<CopyInfo> copy_info)
     : sparsity_structure(sparsity_structure),
-      segments(copy_segments),
-      copies(copy_info),
+      segments(std::move(copy_segments)),
+      copies(std::move(copy_info)),
       copy_index(0)
   {}
 
-  BSMatrix(BSMatrixInfo info)
+  explicit BSMatrix(const BSMatrixInfo& info)
   	: sparsity_structure(info.sparsity_structure), segments(info.copy_segments), copies(info.copy_info), copy_index(0)
   	{}
 
@@ -265,7 +233,6 @@ public:
    */
   void allocate_memory(Eigen::SparseMatrix<scalar_t>& S)
   {
-    // std::cout << "sparsity_structure = " << sparsity_structure << std::endl;
     S = sparsity_structure.eval().template cast<scalar_t>();
     set_target(S);
   }
@@ -309,22 +276,15 @@ public:
 
   // Assumption: The input matrix is contiguous.
   template<typename Derived>
-  void inline operator=(const Eigen::MatrixBase<Derived>& block)
+  inline BSMatrix& operator=(const Eigen::MatrixBase<Derived>& block)
   {
   	// MatrixBase may or may not be an expression. As a result, we call
   	// eval, which evaluates into a contiguous temporary if required, 
   	// or is just a noop if not.
   	// Note: Avoid temporaries here - they require malloc and are slow.
     execute_operation([](auto& a, auto& b){a=b;}, block.eval().data());
+    return *this;
   }
-
-  /**
-   * Copy the given block into the target matrix
-   */
-  // void operator+=(const Eigen::SparseMatrix<scalar_t>& block)
-  // {
-  //   execute_operation([](auto& a, auto& b){a+=b;}, block.valuePtr());
-  // } 
 
   // Assumption: The input matrix is contiguous. Don't change this to a Ref.
   template<typename Derived>
@@ -332,14 +292,6 @@ public:
   {
     execute_operation([](auto& a, auto& b){a+=b;}, block.eval().data());
   }
-
-  /**
-   * Copy the given block into the target matrix
-   */
-  // void operator-=(const Eigen::SparseMatrix<scalar_t>& block)
-  // {
-  //   execute_operation([](auto& a, auto& b){a-=b;}, block.valuePtr());
-  // } 
 
   // Assumption: The input matrix is contiguous. Don't change this to a Ref.
   template<typename Derived>
@@ -386,7 +338,7 @@ struct BSSlice
   Base &base; // Pointer to the top-level matrix
   T M; // Matrix slice
 
-  BSSlice(Base& base, T M) : base(base), M(M) {}
+  BSSlice(Base& base, T M) : base(base), M(std::move(M)) {}
 
   // template<typename... RowSlice, typename... ColSlice>
   // auto operator()(std::tuple<RowSlice...> rows, std::tuple<ColSlice...> cols)
@@ -463,7 +415,7 @@ class BSSliceTape : public BSSlice<T, Base>
   /**
    * Record the sequence of memory copies to copy mat to this slice
    */
-  void record_op(const Eigen::MatrixX<int>& mat)
+  inline void record_op(const Eigen::MatrixX<int>& mat)
   {
     assert(mat.rows() == this->M.rows() && mat.cols() == this->M.cols() && "You assigned a matrix of the wrong size!");
 
@@ -478,7 +430,7 @@ public:
   /**
    * All operators just record the operation
    */
-  template<typename Derived> void operator=(const Eigen::MatrixBase<Derived>& mat)  {record_op(get_pattern(mat));}
+  template<typename Derived> BSSliceTape& operator=(const Eigen::MatrixBase<Derived>& mat) {record_op(get_pattern(mat)); return *this;}
   template<typename Derived> void operator+=(const Eigen::MatrixBase<Derived>& mat) {record_op(get_pattern(mat));}
   template<typename Derived> void operator-=(const Eigen::MatrixBase<Derived>& mat) {record_op(get_pattern(mat));}
 };
@@ -492,13 +444,13 @@ struct BSMatrixTape : public BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>
 
   BSMatrixTape() : BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>(*this, Eigen::MatrixX<int>()) {}
 
-  BSMatrixTape(Eigen::MatrixX<bool> structure, size_t rows=0, size_t cols=0) :
+  explicit BSMatrixTape(const Eigen::MatrixX<bool>& structure, size_t rows=0, size_t cols=0) :
     BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>(*this, Eigen::MatrixX<int>())
   {
   	initialize(structure, rows, cols);
   };
 
-  void initialize(Eigen::MatrixX<bool> structure, size_t rows=0, size_t cols=0)
+  void initialize(const Eigen::MatrixX<bool>& structure, size_t rows=0, size_t cols=0)
   {
     sparsity_structure.resizeLike(structure);
 
@@ -537,8 +489,8 @@ struct BSMatrixTape : public BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>
     M.conservativeResize(rows, cols);
 
     // Set new elements to that from the sparsity structure
-    M(all, seq(curr_cols,cols-1)) = sparsity_structure(seq(0,rows-1), seq(curr_cols,cols-1));
-    M(seq(curr_rows,rows-1), all) = sparsity_structure(seq(curr_rows,rows-1), seq(0,cols-1));
+    M(Eigen::all, Eigen::seq(curr_cols,cols-1)) = sparsity_structure(Eigen::seq(0,rows-1), Eigen::seq(curr_cols,cols-1));
+    M(Eigen::seq(curr_rows,rows-1), Eigen::all) = sparsity_structure(Eigen::seq(curr_rows,rows-1), Eigen::seq(0,cols-1));
   }
 
   /**
@@ -679,8 +631,8 @@ struct BSMatrixSparsity : public BSSliceSparsity<Eigen::MatrixX<int>, BSMatrixSp
         M.conservativeResize(rows, cols);
 
     // Set new elements to zero == sparse
-    if(cols > curr_cols) M(all, seq(curr_cols,last)).array() = 0;
-    if(rows > curr_rows) M(seq(curr_rows,last), all).array() = 0;
+    if(cols > curr_cols) M(Eigen::all, Eigen::seq(curr_cols,Eigen::last)).array() = 0;
+    if(rows > curr_rows) M(Eigen::seq(curr_rows,Eigen::last), Eigen::all).array() = 0;
   }
 
   /**

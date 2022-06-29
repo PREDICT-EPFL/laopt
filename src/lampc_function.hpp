@@ -175,11 +175,7 @@ public:
         using AD_scalar = Eigen::AutoDiffScalar<Eigen::Vector<scalar_t, num_inputs>>;
         using outerDerivatives = Eigen::Vector<AD_scalar, num_inputs>;
         using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
-        using outerAD_t = Eigen::Vector<outerADScalar, num_outputs>;  
-
-        using value_t = typename Eigen::Vector<scalar_t, num_outputs>;
-        using jacobian_t = typename Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
-        using hessian_t = typename Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
+        using outerAD_t = Eigen::Vector<outerADScalar, num_outputs>;
 
         // Convert to AD variables for the inputs and call our function
         outerAD_t out = seed_and_call2(make_ad2<outerADScalar>(args)...).eval();
@@ -260,8 +256,6 @@ public:
                 const Eigen::MatrixBase<Weight>& weight,
                 const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
-
         // Call the (possibly overloaded) eval
         using F = FuncInfo<Derived, Args...>;
         // typename F::return_t value;
@@ -317,11 +311,7 @@ public:
         using AD_scalar = Eigen::AutoDiffScalar<Eigen::Vector<scalar_t, num_inputs>>;
         using outerDerivatives = Eigen::Vector<AD_scalar, num_inputs>;
         using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
-        using outerAD_t = Eigen::Vector<outerADScalar, num_outputs>;  
-
-        using value_t = typename Eigen::Vector<scalar_t, num_outputs>;
-        using jacobian_t = typename Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
-        using hessian_t = typename Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
+        using outerAD_t = Eigen::Vector<outerADScalar, num_outputs>;
 
         // Convert to AD variables for the inputs and call our function
         outerAD_t out = seed_and_call2(make_ad2<outerADScalar>(args)...).eval();

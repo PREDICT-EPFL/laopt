@@ -230,7 +230,7 @@ public:
 	{
 		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
 
-		auto out_indices = seqN(value.rows(), fix<num_outputs>);
+		auto out_indices = Eigen::seqN(value.rows(), Eigen::fix<num_outputs>);
 		this->extend_rows(num_outputs);
 
     f(lampc::Eval(), value(out_indices), vars...);
@@ -242,8 +242,8 @@ public:
 	{
 		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
 
-		auto out_indices = seqN(value.rows(), fix<num_outputs>);
-		auto in_indices = concantenate_indices(vars.indices()...);
+		auto out_indices = Eigen::seqN(value.rows(), Eigen::fix<num_outputs>);
+		auto in_indices = concatenate_indices(vars.indices()...);
 		this->extend_rows(num_outputs);
 
     f(lampc::Jacobian(), value(out_indices), jacobian(out_indices, in_indices), vars...);
@@ -602,7 +602,7 @@ public:
 	{
 		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
 
-		auto out_indices = seqN(weights.rows(), fix<num_outputs>);
+		auto out_indices = Eigen::seqN(weights.rows(), Eigen::fix<num_outputs>);
 		this->extend_rows(num_outputs);
 
     value += f.weightedsum(lampc::Eval(), weights(out_indices), vars...);
@@ -614,8 +614,8 @@ public:
 	{
 		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
 
-		auto out_indices = seqN(weights.rows(), fix<num_outputs>);
-		auto in_indices = concantenate_indices(vars.indices()...);
+		auto out_indices = Eigen::seqN(weights.rows(), Eigen::fix<num_outputs>);
+		auto in_indices = concatenate_indices(vars.indices()...);
 		this->extend_rows(num_outputs);
 
     value += f.weightedsum(lampc::Gradient(), gradient(in_indices), weights(out_indices), vars...);
@@ -627,8 +627,8 @@ public:
 	{
 		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
 
-		auto out_indices = seqN(weights.rows(), fix<num_outputs>);
-		auto in_indices = concantenate_indices(vars.indices()...);
+		auto out_indices = Eigen::seqN(weights.rows(), Eigen::fix<num_outputs>);
+		auto in_indices = concatenate_indices(vars.indices()...);
 		this->extend_rows(num_outputs);
 
     value += f.weightedsum(lampc::Hessian(), 
@@ -730,11 +730,11 @@ struct ProblemInfo
 	int num_constraints;
 };
 
-template<typename UserCode, typename _scalar_t, typename Matrix, typename Vector>
+template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
 class ProblemBase
 {
 public:
-	using scalar_t = _scalar_t;
+	using scalar_t = Scalar;
 
 	// Callbacks used to register the global decision variable with each variable
 	std::vector<std::function<void(scalar_t*)>> variable_callbacks;
@@ -904,7 +904,7 @@ public:
   	assert(dual.rows() == constraints.rows() && "Dual vector is the wrong length");
 
 		Eigen::VectorX<scalar_t> weights(lagrangian.rows());
-		weights(seqN(0,objective.rows())).array() = obj_factor;
+		weights(Eigen::seqN(0,objective.rows())).array() = obj_factor;
 		weights.tail(constraints.rows()) = dual;
 
 	  set_decision_variable(var);

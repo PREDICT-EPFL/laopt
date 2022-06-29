@@ -27,8 +27,8 @@ TEST(BSMatrix, Construction) {
 
     // Create the matrix blkdiag(A,B)
     auto F = [&](auto& tape){
-        tape(seqN(0,A.rows()),seqN(0,A.cols())) = A;
-        tape(seqN(lastp1-B.rows(),B.rows()),seqN(lastp1-B.cols(),B.cols())) = B;
+        tape(Eigen::seqN(0,A.rows()), Eigen::seqN(0,A.cols())) = A;
+        tape(Eigen::seqN(Eigen::lastp1-B.rows(),B.rows()),Eigen::seqN(Eigen::lastp1-B.cols(),B.cols())) = B;
     };
 
     // Get the sparsity structure
@@ -94,9 +94,9 @@ TEST(BSMatrix, Construction_Complex) {
 
     // Partitioning and assembly function
     auto F = [&](auto& tape){
-        tape(seqN(10,A.rows()),concantenate_indices(Eigen::Vector<int,2>{10,11},Eigen::Vector<int,1>{5})) = A;
-        tape(concantenate_indices(Eigen::Vector<int,2>{6,7}, Eigen::Vector<int,3>{0,1,2}),
-             concantenate_indices(Eigen::Vector<int,1>{7},Eigen::Vector<int,1>{5},Eigen::Vector<int,1>{3},Eigen::Vector<int,1>{1},Eigen::Vector<int,1>{0})) = B;
+        tape(Eigen::seqN(10,A.rows()),concatenate_indices(Eigen::Vector<int,2>{10,11},Eigen::Vector<int,1>{5})) = A;
+        tape(concatenate_indices(Eigen::Vector<int,2>{6,7}, Eigen::Vector<int,3>{0,1,2}),
+             concatenate_indices(Eigen::Vector<int,1>{7},Eigen::Vector<int,1>{5},Eigen::Vector<int,1>{3},Eigen::Vector<int,1>{1},Eigen::Vector<int,1>{0})) = B;
     };
 
     auto BS = lampc::template makeBSMatrix<scalar_t>(F, 20,20);
@@ -133,11 +133,11 @@ TEST(BSMatrix, SimpleSum) {
 
     // Create the matrix blkdiag(A,B)
     auto F = [&](auto& mat){
-        mat(seqN(0,A.rows()),seqN(0,A.cols())) = A;
-        mat(seqN(lastp1-B.rows(),B.rows()),seqN(lastp1-B.cols(),B.cols())) = B;
-        mat(seqN(1,B.rows()), seqN(2,B.cols())) += B;
-        mat(seqN(lastp1-B.rows(),B.rows()), seqN(2,B.cols())) += B;
-        mat(seqN(5,A.rows()), seqN(5,A.cols())) += A;
+        mat(Eigen::seqN(0,A.rows()),Eigen::seqN(0,A.cols())) = A;
+        mat(Eigen::seqN(Eigen::lastp1-B.rows(),B.rows()),Eigen::seqN(Eigen::lastp1-B.cols(),B.cols())) = B;
+        mat(Eigen::seqN(1,B.rows()), Eigen::seqN(2,B.cols())) += B;
+        mat(Eigen::seqN(Eigen::lastp1-B.rows(),B.rows()), Eigen::seqN(2,B.cols())) += B;
+        mat(Eigen::seqN(5,A.rows()), Eigen::seqN(5,A.cols())) += A;
     };
 
     auto BS = lampc::template makeBSMatrix<scalar_t>(F, 10,9);

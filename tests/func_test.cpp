@@ -198,7 +198,7 @@ struct TestSpeed
 
         using outerAD_t = Eigen::Vector<outerADScalar, 2>;  
         outerAD_t out;
-        test_jacobian(x(seqN(0,fix<2>)), x(seqN(2,fix<1>)), out);
+        test_jacobian(x(Eigen::seqN(0, Eigen::fix<2>)), x(Eigen::seqN(2, Eigen::fix<1>)), out);
 
         // Copy into buffers
         for(int i=0; i<2; i++)
@@ -448,7 +448,7 @@ TEST(BSMatrixTest, Jacobian) {
             x(1) = 2*i;
             u(0) = 3*i;
             test(lampc::Jacobian(), 
-                 value(seqN(i*2,2)), jacobian(seqN(i*2,2), lampc::multiSeq_to_index(seqN(i*2,fix<2>),seqN(10+i,fix<1>))),
+                 value(Eigen::seqN(i*2,2)), jacobian(Eigen::seqN(i*2,2), lampc::multiSeq_to_index(Eigen::seqN(i*2, Eigen::fix<2>),Eigen::seqN(10+i,Eigen::fix<1>))),
                  x, u);
         }
     };

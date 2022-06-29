@@ -67,7 +67,7 @@ namespace lampc {
     	using scalar_t = typename Eigen::MatrixBase<X>::Scalar;
     	outvalue = x;
 			for(int i=0; i<outvalue.rows(); i++)
-				outjacobian(seqN(i,fix<1>), seqN(i, fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(1);
+				outjacobian(Eigen::seqN(i,Eigen::fix<1>), Eigen::seqN(i, Eigen::fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(1);
     }
 
     template<typename OutValue, typename OutJacobian, typename OutHessian, size_t num_outputs, typename X>
@@ -121,7 +121,7 @@ namespace lampc {
                 const Eigen::MatrixBase<X>& x) noexcept
     {
     	outgradient += weight;
-    	outhessian(all,all) += Eigen::Matrix<scalar_t,Eigen::MatrixBase<X>::RowsAtCompileTime,Eigen::MatrixBase<X>::RowsAtCompileTime>::Constant(0);
+    	outhessian(Eigen::all, Eigen::all) += Eigen::Matrix<scalar_t,Eigen::MatrixBase<X>::RowsAtCompileTime,Eigen::MatrixBase<X>::RowsAtCompileTime>::Constant(0);
     	return weight.dot(x);
     }
 
@@ -173,7 +173,7 @@ namespace lampc {
 
 			// Set jac_f part
 			f(lampc::Jacobian(),
-				outvalue, outjacobian(all,seqN(outvalue.rows(),fix<meta::sum_template<Args::RowsAtCompileTime...>()>)),
+				outvalue, outjacobian(Eigen::all, Eigen::seqN(outvalue.rows(), Eigen::fix<meta::sum_template<Args::RowsAtCompileTime...>()>)),
 				args...);
 
 			// Add the -x part
@@ -182,7 +182,7 @@ namespace lampc {
 			// constexpr int num_outputs = X::RowsAtCompileTime;
 			// outjacobian(all,seqN(0,fix<num_outputs>)) = -Eigen::Matrix<scalar_t,num_outputs,num_outputs>::Identity();
 			for(int i=0; i<outvalue.rows(); i++)
-				outjacobian(seqN(i,fix<1>), seqN(i, fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(-1);
+				outjacobian(Eigen::seqN(i, Eigen::fix<1>), Eigen::seqN(i, Eigen::fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(-1);
     }
 
    //  template<typename OutValue, typename OutJacobian, typename OutHessian, size_t len, typename X, typename... Args>

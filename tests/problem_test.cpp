@@ -58,19 +58,19 @@ struct OCP_DoubleIntegrator
                 const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<X>& xss,
                 const Eigen::MatrixBase<U>& u, const Eigen::MatrixBase<U>& uss) noexcept
     {
-      outgradient(seqN(0,2)) +=  2*p.Q*(x-xss);
-      outgradient(seqN(2,2)) += -2*p.Q*(x-xss);
-      outgradient(seqN(4,1)) +=  2*p.R*(u-uss);
-      outgradient(seqN(5,1)) += -2*p.R*(u-uss);
+      outgradient(Eigen::seqN(0,2)) +=  2*p.Q*(x-xss);
+      outgradient(Eigen::seqN(2,2)) += -2*p.Q*(x-xss);
+      outgradient(Eigen::seqN(4,1)) +=  2*p.R*(u-uss);
+      outgradient(Eigen::seqN(5,1)) += -2*p.R*(u-uss);
 
-      outhessian(seqN(0,2),seqN(0,2)) +=  2*p.Q;
-      outhessian(seqN(0,2),seqN(2,2)) += -2*p.Q;
-      outhessian(seqN(2,2),seqN(2,2)) +=  2*p.Q;
-      outhessian(seqN(2,2),seqN(0,2)) += -2*p.Q;
-      outhessian(seqN(4,1),seqN(4,1)) +=  2*p.R;
-      outhessian(seqN(5,1),seqN(4,1)) += -2*p.R;
-      outhessian(seqN(5,1),seqN(5,1)) +=  2*p.R;
-      outhessian(seqN(4,1),seqN(5,1)) += -2*p.R;
+      outhessian(Eigen::seqN(0,2), Eigen::seqN(0,2)) +=  2*p.Q;
+      outhessian(Eigen::seqN(0,2), Eigen::seqN(2,2)) += -2*p.Q;
+      outhessian(Eigen::seqN(2,2), Eigen::seqN(2,2)) +=  2*p.Q;
+      outhessian(Eigen::seqN(2,2), Eigen::seqN(0,2)) += -2*p.Q;
+      outhessian(Eigen::seqN(4,1), Eigen::seqN(4,1)) +=  2*p.R;
+      outhessian(Eigen::seqN(5,1), Eigen::seqN(4,1)) += -2*p.R;
+      outhessian(Eigen::seqN(5,1), Eigen::seqN(5,1)) +=  2*p.R;
+      outhessian(Eigen::seqN(4,1), Eigen::seqN(5,1)) += -2*p.R;
 
       return impl(x,xss,u,uss);
     }
