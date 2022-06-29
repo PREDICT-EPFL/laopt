@@ -5,7 +5,7 @@ project(lampc_test)
 include(FetchContent)
 FetchContent_Declare(
         googletest
-        URL https://github.com/google/googletest/archive/86add13493e5c881d7e4ba77fb91c1f57752b3a4.zip
+        URL https://github.com/google/googletest/archive/9406a60c7839052e4944ea4dbc8344762a89f9bd.zip
 )
 # For Windows: Prevent overriding the parent project's compiler/linker settings
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
@@ -45,7 +45,7 @@ target_link_libraries(
 
 add_executable(
   indexedvector_test
-  indexedvector_test.cpp
+        indexed_vector_test.cpp
 )
 target_link_libraries(
   indexedvector_test

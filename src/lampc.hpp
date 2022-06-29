@@ -6,7 +6,7 @@
 
 #include "lampc_utility.hpp"
 #include "lampc_function.hpp"
-#include "indexedvector.hpp"
+#include "indexed_vector.hpp"
 #include "bsmatrix.hpp"
 #include "problem.hpp"
 #include "functions.hpp"
