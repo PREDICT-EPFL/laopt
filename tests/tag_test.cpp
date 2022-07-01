@@ -1,9 +1,8 @@
 #include <iostream>
-#include <type_traits>
-#include <tuple>
 
 #include "lampc.hpp"
 #include "lampc_function_tag.hpp"
+#include "lampc_function_library.hpp"
 
 using namespace lampc::tags;
 
@@ -20,61 +19,53 @@ struct User : public lampc::Differentiable<User<scalar_t>>
   Eigen::Matrix<scalar_t, 2, 1> B{{1},{3}};
 
   // Example of function with Eigen autodiff for jacobian
-  struct Sys : Tag {};
-  template<typename T, typename OutValue>
+  struct Sys {};
+  template<typename T>
   inline void 
-  function_impl(Sys, OutValue&& dotx,
+  function_impl(Sys, Eigen::Ref<state_t<T>> x_dot,
            const Eigen::Ref<const state_t<T>>& x, const Eigen::Ref<const input_t<T>>& u) noexcept
   {
-    dotx = A * x + B * u;
-  }
-
-  // Example of function with parameters
-  struct SysP : Tag {
-    // Add any parameters that the problem may have
-    Eigen::Ref<Eigen::Vector<scalar_t,3>> p;
-    double h;
-
-    SysP(Eigen::Ref<Eigen::Vector<scalar_t,3>> p, double&& h) : 
-      p(p), h(h) {}
-  };
-
-  template<typename T>
-  auto function_impl(SysP&& p, 
-    Eigen::Ref<state_t<T>> dotx, // Output
-    const Eigen::Ref<const state_t<T>>& x, const Eigen::Ref<const input_t<T>>& u) noexcept
-  {
-    p.p << 6,7,8;
-    dotx = p.h*(A*x + B*u);
+    x_dot = A * x + B * u;
   }
 
   // Example of function with user-defined jacobian
-  struct SysX : Tag {};
-  template<typename T, typename OutValue>
+  struct SysX {};
+  template<typename T>
   inline void 
-  function_impl(SysX, OutValue&& dotx,
+  function_impl(SysX, Eigen::Ref<state_t<T>> x_dot,
                 const Eigen::Ref<const state_t<T>>& x, const Eigen::Ref<const input_t<T>>& u) noexcept
   {
-    dotx = A * x + B * u;
+    x_dot = A * x + B * u;
   }
 
   template<typename OutValue, typename OutJacobian>
-  inline void jacobian_impl(SysX, OutValue&& out, OutJacobian&& jac,
+  inline void jacobian_impl(SysX, OutValue& out, OutJacobian& jac,
            const Eigen::Ref<const state_t<scalar_t>>& x, const Eigen::Ref<const input_t<scalar_t>>& u) noexcept
   {
-    function_impl(SysX{}, out, x,u);
+    this->function(SysX{}, out, x,u);
 
     jac(all,seqN(0, nx)) = A;
     jac(all,seqN(nx,nu)) = B;
   }
 
-  struct NLSys : Tag {};
-  template<typename T, typename OutValue>
+  // Example of using RK4 in a user function
+  struct SysRK4 {};
+  template<typename T>
+  inline void
+  function_impl(SysRK4, Eigen::Ref<state_t<T>> x_dot,
+                const Eigen::Ref<const state_t<T>>& x, const Eigen::Ref<const input_t<T>>& u) noexcept
+  {
+    lampc::RK4<User<scalar_t>, double, Sys> rk4_sys(*this, 0.2);
+    rk4_sys.template function(x_dot, x, u);
+  }
+
+  struct NLSys {};
+  template<typename T>
   inline void 
-  function_impl(NLSys, OutValue&& dotx,
+  function_impl(NLSys, Eigen::Ref<state_t<T>> x_dot,
            const Eigen::Ref<const state_t<T>>& x, const Eigen::Ref<const input_t<T>>& u) noexcept
   {
-    dotx = x(0)*u(0)*(A * x + B * u);
+    x_dot = x(0)*u(0)*(A * x + B * u);
   }
 
 };
@@ -83,8 +74,6 @@ struct User : public lampc::Differentiable<User<scalar_t>>
 int main()
 {
   using User = User<double>;
-  using Sys = User::Sys;
-  // using SysX = User::SysX;
 
   User user;
 
@@ -97,25 +86,14 @@ int main()
   Eigen::Vector<double,3> p;
   p << 1,2,3;
 
-  std::cout << "\n=== CALLING Function for sys ===" << std::endl;
-  user.function(Sys{}, val, x,u);
+  std::cout << "\n=== CALLING Function for SYS ===" << std::endl;
+  user.function(User::Sys{}, val, x, u);
   std::cout << "user(Sys, x,u) = " << val.transpose() << std::endl;
 
-  std::cout << "\n=== CALLING Function for sysP ===" << std::endl;
-  user.function(User::SysP{p,0.5}, val, x,u);
-  std::cout << "user(SysP, x,u) = " << val.transpose() << std::endl;
-
   std::cout << "\n=== CALLING Jacobian FOR SYS ===" << std::endl;
-  user.jacobian(Sys{}, val,J, x,u);
+  user.jacobian(User::Sys{}, val, J, x, u);
   std::cout << "Jacobian = \n" << J << std::endl;
   std::cout << "val = " << val.transpose() << std::endl;
-
-  std::cout << "\n=== CALLING Jacobian FOR SYSP ===" << std::endl;
-  p << 1,2,3;
-  user.jacobian(User::SysP{p,0.5}, val,J, x,u);
-  std::cout << "Jacobian = \n" << J << std::endl;
-  std::cout << "val = " << val.transpose() << std::endl;
-  std::cout << "p = " << p.transpose() << std::endl; // Check that there was no copy
 
   std::cout << "\n=== CALLING Function on SYSX ===" << std::endl;
   user.function(User::SysX{}, val, x,u);
@@ -126,73 +104,68 @@ int main()
   std::cout << "val = " << val.transpose() << std::endl;
   std::cout << "Jacobian = \n" << J << std::endl;
 
+    std::cout << "\n=== CALLING Function for SYSRK4 ===" << std::endl;
+    user.function(User::SysRK4{}, val, x, u);
+    std::cout << "user(SysRK4, x,u) = " << val.transpose() << std::endl;
+
+    std::cout << "\n=== CALLING Jacobian FOR SYSRK4 ===" << std::endl;
+    user.jacobian(User::SysRK4{}, val, J, x, u);
+    std::cout << "Jacobian = \n" << J << std::endl;
+    std::cout << "val = " << val.transpose() << std::endl;
+
   std::cout << "\n\n=== TESTING EQ ===" << std::endl;
+  lampc::EQ<User, User::Sys> eq_sys(user);
 
   std::cout << "--- Calling function ---" << std::endl;
   User::state_t<double> xp;
   xp << 1,2;
-  user.function(EQ<User::Sys>{}, val, xp,x,u);
+  eq_sys.function(val, xp, x, u);
   std::cout << "val = " << val.transpose() << std::endl;
 
   std::cout << "--- Testing jacobian ---" << std::endl;
-  Eigen::Matrix<double, 2,5> Jeq;
+  Eigen::Matrix<double, 2, 5> Jeq;
   Jeq.array() = 0;
-  user.jacobian(EQ<User::Sys>{}, val,Jeq, xp,x,u);
-  std::cout << "val = " << val.transpose() << std::endl;
-  std::cout << "Jeq = \n" << Jeq << std::endl;
-
-  std::cout << "--- Calling function with parameters ---" << std::endl;
-  x << 1,2;
-  u << 3;
-  xp << 1,2;
-  user.function(EQ<User::SysP>{p,0.5}, val, xp,x,u);
-  std::cout << "EQ<SysP>(x,u) = " << val.transpose() << std::endl;
-  Jeq.array() = 0;
-  user.jacobian(EQ<User::SysP>{p,0.5}, val,Jeq, xp,x,u);
+  eq_sys.jacobian(val, Jeq, xp, x, u);
   std::cout << "val = " << val.transpose() << std::endl;
   std::cout << "Jeq = \n" << Jeq << std::endl;
 
   std::cout << "\n=== TESTING RK4 ===" << std::endl;
+  lampc::RK4<User, double, User::Sys> rk4_sys(user, 0.2);
 
   std::cout << "--- Evaluation" << std::endl;
-  user.function(RK4<User::Sys, double>{0.2}, val, x,u);
+  rk4_sys.function(val, x, u);
   std::cout << "val = " << val.transpose() << std::endl;
 
   std::cout << "--- Jacobian" << std::endl;
-  user.jacobian(RK4<User::Sys, double>{0.2}, val,J, x,u);
+  rk4_sys.jacobian(val,J, x, u);
   std::cout << "Jacobian = \n" << J << std::endl;
   std::cout << "val = " << val.transpose() << std::endl;
 
   std::cout << "\n=== TESTING RK4 + EQ ===" << std::endl;
+  lampc::EQ<lampc::RK4<User, double, User::Sys>> eq_rk4_sys(rk4_sys);
 
   std::cout << "--- Evaluation" << std::endl;
-  user.function(RK4<User::Sys, double>{0.2}, val, x,u);
+  rk4_sys.function(val, x, u);
   std::cout << "integrated value = " << val.transpose() << std::endl;
   std::cout << "xp = " << xp.transpose() << std::endl;
-  user.function(EQ<RK4<User::Sys, double>>{0.2}, val, xp,x,u);
+  eq_rk4_sys.function(val, xp, x, u);
   std::cout << "eq val = " << val.transpose() << std::endl;
 
   std::cout << "--- Jacobian" << std::endl;
-  user.jacobian(EQ<RK4<User::Sys, double>>{0.2}, val,Jeq, xp,x,u);
-  std::cout << "Jeq = \n" << Jeq << std::endl;
-
-  std::cout << "\n=== TESTING RK4 + EQ + Parameters ===" << std::endl;
-  std::cout << "--- Evaluation" << std::endl;
-  user.function(EQ<RK4<User::SysP, double>>{0.2,p,0.4}, val, xp,x,u);
-  std::cout << "eq val = " << val.transpose() << std::endl;
-
-  std::cout << "--- Jacobian" << std::endl;
-  user.jacobian(EQ<RK4<User::SysP, double>>{0.2,p,0.4}, val,Jeq, xp,x,u);
+  eq_rk4_sys.jacobian(val, Jeq, xp, x, u);
   std::cout << "Jeq = \n" << Jeq << std::endl;
 
   std::cout << "\n=== TESTING RK4 + RK4 + RK4 ===" << std::endl;
+  lampc::RK4<lampc::RK4<User, double, User::Sys>, double> rk4_rk4_sys(rk4_sys, 0.3);
+  lampc::RK4<lampc::RK4<lampc::RK4<User, double, User::Sys>, double>, double> rk4_rk4_rk4_sys(rk4_rk4_sys, 0.4);
+
   std::cout << "--- Evaluation" << std::endl;
-  user.function(RK4<RK4<RK4<User::Sys, double>,double>,double>{0.2,0.3,0.4}, val, x,u);
+  rk4_rk4_rk4_sys.function(val, x, u);
   std::cout << "val = " << val.transpose() << std::endl;
 
   std::cout << "--- Jacobian" << std::endl;
-  user.jacobian(RK4<RK4<RK4<User::Sys, double>,double>,double>{0.2,0.3,0.4}, val,J, x,u);
-  std::cout << "Jeq = \n" << Jeq << std::endl;
+  rk4_rk4_rk4_sys.jacobian(val, J, x, u);
+  std::cout << "Jacobian = \n" << J << std::endl;
 
   std::cout << "\n=== TESTING Weighted sum ===" << std::endl;
   Eigen::Vector<double, 2> w;
@@ -205,7 +178,7 @@ int main()
 
   Eigen::Matrix<double, 3,3> H; 
   H.array() = 0; grad.array() = 0;
-  std::cout << "wsum = " << user.hessian(User::NLSys{}, grad,H, w,x,u) << std::endl;
+  std::cout << "wsum = " << user.hessian(User::NLSys{}, grad,H, w, x, u) << std::endl;
   std::cout << "grad = " << grad.transpose() << std::endl;
   std::cout << "hessian = \n" << H << std::endl;
 
