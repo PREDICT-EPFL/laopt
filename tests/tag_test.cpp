@@ -56,7 +56,7 @@ struct User : public lampc::Differentiable<User<scalar_t>>
                 const Eigen::Ref<const state_t<T>>& x, const Eigen::Ref<const input_t<T>>& u) noexcept
   {
     lampc::RK4<User<scalar_t>, double, Sys> rk4_sys(*this, 0.2);
-    rk4_sys.template function(x_dot, x, u);
+    rk4_sys.function(x_dot, x, u);
   }
 
   struct NLSys {};

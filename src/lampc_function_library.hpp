@@ -30,8 +30,7 @@ struct EQ : public Differentiable<EQ<F, Tag>, true>
     {
         // Jacobian is [-I jac_f]
         constexpr int nx = XP::RowsAtCompileTime;
-        auto F_jac = jac(Eigen::all, Eigen::seq(nx,last));
-        f.jacobian(Tag{}, value, F_jac, x...);
+        f.jacobian(Tag{}, value, jac(Eigen::all, Eigen::seq(nx,last)), x...);
         value -= xp;
 
         using scalar_t = typename Eigen::MatrixBase<XP>::Scalar;

@@ -106,7 +106,7 @@ struct Differentiable
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, Tag, OutValue, OutJacobian, Eigen::MatrixBase<Args>...>() == false && !tagless, void>::type
     jacobian(Tag&& tag, OutValue&& outvalue, OutJacobian&& outjacobian, const Eigen::MatrixBase<Args>&... args)
     {
-        jacobian_impl(std::forward<Tag>(tag), std::forward<OutValue>(outvalue), std::forward<OutJacobian>(outjacobian), args...);
+        jacobian_impl_autodiff(std::forward<Tag>(tag), std::forward<OutValue>(outvalue), std::forward<OutJacobian>(outjacobian), args...);
     }
 
     // delegate jacobian without tag
@@ -114,7 +114,7 @@ struct Differentiable
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, OutValue, OutJacobian, Eigen::MatrixBase<Args>...>() == false && tagless, void>::type
     jacobian(OutValue&& outvalue, OutJacobian&& outjacobian, const Eigen::MatrixBase<Args>&... args)
     {
-        jacobian_impl(DefaultTag{}, std::forward<OutValue>(outvalue), std::forward<OutJacobian>(outjacobian), args...);
+        jacobian_impl_autodiff(DefaultTag{}, std::forward<OutValue>(outvalue), std::forward<OutJacobian>(outjacobian), args...);
     }
 
     // define DefaultTag for jacobian
@@ -153,7 +153,7 @@ struct Differentiable
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_wsum<Derived, Tag, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && !tagless, scalar_t>::type
     wsum(Tag&& tag, const Eigen::MatrixBase<Weight>& w, const Eigen::MatrixBase<Args>&... args)
     {
-        return wsum_impl(std::forward<Tag>(tag), w, args...);
+        return wsum_impl_autodiff(std::forward<Tag>(tag), w, args...);
     }
 
     // delegate wsum without tag
@@ -161,7 +161,7 @@ struct Differentiable
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_wsum<Derived, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && tagless, scalar_t>::type
     wsum(const Eigen::MatrixBase<Weight>& w, const Eigen::MatrixBase<Args>&... args)
     {
-        return wsum_impl(DefaultTag{}, w, args...);
+        return wsum_impl_autodiff(DefaultTag{}, w, args...);
     }
 
     // define DefaultTag for wsum
@@ -200,7 +200,7 @@ struct Differentiable
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, Tag, Gradient, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && !tagless, scalar_t>::type
     gradient(Tag&& tag, Gradient&& gradient, const Eigen::MatrixBase<Weight>& w, const Eigen::MatrixBase<Args>&... args)
     {
-        return gradient_impl(std::forward<Tag>(tag), std::forward<Gradient>(gradient), w, args...);
+        return gradient_impl_autodiff(std::forward<Tag>(tag), std::forward<Gradient>(gradient), w, args...);
     }
 
     // delegate gradient without tag
@@ -208,7 +208,7 @@ struct Differentiable
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, Gradient, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && tagless, scalar_t>::type
     gradient(Gradient&& gradient, const Eigen::MatrixBase<Weight>& w, const Eigen::MatrixBase<Args>&... args)
     {
-        return gradient_impl(DefaultTag{}, std::forward<Gradient>(gradient), w, args...);
+        return gradient_impl_autodiff(DefaultTag{}, std::forward<Gradient>(gradient), w, args...);
     }
 
     // define DefaultTag for gradient
@@ -247,7 +247,7 @@ struct Differentiable
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, Tag, Gradient, Hessian, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && !tagless, scalar_t>::type
     hessian(Tag&& tag, Gradient&& gradient, Hessian&& hessian, const Eigen::MatrixBase<Weight>& w, const Eigen::MatrixBase<Args>&... args)
     {
-        return hessian_impl(std::forward<Tag>(tag), typename Tag::hessian(), gradient,hessian, w, args...);
+        return hessian_impl_autodiff(std::forward<Tag>(tag), gradient, hessian, w, args...);
     }
 
     // delegate hessian without tag
@@ -255,7 +255,7 @@ struct Differentiable
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, Gradient, Hessian, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && tagless, scalar_t>::type
     hessian(Gradient&& gradient, Hessian&& hessian, const Eigen::MatrixBase<Weight>& w, const Eigen::MatrixBase<Args>&... args)
     {
-        return hessian_impl(DefaultTag{}, std::forward<Gradient>(gradient), std::forward<Hessian>(hessian), w, args...);
+        return hessian_impl_autodiff(DefaultTag{}, std::forward<Gradient>(gradient), std::forward<Hessian>(hessian), w, args...);
     }
 
     // define DefaultTag for hessian
@@ -281,9 +281,9 @@ private:
     // Compute the jacobian with eigen autodiff
     template<typename Tag, typename OutValue, typename OutJacobian, typename... Args>
     EIGEN_STRONG_INLINE void
-    jacobian_impl(
+    jacobian_impl_autodiff(
             Tag&& tag, // Function to call
-            OutValue& outvalue, OutJacobian& outjacobian, // Outputs
+            const OutValue& outvalue, const OutJacobian& outjacobian, // Outputs
             const Eigen::MatrixBase<Args>&... args) noexcept // Function arguments
     {
         // Compute the scalar type
@@ -303,8 +303,9 @@ private:
         // Copy out into output variables
         for(int i=0; i<out.rows(); i++)
         {
-            outvalue(i) = out[i].value();
-            outjacobian(i,Eigen::all) = out[i].derivatives().transpose();
+            // We cast away the constness to allow temporary expressions: https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
+            const_cast<OutValue&>(outvalue)(i) = out[i].value();
+            const_cast<OutJacobian&>(outjacobian)(i, Eigen::all) = out[i].derivatives().transpose();
         }
     }
 
@@ -358,10 +359,10 @@ private:
     template<typename Tag, typename Weight, typename Gradient, typename Hessian,
             typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
-    hessian_impl(Tag&& tag,
-                 Gradient& gradient, Hessian& hessian,
-                 const Eigen::MatrixBase<Weight>& weight,
-                 const Eigen::MatrixBase<Args>&... args) noexcept
+    hessian_impl_autodiff(Tag&& tag,
+                          const Gradient& gradient, const Hessian& hessian,
+                          const Eigen::MatrixBase<Weight>& weight,
+                          const Eigen::MatrixBase<Args>&... args) noexcept
     {
         constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
         constexpr size_t num_inputs = meta::sum_template<Args::RowsAtCompileTime...>();
@@ -386,10 +387,11 @@ private:
         for(int i=0; i<num_outputs; i++)
         {
             value += weight(i) * out[i].value().value();
-            gradient += weight(i) * out[i].value().derivatives();
+            // We cast away the constness to allow temporary expressions: https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
+            const_cast<Gradient&>(gradient) += weight(i) * out[i].value().derivatives();
 
             for (int j = 0; j < num_inputs; j++) {
-                hessian(j,Eigen::all) += weight(i) * out[i].derivatives()(j).derivatives().transpose();
+                const_cast<Hessian&>(hessian)(j,Eigen::all) += weight(i) * out[i].derivatives()(j).derivatives().transpose();
             }
         }
 
@@ -451,9 +453,9 @@ private:
       */
     template<typename Tag, typename Weight, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
     inline scalar_t
-    wsum_impl(Tag&& tag,
-              const Eigen::MatrixBase<Weight>& weight,
-              const Eigen::MatrixBase<Args>&... args) noexcept
+    wsum_impl_autodiff(Tag&& tag,
+                       const Eigen::MatrixBase<Weight>& weight,
+                       const Eigen::MatrixBase<Args>&... args) noexcept
     {
         constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
         Eigen::Vector<scalar_t, num_outputs> value;
@@ -467,10 +469,10 @@ private:
     template<typename Tag, typename Weight, typename Gradient,
             typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
     inline scalar_t
-    gradient_impl(Tag&& tag,
-                  Gradient& gradient,
-                  const Eigen::MatrixBase<Weight>& weight,
-                  const Eigen::MatrixBase<Args>&... args) noexcept
+    gradient_impl_autodiff(Tag&& tag,
+                           const Gradient& gradient,
+                           const Eigen::MatrixBase<Weight>& weight,
+                           const Eigen::MatrixBase<Args>&... args) noexcept
     {
         constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
         constexpr size_t num_inputs = meta::sum_template<Args::RowsAtCompileTime...>();
@@ -480,7 +482,8 @@ private:
         Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
         value.array() = 0; jacobian.array() = 0;
         this->jacobian(std::forward<Tag>(tag), value,jacobian, args...);
-        gradient += weight.transpose() * jacobian;
+        // We cast away the constness to allow temporary expressions: https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
+        const_cast<Gradient&>(gradient) += weight.transpose() * jacobian;
         return weight.dot(value);
     }
 
