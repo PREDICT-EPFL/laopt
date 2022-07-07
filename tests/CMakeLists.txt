@@ -44,11 +44,11 @@ target_link_libraries(
 )
 
 add_executable(
-  indexedvector_test
-  indexedvector_test.cpp
+  indexed_vector_test
+  indexed_vector_test.cpp
 )
 target_link_libraries(
-  indexedvector_test
+  indexed_vector_test
   gtest_main
   gtest
 )
