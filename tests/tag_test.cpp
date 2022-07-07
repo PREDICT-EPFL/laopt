@@ -2,9 +2,8 @@
 
 #include "lampc.hpp"
 #include "lampc_function_tag.hpp"
+#include "lampc_functor.hpp"
 #include "lampc_function_library.hpp"
-
-using namespace lampc::tags;
 
 template<typename scalar_t>
 struct User : public lampc::Differentiable<User<scalar_t>>
@@ -44,8 +43,8 @@ struct User : public lampc::Differentiable<User<scalar_t>>
   {
     this->function(SysX{}, out, x,u);
 
-    jac(all,seqN(0, nx)) = A;
-    jac(all,seqN(nx,nu)) = B;
+    jac(Eigen::all, Eigen::seqN(0, nx)) = A;
+    jac(Eigen::all, Eigen::seqN(nx,nu)) = B;
   }
 
   // Example of using RK4 in a user function
@@ -55,7 +54,6 @@ struct User : public lampc::Differentiable<User<scalar_t>>
   function_impl(SysRK4, Eigen::Ref<state_t<T>> x_dot,
                 const Eigen::Ref<const state_t<T>>& x, const Eigen::Ref<const input_t<T>>& u) noexcept
   {
-    lampc::RK4<User<scalar_t>, double, Sys> rk4_sys(*this, 0.2);
     rk4_sys.function(x_dot, x, u);
   }
 
@@ -67,6 +65,10 @@ struct User : public lampc::Differentiable<User<scalar_t>>
   {
     x_dot = x(0)*u(0)*(A * x + B * u);
   }
+
+  lampc::RK4<User<scalar_t>, double, Sys> rk4_sys;
+  lampc::Function<User<scalar_t>, Sys> sys;
+  User() : rk4_sys(*this, 0.2), sys(*this) {}
 
 };
 
@@ -95,6 +97,15 @@ int main()
   std::cout << "Jacobian = \n" << J << std::endl;
   std::cout << "val = " << val.transpose() << std::endl;
 
+  std::cout << "\n=== CALLING Function for SYS FUNCTOR ===" << std::endl;
+  user.sys.function(val, x, u);
+  std::cout << "user(Sys, x,u) = " << val.transpose() << std::endl;
+
+  std::cout << "\n=== CALLING Jacobian FOR SYS FUNCTOR ===" << std::endl;
+  user.sys.jacobian(val, J, x, u);
+  std::cout << "Jacobian = \n" << J << std::endl;
+  std::cout << "val = " << val.transpose() << std::endl;
+
   std::cout << "\n=== CALLING Function on SYSX ===" << std::endl;
   user.function(User::SysX{}, val, x,u);
   std::cout << "val = " << val.transpose() << std::endl;
@@ -104,14 +115,14 @@ int main()
   std::cout << "val = " << val.transpose() << std::endl;
   std::cout << "Jacobian = \n" << J << std::endl;
 
-    std::cout << "\n=== CALLING Function for SYSRK4 ===" << std::endl;
-    user.function(User::SysRK4{}, val, x, u);
-    std::cout << "user(SysRK4, x,u) = " << val.transpose() << std::endl;
+  std::cout << "\n=== CALLING Function for SYSRK4 ===" << std::endl;
+  user.function(User::SysRK4{}, val, x, u);
+  std::cout << "user(SysRK4, x,u) = " << val.transpose() << std::endl;
 
-    std::cout << "\n=== CALLING Jacobian FOR SYSRK4 ===" << std::endl;
-    user.jacobian(User::SysRK4{}, val, J, x, u);
-    std::cout << "Jacobian = \n" << J << std::endl;
-    std::cout << "val = " << val.transpose() << std::endl;
+  std::cout << "\n=== CALLING Jacobian FOR SYSRK4 ===" << std::endl;
+  user.jacobian(User::SysRK4{}, val, J, x, u);
+  std::cout << "Jacobian = \n" << J << std::endl;
+  std::cout << "val = " << val.transpose() << std::endl;
 
   std::cout << "\n\n=== TESTING EQ ===" << std::endl;
   lampc::EQ<User, User::Sys> eq_sys(user);
