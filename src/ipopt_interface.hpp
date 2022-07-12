@@ -92,8 +92,8 @@ public:
 	) override
 	{
 		// Compute bounds on the variables
-		prob.eval_variable_bounds(Eigen::Map<Eigen::VectorX<scalar_t>>(x_l,n), 
-								  Eigen::Map<Eigen::VectorX<scalar_t>>(x_u,n));
+		prob.eval_variable_bounds(Eigen::Map<Eigen::VectorX<scalar_t>>(x_l, n),
+								  Eigen::Map<Eigen::VectorX<scalar_t>>(x_u, n));
 
 		// Compute the constraints with a temporary variable so that we can get the bounds
 		assert(m == prob.constraints.rows() && "Number of constraints does not match ipopt's number of constraints");

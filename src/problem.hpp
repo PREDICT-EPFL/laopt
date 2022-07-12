@@ -623,10 +623,10 @@ template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
 class VariableBoundsEvaluator;
 
 template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
-class ConstraintsEvaluator;
+class VectorConstraintsEvaluator;
 
 template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
-class LagrangianEvaluator;
+class WeightedSumConstraintsEvaluator;
 
 template<typename Matrix, typename Vector>
 struct ProblemInfo
@@ -706,7 +706,7 @@ public:
 
     /**
 	 * Compute the various elements of the problem by calling the 
-	 * user-code. Stores the result in constraints/objective and lagrangian respecitvely
+	 * user-code. Stores the result in constraints/objective and lagrangian respectively
 	 * 
 	 * These calls are only made internally when the Matrix and Vector types manage
 	 * their own memory (i.e., during construction). They should not be called
@@ -715,28 +715,43 @@ public:
     template<typename DType>
     void eval_objective_construction(DType dtype)
     {
-        ObjectiveEvaluator<DType, UserCode, Scalar, Matrix, Vector> objective_evaluator(*this);
+        objective.initialize();
+        objective.set_zero(dtype);
+
+        ObjectiveEvaluator<DType, UserCode, Scalar, Matrix, Vector> objective_evaluator(*this, objective);
         user_code.define_problem(objective_evaluator);
     }
 
     void eval_variable_bounds_construction()
     {
-        VariableBoundsEvaluator<UserCode, Scalar, Matrix, Vector> variable_bounds_evaluator(*this);
+        // We don't initialize the variable bounds because they are already set by the ProblemVariableRegistrar
+        variable_bounds.lb(Eigen::seqN(0, num_variables())).array() = -std::numeric_limits<Scalar>::infinity();
+        variable_bounds.ub(Eigen::seqN(0, num_variables())).array() = std::numeric_limits<Scalar>::infinity();
+
+        VariableBoundsEvaluator<UserCode, Scalar, Matrix, Vector> variable_bounds_evaluator(*this, variable_bounds);
         user_code.define_problem(variable_bounds_evaluator);
     }
     
     template<typename DType>
     void eval_constraints_construction(DType dtype)
     {
-        ConstraintsEvaluator<DType, UserCode, Scalar, Matrix, Vector> constraints_evaluator(*this);
+        constraints.initialize();
+        constraints.set_zero(dtype);
+
+        VectorConstraintsEvaluator<DType, UserCode, Scalar, Matrix, Vector> constraints_evaluator(*this, constraints);
         user_code.define_problem(constraints_evaluator);
     }
 
     template<typename DType>
     void eval_lagrangian_construction(DType dtype)
     {
-        LagrangianEvaluator<DType, UserCode, Scalar, Matrix, Vector> lagrangian_evaluator(*this);
-        user_code.define_problem(lagrangian_evaluator);
+        lagrangian.initialize();
+        lagrangian.set_zero(dtype);
+
+        ObjectiveEvaluator<DType, UserCode, Scalar, Matrix, Vector> lagrangian_objective_evaluator(*this, lagrangian);
+        user_code.define_problem(lagrangian_objective_evaluator);
+        WeightedSumConstraintsEvaluator<DType, UserCode, Scalar, Matrix, Vector> lagrangian_constraints_evaluator(*this, lagrangian);
+        user_code.define_problem(lagrangian_constraints_evaluator);
     }
 
 
@@ -749,16 +764,18 @@ public:
     template<typename DType, typename... Args>
     scalar_t eval_objective(DType dtype,
                             Eigen::Ref<Eigen::VectorX<scalar_t>> var,
-                            Args &... args) {
-        set_decision_variable(var);
-
+                            Args &... args)
+    {
         // Weights for the objective are always 1
         Eigen::VectorX<scalar_t> weights(objective.rows());
         weights.array() = 1;
 
+        set_decision_variable(var);
         objective.set_memory(dtype, weights, args...);
+        objective.initialize();
+        objective.set_zero(dtype);
 
-        ObjectiveEvaluator<DType, UserCode, Scalar, Matrix, Vector> objective_evaluator(*this);
+        ObjectiveEvaluator<DType, UserCode, Scalar, Matrix, Vector> objective_evaluator(*this, objective);
         user_code.define_problem(objective_evaluator);
 
         return objective.value;
@@ -768,8 +785,11 @@ public:
     void eval_variable_bounds(Args &&... args)
     {
         variable_bounds.set_memory(args...);
+        // We don't initialize the variable bounds because they are already set by the ProblemVariableRegistrar
+        variable_bounds.lb(Eigen::seqN(0, num_variables())).array() = -std::numeric_limits<Scalar>::infinity();
+        variable_bounds.ub(Eigen::seqN(0, num_variables())).array() = std::numeric_limits<Scalar>::infinity();
 
-        VariableBoundsEvaluator<UserCode, Scalar, Matrix, Vector> variable_bounds_evaluator(*this);
+        VariableBoundsEvaluator<UserCode, Scalar, Matrix, Vector> variable_bounds_evaluator(*this, variable_bounds);
         user_code.define_problem(variable_bounds_evaluator);
     }
 
@@ -780,8 +800,10 @@ public:
     {
         set_decision_variable(var);
         constraints.set_memory(dtype, args...);
+        constraints.initialize();
+        constraints.set_zero(dtype);
 
-        ConstraintsEvaluator<DType, UserCode, Scalar, Matrix, Vector> constraints_evaluator(*this);
+        VectorConstraintsEvaluator<DType, UserCode, Scalar, Matrix, Vector> constraints_evaluator(*this, constraints);
         user_code.define_problem(constraints_evaluator);
     }
 
@@ -809,10 +831,14 @@ public:
 
         set_decision_variable(var);
         lagrangian.set_memory(dtype, weights, args...);
+        lagrangian.initialize();
+        lagrangian.set_zero(dtype);
 
         // TODO : Evaluate variable bounds in lagrangian function
-        LagrangianEvaluator<DType, UserCode, Scalar, Matrix, Vector> lagrangian_evaluator(*this);
-        user_code.define_problem(lagrangian_evaluator);
+        ObjectiveEvaluator<DType, UserCode, Scalar, Matrix, Vector> lagrangian_objective_evaluator(*this, lagrangian);
+        user_code.define_problem(lagrangian_objective_evaluator);
+        WeightedSumConstraintsEvaluator<DType, UserCode, Scalar, Matrix, Vector> lagrangian_constraints_evaluator(*this, lagrangian);
+        user_code.define_problem(lagrangian_constraints_evaluator);
 
         return lagrangian.value;
     }
@@ -871,7 +897,6 @@ public:
 
         problem.variable_bounds.extend_variables(n);
         problem.variable_bounds.extend_rows(n); // already extend variable_bounds for bounds
-        // TODO: init bounds to [-inf, inf] ?
 
         problem.objective.extend_variables(n);
         problem.constraints.extend_variables(n);
@@ -889,13 +914,11 @@ template<typename DType, typename UserCode, typename Scalar, typename Matrix, ty
 class ObjectiveEvaluator
 {
     ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
+    WeightedSum<Matrix, Vector>& objective;
 
 public:
-    explicit ObjectiveEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem) : problem(problem)
-    {
-        problem.objective.initialize();
-        problem.objective.set_zero(DType{});
-    }
+    explicit ObjectiveEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem, WeightedSum<Matrix, Vector>& objective) :
+        problem(problem), objective(objective) {}
 
     template<int N>
     EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, N>& var) {}
@@ -906,12 +929,12 @@ public:
     {
         static constexpr int n_outputs = FuncInfo<UserCode, Tag, Variable<Scalar, args>...>::num_outputs;
 
-        auto out_indices = Eigen::seqN(problem.objective.weights.rows(), Eigen::fix<n_outputs>);
-        problem.objective.extend_rows(n_outputs);
+        auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
+        objective.extend_rows(n_outputs);
 
-        problem.objective.value += problem.user_code.wsum(std::forward<Tag>(tag),
-                                                          problem.objective.weights(out_indices),
-                                                          vars...);
+        objective.value += problem.user_code.wsum(std::forward<Tag>(tag),
+                                                  objective.weights(out_indices),
+                                                  vars...);
     }
 
     template<typename Tag, int ...args, typename LocalDType = DType>
@@ -920,14 +943,14 @@ public:
     {
         static constexpr int n_outputs = FuncInfo<UserCode, Tag, Variable<Scalar, args>...>::num_outputs;
 
-        auto out_indices = Eigen::seqN(problem.objective.weights.rows(), Eigen::fix<n_outputs>);
+        auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
         auto in_indices = concatenate_indices(vars.indices()...);
-        problem.objective.extend_rows(n_outputs);
+        objective.extend_rows(n_outputs);
 
-        problem.objective.value += problem.user_code.gradient(std::forward<Tag>(tag),
-                                                              problem.objective.gradient(in_indices),
-                                                              problem.objective.weights(out_indices),
-                                                              vars...);
+        objective.value += problem.user_code.gradient(std::forward<Tag>(tag),
+                                                      objective.gradient(in_indices),
+                                                      objective.weights(out_indices),
+                                                      vars...);
     }
 
     template<typename Tag, int ...args, typename LocalDType = DType>
@@ -936,15 +959,15 @@ public:
     {
         static constexpr int n_outputs = FuncInfo<UserCode, Tag, Variable<Scalar, args>...>::num_outputs;
 
-        auto out_indices = Eigen::seqN(problem.objective.weights.rows(), Eigen::fix<n_outputs>);
+        auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
         auto in_indices = concatenate_indices(vars.indices()...);
-        problem.objective.extend_rows(n_outputs);
+        objective.extend_rows(n_outputs);
 
-        problem.objective.value += problem.user_code.hessian(std::forward<Tag>(tag),
-                                                             problem.objective.gradient(in_indices),
-                                                             problem.objective.hessian(in_indices, in_indices),
-                                                             problem.objective.weights(out_indices),
-                                                             vars...);
+        objective.value += problem.user_code.hessian(std::forward<Tag>(tag),
+                                                     objective.gradient(in_indices),
+                                                     objective.hessian(in_indices, in_indices),
+                                                     objective.weights(out_indices),
+                                                     vars...);
     }
 
     template<typename ...Args>
@@ -955,13 +978,11 @@ template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
 class VariableBoundsEvaluator
 {
     ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
+    VectorFunction<Matrix, Vector>& variable_bounds;
 
 public:
-    explicit VariableBoundsEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem) : problem(problem)
-    {
-        // variable_bounds.initialize(); TODO: Why not initialize?
-        problem.variable_bounds.set_zero(Eval{});
-    }
+    explicit VariableBoundsEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem, VectorFunction<Matrix, Vector>& variable_bounds) :
+        problem(problem), variable_bounds(variable_bounds) {}
 
     template<int n>
     EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>& var) {}
@@ -977,16 +998,14 @@ public:
 };
 
 template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
-class ConstraintsEvaluator
+class VectorConstraintsEvaluator
 {
     ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
+    VectorFunction<Matrix, Vector>& constraints;
 
 public:
-    explicit ConstraintsEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem) : problem(problem)
-    {
-        problem.constraints.initialize();
-        problem.constraints.set_zero(DType{});
-    }
+    explicit VectorConstraintsEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem, VectorFunction<Matrix, Vector>& constraints) :
+        problem(problem), constraints(constraints) {}
 
     template<int n>
     EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>& var) {}
@@ -1002,25 +1021,20 @@ public:
 };
 
 template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
-class LagrangianEvaluator
+class WeightedSumConstraintsEvaluator
 {
     ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
+    WeightedSum<Matrix, Vector>& constraints;
 
 public:
-    explicit LagrangianEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem) : problem(problem)
-    {
-        problem.lagrangian.initialize();
-        problem.lagrangian.set_zero(DType{});
-    }
+    explicit WeightedSumConstraintsEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem, WeightedSum<Matrix, Vector>& constraints) :
+        problem(problem), constraints(constraints) {}
 
     template<int n>
     EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>& var) {}
 
     template<typename ...Args>
-    EIGEN_STRONG_INLINE void add_obj(Args ...args)
-    {
-        // TODO
-    }
+    EIGEN_STRONG_INLINE void add_obj(Args ...args) {}
 
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_constr(Args ...args)
@@ -1208,8 +1222,7 @@ operator<<(std::ostream &o, const ProblemInfo<BSMatrixSparsity, BSMatrixDenseCon
     o << "  Non-zeros  : " << objective_sparsity_structure.nonZeros() << std::endl;
 
     o << "Lagrangian    : " << info.lagrangian.hessian.rows() << std::endl;
-    Eigen::SparseMatrix<bool> lagrangian_sparsity_structure = (info.lagrangian.hessian.array() >
-                                                               0).matrix().sparseView();
+    Eigen::SparseMatrix<bool> lagrangian_sparsity_structure = (info.lagrangian.hessian.array() > 0).matrix().sparseView();
     o << "  Non-zeros  : " << lagrangian_sparsity_structure.nonZeros() << std::endl;
     return o;
 }
