@@ -2,20 +2,11 @@
 #define IPOPT_INTERFACE_HPP
 
 #include "Eigen/Dense"
-#include "unsupported/Eigen/AutoDiff"
-#include "eigen_autodiff_fix.hpp"
 
 #include "IpIpoptApplication.hpp"
 #include "IpTNLP.hpp"
 
 using namespace Ipopt;
-
-// void printvec(std::string name, const double* x, int len)
-// {
-//     std::cout << std::setw(10) << name << " = ";
-//     std::cout << std::setfill(' ') << std::fixed << std::setprecision(3);
-//     for(int i=0; i<len; i++) std::cout << std::setw(8) << x[i] << " "; 
-// }
 
 namespace lampc
 {
@@ -44,13 +35,14 @@ public:
 	// TODO: Add initial values for the dual and variable bound duals
 
 	/* Constructor. */
-	Solver_IPOpt(UserProblem& _prob) : prob(_prob), 
-									   init_primal(prob.num_variables()),
-									   init_dual(prob.constraints.rows()),
-									   sol_primal(prob.num_variables())
+	explicit Solver_IPOpt(UserProblem& prob) :
+        prob(prob),
+        init_primal(prob.num_variables()),
+        init_dual(prob.constraints.rows()),
+        sol_primal(prob.num_variables())
 	{ 
-		init_primal.array() = 0; // Default to zero if user doesn't set
-		init_dual.array() = 0;
+		init_primal.setZero(); // Default to zero if user doesn't set
+		init_dual.setZero();
 
 		prob.lagrangian.hessian.allocate_memory(lag_hessian);
 	}
@@ -61,7 +53,7 @@ public:
 	   Index&          nnz_jac_g,
 	   Index&          nnz_h_lag,
 	   IndexStyleEnum& index_style
-	)
+	) override
 	{
 		n = prob.num_variables();
 		m = prob.constraints.rows();
@@ -73,10 +65,16 @@ public:
 		// Iterate over the non-zeros, counting only those in the lower triangular part
 		int nnz = 0;
 		auto S = prob.lagrangian.hessian.sparsity_structure;
-		for (int col=0; col<S.outerSize(); ++col)
-			for (typename Eigen::SparseMatrix<typename decltype(S)::Scalar>::InnerIterator it(S,col); it; ++it)
-				if(it.row() >= it.col()) 
-					nnz++;
+		for (int col = 0; col < S.outerSize(); ++col)
+        {
+            for (typename Eigen::SparseMatrix<typename decltype(S)::Scalar>::InnerIterator it(S, col); it; ++it)
+            {
+                if(it.row() >= it.col()) {
+                    nnz++;
+                }
+            }
+        }
+
 		nnz_h_lag = nnz;
 
 		index_style = C_STYLE; // 0-based indexing
@@ -91,7 +89,7 @@ public:
 	   Index   m,
 	   Number* g_l,
 	   Number* g_u
-	)
+	) override
 	{
 		// Compute bounds on the variables
 		prob.eval_variable_bounds(Eigen::Map<Eigen::VectorX<scalar_t>>(x_l,n), 
@@ -121,13 +119,18 @@ public:
 	   Index   m,
 	   bool    init_lambda,
 	   Number* lambda
-	)
+	) override
 	{
 		// Initialize to user-specified value
-		if(init_x)
-			Eigen::Map<Eigen::VectorX<scalar_t>>(x,n) = init_primal;
-		if(init_lambda)
-			Eigen::Map<Eigen::VectorX<scalar_t>>(lambda,m) = init_dual;
+		if (init_x)
+        {
+            Eigen::Map<Eigen::VectorX<scalar_t>>(x, n) = init_primal;
+        }
+
+		if (init_lambda)
+        {
+            Eigen::Map<Eigen::VectorX<scalar_t>>(lambda, m) = init_dual;
+        }
 		return true;
 	}
  
@@ -136,9 +139,9 @@ public:
 	   const Number* x,
 	   bool          new_x,
 	   Number&       obj_value
-	)
+	) override
 	{
-		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x),n);
+		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x), n);
 		obj_value = prob.eval_objective(lampc::Eval(), var);
 		return true;
 	}
@@ -148,10 +151,10 @@ public:
 	   const Number* x,
 	   bool          new_x,
 	   Number*       grad_f
-	)
+	) override
 	{
-		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x),n);
-		Eigen::Map<Eigen::VectorX<scalar_t>> grad(grad_f,n);
+		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x), n);
+		Eigen::Map<Eigen::VectorX<scalar_t>> grad(grad_f, n);
 		prob.eval_objective(lampc::Gradient(), var, grad);
 		return true;
 	}
@@ -162,10 +165,10 @@ public:
 	   bool          new_x,
 	   Index         m,
 	   Number*       g
-	)
+	) override
 	{
-		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x),n);
-		Eigen::Map<Eigen::VectorX<scalar_t>> constraints(g,m);
+		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x), n);
+		Eigen::Map<Eigen::VectorX<scalar_t>> constraints(g, m);
 		Eigen::VectorX<scalar_t> lb(m);
 		Eigen::VectorX<scalar_t> ub(m);
 		prob.eval_constraints(lampc::Eval(), var, constraints, lb, ub);
@@ -182,31 +185,33 @@ public:
 	   Index*        iRow,
 	   Index*        jCol,
 	   Number*       values
-	)
+	) override
 	{
 		assert(nele_jac == prob.constraints.jacobian.sparsity_structure.nonZeros() && "Number of nonzeros is wrong for the jacobian");
 
-		if( values == NULL )
+		if (values == nullptr)
 		{
 			// return the structure of the jacobian of the constraints
 			auto S = prob.constraints.jacobian.sparsity_structure;
-			int i=0;
-			for (int col=0; col<S.outerSize(); ++col)
-				for (typename Eigen::SparseMatrix<typename decltype(S)::Scalar>::InnerIterator it(S,col); it; ++it)
-				{
-					iRow[i] = it.row();
-					jCol[i] = it.col();
-					i++;
-				}
+			int i = 0;
+			for (int col = 0; col < S.outerSize(); ++col)
+            {
+                for (typename Eigen::SparseMatrix<typename decltype(S)::Scalar>::InnerIterator it(S,col); it; ++it)
+                {
+                    iRow[i] = it.row();
+                    jCol[i] = it.col();
+                    i++;
+                }
+            }
 
 			assert(i == nele_jac &&  "Number of non-zeros in the jacobian is wrong");
 		}
 		else
 		{
 			// return the values of the jacobian of the constraints in the same order as the sparsity was defined
-			Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x),n);
+			Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x), n);
 			Eigen::VectorX<scalar_t> constraints(m); // Value of the constraints (ignored)
-			Eigen::Map<Eigen::VectorX<scalar_t>> jacobian_buffer(values,nele_jac); // Jacobian non-zeros
+			Eigen::Map<Eigen::VectorX<scalar_t>> jacobian_buffer(values, nele_jac); // Jacobian non-zeros
 			// Eigen::VectorX<scalar_t> jacobian_buffer(nele_jac);
 
 			Eigen::VectorX<scalar_t> lb(m); // Upper/lower bounds (ignored)
@@ -232,30 +237,34 @@ public:
 	   Index*        iRow,
 	   Index*        jCol,
 	   Number*       values
-	)
+	) override
 	{
-		if( values == NULL )
+		if (values == nullptr)
 		{
 			// Return the structure of the hessian of the lagrangian. 
 			// This is a symmetric matrix, fill the lower left triangle only.
 
 			auto S = prob.lagrangian.hessian.sparsity_structure;
-			int i=0;
-			for (int col=0; col<S.outerSize(); ++col)
-				for (typename Eigen::SparseMatrix<typename decltype(S)::Scalar>::InnerIterator it(S,col); it; ++it)
-					if( it.row() >= it.col() )
-					{
-						iRow[i] = it.row();
-						jCol[i] = it.col();
-						i++;
-					}			
+			int i = 0;
+			for (int col = 0; col < S.outerSize(); ++col)
+            {
+                for (typename Eigen::SparseMatrix<typename decltype(S)::Scalar>::InnerIterator it(S, col); it; ++it)
+                {
+                    if( it.row() >= it.col() )
+                    {
+                        iRow[i] = it.row();
+                        jCol[i] = it.col();
+                        i++;
+                    }
+                }
+            }
 
 			assert(i == nele_hess &&  "Number of non-zeros in the hessian is wrong");
 		}
 		else
 		{
 			// return the values of the hessian of the lagrangian in the same order as the sparsity was defined
-			Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x),n);
+			Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x), n);
 
 			Eigen::VectorX<scalar_t> gradient(n); // Ignored
 
@@ -265,14 +274,18 @@ public:
 			// Copy the lower triangular part into the ipopt buffer
 			// auto S = prob.lagrangian.hessian.sparsity_structure;
 			auto S = lag_hessian;
-			int i=0;
-			for (int col=0; col<S.outerSize(); ++col)
-				for (typename Eigen::SparseMatrix<typename decltype(S)::Scalar>::InnerIterator it(S,col); it; ++it)
-					if( it.row() >= it.col() )
-					{
-						values[i] = it.value();
-						i++;
-					}
+			int i = 0;
+			for (int col = 0; col < S.outerSize(); ++col)
+            {
+                for (typename Eigen::SparseMatrix<typename decltype(S)::Scalar>::InnerIterator it(S, col); it; ++it)
+                {
+                    if( it.row() >= it.col() )
+                    {
+                        values[i] = it.value();
+                        i++;
+                    }
+                }
+            }
 	   }
 
 	   return true;
@@ -290,7 +303,7 @@ public:
 	   Number                     obj_value,
 	   const IpoptData*           ip_data,
 	   IpoptCalculatedQuantities* ip_cq
-	)
+	) override
 	{
 		sol_primal = Eigen::Map<const Eigen::VectorX<Number>>(x, n);
 		prob.set_decision_variable(sol_primal);

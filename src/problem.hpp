@@ -8,10 +8,18 @@ namespace lampc
 {
 
 /**
+ * Tags to dispatch the relevant problem function evaluations
+ */
+struct Eval {};
+struct Jacobian {};
+struct Gradient {};
+struct Hessian {};
+
+/**
  * We create three copies of the problem (and the contained constraints, objective, etc). 
  * 
  * The first is a Sparsity version, in which the variable information is also propagated with every function
- * call and passed to BSMatrixTape objects to develop the spasity structures.
+ * call and passed to BSMatrixTape objects to develop the sparsity structures.
  *
  * The second is a Tape version, where the same process is followed to record the copy operations.
  * 
@@ -35,26 +43,25 @@ class Variable : public IndexedVector<Eigen::Map<Eigen::Vector<_scalar_t, _size>
 public:
 	using scalar_t = _scalar_t;
 
-	Variable() : Base(NULL) // The map initially points to NULL
-		{}
+	Variable() : Base(NULL) {} // The map initially points to NULL
 
 	constexpr int size() { return m_size; }
-	bool is_valid() { return this->data() != NULL; }
+	bool has_data() { return this->data() != NULL; }
 
 	/**
 	 * offset = offset of this variable into the global decision variable.
-	 * 
+	 *
 	 * Returns a callback function used to set the optimization variable
 	 */
 	auto register_variable(int offset)
 	{
 		this->set_offset(offset);
 
-		auto p_this = this;
-    return [p_this](scalar_t* master_variable) 
-    { 
-    	new (p_this) Eigen::Map<Eigen::Vector<scalar_t,m_size>>(master_variable + p_this->offset());
-    };
+        Variable<_scalar_t, _size>* p_this = this;
+        return [p_this](scalar_t* master_variable)
+        {
+            new (p_this) Eigen::Map<Eigen::Vector<scalar_t, m_size>>(master_variable + p_this->offset());
+        };
 	}
 };
 
@@ -103,9 +110,18 @@ public:
 	Matrix jacobian;
 	Vector lb, ub;
 	int num_variables = 0;
-	inline int rows() {return m_rows;}
 
-	/**
+    VectorFunction()
+    {
+        initialize();
+    }
+
+    inline int rows()
+    {
+        return m_rows;
+    }
+
+    /**
 	 * Must be called before each evaluation
 	 * 
 	 * Resets the size of the function to zero, but keeps the number of variables.
@@ -113,7 +129,7 @@ public:
 	void initialize()
 	{
 		value.resize(0,1);
-		jacobian.resize(0,num_variables);
+		jacobian.resize(0, num_variables);
 		lb.resize(0,1);
 		ub.resize(0,1);
 	}
@@ -121,13 +137,20 @@ public:
 	/**
 	 * Set all values to zero
 	 */
-	void set_zero()
+	void set_zero(Eval)
 	{
 		value.set_zero();
-		jacobian.set_zero();
 		lb.set_zero();
 		ub.set_zero();
 	}
+
+    void set_zero(Jacobian)
+    {
+        value.set_zero();
+        jacobian.set_zero();
+        lb.set_zero();
+        ub.set_zero();
+    }
 
 	/**
 	 * Sets the memory buffers for all the elements of the VectorFunction
@@ -135,9 +158,9 @@ public:
 	 * Mem must contain appropriate memory elements jacobian, value, lb and ub
 	 */
 	void set_memory(Eval, 
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _value, 
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _lb,
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _ub)
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _value,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _lb,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _ub)
 	{
 		value.set_buffer(_value);
 		lb.set_buffer(_lb);
@@ -145,19 +168,23 @@ public:
 	}
 
 	void set_memory(Jacobian, 
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _value, 
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _lb,
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _ub,
-									Eigen::SparseMatrix<scalar_t>& _jacobian)
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _value,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _lb,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _ub,
+                    Eigen::SparseMatrix<scalar_t>& _jacobian)
 	{
-		set_memory(Jacobian(), _value,_lb,_ub,Eigen::Map<Eigen::VectorX<scalar_t>>(_jacobian.valuePtr(),_jacobian.nonZeros()));
+		set_memory(Jacobian{},
+                   _value,
+                   _lb,
+                   _ub,
+                   Eigen::Map<Eigen::VectorX<scalar_t>>(_jacobian.valuePtr(), _jacobian.nonZeros()));
 	}
 
 	void set_memory(Jacobian, 
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _value, 
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _lb,
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _ub,
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _jacobian_buffer)	
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _value,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _lb,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _ub,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _jacobian_buffer)
 	{
 		jacobian.set_target(_jacobian_buffer);
 		value.set_buffer(_value);
@@ -175,28 +202,26 @@ public:
 	// Put computed values into the structure mem
 	void set_memory(Eval, FunctionMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Eval(), mem.value, mem.lb, mem.ub);
+		set_memory(lampc::Eval{}, mem.value, mem.lb, mem.ub);
 	}
 	void set_memory(Jacobian, FunctionMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Jacobian(), mem.value, mem.lb, mem.ub, mem.jacobian_buffer);
+		set_memory(lampc::Jacobian{}, mem.value, mem.lb, mem.ub, mem.jacobian_buffer);
 	}
 	void set_memory(FunctionMemory<scalar_t>& mem)
 	{
 		set_memory(mem.lb, mem.ub);
 	}
 
-	VectorFunction() { initialize(); }
-
 	/**
-	 * Constructor for tape recording or deloyment
+	 * Constructor for tape recording or deployment
 	 */
-	template<typename _Matrix, typename _Vector>
-	VectorFunction(const FunctionInfo<_Matrix, _Vector>& info) :
+	template<typename TMatrix, typename TVector>
+	explicit VectorFunction(const FunctionInfo<TMatrix, TVector>& info) :
 		value(info.value), jacobian(info.jacobian), lb(info.lb), ub(info.ub)
 	{
 		initialize();
-		set_zero();
+		set_zero(Jacobian{});
 
 		m_rows = info.rows;
 	}
@@ -207,7 +232,7 @@ public:
 	void extend_rows(int rows)
 	{
 		value.extend(rows,0);
-    jacobian.extend(rows, 0);
+        jacobian.extend(rows, 0);
 		lb.extend(rows,0);
 		ub.extend(rows,0);		
 	}
@@ -222,42 +247,42 @@ public:
 	}
 
 
-	/**
-	 * Add constraints to the problem
-	 */
-	template<typename F, typename... Vars, typename scalar_t = meta::get_scalar_t<Vars...>>
-	auto add(lampc::Eval, F f, Vars... vars)
-	{
-		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
-
-		auto out_indices = Eigen::seqN(value.rows(), Eigen::fix<num_outputs>);
-		this->extend_rows(num_outputs);
-
-    f(lampc::Eval(), value(out_indices), vars...);
-    return make_boundref(*this, out_indices);
-	}
-
-	template<typename F, typename... Vars, typename scalar_t = meta::get_scalar_t<Vars...>>
-	auto add(lampc::Jacobian, F f, Vars... vars)
-	{
-		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
-
-		auto out_indices = Eigen::seqN(value.rows(), Eigen::fix<num_outputs>);
-		auto in_indices = concatenate_indices(vars.indices()...);
-		this->extend_rows(num_outputs);
-
-    f(lampc::Jacobian(), value(out_indices), jacobian(out_indices, in_indices), vars...);
-    return make_boundref(*this, out_indices);
-	}
-
-	/**
-	 * Used to set variable bounds
-	 */
-	template<typename Var, typename scalar_t = typename Var::Scalar>
-	auto add(Var var)
-	{
-    return make_boundref(*this, var.indices());
-	}
+//	/**
+//	 * Add constraints to the problem
+//	 */
+//	template<typename F, typename... Vars, typename scalar_t = meta::get_scalar_t<Vars...>>
+//	auto add(lampc::Eval, F f, Vars... vars)
+//	{
+//		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
+//
+//		auto out_indices = Eigen::seqN(value.rows(), Eigen::fix<num_outputs>);
+//		this->extend_rows(num_outputs);
+//
+//    f(lampc::Eval{}, value(out_indices), vars...);
+//    return make_boundref(*this, out_indices);
+//	}
+//
+//	template<typename F, typename... Vars, typename scalar_t = meta::get_scalar_t<Vars...>>
+//	auto add(lampc::Jacobian, F f, Vars... vars)
+//	{
+//		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
+//
+//		auto out_indices = Eigen::seqN(value.rows(), Eigen::fix<num_outputs>);
+//		auto in_indices = concatenate_indices(vars.indices()...);
+//		this->extend_rows(num_outputs);
+//
+//    f(lampc::Jacobian{}, value(out_indices), jacobian(out_indices, in_indices), vars...);
+//    return make_boundref(*this, out_indices);
+//	}
+//
+//	/**
+//	 * Used to set variable bounds
+//	 */
+//	template<typename Var, typename scalar_t = typename Var::Scalar>
+//	auto add(Var var)
+//	{
+//    return make_boundref(*this, var.indices());
+//	}
 
 
 	FunctionInfo<Matrix,Vector> generate()
@@ -271,20 +296,6 @@ public:
 		info.value = value.generate();
 		info.lb = lb.generate();
 		info.ub = ub.generate();
-
-		// std::cout << std::endl << std::endl;
-		// std::cout << "info.rows = " << info.rows << std::endl;
-		// std::cout << "info.variables = " << info.variables << std::endl;
-
-		// std::cout << "type(info.jacobian) = " << type_name<decltype(info.jacobian)>() << std::endl;
-		// // std::cout << "type(info.value) = " << type_name<decltype(info.value)>() << std::endl;
-		// // std::cout << "type(info.lb) = " << type_name<decltype(info.lb)>() << std::endl;
-		// // std::cout << "type(info.ub) = " << type_name<decltype(info.ub)>() << std::endl;
-
-		// // std::cout << "jacobian.shape = " << info.jacobian.rows() << " x " << info.jacobian.cols() << std::endl;
-		// std::cout << "value.shape = " << info.value.rows << " x " << info.value.cols << std::endl;
-		// std::cout << "lb.shape = " << info.lb.rows << " x " << info.lb.cols << std::endl;
-		// std::cout << "ub.shape = " << info.ub.rows << " x " << info.ub.cols << std::endl;
 
 		return info;
 	}
@@ -380,66 +391,6 @@ BoundRef<Index,Function> operator==(const Derived& eq, BoundRef<Index,Function> 
 	return f;
 }
 
-
-/**
- * A class used by the WeightedSum class to enumlate
- * the behaviour of BoundRef when a constraint is being 
- * called as a weighted sum (i.e, for the lagrangian)
- * 
- * In this case, we want any calls on the bounds to just
- * be ignored.
- */
-struct BoundRefFake
-{
-	struct ignoreme
-	{
-		BoundRefFake& operator=(BoundRefFake& other)  { return other; }
-		BoundRefFake& operator=(BoundRefFake&& other) { return other; }
-	};
-
-	ignoreme lb;
-	ignoreme ub;
-
-	BoundRefFake() {}
-};
-
-/**
- * Constraint functions
- */
-template<typename Derived>
-BoundRefFake operator<=(BoundRefFake f, const Eigen::MatrixBase<Derived>& ub) { return f; }
-
-template<typename Derived>
-BoundRefFake operator<=(const Eigen::MatrixBase<Derived>& lb, BoundRefFake f) { return f; }
-
-template<typename Derived>
-BoundRefFake operator>=(const Eigen::MatrixBase<Derived>& ub, BoundRefFake f) { return f; }
-
-template<typename Derived>
-BoundRefFake operator>=(BoundRefFake f, const Eigen::MatrixBase<Derived>& lb) { return f; }
-
-template<typename Derived>
-BoundRefFake operator==(BoundRefFake f, const Eigen::MatrixBase<Derived>& eq) { return f; }
-
-template<typename Derived>
-BoundRefFake operator==(const Eigen::MatrixBase<Derived>& eq, BoundRefFake f) { return f; }
-
-template<typename scalar_t>
-BoundRefFake operator<=(BoundRefFake f, const scalar_t ub) { return f; }
-template<typename scalar_t>
-BoundRefFake operator<=(const scalar_t lb, BoundRefFake f) { return f; }
-template<typename scalar_t>
-BoundRefFake operator>=(const scalar_t ub, BoundRefFake f) { return f; }
-template<typename scalar_t>
-BoundRefFake operator>=(BoundRefFake f, const scalar_t lb) { return f; }
-template<typename scalar_t>
-BoundRefFake operator==(BoundRefFake f, const scalar_t eq) { return f; }
-template<typename scalar_t>
-BoundRefFake operator==(const scalar_t eq, BoundRefFake f) { return f; }
-
-
-
-
 /**
  * Information about a weighted sum function.
  * 
@@ -468,15 +419,49 @@ class WeightedSum
 
 public:
 	using scalar_t = typename Vector::scalar_t;
-	Matrix hessian;
+
+    Vector weights;
+    scalar_t value;
 	Vector gradient;
-	scalar_t value;
-	Vector weights;
+    Matrix hessian;
 
 	int num_variables = 0;
-	inline int rows() {return m_rows;}
 
-public:
+    /**
+     * Sparsity discovery constructor
+     */
+    WeightedSum()
+    {
+        initialize();
+    }
+
+    /**
+     * Constructor for tape recording or deployment
+     */
+    template<typename TMatrix, typename TVector>
+    explicit WeightedSum(const WeightedSumInfo<TMatrix, TVector>& info) :
+            weights(info.weights), gradient(info.gradient), hessian(info.hessian)
+    {
+        initialize();
+        set_zero(Hessian{});
+
+        m_rows = info.rows;
+    }
+
+    /**
+	 * Must be called before each evaluation
+	 */
+    void initialize()
+    {
+        hessian.resize(num_variables, num_variables);
+        gradient.resize(num_variables, 1);
+        weights.resize(0, 1);
+    }
+
+    inline int rows()
+    {
+        return m_rows;
+    }
 
 	/**
 	 * Increase the number of rows in the function
@@ -495,16 +480,6 @@ public:
 		gradient.extend(variables, 0);
 
 		num_variables += variables;
-	}
-
-	/**
-	 * Must be called before each evaluation
-	 */
-	void initialize()
-	{
-		hessian.resize(num_variables, num_variables);
-		gradient.resize(num_variables, 1);
-		weights.resize(0, 1);
 	}
 
 	/**
@@ -531,118 +506,97 @@ public:
 	/**
 	 * Sets the memory buffers for all the elements of the WeightedSum
 	 */
-	void set_memory(Eval, 
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _weights)
+	void set_memory(Eval, Eigen::Ref<Eigen::VectorX<scalar_t>> _weights)
 	{
 		weights.set_buffer(_weights);
 	}
 
-	void set_memory(Gradient, 
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _weights,
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _gradient)
+	void set_memory(Gradient,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _weights,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _gradient)
 	{
 		weights.set_buffer(_weights);
 		gradient.set_buffer(_gradient);
 	}
 
-	void set_memory(Hessian, 
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _weights,
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _gradient,
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _hessian_buffer)
+	void set_memory(Hessian,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _weights,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _gradient,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _hessian_buffer)
 	{
 		weights.set_buffer(_weights);
 		gradient.set_buffer(_gradient);
 		hessian.set_target(_hessian_buffer);
 	}
 
-	void set_memory(Hessian, 
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _weights,
-									Eigen::Ref<Eigen::VectorX<scalar_t>> _gradient,
-									Eigen::SparseMatrix<scalar_t>& _hessian)
+	void set_memory(Hessian,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _weights,
+                    Eigen::Ref<Eigen::VectorX<scalar_t>> _gradient,
+                    Eigen::SparseMatrix<scalar_t>& _hessian)
 	{
-		set_memory(Hessian(), _weights, _gradient, Eigen::Map<Eigen::VectorX<scalar_t>>(_hessian.valuePtr(), _hessian.nonZeros()));
+		set_memory(Hessian{}, _weights, _gradient, Eigen::Map<Eigen::VectorX<scalar_t>>(_hessian.valuePtr(), _hessian.nonZeros()));
 	}
 
-	void set_memory(Eval, Eigen::Ref<Eigen::VectorX<scalar_t>> weights, WeightedSumMemory<scalar_t>& mem) 
+	void set_memory(Eval, Eigen::Ref<Eigen::VectorX<scalar_t>> _weights, WeightedSumMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Eval(), weights);
+		set_memory(lampc::Eval{}, _weights);
 	}
 	
-	void set_memory(Gradient, Eigen::Ref<Eigen::VectorX<scalar_t>> weights, WeightedSumMemory<scalar_t>& mem) 
+	void set_memory(Gradient, Eigen::Ref<Eigen::VectorX<scalar_t>> _weights, WeightedSumMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Eval(), weights, mem.gradient);
+		set_memory(lampc::Eval{}, _weights, mem.gradient);
 	}
-	void set_memory(Hessian, Eigen::Ref<Eigen::VectorX<scalar_t>> weights, WeightedSumMemory<scalar_t>& mem) 
+	void set_memory(Hessian, Eigen::Ref<Eigen::VectorX<scalar_t>> _weights, WeightedSumMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Hessian(), weights, mem.gradient, mem.hessian_buffer);
-	}
-
-
-
-	/**
-	 * Sparsity discovery constructor
-	 */
-	WeightedSum() { initialize(); }
-
-	/**
-	 * Constructor for tape recording or deloyment
-	 */
-	template<typename _Matrix, typename _Vector>
-	WeightedSum(const WeightedSumInfo<_Matrix, _Vector>& info) :
-		hessian(info.hessian), gradient(info.gradient), weights(info.weights)
-	{
-		initialize();
-		set_zero(Hessian{});
-
-		m_rows = info.rows;
+		set_memory(lampc::Hessian{}, _weights, mem.gradient, mem.hessian_buffer);
 	}
 
-	template<typename F, typename... Vars>
-	BoundRefFake add(lampc::Eval, F f, Vars... vars)
-	{
-		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
-
-		auto out_indices = Eigen::seqN(weights.rows(), Eigen::fix<num_outputs>);
-		this->extend_rows(num_outputs);
-
-    value += f.weightedsum(lampc::Eval(), weights(out_indices), vars...);
-    return BoundRefFake();
-	}
-
-	template<typename F, typename... Vars>
-	BoundRefFake add(lampc::Gradient, F f, Vars... vars)
-	{
-		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
-
-		auto out_indices = Eigen::seqN(weights.rows(), Eigen::fix<num_outputs>);
-		auto in_indices = concatenate_indices(vars.indices()...);
-		this->extend_rows(num_outputs);
-
-    value += f.weightedsum(lampc::Gradient(), gradient(in_indices), weights(out_indices), vars...);
-    return BoundRefFake();
-	}
-
-	template<typename F, typename... Vars>
-	BoundRefFake add(lampc::Hessian, F f, Vars... vars)
-	{
-		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
-
-		auto out_indices = Eigen::seqN(weights.rows(), Eigen::fix<num_outputs>);
-		auto in_indices = concatenate_indices(vars.indices()...);
-		this->extend_rows(num_outputs);
-
-    value += f.weightedsum(lampc::Hessian(), 
-    	       							 gradient(in_indices), hessian(in_indices, in_indices), 
-    											 weights(out_indices), vars...);
-    return BoundRefFake();
-	}
-
-	// Defaults to hessian computation
-	template<typename F, typename... Vars>
-	BoundRefFake add(F f, Vars... vars)
-	{
-		return add(lampc::Hessian(), f, vars...);
-	}	
+//	template<typename F, typename... Vars>
+//	BoundRefFake add(lampc::Eval, F f, Vars... vars)
+//	{
+//		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
+//
+//		auto out_indices = Eigen::seqN(weights.rows(), Eigen::fix<num_outputs>);
+//		this->extend_rows(num_outputs);
+//
+//    value += f.weightedsum(lampc::Eval{}, weights(out_indices), vars...);
+//    return BoundRefFake();
+//	}
+//
+//	template<typename F, typename... Vars>
+//	BoundRefFake add(lampc::Gradient, F f, Vars... vars)
+//	{
+//		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
+//
+//		auto out_indices = Eigen::seqN(weights.rows(), Eigen::fix<num_outputs>);
+//		auto in_indices = concatenate_indices(vars.indices()...);
+//		this->extend_rows(num_outputs);
+//
+//    value += f.weightedsum(lampc::Gradient{}, gradient(in_indices), weights(out_indices), vars...);
+//    return BoundRefFake();
+//	}
+//
+//	template<typename F, typename... Vars>
+//	BoundRefFake add(lampc::Hessian, F f, Vars... vars)
+//	{
+//		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
+//
+//		auto out_indices = Eigen::seqN(weights.rows(), Eigen::fix<num_outputs>);
+//		auto in_indices = concatenate_indices(vars.indices()...);
+//		this->extend_rows(num_outputs);
+//
+//    value += f.weightedsum(lampc::Hessian{},
+//    	       							 gradient(in_indices), hessian(in_indices, in_indices),
+//    											 weights(out_indices), vars...);
+//    return BoundRefFake();
+//	}
+//
+//	// Defaults to hessian computation
+//	template<typename F, typename... Vars>
+//	BoundRefFake add(F f, Vars... vars)
+//	{
+//		return add(lampc::Hessian{}, f, vars...);
+//	}
 
 	WeightedSumInfo<Matrix,Vector> generate()
 	{
@@ -659,64 +613,20 @@ public:
 	}
 };
 
-template<typename Vector>
-struct VariableBoundsInfo
-{
-	int num_variables;
-	typename Vector::Info lb;
-	typename Vector::Info ub;
-};
+template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
+class ProblemVariableRegistrar;
 
-// /**
-//  * An object that holds the bounds for the variables
-//  */
-// template<typename Vector>
-// class VariableBounds
-// {
-// 	Vector lb, ub;
+template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
+class ObjectiveEvaluator;
 
-// public:
+template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
+class VariableBoundsEvaluator;
 
-// 	VariableBounds()
-// 	{
-// 		initialize();
-// 	}
+template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
+class ConstraintsEvaluator;
 
-// 	template<typename Info>
-// 	VariableBounds(Info& info) :
-// 			lb(info.lb), ub(info.ub)
-// 	{
-// 		initialize();
-// 	}
-
-// 	initialize()
-// 	{
-// 		lb.resize(0,1);
-// 		ub.resize(0,1);
-// 	}
-
-// 	void extend_variables(int n)
-// 	{
-// 		lb.extend(n,0);
-// 		ub.extend(n,0);
-// 	}
-
-// 	using Info = VariableBoundsInfo<Vector>;
-// 	auto generate()
-// 	{
-// 		Info info;
-
-// 		info.lb = lb.generate();
-// 		info.ub = ub.generate();
-
-// 		info.num_variables = num_variables();
-
-// 		return info;
-// 	}
-
-// 	void operator()xxxx
-// };
-
+template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
+class LagrangianEvaluator;
 
 template<typename Matrix, typename Vector>
 struct ProblemInfo
@@ -735,92 +645,44 @@ class ProblemBase
 {
 public:
 	using scalar_t = Scalar;
+    using objective_t = WeightedSum<Matrix, Vector>;
+    using variable_bounds_t = VectorFunction<Matrix, Vector>;
+    using constraint_t = VectorFunction<Matrix, Vector>;
+    using lagrangian_t = WeightedSum<Matrix, Vector>;
 
-	// Callbacks used to register the global decision variable with each variable
-	std::vector<std::function<void(scalar_t*)>> variable_callbacks;
+    UserCode& user_code;
 
-	int m_num_variables = 0;
+    objective_t objective;
+    variable_bounds_t variable_bounds;
+    constraint_t constraints;
+    lagrangian_t lagrangian;
 
-	/**
-	 * UserCode object must define three functions:
-	 * 
-	 *   template<typename OptProblem>
-	 *   void define_variables(OptProblem& problem)
-	 * 
-	 *   template<typename Constraints, typename Dtype>
-	 *   void eval_constraints(Dtype dtype, Constraints& con)
-	 * 
-	 *   template<typename Objective, typename Dtype>
-	 *   void eval_objective(Dtype dtype, Objective& obj)
-	 */
-	UserCode& usercode;
+    // Callbacks used to register the global decision variable with each variable
+    std::vector<std::function<void(scalar_t*)>> variable_callbacks;
+
+    int m_num_variables = 0;
 
 public:
 
 	/**
 	 * Default constructor for sparsity discovery
 	 */
-	ProblemBase(UserCode& _usercode) : usercode(_usercode)
+	explicit ProblemBase(UserCode& user_code) : user_code(user_code)
 	{
-		usercode.define_variables(*this);
+        ProblemVariableRegistrar<UserCode, Scalar, Matrix, Vector> problem_variable_registrar(*this);
+		user_code.define_problem(problem_variable_registrar);
 	}
 
 	/**
 	 * Constructor for tape recording and deployment
 	 */
-	template<typename _Matrix, typename _Vector>
-	ProblemBase(UserCode& _usercode, const ProblemInfo<_Matrix,_Vector>& info) : 
-		usercode(_usercode),
-		constraints(info.constraints), objective(info.objective), lagrangian(info.lagrangian), variable_bounds(info.variable_bounds)
+	template<typename TMatrix, typename TVector>
+	explicit ProblemBase(UserCode& user_code, const ProblemInfo<TMatrix, TVector>& info) :
+		user_code(user_code),
+        objective(info.objective), variable_bounds(info.variable_bounds), constraints(info.constraints), lagrangian(info.lagrangian)
 	{
-		usercode.define_variables(*this);
-	}
-
-	using constraint_t = VectorFunction<Matrix, Vector>;
-	using objective_t = WeightedSum<Matrix, Vector>;
-	using lagrangian_t = WeightedSum<Matrix, Vector>;
-	using variablebounds_t = VectorFunction<Matrix, Vector>;
-
-	constraint_t constraints;
-	objective_t objective;
-	lagrangian_t lagrangian;
-	variablebounds_t variable_bounds;
-
-	/**
-	 * Compute the various elements of the problem by calling the 
-	 * user-code. Stores the result in constraints/objective and lagrangian respecitvely
-	 * 
-	 * These calls are only made internally when the Matrix and Vector types manage
-	 * their own memory (i.e., during construction). They should not be called
-	 * by the user or during deployment.
-	 */
-	template<typename DType> void __eval_constraints_construction(DType dtype) 
-	{
-		constraints.initialize();
-		constraints.set_zero();
-		usercode.eval_constraints(dtype, constraints);
-	}
-
-	void __eval_variable_bounds_construction() 
-	{
-		// variable_bounds.initialize();
-		variable_bounds.set_zero();
-		usercode.eval_variable_bounds(variable_bounds);
-	}
-
-	template<typename DType> void __eval_objective_construction(DType dtype) 
-	{
-		objective.initialize();
-		objective.set_zero(dtype);
-		usercode.eval_objective(dtype, objective);
-	}
-
-	template<typename DType> void __eval_lagrangian_construction(DType dtype) 
-	{
-		lagrangian.initialize();
-		lagrangian.set_zero(dtype);
-		usercode.eval_objective(dtype, lagrangian);
-		usercode.eval_constraints(dtype, lagrangian);
+        ProblemVariableRegistrar<UserCode, Scalar, Matrix, Vector> problem_variable_registrar(*this);
+        user_code.define_problem(problem_variable_registrar);
 	}
 
 	/**
@@ -828,17 +690,54 @@ public:
 	 */
 	int num_equalities()
 	{
-	  Eigen::VectorX<scalar_t> _value(constraints.rows());
-	  Eigen::VectorX<scalar_t> _lb(constraints.rows());
-	  Eigen::VectorX<scalar_t> _ub(constraints.rows());
-	  Eigen::VectorX<scalar_t> _var(num_variables());
-	  eval_constraints(Eval(), _var, _value, _lb, _ub);
+        Eigen::VectorX<scalar_t> _value(constraints.rows());
+        Eigen::VectorX<scalar_t> _lb(constraints.rows());
+        Eigen::VectorX<scalar_t> _ub(constraints.rows());
+        Eigen::VectorX<scalar_t> _var(num_variables());
+        eval_constraints(Eval{}, _var, _value, _lb, _ub);
 
-	  int n=0;
-	  for(int i=0; i<_lb.rows(); i++)
-	  	if(_lb[i] == _ub[i]) n++;
-	  return n;
+        int n = 0;
+        for (int i = 0; i < _lb.rows(); i++)
+        {
+            if (_lb[i] == _ub[i]) n++;
+        }
+        return n;
 	}
+
+    /**
+	 * Compute the various elements of the problem by calling the 
+	 * user-code. Stores the result in constraints/objective and lagrangian respecitvely
+	 * 
+	 * These calls are only made internally when the Matrix and Vector types manage
+	 * their own memory (i.e., during construction). They should not be called
+	 * by the user or during deployment.
+	 */
+    template<typename DType>
+    void eval_objective_construction(DType dtype)
+    {
+        ObjectiveEvaluator<DType, UserCode, Scalar, Matrix, Vector> objective_evaluator(*this);
+        user_code.define_problem(objective_evaluator);
+    }
+
+    void eval_variable_bounds_construction()
+    {
+        VariableBoundsEvaluator<UserCode, Scalar, Matrix, Vector> variable_bounds_evaluator(*this);
+        user_code.define_problem(variable_bounds_evaluator);
+    }
+    
+    template<typename DType>
+    void eval_constraints_construction(DType dtype)
+    {
+        ConstraintsEvaluator<DType, UserCode, Scalar, Matrix, Vector> constraints_evaluator(*this);
+        user_code.define_problem(constraints_evaluator);
+    }
+
+    template<typename DType>
+    void eval_lagrangian_construction(DType dtype)
+    {
+        LagrangianEvaluator<DType, UserCode, Scalar, Matrix, Vector> lagrangian_evaluator(*this);
+        user_code.define_problem(lagrangian_evaluator);
+    }
 
 
 	/**
@@ -847,108 +746,92 @@ public:
 	 * 
 	 * Mem must be compatible with set_memory
 	 */
-  template<typename DType, typename... Args> 
-  void eval_constraints(DType dtype, 
-  										  Eigen::Ref<Eigen::VectorX<scalar_t>> var, 
-  										  Args&... args)
-  {
-	  set_decision_variable(var);
-  	constraints.set_memory(dtype, args...);
-  	constraints.initialize();
-  	usercode.eval_constraints(dtype, constraints);
-  }
+    template<typename DType, typename... Args>
+    scalar_t eval_objective(DType dtype,
+                            Eigen::Ref<Eigen::VectorX<scalar_t>> var,
+                            Args &... args) {
+        set_decision_variable(var);
 
-  template<typename... Args> 
-  void eval_variable_bounds(Args&&... args)
-  {
-  	variable_bounds.set_memory(args...);
-  	variable_bounds.set_zero();
-  	// variable_bounds.initialize();
-  	usercode.eval_variable_bounds(variable_bounds);
-  }
+        // Weights for the objective are always 1
+        Eigen::VectorX<scalar_t> weights(objective.rows());
+        weights.array() = 1;
 
-  template<typename DType, typename... Args> 
-  scalar_t eval_objective(DType dtype, 
-  										Eigen::Ref<Eigen::VectorX<scalar_t>> var, 
-  									  Args&... args)
-  {
-	  set_decision_variable(var);
+        objective.set_memory(dtype, weights, args...);
 
-	  // Weights for the objective are always 1
-		Eigen::VectorX<scalar_t> weights(objective.rows());
-		weights.array() = 1;
+        ObjectiveEvaluator<DType, UserCode, Scalar, Matrix, Vector> objective_evaluator(*this);
+        user_code.define_problem(objective_evaluator);
 
-  	objective.set_memory(dtype, weights, args...);
-  	objective.initialize();
-    objective.set_zero(dtype);
-  	usercode.eval_objective(dtype, objective);
-  	return objective.value;
-  }
+        return objective.value;
+    }
 
-  /**
-   * Compute the lagrangian function.
-   * 
-   * Note that we actually compute the lagrangian of
-   *   L(prim,dual) = obj(prim) + dual'*g(prima)
-   * i.e., we ignore the variable bounds.
-   * This is done at the moment because IPOpt only uses the hessian of the lagrangian, so it
-   * doesn't matter, but this needs to be fixed.
-   */
-  template<typename DType, typename... Args> 
-  scalar_t eval_lagrangian(DType dtype, 
-  										     Eigen::Ref<Eigen::VectorX<scalar_t>> var, 
-  										     scalar_t obj_factor, // Weight to multiply the objective by [normally 1]
-  										     Eigen::Ref<Eigen::VectorX<scalar_t>> dual, // Dual variable
-  									       Args&... args)
-  {
-  	assert(dual.rows() == constraints.rows() && "Dual vector is the wrong length");
+    template<typename... Args>
+    void eval_variable_bounds(Args &&... args)
+    {
+        variable_bounds.set_memory(args...);
 
-		Eigen::VectorX<scalar_t> weights(lagrangian.rows());
-		weights(Eigen::seqN(0,objective.rows())).array() = obj_factor;
-		weights.tail(constraints.rows()) = dual;
+        VariableBoundsEvaluator<UserCode, Scalar, Matrix, Vector> variable_bounds_evaluator(*this);
+        user_code.define_problem(variable_bounds_evaluator);
+    }
 
-	  set_decision_variable(var);
-  	lagrangian.set_memory(dtype, weights, args...);
-  	lagrangian.initialize();
-    lagrangian.set_zero(dtype);
+    template<typename DType, typename... Args>
+    void eval_constraints(DType dtype,
+                          Eigen::Ref<Eigen::VectorX<scalar_t>> var,
+                          Args &... args)
+    {
+        set_decision_variable(var);
+        constraints.set_memory(dtype, args...);
 
-  	usercode.eval_objective(dtype, lagrangian);
-  	usercode.eval_constraints(dtype, lagrangian);
+        ConstraintsEvaluator<DType, UserCode, Scalar, Matrix, Vector> constraints_evaluator(*this);
+        user_code.define_problem(constraints_evaluator);
+    }
 
-// TODO : Evaluate variable bounds in lagrangian function
+    /**
+     * Compute the lagrangian function.
+     *
+     * Note that we actually compute the lagrangian of
+     *   L(prim,dual) = obj(prim) + dual'*g(prima)
+     * i.e., we ignore the variable bounds.
+     * This is done at the moment because IPOpt only uses the hessian of the lagrangian, so it
+     * doesn't matter, but this needs to be fixed.
+     */
+    template<typename DType, typename... Args>
+    scalar_t eval_lagrangian(DType dtype,
+                             Eigen::Ref<Eigen::VectorX<scalar_t>> var,
+                             scalar_t obj_factor, // Weight to multiply the objective by [normally 1]
+                             Eigen::Ref<Eigen::VectorX<scalar_t>> dual, // Dual variable
+                             Args &... args)
+    {
+        assert(dual.rows() == constraints.rows() && "Dual vector is the wrong length");
 
-  	return lagrangian.value;
-  }
+        Eigen::VectorX<scalar_t> weights(lagrangian.rows());
+        weights(Eigen::seqN(0, objective.rows())).array() = obj_factor;
+        weights.tail(constraints.rows()) = dual;
 
+        set_decision_variable(var);
+        lagrangian.set_memory(dtype, weights, args...);
 
-	/**
-	 * Add the variable to the optimization problem.
-	 * 
-	 * Order in which they're added determines their order in the global
-	 * decision variable
-	 */
-	template<int n>
-	void add_variable(Variable<scalar_t, n>& var)
-	{
-		variable_callbacks.push_back(var.register_variable(m_num_variables));
-		m_num_variables += n;
+        // TODO : Evaluate variable bounds in lagrangian function
+        LagrangianEvaluator<DType, UserCode, Scalar, Matrix, Vector> lagrangian_evaluator(*this);
+        user_code.define_problem(lagrangian_evaluator);
 
-		constraints.extend_variables(n);
-		objective.extend_variables(n);
-		lagrangian.extend_variables(n);
-		variable_bounds.extend_variables(n);
-		variable_bounds.extend_rows(n); // The rows of the variable_bounds are the variables, so this one is backwards
-	}
+        return lagrangian.value;
+    }
 
-	int num_variables() { return m_num_variables; }
+	int num_variables()
+    {
+        return m_num_variables;
+    }
 
 	/**
 	 * Use the memory in var as the global decision variable
 	 */	
 	void set_decision_variable(Eigen::Ref<Eigen::VectorX<scalar_t>> var)
 	{
-		assert(var.rows() >= num_variables() && "Decision variable is the wrong size");		
-		for(auto& call : variable_callbacks) call(var.data());
+		assert(var.rows() == num_variables() && "Decision variable is the wrong size");
+		for(auto& call : variable_callbacks)
+        {
+            call(var.data());
+        }
 	}
 
 	/**
@@ -972,15 +855,189 @@ public:
 	}
 };
 
+template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
+class ProblemVariableRegistrar
+{
+    ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
+
+public:
+    explicit ProblemVariableRegistrar(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem) : problem(problem) {}
+
+    template<int n>
+    EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>& var)
+    {
+        problem.variable_callbacks.push_back(var.register_variable(problem.m_num_variables));
+        problem.m_num_variables += n;
+
+        problem.variable_bounds.extend_variables(n);
+        problem.variable_bounds.extend_rows(n); // already extend variable_bounds for bounds
+        // TODO: init bounds to [-inf, inf] ?
+
+        problem.objective.extend_variables(n);
+        problem.constraints.extend_variables(n);
+        problem.lagrangian.extend_variables(n);
+    }
+
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_obj(Args ...args) {}
+
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_constr(Args ...args) {}
+};
+
+template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
+class ObjectiveEvaluator
+{
+    ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
+
+public:
+    explicit ObjectiveEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem) : problem(problem)
+    {
+        problem.objective.initialize();
+        problem.objective.set_zero(DType{});
+    }
+
+    template<int N>
+    EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, N>& var) {}
+
+    template<typename Tag, int ...args, typename LocalDType = DType>
+    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value>::type
+    add_obj(Tag&& tag, Variable<Scalar, args>& ...vars)
+    {
+        static constexpr int n_outputs = FuncInfo<UserCode, Tag, Variable<Scalar, args>...>::num_outputs;
+
+        auto out_indices = Eigen::seqN(problem.objective.weights.rows(), Eigen::fix<n_outputs>);
+        problem.objective.extend_rows(n_outputs);
+
+        problem.objective.value += problem.user_code.wsum(std::forward<Tag>(tag),
+                                                          problem.objective.weights(out_indices),
+                                                          vars...);
+    }
+
+    template<typename Tag, int ...args, typename LocalDType = DType>
+    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Gradient>::value>::type
+    add_obj(Tag&& tag, Variable<Scalar, args>& ...vars)
+    {
+        static constexpr int n_outputs = FuncInfo<UserCode, Tag, Variable<Scalar, args>...>::num_outputs;
+
+        auto out_indices = Eigen::seqN(problem.objective.weights.rows(), Eigen::fix<n_outputs>);
+        auto in_indices = concatenate_indices(vars.indices()...);
+        problem.objective.extend_rows(n_outputs);
+
+        problem.objective.value += problem.user_code.gradient(std::forward<Tag>(tag),
+                                                              problem.objective.gradient(in_indices),
+                                                              problem.objective.weights(out_indices),
+                                                              vars...);
+    }
+
+    template<typename Tag, int ...args, typename LocalDType = DType>
+    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Hessian>::value>::type
+    add_obj(Tag&& tag, Variable<Scalar, args>& ...vars)
+    {
+        static constexpr int n_outputs = FuncInfo<UserCode, Tag, Variable<Scalar, args>...>::num_outputs;
+
+        auto out_indices = Eigen::seqN(problem.objective.weights.rows(), Eigen::fix<n_outputs>);
+        auto in_indices = concatenate_indices(vars.indices()...);
+        problem.objective.extend_rows(n_outputs);
+
+        problem.objective.value += problem.user_code.hessian(std::forward<Tag>(tag),
+                                                             problem.objective.gradient(in_indices),
+                                                             problem.objective.hessian(in_indices, in_indices),
+                                                             problem.objective.weights(out_indices),
+                                                             vars...);
+    }
+
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_constr(Args ...args) {}
+};
+
+template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
+class VariableBoundsEvaluator
+{
+    ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
+
+public:
+    explicit VariableBoundsEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem) : problem(problem)
+    {
+        // variable_bounds.initialize(); TODO: Why not initialize?
+        problem.variable_bounds.set_zero(Eval{});
+    }
+
+    template<int n>
+    EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>& var) {}
+
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_obj(Args ...args) {}
+
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_constr(Args ...args)
+    {
+        // TODO
+    }
+};
+
+template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
+class ConstraintsEvaluator
+{
+    ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
+
+public:
+    explicit ConstraintsEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem) : problem(problem)
+    {
+        problem.constraints.initialize();
+        problem.constraints.set_zero(DType{});
+    }
+
+    template<int n>
+    EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>& var) {}
+
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_obj(Args ...args) {}
+
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_constr(Args ...args)
+    {
+        // TODO
+    }
+};
+
+template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
+class LagrangianEvaluator
+{
+    ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
+
+public:
+    explicit LagrangianEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem) : problem(problem)
+    {
+        problem.lagrangian.initialize();
+        problem.lagrangian.set_zero(DType{});
+    }
+
+    template<int n>
+    EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>& var) {}
+
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_obj(Args ...args)
+    {
+        // TODO
+    }
+
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_constr(Args ...args)
+    {
+        // TODO
+    }
+};
+
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
 using Sparsity = ProblemBase<UserCode, scalar_t, BSMatrixSparsity, BSMatrixDenseConstruction<scalar_t>>;
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
-using SparsityInfo = typename Sparsity<UserCode,scalar_t>::Info;
+using SparsityInfo = typename Sparsity<UserCode, scalar_t>::Info;
 
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
 using Tape = ProblemBase<UserCode, scalar_t, BSMatrixTape, BSMatrixDenseConstruction<scalar_t>>;
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
-using TapeInfo = typename Tape<UserCode,scalar_t>::Info;
+using TapeInfo = typename Tape<UserCode, scalar_t>::Info;
 
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
 using Problem = ProblemBase<UserCode, scalar_t, BSMatrix<scalar_t>, BSMatrixDenseDeployment<scalar_t>>;
@@ -989,50 +1046,50 @@ using Problem = ProblemBase<UserCode, scalar_t, BSMatrix<scalar_t>, BSMatrixDens
  * Generates sparsity information for the given user code.
  */
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
-SparsityInfo<UserCode> generate_sparsity(UserCode& usercode)
+SparsityInfo<UserCode> generate_sparsity(UserCode& user_code)
 {
-	Sparsity<UserCode,scalar_t> prob(usercode);
+	Sparsity<UserCode, scalar_t> prob(user_code);
 
-  Eigen::VectorX<scalar_t> var(prob.num_variables());
-  var.array() = 0;
-  prob.set_decision_variable(var);
+    Eigen::VectorX<scalar_t> var(prob.num_variables());
+    var.setZero();
+    prob.set_decision_variable(var);
 
-  prob.__eval_constraints_construction(Jacobian());
-  prob.__eval_variable_bounds_construction();
-  prob.__eval_objective_construction(Hessian());
-  prob.__eval_lagrangian_construction(Hessian());
+    prob.eval_constraints_construction(Jacobian{});
+    prob.eval_variable_bounds_construction();
+    prob.eval_objective_construction(Hessian{});
+    prob.eval_lagrangian_construction(Hessian{});
 
-  return prob.generate();
+    return prob.generate();
 }
 
 /**
  * Generates tape information for the given user code.
  */
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
-TapeInfo<UserCode> generate_tape(UserCode& usercode, SparsityInfo<UserCode> sparsity)
+TapeInfo<UserCode> generate_tape(UserCode& user_code, SparsityInfo<UserCode> sparsity)
 {
-	Tape<UserCode,scalar_t> prob(usercode, sparsity);
+	Tape<UserCode, scalar_t> prob(user_code, sparsity);
 
-  Eigen::VectorX<scalar_t> var(prob.num_variables());
-  var.array() = 0;
-  prob.set_decision_variable(var);
+    Eigen::VectorX<scalar_t> var(prob.num_variables());
+    var.setZero();
+    prob.set_decision_variable(var);
 
-  prob.__eval_constraints_construction(Jacobian());
-  prob.__eval_variable_bounds_construction();
-  prob.__eval_objective_construction(Hessian());
-  prob.__eval_lagrangian_construction(Hessian());
+    prob.eval_constraints_construction(Jacobian{});
+    prob.eval_variable_bounds_construction();
+    prob.eval_objective_construction(Hessian{});
+    prob.eval_lagrangian_construction(Hessian{});
 
-  return prob.generate();
+    return prob.generate();
 }
 
 /**
  * Generates tape and sparsity information for the given user code, and then creates a problem.
  */
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
-Problem<UserCode> generate(UserCode& usercode)
+Problem<UserCode> generate(UserCode& user_code)
 {
-	auto tape = generate_tape(usercode, generate_sparsity(usercode));
-	return Problem<UserCode>(usercode, tape);
+    TapeInfo<UserCode> tape = generate_tape(user_code, generate_sparsity(user_code));
+    return Problem<UserCode>(user_code, tape);
 }
 
 /**
@@ -1040,29 +1097,31 @@ Problem<UserCode> generate(UserCode& usercode)
  * a VectorFunction if the memory isn't held externally.
  */
 template<typename scalar_t>
-struct FunctionMemory
-{
-	Eigen::SparseMatrix<scalar_t> jacobian;
-	Eigen::VectorX<scalar_t> value;
-	Eigen::VectorX<scalar_t> lb;
-	Eigen::VectorX<scalar_t> ub;
+struct FunctionMemory {
+    Eigen::SparseMatrix<scalar_t> jacobian;
+    Eigen::VectorX<scalar_t> value;
+    Eigen::VectorX<scalar_t> lb;
+    Eigen::VectorX<scalar_t> ub;
 
-	// Pointer to the valuePtr of the jacobian 
-	Eigen::Map<Eigen::VectorX<scalar_t>> jacobian_buffer; 
+    // Pointer to the valuePtr of the jacobian
+    Eigen::Map<Eigen::VectorX<scalar_t>> jacobian_buffer;
 
-	template<typename Matrix, typename Vector>
-	FunctionMemory(VectorFunction<Matrix,Vector>& f) :
-		value(f.rows(),1), lb(f.rows(),1), ub(f.rows(),1), jacobian_buffer(NULL,0)
-	{
-		f.jacobian.allocate_memory(jacobian);
-		new (&jacobian_buffer) Eigen::Map<Eigen::VectorX<scalar_t>>(jacobian.valuePtr(),jacobian.nonZeros());
+    template<typename Matrix, typename Vector>
+    explicit FunctionMemory(VectorFunction<Matrix, Vector> &f) :
+        value(f.rows(), 1),
+        lb(f.rows(), 1),
+        ub(f.rows(), 1),
+        jacobian_buffer(NULL, 0)
+    {
+        f.jacobian.allocate_memory(jacobian);
+        new (&jacobian_buffer) Eigen::Map<Eigen::VectorX<scalar_t>>(jacobian.valuePtr(), jacobian.nonZeros());
 
-		// Set this memory as the buffer for the function
-		f.jacobian.set_target(jacobian);
-		f.value.set_buffer(value);
-		f.lb.set_buffer(lb);
-		f.ub.set_buffer(ub);
-	}
+        // Set this memory as the buffer for the function
+        f.jacobian.set_target(jacobian);
+        f.value.set_buffer(value);
+        f.lb.set_buffer(lb);
+        f.ub.set_buffer(ub);
+    }
 };
 
 
@@ -1081,13 +1140,13 @@ struct WeightedSumMemory
 	Eigen::Map<Eigen::VectorX<scalar_t>> hessian_buffer; 
 
 	template<typename WSum>
-	WeightedSumMemory(WSum& w) :
+	explicit WeightedSumMemory(WSum& w) :
         gradient(w.num_variables),
         weights(w.rows()),
-        hessian_buffer(NULL,0)
+        hessian_buffer(NULL, 0)
 	{
 		w.hessian.allocate_memory(hessian);
-		new (&hessian_buffer) Eigen::Map<Eigen::VectorX<scalar_t>>(hessian.valuePtr(),hessian.nonZeros());
+		new (&hessian_buffer) Eigen::Map<Eigen::VectorX<scalar_t>>(hessian.valuePtr(), hessian.nonZeros());
 
 		// Set this memory as the buffer for the function
 		w.hessian.set_target(hessian);
@@ -1101,82 +1160,78 @@ struct WeightedSumMemory
  * a Problem if the memory isn't held externally.
  */
 template<typename scalar_t>
-struct ProblemMemory
-{
-	FunctionMemory<scalar_t> constraints;
-	WeightedSumMemory<scalar_t> objective;
-	WeightedSumMemory<scalar_t> lagrangian;
-	FunctionMemory<scalar_t> variable_bounds;
+struct ProblemMemory {
+    FunctionMemory<scalar_t> constraints;
+    WeightedSumMemory<scalar_t> objective;
+    WeightedSumMemory<scalar_t> lagrangian;
+    FunctionMemory<scalar_t> variable_bounds;
 
-  Eigen::VectorX<scalar_t> var;
+    Eigen::VectorX<scalar_t> var;
 
-	template<typename Problem>
-	ProblemMemory(Problem& prob) :
-			constraints(prob.constraints),
-			variable_bounds(prob.variable_bounds),
-      objective(prob.objective),
-			lagrangian(prob.lagrangian),
-			var(prob.num_variables())
-	{
-		// Zero everything
-		prob.constraints.initialize();
-		// prob.variable_bounds.initialize();
-		prob.variable_bounds.set_zero();
-		prob.objective.initialize();
-		prob.lagrangian.initialize();
-	  var.array() = 0;
-	  prob.set_decision_variable(var);
+    template<typename Problem>
+    explicit ProblemMemory(Problem &prob) :
+        constraints(prob.constraints),
+        variable_bounds(prob.variable_bounds),
+        objective(prob.objective),
+        lagrangian(prob.lagrangian),
+        var(prob.num_variables())
+    {
+        // Zero everything
+        prob.constraints.initialize();
+        // prob.variable_bounds.initialize();
+        prob.variable_bounds.set_zero();
+        prob.objective.initialize();
+        prob.lagrangian.initialize();
+        var.array() = 0;
+        prob.set_decision_variable(var);
 
-	  for(int i=0; i<objective.hessian.nonZeros(); i++) objective.hessian.valuePtr()[i] = i;
-	  for(int i=0; i<constraints.jacobian.nonZeros(); i++) constraints.jacobian.valuePtr()[i] = i;
-	  for(int i=0; i<lagrangian.hessian.nonZeros(); i++) lagrangian.hessian.valuePtr()[i] = i;
-	}
+        for (int i = 0; i < objective.hessian.nonZeros(); i++) objective.hessian.valuePtr()[i] = i;
+        for (int i = 0; i < constraints.jacobian.nonZeros(); i++) constraints.jacobian.valuePtr()[i] = i;
+        for (int i = 0; i < lagrangian.hessian.nonZeros(); i++) lagrangian.hessian.valuePtr()[i] = i;
+    }
 };
 
-
-
 template <typename scalar_t>
-std::ostream& operator<<(std::ostream& o, const ProblemInfo<BSMatrixSparsity,BSMatrixDenseConstruction<scalar_t>>& info)
-{
-	o << "==== Problem Sparsity Information ====\n";
-	o << "Variables    : " << info.num_variables << std::endl;
+std::ostream &
+operator<<(std::ostream &o, const ProblemInfo<BSMatrixSparsity, BSMatrixDenseConstruction<scalar_t>> &info) {
+    o << "==== Problem Sparsity Information ====\n";
+    o << "Variables    : " << info.num_variables << std::endl;
 
-	o << "Constraints  : " << info.constraints.rows << std::endl;
-  Eigen::SparseMatrix<bool> sparsity_structure = (info.constraints.jacobian.array() > 0).matrix().sparseView();  
-  o << "  Non-zeros  : " << sparsity_structure.nonZeros() << std::endl;
+    o << "Constraints  : " << info.constraints.rows << std::endl;
+    Eigen::SparseMatrix<bool> sparsity_structure = (info.constraints.jacobian.array() > 0).matrix().sparseView();
+    o << "  Non-zeros  : " << sparsity_structure.nonZeros() << std::endl;
 
-	o << "Variable bnds: " << info.variable_bounds.rows << std::endl;
+    o << "Variable bnds: " << info.variable_bounds.rows << std::endl;
 
-	o << "Objective    : " << info.objective.hessian.rows() << std::endl;
-  Eigen::SparseMatrix<bool> objective_sparsity_structure = (info.objective.hessian.array() > 0).matrix().sparseView();  
-  o << "  Non-zeros  : " << objective_sparsity_structure.nonZeros() << std::endl;
+    o << "Objective    : " << info.objective.hessian.rows() << std::endl;
+    Eigen::SparseMatrix<bool> objective_sparsity_structure = (info.objective.hessian.array() > 0).matrix().sparseView();
+    o << "  Non-zeros  : " << objective_sparsity_structure.nonZeros() << std::endl;
 
-	o << "Lagrangian    : " << info.lagrangian.hessian.rows() << std::endl;
-  Eigen::SparseMatrix<bool> lagrangian_sparsity_structure = (info.lagrangian.hessian.array() > 0).matrix().sparseView();  
-  o << "  Non-zeros  : " << lagrangian_sparsity_structure.nonZeros() << std::endl;
-  return o;
+    o << "Lagrangian    : " << info.lagrangian.hessian.rows() << std::endl;
+    Eigen::SparseMatrix<bool> lagrangian_sparsity_structure = (info.lagrangian.hessian.array() >
+                                                               0).matrix().sparseView();
+    o << "  Non-zeros  : " << lagrangian_sparsity_structure.nonZeros() << std::endl;
+    return o;
 }
 
 template <typename scalar_t>
 std::ostream& operator<<(std::ostream& o, const ProblemInfo<BSMatrixTape,BSMatrixDenseConstruction<scalar_t>>& info)
 {
 	o << "==== Problem Tape Information ====\n";
-	o << "Variables    : " << info.num_variables << std::endl;
-	o << "Variable bnds: " << info.variable_bounds.rows << std::endl;
-	o << "Constraints  : " << info.constraints.rows << std::endl;
-  o << "  Non-zeros  : " << info.constraints.jacobian.sparsity_structure.nonZeros() << std::endl;
-  o << "  Tape length: " << info.constraints.jacobian.copy_segments.size() << std::endl;
-	o << "Objective    : " << info.objective.rows << std::endl;
-  o << "  Non-zeros  : " << info.objective.hessian.sparsity_structure.nonZeros() << std::endl;
-  o << "  Tape length: " << info.objective.hessian.copy_segments.size() << std::endl;
-	o << "Lagrangian   : " << info.lagrangian.rows << std::endl;
-  o << "  Non-zeros  : " << info.lagrangian.hessian.sparsity_structure.nonZeros() << std::endl;
-  o << "  Tape length: " << info.lagrangian.hessian.copy_segments.size() << std::endl;
+    o << "Variables    : " << info.num_variables << std::endl;
+    o << "Variable bnds: " << info.variable_bounds.rows << std::endl;
+    o << "Constraints  : " << info.constraints.rows << std::endl;
+    o << "  Non-zeros  : " << info.constraints.jacobian.sparsity_structure.nonZeros() << std::endl;
+    o << "  Tape length: " << info.constraints.jacobian.copy_segments.size() << std::endl;
+    o << "Objective    : " << info.objective.rows << std::endl;
+    o << "  Non-zeros  : " << info.objective.hessian.sparsity_structure.nonZeros() << std::endl;
+    o << "  Tape length: " << info.objective.hessian.copy_segments.size() << std::endl;
+    o << "Lagrangian   : " << info.lagrangian.rows << std::endl;
+    o << "  Non-zeros  : " << info.lagrangian.hessian.sparsity_structure.nonZeros() << std::endl;
+    o << "  Tape length: " << info.lagrangian.hessian.copy_segments.size() << std::endl;
 
-  return o;
+    return o;
 }
-
-
 
 template <class T, std::size_t N>
 std::ostream& operator<<(std::ostream& o, const std::array<T, N>& arr)
@@ -1184,8 +1239,6 @@ std::ostream& operator<<(std::ostream& o, const std::array<T, N>& arr)
     copy(arr.cbegin(), arr.cend(), std::ostream_iterator<T>(o, " "));
     return o;
 }
-
-
 
 };
 

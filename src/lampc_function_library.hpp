@@ -1,7 +1,6 @@
 #ifndef LAMPC_LAMPC_FUNCTION_LIBRARY_HPP
 #define LAMPC_LAMPC_FUNCTION_LIBRARY_HPP
 
-#include "lampc.hpp"
 #include "lampc_function_tag.hpp"
 
 namespace lampc {

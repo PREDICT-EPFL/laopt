@@ -84,8 +84,9 @@ public:
     }
 
     template<typename T>
-    inline void dynamics_impl(const Eigen::Ref<const state_t<T>> &x, const Eigen::Ref<const control_t<T>> &u,
-                              Eigen::Ref<state_t<T>> xdot) const noexcept
+    inline void dynamics_impl(Eigen::Ref<state_t<T>> xdot,
+                              const Eigen::Ref<const state_t<T>> &x,
+                              const Eigen::Ref<const control_t<T>> &u) const noexcept
     {
 //         Linear(ized) dynamics
 //        xdot = A.template cast<T>() * (x - x_trim.template cast<T>()) +
@@ -98,8 +99,9 @@ public:
 //        xdot *= p(0); // Time-optimal ocp
     }
     template<typename T>
-    inline void lagrange_term_impl(const Eigen::Ref<const state_t <T>> &x, const Eigen::Ref<const control_t <T>> &u,
-                                   T &lagrange) noexcept
+    inline void lagrange_term_impl(T &lagrange,
+                                   const Eigen::Ref<const state_t <T>> &x,
+                                   const Eigen::Ref<const control_t <T>> &u) noexcept
     {
         T non_control_cost;
         get_non_control_cost(x, non_control_cost);
@@ -111,7 +113,7 @@ public:
     }
 
     template<typename T>
-    inline void mayer_term_impl(const Eigen::Ref<const state_t <T>> &x, T &mayer) noexcept
+    inline void mayer_term_impl(T &mayer, const Eigen::Ref<const state_t <T>> &x) noexcept
     {
         T non_control_cost;
         get_non_control_cost(x, non_control_cost);

@@ -1,10 +1,49 @@
 #ifndef __LAMPC__FUNCTION_TAG_HPP
 #define __LAMPC__FUNCTION_TAG_HPP
 
+#include <Eigen/Dense>
+#include <unsupported/Eigen/AutoDiff>
+#include "eigen_autodiff_fix.hpp"
+
 namespace lampc
 {
 
 struct DefaultTag {};
+
+/**
+ * This construct selects the return type of the user defined function.
+ * It first tries to find the function with Tag. If this fails is tries to select the functionality without Tag.
+ * If this also fails it just returns std::false_type which is going to be caught at compile time.
+ */
+template<typename F, typename Tag, typename... Vars>
+static auto user_function_return_t_pre_selector(int) -> decltype(std::declval<F>().function_impl(Tag{}, std::declval<Vars>()...));
+template<typename F, typename Tag, typename... Vars>
+static auto user_function_return_t_pre_selector(long) -> decltype(std::declval<F>().function_impl(std::declval<Vars>()...));
+template<typename F, typename Tag, typename... Vars>
+static auto user_function_return_t_selector(int) -> decltype(user_function_return_t_pre_selector<F, Tag, Vars...>(0));
+template<typename F, typename Tag, typename... Vars>
+static auto user_function_return_t_selector(long) -> std::false_type;
+
+template<typename F, typename Tag, typename... Vars>
+struct FuncInfo
+{
+    using raw_return_t = decltype(user_function_return_t_selector<F, Tag, Vars...>(0));
+    static_assert(!std::is_same<raw_return_t, std::false_type>::value || std::is_same<Tag, DefaultTag>::value, "It seems like there is a missing function_impl!");
+
+    static constexpr int num_inputs = meta::sum_template<meta::matrix_info<Vars>::RowsAtCompileTime...>();
+    static constexpr int num_outputs = meta::matrix_info<raw_return_t>::RowsAtCompileTime;
+
+    using scalar_t = typename meta::matrix_info<raw_return_t>::Scalar;
+
+    using return_t = Eigen::Vector<scalar_t, num_outputs>;
+    using jacobian_t = Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
+    using gradient_t = Eigen::Vector<scalar_t, num_inputs>;
+    using hessian_t = Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
+
+    using is_return_matrix = typename meta::matrix_info<raw_return_t>::is_matrix_t;
+
+    static_assert(num_outputs > 0 && num_inputs > 0, "The function cannot have a dynamic size.");
+};
 
 /**
  * Base class (CRTP) that provides the functions:
@@ -25,41 +64,67 @@ struct DefaultTag {};
 template<typename Derived, bool tagless = false>
 struct Differentiable
 {
-    // user specified function code with tag
-    template<typename Tag, typename OutValue, typename... Args, typename Dummy = void>
-    EIGEN_STRONG_INLINE typename std::enable_if<!tagless, Dummy>::type
-    function(Tag&& tag, OutValue&& outvalue, const Eigen::MatrixBase<Args>&... args) noexcept
+    template<typename Tag, typename... Args>
+    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Tag, Args...>::return_t
+    call_function_impl_helper(meta::IsScalar, Tag&& tag, const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        using Scalar = lampc::meta::get_scalar_t<Args...>;
-        static_cast<Derived*>(this)->template function_impl<Scalar>(
-                std::forward<Tag>(tag),
-                std::forward<OutValue>(outvalue),
-                args...);
-    }
-
-    // user specified function code without tag
-    template<typename OutValue, typename... Args, typename Dummy = void>
-    EIGEN_STRONG_INLINE typename std::enable_if<tagless, Dummy>::type
-    function(OutValue&& outvalue, const Eigen::MatrixBase<Args>&... args) noexcept
-    {
-        using Scalar = lampc::meta::get_scalar_t<Args...>;
-        static_cast<Derived*>(this)->template function_impl<Scalar>(
-                std::forward<OutValue>(outvalue),
-                args...);
-    }
-
-    template<typename... Args, typename Dummy = void>
-    EIGEN_STRONG_INLINE typename std::enable_if<tagless, Dummy>::type
-    function(DefaultTag, Args&&... args) noexcept
-    {
-        function(std::forward<Args>(args)...);
+        Eigen::Matrix<meta::get_scalar_t<Args...>, 1, 1> outvalue;
+        outvalue(0) = static_cast<Derived*>(this)->function_impl(std::forward<Tag>(tag), args...);
+        return outvalue;
     }
 
     template<typename... Args>
-    EIGEN_STRONG_INLINE void
+    EIGEN_STRONG_INLINE typename FuncInfo<Derived, DefaultTag, Args...>::return_t
+    call_function_impl_helper(meta::IsScalar, DefaultTag, const Eigen::MatrixBase<Args>&... args) noexcept
+    {
+        Eigen::Matrix<meta::get_scalar_t<Args...>, 1, 1> outvalue;
+        outvalue(0) = static_cast<Derived*>(this)->function_impl(args...);
+        return outvalue;
+    }
+
+    template<typename Tag, typename... Args>
+    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Tag, Args...>::return_t
+    call_function_impl_helper(meta::IsMatrix, Tag&& tag, const Eigen::MatrixBase<Args>&... args) noexcept
+    {
+        return static_cast<Derived*>(this)->function_impl(std::forward<Tag>(tag), args...);
+    }
+
+    template<typename... Args>
+    EIGEN_STRONG_INLINE typename FuncInfo<Derived, DefaultTag, Args...>::return_t
+    call_function_impl_helper(meta::IsMatrix, DefaultTag, const Eigen::MatrixBase<Args>&... args) noexcept
+    {
+        return static_cast<Derived*>(this)->function_impl(args...);
+    }
+
+    template<typename Tag, typename... Args>
+    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Tag, Args...>::return_t
+    call_function_impl(Tag&& tag, const Eigen::MatrixBase<Args>&... args) noexcept
+    {
+        using F = FuncInfo<Derived, Tag, Args...>;
+        return call_function_impl_helper(typename F::is_return_matrix(), std::forward<Tag>(tag), args...);
+    }
+
+    // user specified function code with tag
+    template<typename Tag, typename... Args>
+    EIGEN_STRONG_INLINE typename std::enable_if<!tagless, typename FuncInfo<Derived, Tag, Args...>::return_t>::type
+    function(Tag&& tag, const Eigen::MatrixBase<Args>&... args) noexcept
+    {
+        return call_function_impl(std::forward<Tag>(tag), args...);
+    }
+
+    // user specified function code without tag
+    template<typename... Args>
+    EIGEN_STRONG_INLINE typename std::enable_if<tagless, typename FuncInfo<Derived, DefaultTag, Args...>::return_t>::type
+    function(const Eigen::MatrixBase<Args>&... args) noexcept
+    {
+        return call_function_impl(DefaultTag{}, args...);
+    }
+
+    template<typename... Args>
+    EIGEN_STRONG_INLINE auto
     operator()(Args&&... args) noexcept
     {
-        function(std::forward<Args>(args)...);
+        return function(std::forward<Args>(args)...);
     }
 
     /**
@@ -336,14 +401,14 @@ private:
     {
         // Set derivative equal to identity
         int offset = 0;
-        (void)std::initializer_list<int>{
+        (void) std::initializer_list<int>{
             (
                 offset = AD_Seed(args, offset), // Set to unit vectors
                 0
             )...
         };
 
-        function(std::forward<Tag>(tag), out, std::forward<Args>(args)...);
+        out = function(std::forward<Tag>(tag), std::forward<Args>(args)...);
     }
 
     /**
@@ -368,10 +433,6 @@ private:
         using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
         using outerAD_t = Eigen::Vector<outerADScalar, num_outputs>;
 
-        // using value_t = typename Eigen::Vector<scalar_t, num_outputs>;
-        // using jacobian_t = typename Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
-        // using hessian_t = typename Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
-
         // Convert to AD variables for the inputs and call our function
         outerAD_t out;
         seed_and_call2(std::forward<Tag>(tag), out, make_ad2<outerADScalar>(args)...);
@@ -379,14 +440,13 @@ private:
         scalar_t value = 0;
 
         // Copy into buffers
-        for(int i=0; i<num_outputs; i++)
-        {
+        for(int i = 0; i < num_outputs; i++) {
             value += weight(i) * out[i].value().value();
             // We cast away the constness to allow temporary expressions: https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
             const_cast<Gradient&>(gradient) += weight(i) * out[i].value().derivatives();
 
             for (int j = 0; j < num_inputs; j++) {
-                const_cast<Hessian&>(hessian)(j,Eigen::all) += weight(i) * out[i].derivatives()(j).derivatives().transpose();
+                const_cast<Hessian&>(hessian)(j, Eigen::all) += weight(i) * out[i].derivatives()(j).derivatives().transpose();
             }
         }
 
@@ -394,7 +454,7 @@ private:
     }
 
 
-    // Take a vector input and return a AD version of the vector
+    // Take a vector input and return an AD version of the vector
     template<typename outerADScalar, typename X>
     EIGEN_STRONG_INLINE auto make_ad2(const Eigen::MatrixBase<X>& x) noexcept
     {
@@ -432,15 +492,15 @@ private:
     {
         // Set derivative equal to identity
         int offset = 0;
-        (void)std::initializer_list<int>{
+        (void) std::initializer_list<int>{
             (
                 offset = AD_Seed2(args, offset), // Set to unit vectors
                 0
             )...
         };
 
-        // Call our functionxxx
-        function(std::forward<std::decay_t<Tag>>(tag), out, std::forward<Args>(args)...);
+        // Call our function
+        out = function(std::forward<Tag>(tag), std::forward<Args>(args)...);
     }
 
     /**
@@ -453,8 +513,7 @@ private:
                        const Eigen::MatrixBase<Args>&... args) noexcept
     {
         constexpr size_t num_outputs = Eigen::MatrixBase<Weight>::RowsAtCompileTime;
-        Eigen::Vector<scalar_t, num_outputs> value;
-        function(std::forward<Tag>(tag), value, std::forward<Args>(args)...);
+        Eigen::Vector<scalar_t, num_outputs> value = function(std::forward<Tag>(tag), args...);
         return weight.dot(value);
     }
 
@@ -476,7 +535,7 @@ private:
         Eigen::Vector<scalar_t, num_outputs> value;
         Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
         value.array() = 0; jacobian.array() = 0;
-        this->jacobian(std::forward<Tag>(tag), value,jacobian, args...);
+        this->jacobian(std::forward<Tag>(tag), value, jacobian, args...);
         // We cast away the constness to allow temporary expressions: https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
         const_cast<Gradient&>(gradient) += weight.transpose() * jacobian;
         return weight.dot(value);

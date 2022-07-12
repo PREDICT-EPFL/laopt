@@ -24,21 +24,23 @@ public:
     control_t<scalar_t> ubu{5};
 
     template<typename T>
-    inline void dynamics_impl(const Eigen::Ref<const state_t<T>> &x, const Eigen::Ref<const control_t<T>> &u,
-                              Eigen::Ref<state_t<T>> x_dot) const noexcept
+    inline void dynamics_impl(Eigen::Ref<state_t<T>> x_dot,
+                              const Eigen::Ref<const state_t<T>> &x,
+                              const Eigen::Ref<const control_t<T>> &u) const noexcept
     {
         x_dot = A * x + B * u;
     }
 
     template<typename T>
-    inline void lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x, const Eigen::Ref<const control_t<T>> &u,
-                                   T &lagrange) noexcept
+    inline void lagrange_term_impl(T &lagrange,
+                                   const Eigen::Ref<const state_t<T>> &x,
+                                   const Eigen::Ref<const control_t<T>> &u) noexcept
     {
         lagrange = (ref - x).dot(Q * (ref - x)) + u.dot(R * u);
     }
 
     template<typename T>
-    inline void mayer_term_impl(const Eigen::Ref<const state_t<T>> &x, T &mayer) noexcept
+    inline void mayer_term_impl(T &mayer, const Eigen::Ref<const state_t<T>> &x) noexcept
     {
         mayer = (ref - x).dot(Q * (ref - x));
     }
