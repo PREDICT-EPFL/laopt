@@ -114,6 +114,18 @@ VariableLowerBound<Scalar, size, Derived> operator>=(const Variable<Scalar, size
     return VariableLowerBound<Scalar, size, Derived>(variable, lb);
 }
 
+template<typename Scalar, int size, typename Derived>
+VariableLowerUpperBound<Scalar, size, Derived, Derived> operator==(const Variable<Scalar, size>& variable, const Derived& eq)
+{
+    return VariableLowerUpperBound<Scalar, size, Derived, Derived>(variable, eq, eq);
+}
+
+template<typename Scalar, int size, typename Derived>
+VariableLowerUpperBound<Scalar, size, Derived, Derived> operator==(const Derived& eq, const Variable<Scalar, size>& variable)
+{
+    return VariableLowerUpperBound<Scalar, size, Derived, Derived>(variable, eq, eq);
+}
+
 template<typename Scalar, int size, typename DerivedLb, typename DerivedUb>
 VariableLowerUpperBound<Scalar, size, DerivedLb, DerivedUb> operator<=(const VariableLowerBound<Scalar, size, DerivedLb>& vlb, const DerivedUb& ub)
 {

@@ -94,8 +94,8 @@ public:
             problem.add_constr(ocp.lbu <= U[i] <= ocp.ubu);
         }
 
-//        // add initial state constraint
-//        problem.add_constr(X[0] == ocp.x0);
+        // add initial state constraint
+        problem.add_constr(X[0] == ocp.x0);
 //
 //        // add dynamics constraints
 //        for (int i = 0; i < N; i++)
