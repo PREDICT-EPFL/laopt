@@ -12,8 +12,8 @@ struct DefaultTag {};
 
 /**
  * This construct selects the return type of the user defined function.
- * It first tries to find the function with Tag. If this fails is tries to select the functionality without Tag.
- * If this also fails it just returns std::false_type which is going to be caught at compile time.
+ * It first tries to find the function with Tag. If this fails is tries to select the function without Tag.
+ * If this also fails it just returns std::false_type which is going to be caught at compile time somewhere else.
  */
 template<typename F, typename Tag, typename... Vars>
 static auto user_function_return_t_pre_selector(int) -> decltype(std::declval<F>().function_impl(Tag{}, std::declval<Vars>()...));
