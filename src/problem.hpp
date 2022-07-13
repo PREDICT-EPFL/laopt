@@ -3,6 +3,8 @@
 
 #include <numeric>
 #include <iterator>
+#include "variable.hpp"
+#include "lampc_function_tag.hpp"
 
 namespace lampc
 {
@@ -26,44 +28,6 @@ struct Hessian {};
  * The third is the deployment version, which doesn't have the variable information and
  * just plays back the tape for speed. Only this version needs to be optimized.
  */
-
-
-/**
- * A Variable is just an Eigen Map that also maintains an index vector into the global
- * decision variable
- */
-template<typename _scalar_t, int _size>
-class Variable : public IndexedVector<Eigen::Map<Eigen::Vector<_scalar_t, _size>>>
-{
-	static constexpr int m_size = _size;
-	using Base = IndexedVector<Eigen::Map<Eigen::Vector<_scalar_t, _size>>>;
-
-	using Base::Base;
-
-public:
-	using scalar_t = _scalar_t;
-
-	Variable() : Base(NULL) {} // The map initially points to NULL
-
-	constexpr int size() { return m_size; }
-	bool has_data() { return this->data() != NULL; }
-
-	/**
-	 * offset = offset of this variable into the global decision variable.
-	 *
-	 * Returns a callback function used to set the optimization variable
-	 */
-	auto register_variable(int offset)
-	{
-		this->set_offset(offset);
-
-        Variable<_scalar_t, _size>* p_this = this;
-        return [p_this](scalar_t* master_variable)
-        {
-            new (p_this) Eigen::Map<Eigen::Vector<scalar_t, m_size>>(master_variable + p_this->offset());
-        };
-	}
-};
 
 template<typename Scalar, int size, typename Derived>
 struct VariableUpperBound
@@ -137,16 +101,6 @@ VariableLowerUpperBound<Scalar, size, DerivedLb, DerivedUb> operator>=(const Der
 {
     return VariableLowerUpperBound<Scalar, size, DerivedLb, DerivedUb>(vub.variable, lb, vub.ub);
 }
-
-template<typename Index, typename Function>
-struct BoundRef;
-
-template<typename Index, typename Function>
-auto make_boundref(Function& f, Index index)
-{
-	return BoundRef<Index,Function>(f,index);
-}
-
 
 /**
  * Information about the function.
@@ -319,45 +273,6 @@ public:
 		num_variables += variables;
 	}
 
-
-//	/**
-//	 * Add constraints to the problem
-//	 */
-//	template<typename F, typename... Vars, typename scalar_t = meta::get_scalar_t<Vars...>>
-//	auto add(lampc::Eval, F f, Vars... vars)
-//	{
-//		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
-//
-//		auto out_indices = Eigen::seqN(value.rows(), Eigen::fix<num_outputs>);
-//		this->extend_rows(num_outputs);
-//
-//    f(lampc::Eval{}, value(out_indices), vars...);
-//    return make_boundref(*this, out_indices);
-//	}
-//
-//	template<typename F, typename... Vars, typename scalar_t = meta::get_scalar_t<Vars...>>
-//	auto add(lampc::Jacobian, F f, Vars... vars)
-//	{
-//		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
-//
-//		auto out_indices = Eigen::seqN(value.rows(), Eigen::fix<num_outputs>);
-//		auto in_indices = concatenate_indices(vars.indices()...);
-//		this->extend_rows(num_outputs);
-//
-//    f(lampc::Jacobian{}, value(out_indices), jacobian(out_indices, in_indices), vars...);
-//    return make_boundref(*this, out_indices);
-//	}
-//
-//	/**
-//	 * Used to set variable bounds
-//	 */
-//	template<typename Var, typename scalar_t = typename Var::Scalar>
-//	auto add(Var var)
-//	{
-//    return make_boundref(*this, var.indices());
-//	}
-
-
 	FunctionInfo<Matrix,Vector> generate()
 	{
 		FunctionInfo<Matrix,Vector> info;
@@ -373,96 +288,6 @@ public:
 		return info;
 	}
 };
-
-/**
- * The return type of a constraint "add" function. 
- * 
- * Contains references to the upper/lower bounds for the object, 
- * the value and jacobian and the indices.
- * 
- * Can be saved by the user in order to refer to the constraint
- * later on, or used to set the constraints.
- */
-template<typename Index, typename Function>
-struct BoundRef
-{	
-	Function& f;
-	Index index;
-
-	BoundRef(Function& _f, Index& _index) : f(_f), index(_index)
-	{}
-
-	template<typename Derived>
-	inline void set_lb(const Eigen::MatrixBase<const Derived>& lb)
-	{
-		f.lb(index) = lb;
-	}
-
-	template<typename Scalar>
-	inline void set_lb(const Scalar lb)
-	{
-		f.lb(index).array() = lb;
-	}
-
-	template<typename Derived>
-	inline void set_ub(const Eigen::MatrixBase<const Derived>& ub)
-	{
-		f.ub(index) = ub;
-	}
-
-	template<typename Scalar>
-	inline void set_ub(const Scalar ub)
-	{
-		f.ub(index).array() = ub;
-	}
-};
-
-
-/**
- * Constraint functions
- */
-template<typename Index, typename Function, typename Derived>
-BoundRef<Index,Function> operator<=(BoundRef<Index,Function> f, const Derived& ub) 
-{ 
-	f.set_ub(ub); 
-	return f; 
-}
-
-template<typename Index, typename Function, typename Derived>
-BoundRef<Index,Function> operator<=(const Derived& lb, BoundRef<Index,Function> f)
-{ 
-	f.set_lb(lb); 
-	return f; 
-}
-
-template<typename Index, typename Function, typename Derived>
-BoundRef<Index,Function> operator>=(BoundRef<Index,Function> f, const Derived& lb)
-{ 
-	f.set_lb(lb); 
-	return f; 
-}
-
-template<typename Index, typename Function, typename Derived>
-BoundRef<Index,Function> operator>=(const Derived& ub, BoundRef<Index,Function> f)
-{ 
-	f.set_ub(ub); 
-	return f; 
-}
-
-template<typename Index, typename Function, typename Derived>
-BoundRef<Index,Function> operator==(BoundRef<Index,Function> f, const Derived& eq)
-{
-	f.set_ub(eq);
-	f.set_lb(eq);
-	return f;
-}
-template<typename Index, typename Function, typename Derived>
-BoundRef<Index,Function> operator==(const Derived& eq, BoundRef<Index,Function> f)
-{
-	f.set_ub(eq);
-	f.set_lb(eq);
-	return f;
-}
 
 /**
  * Information about a weighted sum function.
@@ -623,53 +448,6 @@ public:
 	{
 		set_memory(lampc::Hessian{}, _weights, mem.gradient, mem.hessian_buffer);
 	}
-
-//	template<typename F, typename... Vars>
-//	BoundRefFake add(lampc::Eval, F f, Vars... vars)
-//	{
-//		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
-//
-//		auto out_indices = Eigen::seqN(weights.rows(), Eigen::fix<num_outputs>);
-//		this->extend_rows(num_outputs);
-//
-//    value += f.weightedsum(lampc::Eval{}, weights(out_indices), vars...);
-//    return BoundRefFake();
-//	}
-//
-//	template<typename F, typename... Vars>
-//	BoundRefFake add(lampc::Gradient, F f, Vars... vars)
-//	{
-//		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
-//
-//		auto out_indices = Eigen::seqN(weights.rows(), Eigen::fix<num_outputs>);
-//		auto in_indices = concatenate_indices(vars.indices()...);
-//		this->extend_rows(num_outputs);
-//
-//    value += f.weightedsum(lampc::Gradient{}, gradient(in_indices), weights(out_indices), vars...);
-//    return BoundRefFake();
-//	}
-//
-//	template<typename F, typename... Vars>
-//	BoundRefFake add(lampc::Hessian, F f, Vars... vars)
-//	{
-//		static constexpr int num_outputs = FuncInfo<F,Vars...>::num_outputs;
-//
-//		auto out_indices = Eigen::seqN(weights.rows(), Eigen::fix<num_outputs>);
-//		auto in_indices = concatenate_indices(vars.indices()...);
-//		this->extend_rows(num_outputs);
-//
-//    value += f.weightedsum(lampc::Hessian{},
-//    	       							 gradient(in_indices), hessian(in_indices, in_indices),
-//    											 weights(out_indices), vars...);
-//    return BoundRefFake();
-//	}
-//
-//	// Defaults to hessian computation
-//	template<typename F, typename... Vars>
-//	BoundRefFake add(F f, Vars... vars)
-//	{
-//		return add(lampc::Hessian{}, f, vars...);
-//	}
 
 	WeightedSumInfo<Matrix,Vector> generate()
 	{
@@ -1000,21 +778,37 @@ public:
 
     template<typename Tag, int ...args, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value>::type
-    add_obj(Tag&& tag, Variable<Scalar, args>& ...vars)
+    add_obj(const Tag& tag, Variable<Scalar, args>& ...vars)
     {
         static constexpr int n_outputs = FuncInfo<UserCode, Tag, Variable<Scalar, args>...>::num_outputs;
 
         auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
         objective.extend_rows(n_outputs);
 
-        objective.value += problem.user_code.wsum(std::forward<Tag>(tag),
+        objective.value += problem.user_code.wsum(tag,
                                                   objective.weights(out_indices),
                                                   vars...);
     }
 
+    template<typename Function, typename Tag, typename Capture, typename LocalDType = DType>
+    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value>::type
+    add_obj(const FunctionCapture<Function, Tag, Capture>& function_capture)
+    {
+        objective.value += function_capture.capture([&](auto&&... vars) {
+            static constexpr int n_outputs = FuncInfo<typename Function::derived, Tag, decltype(vars)...>::num_outputs;
+
+            auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
+            objective.extend_rows(n_outputs);
+
+            return function_capture.func.wsum(Tag{},
+                                              objective.weights(out_indices),
+                                              std::forward<decltype(vars)>(vars)...);
+        });
+    }
+
     template<typename Tag, int ...args, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Gradient>::value>::type
-    add_obj(Tag&& tag, Variable<Scalar, args>& ...vars)
+    add_obj(const Tag& tag, Variable<Scalar, args>& ...vars)
     {
         static constexpr int n_outputs = FuncInfo<UserCode, Tag, Variable<Scalar, args>...>::num_outputs;
 
@@ -1022,15 +816,33 @@ public:
         auto in_indices = concatenate_indices(vars.indices()...);
         objective.extend_rows(n_outputs);
 
-        objective.value += problem.user_code.gradient(std::forward<Tag>(tag),
+        objective.value += problem.user_code.gradient(tag,
                                                       objective.gradient(in_indices),
                                                       objective.weights(out_indices),
                                                       vars...);
     }
 
+    template<typename Function, typename Tag, typename Capture, typename LocalDType = DType>
+    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Gradient>::value>::type
+    add_obj(const FunctionCapture<Function, Tag, Capture>& function_capture)
+    {
+        objective.value += function_capture.capture([&](auto&&... vars) {
+            static constexpr int n_outputs = FuncInfo<typename Function::derived, Tag, decltype(vars)...>::num_outputs;
+
+            auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
+            auto in_indices = concatenate_indices(vars.indices()...);
+            objective.extend_rows(n_outputs);
+
+            return function_capture.func.gradient(Tag{},
+                                                  objective.gradient(in_indices),
+                                                  objective.weights(out_indices),
+                                                  vars...);
+        });
+    }
+
     template<typename Tag, int ...args, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Hessian>::value>::type
-    add_obj(Tag&& tag, Variable<Scalar, args>& ...vars)
+    add_obj(const Tag& tag, Variable<Scalar, args>& ...vars)
     {
         static constexpr int n_outputs = FuncInfo<UserCode, Tag, Variable<Scalar, args>...>::num_outputs;
 
@@ -1038,11 +850,30 @@ public:
         auto in_indices = concatenate_indices(vars.indices()...);
         objective.extend_rows(n_outputs);
 
-        objective.value += problem.user_code.hessian(std::forward<Tag>(tag),
+        objective.value += problem.user_code.hessian(tag,
                                                      objective.gradient(in_indices),
                                                      objective.hessian(in_indices, in_indices),
                                                      objective.weights(out_indices),
                                                      vars...);
+    }
+
+    template<typename Function, typename Tag, typename Capture, typename LocalDType = DType>
+    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Hessian>::value>::type
+    add_obj(const FunctionCapture<Function, Tag, Capture>& function_capture)
+    {
+        objective.value += function_capture.capture([&](auto&&... vars) {
+            static constexpr int n_outputs = FuncInfo<typename Function::derived, Tag, std::remove_reference_t<decltype(vars)>...>::num_outputs;
+
+            auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
+            auto in_indices = concatenate_indices(vars.indices()...);
+            objective.extend_rows(n_outputs);
+
+            return function_capture.func.hessian(Tag{},
+                                                 objective.gradient(in_indices),
+                                                 objective.hessian(in_indices, in_indices),
+                                                 objective.weights(out_indices),
+                                                 vars...);
+        });
     }
 
     template<typename ...Args>

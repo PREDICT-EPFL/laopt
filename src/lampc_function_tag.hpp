@@ -5,6 +5,8 @@
 #include <unsupported/Eigen/AutoDiff>
 #include "eigen_autodiff_fix.hpp"
 
+#include "variable.hpp"
+
 namespace lampc
 {
 
@@ -27,10 +29,10 @@ static auto user_function_return_t_selector(long) -> std::false_type;
 template<typename F, typename Tag, typename... Vars>
 struct FuncInfo
 {
-    using raw_return_t = decltype(user_function_return_t_selector<F, Tag, Vars...>(0));
-    static_assert(!std::is_same<raw_return_t, std::false_type>::value || std::is_same<Tag, DefaultTag>::value, "It seems like there is a missing function_impl!");
+    using raw_return_t = decltype(user_function_return_t_selector<F, std::remove_reference_t<Tag>, std::remove_reference_t<Vars>...>(0));
+    static_assert(!std::is_same<raw_return_t, std::false_type>::value || std::is_same<std::remove_reference_t<Tag>, DefaultTag>::value, "It seems like there is a missing function_impl!");
 
-    static constexpr int num_inputs = meta::sum_template<meta::matrix_info<Vars>::RowsAtCompileTime...>();
+    static constexpr int num_inputs = meta::sum_template<meta::matrix_info<std::remove_reference_t<Vars>>::RowsAtCompileTime...>();
     static constexpr int num_outputs = meta::matrix_info<raw_return_t>::RowsAtCompileTime;
 
     using scalar_t = typename meta::matrix_info<raw_return_t>::Scalar;
@@ -43,6 +45,18 @@ struct FuncInfo
     using is_return_matrix = typename meta::matrix_info<raw_return_t>::is_matrix_t;
 
     static_assert(num_outputs > 0 && num_inputs > 0, "The function cannot have a dynamic size.");
+};
+
+/*
+ * This struct captures a function call.
+ * Capture is a lambda which takes another lambda as input which is then called with the original parameters.
+ */
+template<typename Derived, typename Tag, typename Capture>
+struct FunctionCapture
+{
+    Derived& func;
+    Capture capture;
+    explicit FunctionCapture(Derived& func, const Capture&& capture) : func(func), capture(capture) {}
 };
 
 /**
@@ -62,10 +76,10 @@ struct FuncInfo
  * can be added by the user when inheriting from Differentiable
  */
 template<typename Derived, bool tagless = false>
-struct Differentiable
+class Differentiable
 {
     template<typename Tag, typename... Args>
-    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Tag, Args...>::return_t
+    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Tag, Eigen::MatrixBase<Args>...>::return_t
     call_function_impl_helper(meta::IsScalar, Tag&& tag, const Eigen::MatrixBase<Args>&... args) noexcept
     {
         Eigen::Matrix<meta::get_scalar_t<Args...>, 1, 1> outvalue;
@@ -74,7 +88,7 @@ struct Differentiable
     }
 
     template<typename... Args>
-    EIGEN_STRONG_INLINE typename FuncInfo<Derived, DefaultTag, Args...>::return_t
+    EIGEN_STRONG_INLINE typename FuncInfo<Derived, DefaultTag, Eigen::MatrixBase<Args>...>::return_t
     call_function_impl_helper(meta::IsScalar, DefaultTag, const Eigen::MatrixBase<Args>&... args) noexcept
     {
         Eigen::Matrix<meta::get_scalar_t<Args...>, 1, 1> outvalue;
@@ -83,30 +97,33 @@ struct Differentiable
     }
 
     template<typename Tag, typename... Args>
-    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Tag, Args...>::return_t
+    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Tag, Eigen::MatrixBase<Args>...>::return_t
     call_function_impl_helper(meta::IsMatrix, Tag&& tag, const Eigen::MatrixBase<Args>&... args) noexcept
     {
         return static_cast<Derived*>(this)->function_impl(std::forward<Tag>(tag), args...);
     }
 
     template<typename... Args>
-    EIGEN_STRONG_INLINE typename FuncInfo<Derived, DefaultTag, Args...>::return_t
+    EIGEN_STRONG_INLINE typename FuncInfo<Derived, DefaultTag, Eigen::MatrixBase<Args>...>::return_t
     call_function_impl_helper(meta::IsMatrix, DefaultTag, const Eigen::MatrixBase<Args>&... args) noexcept
     {
         return static_cast<Derived*>(this)->function_impl(args...);
     }
 
     template<typename Tag, typename... Args>
-    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Tag, Args...>::return_t
+    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Tag, Eigen::MatrixBase<Args>...>::return_t
     call_function_impl(Tag&& tag, const Eigen::MatrixBase<Args>&... args) noexcept
     {
         using F = FuncInfo<Derived, Tag, Args...>;
         return call_function_impl_helper(typename F::is_return_matrix(), std::forward<Tag>(tag), args...);
     }
 
+public:
+    using derived = Derived;
+
     // user specified function code with tag
     template<typename Tag, typename... Args>
-    EIGEN_STRONG_INLINE typename std::enable_if<!tagless, typename FuncInfo<Derived, Tag, Args...>::return_t>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<!tagless, typename FuncInfo<Derived, Tag, Eigen::MatrixBase<Args>...>::return_t>::type
     function(Tag&& tag, const Eigen::MatrixBase<Args>&... args) noexcept
     {
         return call_function_impl(std::forward<Tag>(tag), args...);
@@ -114,10 +131,34 @@ struct Differentiable
 
     // user specified function code without tag
     template<typename... Args>
-    EIGEN_STRONG_INLINE typename std::enable_if<tagless, typename FuncInfo<Derived, DefaultTag, Args...>::return_t>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<tagless, typename FuncInfo<Derived, DefaultTag, Eigen::MatrixBase<Args>...>::return_t>::type
     function(const Eigen::MatrixBase<Args>&... args) noexcept
     {
         return call_function_impl(DefaultTag{}, args...);
+    }
+
+    // captures the function call for variables with tag
+    template<typename Tag, typename Scalar, int... size, typename Dummy = void, typename = typename std::enable_if<!tagless, Dummy>::type>
+    EIGEN_STRONG_INLINE auto
+    function(Tag&& tag, const Variable<Scalar, size>&... args) noexcept
+    {
+        auto capture = [&](auto f)
+        {
+            return f(args...);
+        };
+        return FunctionCapture<Differentiable<Derived, tagless>, Tag, decltype(capture)>(*this, std::move(capture));
+    }
+
+    // captures the function call for variables without tag
+    template<typename Scalar, int... size, typename Dummy = void, typename = typename std::enable_if<tagless, Dummy>::type>
+    EIGEN_STRONG_INLINE auto
+    function(const Variable<Scalar, size>&... args) noexcept
+    {
+        auto capture = [&](auto f)
+        {
+            return f(args...);
+        };
+        return FunctionCapture<Differentiable<Derived, tagless>, DefaultTag, decltype(capture)>(*this, std::move(capture));
     }
 
     template<typename... Args>

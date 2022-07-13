@@ -13,24 +13,24 @@ public:
     explicit Function(Derived& derived) : derived(derived) {};
 
     template<typename... Args>
-    EIGEN_STRONG_INLINE void
+    EIGEN_STRONG_INLINE auto
     function(DefaultTag, Args&&... args) noexcept
     {
-        derived.function(Tag{}, std::forward<Args>(args)...);
+        return derived.function(Tag{}, std::forward<Args>(args)...);
     }
 
     template<typename... Args>
-    EIGEN_STRONG_INLINE void
+    EIGEN_STRONG_INLINE auto
     function(Args&&... args) noexcept
     {
-        derived.function(Tag{}, std::forward<Args>(args)...);
+        return derived.function(Tag{}, std::forward<Args>(args)...);
     }
 
     template<typename... Args>
-    EIGEN_STRONG_INLINE void
+    EIGEN_STRONG_INLINE auto
     operator()(Args&&... args) noexcept
     {
-        derived.function(Tag{}, std::forward<Args>(args)...);
+        return derived.function(Tag{}, std::forward<Args>(args)...);
     }
 
     template <typename... Args>

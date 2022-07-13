@@ -49,6 +49,7 @@ public:
         ocp.template mayer_term_impl<Scalar>(mayer, x);
         return mayer;
     }
+    lampc::Function<MultipleShootingTranscription<OCP, N>, TerminalCost> terminal_cost;
 
     template<size_t n>
     using Variable = lampc::Variable<scalar_t, n>;
@@ -63,6 +64,7 @@ public:
     explicit MultipleShootingTranscription(OCP &ocp_) :
     ocp(ocp_),
     dsys(*this, ocp.tf / N),
+    terminal_cost(*this),
     dsys_eq(dsys)
     {
         for(int i = 0; i < N + 1; i++)
@@ -81,11 +83,12 @@ public:
         }
 
         // add objective
-        for (int i=0; i < N; i++)
+        problem.add_obj(this->function(StageCost{}, X[0], U[0]));
+        for (int i = 1; i < N; i++)
         {
             problem.add_obj(StageCost{}, X[i], U[i]);
         }
-        problem.add_obj(TerminalCost{}, X[N]);
+        problem.add_obj(terminal_cost(X[N]));
 
         // add box constraints
         for (int i = 0; i < N + 1; i++)
