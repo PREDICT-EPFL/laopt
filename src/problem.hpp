@@ -65,6 +65,67 @@ public:
 	}
 };
 
+template<typename Scalar, int size, typename Derived>
+struct VariableUpperBound
+{
+    const Variable<Scalar, size>& variable;
+    const Derived& ub;
+    explicit VariableUpperBound(const Variable<Scalar, size>& variable, const Derived& ub) : variable(variable), ub(ub) {}
+};
+
+template<typename Scalar, int size, typename Derived>
+struct VariableLowerBound
+{
+    const Variable<Scalar, size>& variable;
+    const Derived& lb;
+    explicit VariableLowerBound(const Variable<Scalar, size>& variable, const Derived& lb) : variable(variable), lb(lb) {}
+};
+
+template<typename Scalar, int size, typename DerivedLb, typename DerivedUb>
+struct VariableLowerUpperBound
+{
+    const Variable<Scalar, size>& variable;
+    const DerivedLb& lb;
+    const DerivedUb& ub;
+    explicit VariableLowerUpperBound(const Variable<Scalar, size>& variable, const DerivedLb& lb, const DerivedUb& ub) : variable(variable), lb(lb), ub(ub) {}
+};
+
+template<typename Scalar, int size, typename Derived>
+VariableUpperBound<Scalar, size, Derived> operator<=(const Variable<Scalar, size>& variable, const Derived& ub)
+{
+    return VariableUpperBound<Scalar, size, Derived>(variable, ub);
+}
+
+template<typename Scalar, int size, typename Derived>
+VariableUpperBound<Scalar, size, Derived> operator>=(const Derived& ub, const Variable<Scalar, size>& variable)
+{
+    return VariableUpperBound<Scalar, size, Derived>(variable, ub);
+}
+
+template<typename Scalar, int size, typename Derived>
+VariableLowerBound<Scalar, size, Derived> operator<=(const Derived& lb, const Variable<Scalar, size>& variable)
+{
+    return VariableLowerBound<Scalar, size, Derived>(variable, lb);
+}
+
+template<typename Scalar, int size, typename Derived>
+VariableLowerBound<Scalar, size, Derived> operator>=(const Variable<Scalar, size>& variable, const Derived& lb)
+{
+    return VariableLowerBound<Scalar, size, Derived>(variable, lb);
+}
+
+template<typename Scalar, int size, typename DerivedLb, typename DerivedUb>
+VariableLowerUpperBound<Scalar, size, DerivedLb, DerivedUb> operator<=(const VariableLowerBound<Scalar, size, DerivedLb>& vlb, const DerivedUb& ub)
+{
+    return VariableLowerUpperBound<Scalar, size, DerivedLb, DerivedUb>(vlb.variable, vlb.lb, ub);
+}
+
+template<typename Scalar, int size, typename DerivedLb, typename DerivedUb>
+VariableLowerUpperBound<Scalar, size, DerivedLb, DerivedUb> operator>=(const DerivedLb& lb, const VariableLowerBound<Scalar, size, DerivedUb>& vub)
+{
+    return VariableLowerUpperBound<Scalar, size, DerivedLb, DerivedUb>(vub.variable, lb, vub.ub);
+}
+
 template<typename Index, typename Function>
 struct BoundRef;
 
@@ -990,11 +1051,39 @@ public:
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_obj(Args ...args) {}
 
-    template<typename ...Args>
-    EIGEN_STRONG_INLINE void add_constr(Args ...args)
+    template<int size, typename Derived>
+    EIGEN_STRONG_INLINE void add_constr(const VariableUpperBound<Scalar, size, Eigen::MatrixBase<Derived>>& bound)
     {
-        // TODO
+        variable_bounds.ub(bound.variable.indices()) = bound.ub;
     }
+
+    template<int size, typename DerivedScalar>
+    EIGEN_STRONG_INLINE void add_constr(const VariableUpperBound<Scalar, size, DerivedScalar>& bound)
+    {
+        variable_bounds.ub(bound.variable.indices()).array() = bound.ub;
+    }
+
+    template<int size, typename Derived>
+    EIGEN_STRONG_INLINE void add_constr(const VariableLowerBound<Scalar, size, Eigen::MatrixBase<Derived>>& bound)
+    {
+        variable_bounds.lb(bound.variable.indices()) = bound.lb;
+    }
+
+    template<int size, typename DerivedScalar>
+    EIGEN_STRONG_INLINE void add_constr(const VariableLowerBound<Scalar, size, DerivedScalar>& bound)
+    {
+        variable_bounds.lb(bound.variable.indices()).array() = bound.lb;
+    }
+
+    template<int size, typename DerivedLb, typename DerivedUb>
+    EIGEN_STRONG_INLINE void add_constr(const VariableLowerUpperBound<Scalar, size, DerivedLb, DerivedUb>& bound)
+    {
+        add_constr(VariableLowerBound<Scalar, size, DerivedLb>(bound.variable, bound.lb));
+        add_constr(VariableUpperBound<Scalar, size, DerivedUb>(bound.variable, bound.ub));
+    }
+
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_constr(Args ...args) {}
 };
 
 template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>

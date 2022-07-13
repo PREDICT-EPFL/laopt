@@ -87,13 +87,13 @@ public:
         }
         problem.add_obj(TerminalCost{}, X[N]);
 
-//        // add box constraints
-//        for (int i = 0; i < N + 1; i++)
-//        {
-//            problem.add_constr(ocp.lbx <= X[i] <= ocp.ubx);
-//            problem.add_constr(ocp.lbu <= U[i] <= ocp.ubu);
-//        }
-//
+        // add box constraints
+        for (int i = 0; i < N + 1; i++)
+        {
+            problem.add_constr(ocp.lbx <= X[i] <= 10);
+            problem.add_constr(ocp.lbu <= U[i] <= ocp.ubu);
+        }
+
 //        // add initial state constraint
 //        problem.add_constr(X[0] == ocp.x0);
 //
