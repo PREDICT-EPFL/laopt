@@ -828,6 +828,7 @@ public:
                             Args &... args)
     {
         // Weights for the objective are always 1
+        // TODO: Don't allocated a new dynamic vector at every evaluation since it introduces a malloc and free each time. Maybe move to solver interface?
         Eigen::VectorX<scalar_t> weights(objective.rows());
         weights.array() = 1;
 
@@ -886,6 +887,7 @@ public:
     {
         assert(dual.rows() == constraints.rows() && "Dual vector is the wrong length");
 
+        // TODO: Don't allocated a new dynamic vector at every evaluation since it introduces a malloc and free each time. Maybe move to solver interface?
         Eigen::VectorX<scalar_t> weights(lagrangian.rows());
         weights(Eigen::seqN(0, objective.rows())).array() = obj_factor;
         weights.tail(constraints.rows()) = dual;
