@@ -15,7 +15,7 @@ struct DefaultTag {};
 /**
  * This construct selects the return type of the user defined function.
  * It first tries to find the function with Tag. If this fails is tries to select the function without Tag.
- * If this also fails it just returns std::false_type which is going to be caught at compile time somewhere else.
+ * If this also fails it just returns FunctionImplNonExistenceError which is going to be caught at compile time somewhere else.
  */
 struct FunctionImplNonExistenceError {};
 template<typename F, typename Tag, typename... Vars>
