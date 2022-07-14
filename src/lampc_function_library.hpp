@@ -7,6 +7,52 @@ namespace lampc {
 
 namespace lib {
 
+struct ID : public Differentiable<ID, true>
+{
+    template<typename X>
+    EIGEN_STRONG_INLINE typename X::PlainObject
+    function_impl(const Eigen::MatrixBase<X>& x) noexcept
+    {
+        return x;
+    }
+
+    template<typename OutValue, typename OutJacobian, typename X>
+    EIGEN_STRONG_INLINE void
+    jacobian_impl(OutValue& value, OutJacobian& jac, const Eigen::MatrixBase<X>& x) noexcept
+    {
+        value = x;
+
+        using scalar_t = typename Eigen::MatrixBase<X>::Scalar;
+        for(int i = 0; i < value.rows(); i++)
+        {
+            jac(Eigen::seqN(i,Eigen::fix<1>), Eigen::seqN(i, Eigen::fix<1>)) = Eigen::Matrix<scalar_t, 1, 1>::Constant(1);
+        }
+    }
+
+    template <typename Weight, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    EIGEN_STRONG_INLINE scalar_t
+    wsum_impl(const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
+    {
+        return weight.dot(x);
+    }
+
+    template <typename Weight, typename OutGradient, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    EIGEN_STRONG_INLINE scalar_t
+    gradient_impl(OutGradient& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
+    {
+        out_gradient += weight;
+        return wsum(weight, x);
+    }
+
+    template <typename Weight, typename OutGradient, typename OutHessian, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    EIGEN_STRONG_INLINE scalar_t
+    hessian_impl(OutGradient&& out_gradient, OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
+    {
+        // Hessian is zero, i.e., we don't set any values
+        return gradient(std::forward<OutGradient>(out_gradient), weight, x);
+    }
+};
+
 //
 // For a given function F with Tag, EQ<F, Tag> is the function eq(xp, x...) = -xp + F(Tag, x...)
 //
@@ -34,7 +80,7 @@ struct EQ : public Differentiable<EQ<F, Tag>, true>
         value -= xp;
 
         using scalar_t = typename Eigen::MatrixBase<XP>::Scalar;
-        for(int i=0; i < value.rows(); i++)
+        for(int i = 0; i < value.rows(); i++)
         {
             jac(Eigen::seqN(i,Eigen::fix<1>), Eigen::seqN(i, Eigen::fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(-1);
         }
