@@ -5,6 +5,8 @@
 
 namespace lampc {
 
+namespace lib {
+
 //
 // For a given function F with Tag, EQ<F, Tag> is the function eq(xp, x...) = -xp + F(Tag, x...)
 //
@@ -59,6 +61,8 @@ struct RK4 : public Differentiable<RK4<F, Scalar, Tag>, true>
         return x + h/6.0 * (k1 + 2.0*k2 + 2.0*k3 + k4);
     }
 };
+
+} // namespace lib
 
 } // namespace lampc
 

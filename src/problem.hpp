@@ -893,7 +893,7 @@ public:
     add_obj(const FunctionCapture<Function, Tag, Capture>& function_capture)
     {
         function_capture.capture([&](auto&&... vars) {
-            static constexpr int n_outputs = FuncInfo<typename Function::derived, Tag, decltype(vars)...>::num_outputs;
+            static constexpr int n_outputs = FuncInfo<Function, Tag, decltype(vars)...>::num_outputs;
 
             auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
             objective.extend_rows(n_outputs);
@@ -925,7 +925,7 @@ public:
     add_obj(const FunctionCapture<Function, Tag, Capture>& function_capture)
     {
         function_capture.capture([&](auto&&... vars) {
-            static constexpr int n_outputs = FuncInfo<typename Function::derived, Tag, decltype(vars)...>::num_outputs;
+            static constexpr int n_outputs = FuncInfo<Function, Tag, decltype(vars)...>::num_outputs;
 
             auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
             auto in_indices = concatenate_indices(vars.indices()...);
@@ -960,7 +960,7 @@ public:
     add_obj(const FunctionCapture<Function, Tag, Capture>& function_capture)
     {
         function_capture.capture([&](auto&&... vars) {
-            static constexpr int n_outputs = FuncInfo<typename Function::derived, Tag, std::remove_reference_t<decltype(vars)>...>::num_outputs;
+            static constexpr int n_outputs = FuncInfo<Function, Tag, std::remove_reference_t<decltype(vars)>...>::num_outputs;
 
             auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
             auto in_indices = concatenate_indices(vars.indices()...);
@@ -1088,7 +1088,7 @@ public:
     add_constr(const Bound<Function, Tag, BoundArgs...>& bound)
     {
         bound.function_capture.capture([&](auto&&... vars) {
-            static constexpr int n_outputs = FuncInfo<typename Function::derived, Tag, decltype(vars)...>::num_outputs;
+            static constexpr int n_outputs = FuncInfo<Function, Tag, decltype(vars)...>::num_outputs;
 
             auto out_indices = Eigen::seqN(constraints.value.rows(), Eigen::fix<n_outputs>);
             constraints.extend_rows(n_outputs);
@@ -1104,7 +1104,7 @@ public:
     add_constr(const Bound<Function, Tag, BoundArgs...>& bound)
     {
         bound.function_capture.capture([&](auto&&... vars) {
-            static constexpr int n_outputs = FuncInfo<typename Function::derived, Tag, decltype(vars)...>::num_outputs;
+            static constexpr int n_outputs = FuncInfo<Function, Tag, decltype(vars)...>::num_outputs;
 
             auto out_indices = Eigen::seqN(constraints.value.rows(), Eigen::fix<n_outputs>);
             auto in_indices = concatenate_indices(vars.indices()...);
@@ -1143,7 +1143,7 @@ public:
     add_constr(const Bound<Function, Tag, BoundArgs...>& bound)
     {
         bound.function_capture.capture([&](auto&&... vars) {
-            static constexpr int n_outputs = FuncInfo<typename Function::derived, Tag, decltype(vars)...>::num_outputs;
+            static constexpr int n_outputs = FuncInfo<Function, Tag, decltype(vars)...>::num_outputs;
 
             auto out_indices = Eigen::seqN(constraints.weights.rows(), Eigen::fix<n_outputs>);
             constraints.extend_rows(n_outputs);
@@ -1159,7 +1159,7 @@ public:
     add_constr(const Bound<Function, Tag, BoundArgs...>& bound)
     {
         bound.function_capture.capture([&](auto&&... vars) {
-            static constexpr int n_outputs = FuncInfo<typename Function::derived, Tag, decltype(vars)...>::num_outputs;
+            static constexpr int n_outputs = FuncInfo<Function, Tag, decltype(vars)...>::num_outputs;
 
             auto out_indices = Eigen::seqN(constraints.weights.rows(), Eigen::fix<n_outputs>);
             auto in_indices = concatenate_indices(vars.indices()...);
@@ -1177,7 +1177,7 @@ public:
     add_constr(const Bound<Function, Tag, BoundArgs...>& bound)
     {
         bound.function_capture.capture([&](auto&&... vars) {
-            static constexpr int n_outputs = FuncInfo<typename Function::derived, Tag, decltype(vars)...>::num_outputs;
+            static constexpr int n_outputs = FuncInfo<Function, Tag, decltype(vars)...>::num_outputs;
 
             auto out_indices = Eigen::seqN(constraints.weights.rows(), Eigen::fix<n_outputs>);
             auto in_indices = concatenate_indices(vars.indices()...);

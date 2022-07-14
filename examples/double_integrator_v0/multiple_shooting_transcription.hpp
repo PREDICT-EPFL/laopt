@@ -27,7 +27,7 @@ public:
     }
 
     // Discretized dynamics
-    using dsys_t = lampc::RK4<MultipleShootingTranscription<OCP, N>, scalar_t, Sys>;
+    using dsys_t = lampc::lib::RK4<MultipleShootingTranscription<OCP, N>, scalar_t, Sys>;
     dsys_t dsys;
 
     struct StageCost {};
@@ -59,7 +59,7 @@ public:
     std::array<Variable<OCP::NU>, N + 1> U;
 
     // Functions we use to define the eq constraints for the dynamics
-    lampc::EQ<dsys_t> dsys_eq;
+    lampc::lib::EQ<dsys_t> dsys_eq;
 
     explicit MultipleShootingTranscription(OCP &ocp_) :
     ocp(ocp_),

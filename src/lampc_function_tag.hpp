@@ -119,7 +119,6 @@ class Differentiable
     }
 
 public:
-    using derived = Derived;
 
     // user specified function code with tag
     template<typename Tag, typename... Args>
@@ -146,7 +145,7 @@ public:
         {
             return f(args...);
         };
-        return FunctionCapture<Differentiable<Derived, tagless>, Tag, decltype(capture)>(*this, std::move(capture));
+        return FunctionCapture<Derived, Tag, decltype(capture)>(*static_cast<Derived*>(this), std::move(capture));
     }
 
     // captures the function call for variables without tag
@@ -158,7 +157,7 @@ public:
         {
             return f(args...);
         };
-        return FunctionCapture<Differentiable<Derived, tagless>, DefaultTag, decltype(capture)>(*this, std::move(capture));
+        return FunctionCapture<Derived, DefaultTag, decltype(capture)>(*static_cast<Derived*>(this), std::move(capture));
     }
 
     // we don't capture the DefaultTag to prevent recursion
