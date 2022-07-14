@@ -104,7 +104,7 @@ public:
 		Eigen::VectorX<scalar_t> var(prob.num_variables());
 		var.array() = 0;
 
-		prob.eval_constraints(lampc::Eval(), var, con,lb,ub);
+		prob.eval_constraints(lampc::Eval(), var, con, lb, ub);
 
 		return true;
 	}

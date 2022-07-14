@@ -17,7 +17,7 @@ public:
 
     // Continuous dynamics
     struct Sys {};
-    template<typename OutValue, typename X, typename U, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
+    template<typename X, typename U, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<Scalar, OCP::NX>
     function_impl(Sys, const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u) noexcept
     {
@@ -99,13 +99,13 @@ public:
 
         // add initial state constraint
         problem.add_constr(X[0] == ocp.x0);
-//
-//        // add dynamics constraints
-//        for (int i = 0; i < N; i++)
-//        {
-//            problem.add_constr(dsys_eq(X[i + 1], X[i], U[i]) == 0);
-//        }
-//
+
+        // add dynamics constraints
+        for (int i = 0; i < N; i++)
+        {
+            problem.add_constr(dsys_eq(X[i + 1], X[i], U[i]) == 0);
+        }
+
 //        // add last input constraint
 //        problem.add_constr(U[N] == U[N - 1]);
     }

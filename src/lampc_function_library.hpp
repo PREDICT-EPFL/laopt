@@ -15,12 +15,11 @@ struct EQ : public Differentiable<EQ<F, Tag>, true>
 
     explicit EQ(F& f) : f(f) {}
 
-    template<typename T, typename OutValue, typename XP, typename... X>
-    EIGEN_STRONG_INLINE void
-    function_impl(OutValue& value, const Eigen::MatrixBase<XP>& xp, const Eigen::MatrixBase<X>&... x) noexcept
+    template<typename XP, typename... X>
+    EIGEN_STRONG_INLINE typename XP::PlainObject
+    function_impl(const Eigen::MatrixBase<XP>& xp, const Eigen::MatrixBase<X>&... x) noexcept
     {
-        f(Tag{}, value, x...);
-        value -= xp;
+        return f(Tag{}, x...) - xp;
     }
 
     template<typename OutValue, typename OutJacobian, typename XP, typename... X>
@@ -48,17 +47,16 @@ struct RK4 : public Differentiable<RK4<F, Scalar, Tag>, true>
 
     explicit RK4(F& f, Scalar step_size) : f(f), h(step_size) {}
 
-    template<typename T, typename OutValue, typename X, typename... Params>
-    EIGEN_STRONG_INLINE void
-    function_impl(OutValue& x_next, const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<Params>&... params) noexcept
+    template<typename X, typename... Params>
+    EIGEN_STRONG_INLINE typename X::PlainObject
+    function_impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<Params>&... params) noexcept
     {
         using Vec = typename X::PlainObject;
-        Vec k1, k2, k3, k4;
-        f(Tag{}, k1, x,          params...);
-        f(Tag{}, k2, x+h*0.5*k1, params...);
-        f(Tag{}, k3, x+h*0.5*k2, params...);
-        f(Tag{}, k4, x+h*k3,     params...);
-        x_next = x + h/6.0 * (k1 + 2.0*k2 + 2.0*k3 + k4);
+        Vec k1 = f(Tag{}, x,          params...);
+        Vec k2 = f(Tag{}, x+h*0.5*k1, params...);
+        Vec k3 = f(Tag{}, x+h*0.5*k2, params...);
+        Vec k4 = f(Tag{}, x+h*k3,     params...);
+        return x + h/6.0 * (k1 + 2.0*k2 + 2.0*k3 + k4);
     }
 };
 
