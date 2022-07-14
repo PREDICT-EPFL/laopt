@@ -93,7 +93,7 @@ public:
         // add box constraints
         for (int i = 0; i < N + 1; i++)
         {
-            problem.add_constr(ocp.lbx <= X[i] <= 10);
+            problem.add_constr(ocp.lbx <= X[i] <= ocp.ubx);
             problem.add_constr(ocp.lbu <= U[i] <= ocp.ubu);
         }
 
