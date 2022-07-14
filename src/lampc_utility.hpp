@@ -21,7 +21,7 @@ namespace lampc
         template<int... S>
         constexpr int sum_template() {
             int result = 0;
-            for(auto s : { S... }) result += s;
+            for (int s : std::initializer_list<int>{ S... }) result += s;
             return result;
         }
 

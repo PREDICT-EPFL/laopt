@@ -18,6 +18,8 @@ class IndexedVector : public Base {
     index_t m_indices;
 
 public:
+    using base = Base;
+
     IndexedVector() : Base() {
         static_assert(Base::ColsAtCompileTime == 1, "you tired using a matrix on an indexed vector");
         m_indices.array() = -1;
