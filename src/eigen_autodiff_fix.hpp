@@ -4,7 +4,7 @@
 namespace Eigen {
 
 template<typename DerType, typename BinOp>
-struct ScalarBinaryOpTraits<AutoDiffScalar<DerType>, typename DerType::Scalar::Scalar,BinOp> {
+struct ScalarBinaryOpTraits<AutoDiffScalar<DerType>, typename DerType::Scalar::Scalar, BinOp> {
 typedef AutoDiffScalar<DerType> ReturnType;
 };
 

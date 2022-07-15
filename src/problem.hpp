@@ -203,7 +203,7 @@ FunctionLowerUpperBound<Derived, Tag, Capture, DerivedLb, DerivedUb> operator>=(
 /**
  * Information about the function.
  * 
- * Either sparsity or tape informaation, depending on Matrix and Vector
+ * Either sparsity or tape information, depending on Matrix and Vector
  */
 template<typename Matrix, typename Vector>
 struct FunctionInfo
@@ -1358,8 +1358,8 @@ struct ProblemMemory {
 };
 
 template <typename scalar_t>
-std::ostream &
-operator<<(std::ostream &o, const ProblemInfo<BSMatrixSparsity, BSMatrixDenseConstruction<scalar_t>> &info) {
+std::ostream& operator<<(std::ostream &o, const ProblemInfo<BSMatrixSparsity, BSMatrixDenseConstruction<scalar_t>> &info)
+{
     o << "==== Problem Sparsity Information ====\n";
     o << "Variables    : " << info.num_variables << std::endl;
 
@@ -1405,6 +1405,6 @@ std::ostream& operator<<(std::ostream& o, const std::array<T, N>& arr)
     return o;
 }
 
-};
+}
 
 #endif // __PROBLEM_HPP
