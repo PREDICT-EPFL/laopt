@@ -885,7 +885,7 @@ public:
 
         objective.value += problem.user_code.wsum(tag,
                                                   objective.weights(out_indices),
-                                                  static_cast<const typename Variable<Scalar, args>::base&>(vars)...);
+                                                  vars.cast_base()...);
     }
 
     template<typename Function, typename Tag, typename Capture, typename LocalDType = DType>
@@ -900,7 +900,7 @@ public:
 
             objective.value += function_capture.func.wsum(Tag{},
                                                           objective.weights(out_indices),
-                                                          static_cast<const typename std::remove_reference_t<decltype(vars)>::base&>(vars)...);
+                                                          vars.cast_base()...);
         });
     }
 
@@ -917,7 +917,7 @@ public:
         objective.value += problem.user_code.gradient(tag,
                                                       objective.gradient(in_indices),
                                                       objective.weights(out_indices),
-                                                      static_cast<const typename Variable<Scalar, args>::base&>(vars)...);
+                                                      vars.cast_base()...);
     }
 
     template<typename Function, typename Tag, typename Capture, typename LocalDType = DType>
@@ -934,7 +934,7 @@ public:
             objective.value += function_capture.func.gradient(Tag{},
                                                               objective.gradient(in_indices),
                                                               objective.weights(out_indices),
-                                                              static_cast<const typename std::remove_reference_t<decltype(vars)>::base&>(vars)...);
+                                                              vars.cast_base()...);
         });
     }
 
@@ -952,7 +952,7 @@ public:
                                                      objective.gradient(in_indices),
                                                      objective.hessian(in_indices, in_indices),
                                                      objective.weights(out_indices),
-                                                     static_cast<const typename Variable<Scalar, args>::base&>(vars)...);
+                                                     vars.cast_base()...);
     }
 
     template<typename Function, typename Tag, typename Capture, typename LocalDType = DType>
@@ -970,7 +970,7 @@ public:
                                                               objective.gradient(in_indices),
                                                               objective.hessian(in_indices, in_indices),
                                                               objective.weights(out_indices),
-                                                              static_cast<const typename std::remove_reference_t<decltype(vars)>::base&>(vars)...);
+                                                              vars.cast_base()...);
         });
     }
 
@@ -1094,7 +1094,7 @@ public:
             constraints.extend_rows(n_outputs);
 
             constraints.value(out_indices) = bound.function_capture.func.function(Tag{},
-                                                                                  static_cast<const typename std::remove_reference_t<decltype(vars)>::base&>(vars)...);
+                                                                                  vars.cast_base()...);
             add_bounds(bound, out_indices);
         });
     }
@@ -1113,7 +1113,7 @@ public:
             bound.function_capture.func.jacobian(Tag{},
                                                  constraints.value(out_indices),
                                                  constraints.jacobian(out_indices, in_indices),
-                                                 static_cast<const typename std::remove_reference_t<decltype(vars)>::base&>(vars)...);
+                                                 vars.cast_base()...);
             add_bounds(bound, out_indices);
         });
     }
@@ -1150,7 +1150,7 @@ public:
 
             constraints.value += bound.function_capture.func.wsum(Tag{},
                                                                   constraints.weights(out_indices),
-                                                                  static_cast<const typename std::remove_reference_t<decltype(vars)>::base&>(vars)...);
+                                                                  vars.cast_base()...);
         });
     }
 
@@ -1168,7 +1168,7 @@ public:
             constraints.value += bound.function_capture.func.gradient(Tag{},
                                                                       constraints.gradient(in_indices),
                                                                       constraints.weights(out_indices),
-                                                                      static_cast<const typename std::remove_reference_t<decltype(vars)>::base&>(vars)...);
+                                                                      vars.cast_base()...);
         });
     }
 
@@ -1187,7 +1187,7 @@ public:
                                                                      constraints.gradient(in_indices),
                                                                      constraints.hessian(in_indices, in_indices),
                                                                      constraints.weights(out_indices),
-                                                                     static_cast<const typename std::remove_reference_t<decltype(vars)>::base&>(vars)...);
+                                                                     vars.cast_base()...);
         });
     }
 
