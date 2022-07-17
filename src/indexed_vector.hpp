@@ -18,8 +18,6 @@ class IndexedVector : public Base {
     index_t m_indices;
 
 public:
-    using base = Base;
-
     IndexedVector() : Base() {
         static_assert(Base::ColsAtCompileTime == 1, "you tired using a matrix on an indexed vector");
         m_indices.array() = -1;
@@ -66,6 +64,16 @@ public:
     void set_indices(const Eigen::MatrixBase<Derived> &indices) {
         static_assert(std::is_same<typename Derived::Scalar, int>::value, "indices have to be integer");
         m_indices = indices;
+    }
+
+    Base& cast_base()
+    {
+        return static_cast<Base&>(*this);
+    }
+
+    const Base& cast_base() const
+    {
+        return static_cast<const Base&>(*this);
     }
 
     /**

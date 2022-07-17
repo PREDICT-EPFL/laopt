@@ -19,24 +19,12 @@ class Variable : public IndexedVector<Eigen::Map<Eigen::Vector<_scalar_t, _size>
     using IndexedVectorBase::IndexedVectorBase;
 
 public:
-    using base = typename IndexedVectorBase::base;
-
     using scalar_t = _scalar_t;
 
     Variable() : IndexedVectorBase(NULL) {} // The map initially points to NULL
 
     constexpr int size() { return m_size; }
     bool has_data() { return this->data() != NULL; }
-
-    base& cast_base()
-    {
-        return static_cast<base&>(*this);
-    }
-
-    const base& cast_base() const
-    {
-        return static_cast<const base&>(*this);
-    }
 
     /**
      * offset = offset of this variable into the global decision variable.
