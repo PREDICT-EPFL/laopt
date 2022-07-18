@@ -183,25 +183,25 @@ FunctionLowerUpperBound<Derived, Tag, Capture, DerivedEq, DerivedEq> operator==(
 template<typename Derived, typename Tag, typename Capture, typename DerivedLb, typename DerivedUb>
 FunctionLowerUpperBound<Derived, Tag, Capture, DerivedLb, DerivedUb> operator<=(const FunctionLowerBound<Derived, Tag, Capture, DerivedLb>& flb, const DerivedUb& ub)
 {
-    return FunctionLowerUpperBound<Derived, Tag, Capture, DerivedLb, DerivedUb>(flb.variable, flb.lb, ub);
+    return FunctionLowerUpperBound<Derived, Tag, Capture, DerivedLb, DerivedUb>(flb.function_capture, flb.lb, ub);
 }
 
 template<typename Derived, typename Tag, typename Capture, typename DerivedLb, typename DerivedUb>
 FunctionLowerUpperBound<Derived, Tag, Capture, DerivedLb, DerivedUb> operator<=(const DerivedLb& lb, const FunctionUpperBound<Derived, Tag, Capture, DerivedUb>& fub)
 {
-    return FunctionLowerUpperBound<Derived, Tag, Capture, DerivedLb, DerivedUb>(fub.variable, lb, fub.ub);
+    return FunctionLowerUpperBound<Derived, Tag, Capture, DerivedLb, DerivedUb>(fub.function_capture, lb, fub.ub);
 }
 
 template<typename Derived, typename Tag, typename Capture, typename DerivedLb, typename DerivedUb>
 FunctionLowerUpperBound<Derived, Tag, Capture, DerivedLb, DerivedUb> operator>=(const DerivedUb& ub, const FunctionLowerBound<Derived, Tag, Capture, DerivedLb>& flb)
 {
-    return FunctionLowerUpperBound<Derived, Tag, Capture, DerivedLb, DerivedUb>(flb.variable, flb.lb, ub);
+    return FunctionLowerUpperBound<Derived, Tag, Capture, DerivedLb, DerivedUb>(flb.function_capture, flb.lb, ub);
 }
 
 template<typename Derived, typename Tag, typename Capture, typename DerivedLb, typename DerivedUb>
 FunctionLowerUpperBound<Derived, Tag, Capture, DerivedLb, DerivedUb> operator>=(const FunctionUpperBound<Derived, Tag, Capture, DerivedUb>& fub, const DerivedLb& lb)
 {
-    return FunctionLowerUpperBound<Derived, Tag, Capture, DerivedLb, DerivedUb>(fub.variable, lb, fub.ub);
+    return FunctionLowerUpperBound<Derived, Tag, Capture, DerivedLb, DerivedUb>(fub.function_capture, lb, fub.ub);
 }
 
 /**
