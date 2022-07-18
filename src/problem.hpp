@@ -1332,9 +1332,9 @@ struct WeightedSumMemory
 template<typename scalar_t>
 struct ProblemMemory {
     FunctionMemory<scalar_t> constraints;
+    FunctionMemory<scalar_t> variable_bounds;
     WeightedSumMemory<scalar_t> objective;
     WeightedSumMemory<scalar_t> lagrangian;
-    FunctionMemory<scalar_t> variable_bounds;
 
     Eigen::VectorX<scalar_t> var;
 
@@ -1349,7 +1349,7 @@ struct ProblemMemory {
         // Zero everything
         prob.constraints.initialize();
         // prob.variable_bounds.initialize();
-        prob.variable_bounds.set_zero();
+        // prob.variable_bounds.set_zero();
         prob.objective.initialize();
         prob.lagrangian.initialize();
         var.array() = 0;
