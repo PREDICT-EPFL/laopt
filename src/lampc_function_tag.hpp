@@ -461,8 +461,8 @@ private:
 
     /**
      * Returns the value w'*f(x).
-     * outgradient += gradient(w'*f(x))
-     * outhessian += hessian(w'*f(x))
+     * out_gradient += gradient(w'*f(x))
+     * out_hessian += hessian(w'*f(x))
      */
     template<typename Tag, typename Weight, typename OutGradient, typename OutHessian,
             typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
