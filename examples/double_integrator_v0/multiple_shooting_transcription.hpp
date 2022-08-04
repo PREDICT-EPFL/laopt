@@ -83,10 +83,9 @@ public:
         }
 
         // add objective
-        problem.add_obj(this->function(StageCost{}, X[0], U[0]));
-        for (int i = 1; i < N; i++)
+        for (int i = 0; i < N; i++)
         {
-            problem.add_obj(StageCost{}, X[i], U[i]);
+            problem.add_obj(this->function(StageCost{}, X[i], U[i]));
         }
         problem.add_obj(terminal_cost(X[N]));
 
@@ -103,6 +102,7 @@ public:
         // add dynamics constraints
         for (int i = 0; i < N; i++)
         {
+//            problem.add_constr(X[i + 1] - dsys(X[i], U[i]) == 0);
             problem.add_constr(dsys_eq(X[i + 1], X[i], U[i]) == 0);
         }
 

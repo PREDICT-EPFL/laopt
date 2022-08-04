@@ -2,6 +2,7 @@
 #define LAMPC_VARIABLE_H
 
 #include "Eigen/Dense"
+#include "expr_base.hpp"
 
 namespace lampc {
 
@@ -12,12 +13,16 @@ namespace lampc {
  * indices of the original data elements
  */
 template<typename Base>
-class IndexedVector : public Base {
+class IndexedVector : public Base, public ExprBase<IndexedVector<Base>> {
     using index_t = typename Eigen::Vector<int, Base::RowsAtCompileTime>;
     // Indices of the elements of this vector wrt the original IndexedMap
     index_t m_indices;
 
 public:
+
+    static constexpr int n_inputs = Base::RowsAtCompileTime;
+    static constexpr int n_outputs = Base::RowsAtCompileTime;
+
     IndexedVector() : Base() {
         static_assert(Base::ColsAtCompileTime == 1, "you tired using a matrix on an indexed vector");
         m_indices.array() = -1;

@@ -5,6 +5,7 @@
 #include <unsupported/Eigen/AutoDiff>
 #include "eigen_autodiff_fix.hpp"
 
+#include "expr_base.hpp"
 #include "variable.hpp"
 
 namespace lampc
@@ -32,31 +33,36 @@ struct FuncInfo
 {
     using raw_return_t = decltype(user_function_return_t_selector<F, std::remove_reference_t<Tag>, std::remove_reference_t<Vars>...>(0));
 
-    static constexpr int num_inputs = meta::sum_template<meta::matrix_info<std::remove_reference_t<Vars>>::RowsAtCompileTime...>();
-    static constexpr int num_outputs = meta::matrix_info<raw_return_t>::RowsAtCompileTime;
+    static constexpr int n_inputs = meta::sum_template<meta::matrix_info<std::remove_reference_t<Vars>>::RowsAtCompileTime...>();
+    static constexpr int n_outputs = meta::matrix_info<raw_return_t>::RowsAtCompileTime;
 
     using scalar_t = typename meta::matrix_info<raw_return_t>::Scalar;
 
-    using return_t = Eigen::Vector<scalar_t, num_outputs>;
-    using jacobian_t = Eigen::Matrix<scalar_t, num_outputs, num_inputs>;
-    using gradient_t = Eigen::Vector<scalar_t, num_inputs>;
-    using hessian_t = Eigen::Matrix<scalar_t, num_inputs, num_inputs>;
+    using return_t = Eigen::Vector<scalar_t, n_outputs>;
+    using jacobian_t = Eigen::Matrix<scalar_t, n_outputs, n_inputs>;
+    using gradient_t = Eigen::Vector<scalar_t, n_inputs>;
+    using hessian_t = Eigen::Matrix<scalar_t, n_inputs, n_inputs>;
 
     using is_return_matrix = typename meta::matrix_info<raw_return_t>::is_matrix_t;
 
-    static_assert(num_outputs > 0 && num_inputs >= 0, "The function cannot have a dynamic size.");
+    static_assert(n_outputs > 0 && n_inputs >= 0, "The function cannot have a dynamic size.");
 };
 
 /*
  * This struct captures a function call.
  * Capture is a lambda which takes another lambda as input which is then called with the original parameters.
  */
-template<typename Derived, typename Tag, typename Capture>
-struct FunctionCapture
+template<typename Derived, typename Tag, typename Info, typename Capture>
+class FunctionCapture : public ExprBase<FunctionCapture<Derived, Tag, Info, Capture>>
 {
+public:
     Derived& func;
     Capture capture;
-    explicit FunctionCapture(Derived& func, const Capture&& capture) : func(func), capture(capture) {}
+
+    static constexpr int n_inputs = Info::n_inputs;
+    static constexpr int n_outputs = Info::n_outputs;
+
+    explicit FunctionCapture(Derived& func, const Capture& capture) : func(func), capture(capture) {}
 };
 
 /**
@@ -139,13 +145,14 @@ public:
     // captures the function call for variables with tag
     template<typename Tag, typename Scalar, int... size, typename Dummy = void, typename = typename std::enable_if<!tagless, Dummy>::type>
     EIGEN_STRONG_INLINE auto
-    function(Tag&& tag, const Variable<Scalar, size>&... args) noexcept
+    function(Tag, const Variable<Scalar, size>&... args) noexcept
     {
         auto capture = [&](auto f)
         {
             return f(args...);
         };
-        return FunctionCapture<Derived, Tag, decltype(capture)>(*static_cast<Derived*>(this), std::move(capture));
+        using Info = FuncInfo<Derived, Tag, Variable<Scalar, size>...>;
+        return FunctionCapture<Derived, Tag, Info, decltype(capture)>(*static_cast<Derived*>(this), capture);
     }
 
     // captures the function call for variables without tag
@@ -157,7 +164,8 @@ public:
         {
             return f(args...);
         };
-        return FunctionCapture<Derived, DefaultTag, decltype(capture)>(*static_cast<Derived*>(this), std::move(capture));
+        using Info = FuncInfo<Derived, DefaultTag, Variable<Scalar, size>...>;
+        return FunctionCapture<Derived, DefaultTag, Info, decltype(capture)>(*static_cast<Derived*>(this), capture);
     }
 
     // define DefaultTag for function
@@ -412,8 +420,8 @@ private:
         for(int i = 0; i < out.rows(); i++)
         {
             // We cast away the constness to allow temporary expressions: https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
-            const_cast<OutValue&>(out_value)(i) = out[i].value();
-            const_cast<OutJacobian&>(out_jacobian)(i, Eigen::all) = out[i].derivatives().transpose();
+            const_cast<OutValue&>(out_value)(i) += out[i].value();
+            const_cast<OutJacobian&>(out_jacobian)(i, Eigen::all) += out[i].derivatives().transpose();
         }
     }
 

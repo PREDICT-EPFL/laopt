@@ -53,6 +53,21 @@ struct ID : public Differentiable<ID, true>
     }
 };
 
+template<typename F, typename Tag = DefaultTag>
+struct NEG : public Differentiable<NEG<F, Tag>, true>
+{
+    F& f;
+
+    explicit NEG(F& f) : f(f) {}
+
+    template<typename... Args>
+    EIGEN_STRONG_INLINE auto
+    function_impl(const Eigen::MatrixBase<Args>&... args) noexcept
+    {
+        return -f(Tag{}, args...);
+    }
+};
+
 //
 // For a given function F with Tag, EQ<F, Tag> is the function eq(xp, x...) = -xp + F(Tag, x...)
 //
