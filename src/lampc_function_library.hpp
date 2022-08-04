@@ -46,7 +46,7 @@ struct ID : public Differentiable<ID, true>
 
     template <typename Weight, typename OutGradient, typename OutHessian, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
-    hessian_impl(OutGradient&& out_gradient, OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
+    hessian_impl(OutGradient& out_gradient, OutHessian& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
     {
         // Hessian is zero, i.e., we don't set any values
         return gradient(std::forward<OutGradient>(out_gradient), weight, x);

@@ -143,28 +143,28 @@ public:
     }
 
     // captures the function call for variables with tag
-    template<typename Tag, typename Scalar, int... size, typename Dummy = void, typename = typename std::enable_if<!tagless, Dummy>::type>
+    template<typename Tag, typename... Args, typename Dummy = void, typename = typename std::enable_if<!tagless, Dummy>::type>
     EIGEN_STRONG_INLINE auto
-    function(Tag, const Variable<Scalar, size>&... args) noexcept
+    function(Tag, const IndexedVector<Args>&... args) noexcept
     {
         auto capture = [&](auto f)
         {
             return f(args...);
         };
-        using Info = FuncInfo<Derived, Tag, Variable<Scalar, size>...>;
+        using Info = FuncInfo<Derived, Tag, Args...>;
         return FunctionCapture<Derived, Tag, Info, decltype(capture)>(*static_cast<Derived*>(this), capture);
     }
 
     // captures the function call for variables without tag
-    template<typename Scalar, int... size, typename Dummy = void, typename = typename std::enable_if<tagless, Dummy>::type>
+    template<typename... Args, typename Dummy = void, typename = typename std::enable_if<tagless, Dummy>::type>
     EIGEN_STRONG_INLINE auto
-    function(const Variable<Scalar, size>&... args) noexcept
+    function(const IndexedVector<Args>&... args) noexcept
     {
         auto capture = [&](auto f)
         {
             return f(args...);
         };
-        using Info = FuncInfo<Derived, DefaultTag, Variable<Scalar, size>...>;
+        using Info = FuncInfo<Derived, DefaultTag, Args...>;
         return FunctionCapture<Derived, DefaultTag, Info, decltype(capture)>(*static_cast<Derived*>(this), capture);
     }
 
@@ -203,34 +203,34 @@ public:
 
     // user specified jacobian code with tag
     template <typename Tag, typename OutValue, typename OutJacobian, typename... Args>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, Tag, OutValue, OutJacobian, Eigen::MatrixBase<Args>...>() == true && !tagless, void>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, Tag, OutValue&, OutJacobian&, Eigen::MatrixBase<Args>...>() == true && !tagless, void>::type
     jacobian(Tag&& tag, OutValue&& out_value, OutJacobian&& out_jacobian, const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        static_cast<Derived*>(this)->jacobian_impl(std::forward<Tag>(tag), std::forward<OutValue>(out_value), std::forward<OutJacobian>(out_jacobian), args...);
+        static_cast<Derived*>(this)->jacobian_impl(std::forward<Tag>(tag), out_value, out_jacobian, args...);
     }
 
     // user specified jacobian code without tag
     template <typename OutValue, typename OutJacobian, typename... Args>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, OutValue, OutJacobian, Eigen::MatrixBase<Args>...>() == true && tagless, void>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, OutValue&, OutJacobian&, Eigen::MatrixBase<Args>...>() == true && tagless, void>::type
     jacobian(OutValue&& out_value, OutJacobian&& out_jacobian, const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        static_cast<Derived*>(this)->jacobian_impl(std::forward<OutValue>(out_value), std::forward<OutJacobian>(out_jacobian), args...);
+        static_cast<Derived*>(this)->jacobian_impl(out_value, out_jacobian, args...);
     }
 
     // default internal jacobian code
     template <typename Tag, typename OutValue, typename OutJacobian, typename... Args>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, Tag, OutValue, OutJacobian, Eigen::MatrixBase<Args>...>() == false && !tagless, void>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, Tag, OutValue&, OutJacobian&, Eigen::MatrixBase<Args>...>() == false && !tagless, void>::type
     jacobian(Tag&& tag, OutValue&& out_value, OutJacobian&& out_jacobian, const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        jacobian_impl_autodiff(std::forward<Tag>(tag), std::forward<OutValue>(out_value), std::forward<OutJacobian>(out_jacobian), args...);
+        jacobian_impl_autodiff(std::forward<Tag>(tag), out_value, out_jacobian, args...);
     }
 
     // delegate jacobian without tag
     template <typename OutValue, typename OutJacobian, typename... Args>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, OutValue, OutJacobian, Eigen::MatrixBase<Args>...>() == false && tagless, void>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, OutValue&, OutJacobian&, Eigen::MatrixBase<Args>...>() == false && tagless, void>::type
     jacobian(OutValue&& out_value, OutJacobian&& out_jacobian, const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        jacobian_impl_autodiff(DefaultTag{}, std::forward<OutValue>(out_value), std::forward<OutJacobian>(out_jacobian), args...);
+        jacobian_impl_autodiff(DefaultTag{}, out_value, out_jacobian, args...);
     }
 
     // define DefaultTag for jacobian
@@ -297,7 +297,7 @@ public:
 
     // user specified gradient code with tag
     template <typename Tag, typename Weight, typename OutGradient, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, Tag, OutGradient, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == true && !tagless, scalar_t>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, Tag, OutGradient&, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == true && !tagless, scalar_t>::type
     gradient(Tag&& tag, OutGradient&& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<Args>&... args) noexcept
     {
         return static_cast<Derived*>(this)->gradient_impl(std::forward<Tag>(tag), out_gradient, weight, args...);
@@ -305,26 +305,26 @@ public:
 
     // user specified gradient code without tag
     template <typename Weight, typename OutGradient, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, OutGradient, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == true && tagless, scalar_t>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, OutGradient&, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == true && tagless, scalar_t>::type
     gradient(OutGradient&& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        return static_cast<Derived*>(this)->gradient_impl(std::forward<OutGradient>(out_gradient), weight, args...);
+        return static_cast<Derived*>(this)->gradient_impl(out_gradient, weight, args...);
     }
 
     // default internal gradient code
     template <typename Tag, typename Weight, typename OutGradient, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, Tag, OutGradient, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && !tagless, scalar_t>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, Tag, OutGradient&, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && !tagless, scalar_t>::type
     gradient(Tag&& tag, OutGradient&& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        return gradient_impl_autodiff(std::forward<Tag>(tag), std::forward<OutGradient>(out_gradient), weight, args...);
+        return gradient_impl_autodiff(std::forward<Tag>(tag), out_gradient, weight, args...);
     }
 
     // delegate gradient without tag
     template <typename Weight, typename OutGradient, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, OutGradient, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && tagless, scalar_t>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, OutGradient&, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && tagless, scalar_t>::type
     gradient(OutGradient&& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        return gradient_impl_autodiff(DefaultTag{}, std::forward<OutGradient>(out_gradient), weight, args...);
+        return gradient_impl_autodiff(DefaultTag{}, out_gradient, weight, args...);
     }
 
     // define DefaultTag for gradient
@@ -344,23 +344,23 @@ public:
 
     // user specified hessian code with tag
     template <typename Tag, typename Weight, typename OutGradient, typename OutHessian, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, Tag, OutGradient, OutHessian, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == true && !tagless, scalar_t>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, Tag, OutGradient&, OutHessian&, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == true && !tagless, scalar_t>::type
     hessian(Tag&& tag, OutGradient&& out_gradient, OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        return static_cast<Derived*>(this)->hessian_impl(std::forward<Tag>(tag), std::forward<OutGradient>(out_gradient), std::forward<OutHessian>(out_hessian), weight, args...);
+        return static_cast<Derived*>(this)->hessian_impl(std::forward<Tag>(tag), out_gradient, out_hessian, weight, args...);
     }
 
     // user specified hessian code without tag
     template <typename Weight, typename OutGradient, typename OutHessian, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, OutGradient, OutHessian, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == true && tagless, scalar_t>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, OutGradient&, OutHessian&, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == true && tagless, scalar_t>::type
     hessian(OutGradient&& out_gradient, OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        return static_cast<Derived*>(this)->hessian_impl(std::forward<OutGradient>(out_gradient), std::forward<OutHessian>(out_hessian), weight, args...);
+        return static_cast<Derived*>(this)->hessian_impl(out_gradient, out_hessian, weight, args...);
     }
 
     // default internal hessian code
     template <typename Tag, typename Weight, typename OutGradient, typename OutHessian, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, Tag, OutGradient, OutHessian, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && !tagless, scalar_t>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, Tag, OutGradient&, OutHessian&, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && !tagless, scalar_t>::type
     hessian(Tag&& tag, OutGradient&& out_gradient, OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<Args>&... args) noexcept
     {
         return hessian_impl_autodiff(std::forward<Tag>(tag), out_gradient, out_hessian, weight, args...);
@@ -368,10 +368,10 @@ public:
 
     // delegate hessian without tag
     template <typename Weight, typename OutGradient, typename OutHessian, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, OutGradient, OutHessian, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && tagless, scalar_t>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, OutGradient&, OutHessian&, Eigen::MatrixBase<Weight>, Eigen::MatrixBase<Args>...>() == false && tagless, scalar_t>::type
     hessian(OutGradient&& out_gradient, OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        return hessian_impl_autodiff(DefaultTag{}, std::forward<OutGradient>(out_gradient), std::forward<OutHessian>(out_hessian), weight, args...);
+        return hessian_impl_autodiff(DefaultTag{}, out_gradient, out_hessian, weight, args...);
     }
 
     // define DefaultTag for hessian
@@ -399,7 +399,7 @@ private:
     EIGEN_STRONG_INLINE void
     jacobian_impl_autodiff(
             Tag&& tag, // Function to call
-            const OutValue& out_value, const OutJacobian& out_jacobian, // Outputs
+            OutValue& out_value, OutJacobian& out_jacobian, // Outputs
             const Eigen::MatrixBase<Args>&... args) noexcept // Function arguments
     {
         // Compute the scalar type
@@ -419,9 +419,8 @@ private:
         // Copy out into output variables
         for(int i = 0; i < out.rows(); i++)
         {
-            // We cast away the constness to allow temporary expressions: https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
-            const_cast<OutValue&>(out_value)(i) += out[i].value();
-            const_cast<OutJacobian&>(out_jacobian)(i, Eigen::all) += out[i].derivatives().transpose();
+            out_value(i) += out[i].value();
+            out_jacobian(i, Eigen::all) += out[i].derivatives().transpose();
         }
     }
 
@@ -476,7 +475,7 @@ private:
             typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
     hessian_impl_autodiff(Tag&& tag,
-                          const OutGradient& out_gradient, const OutHessian& out_hessian,
+                          OutGradient& out_gradient, OutHessian& out_hessian,
                           const Eigen::MatrixBase<Weight>& weight,
                           const Eigen::MatrixBase<Args>&... args) noexcept
     {
@@ -499,10 +498,10 @@ private:
         for(int i = 0; i < num_outputs; i++) {
             value += weight(i) * out[i].value().value();
             // We cast away the constness to allow temporary expressions: https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
-            const_cast<OutGradient&>(out_gradient) += weight(i) * out[i].value().derivatives();
+            out_gradient += weight(i) * out[i].value().derivatives();
 
             for (int j = 0; j < num_inputs; j++) {
-                const_cast<OutHessian&>(out_hessian)(j, Eigen::all) += weight(i) * out[i].derivatives()(j).derivatives().transpose();
+                out_hessian(j, Eigen::all) += weight(i) * out[i].derivatives()(j).derivatives().transpose();
             }
         }
 
@@ -580,7 +579,7 @@ private:
             typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
     inline scalar_t
     gradient_impl_autodiff(Tag&& tag,
-                           const Gradient& out_gradient,
+                           Gradient& out_gradient,
                            const Eigen::MatrixBase<Weight>& weight,
                            const Eigen::MatrixBase<Args>&... args) noexcept
     {
@@ -592,8 +591,7 @@ private:
         Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
         value.array() = 0; jacobian.array() = 0;
         this->jacobian(std::forward<Tag>(tag), value, jacobian, args...);
-        // We cast away the constness to allow temporary expressions: https://eigen.tuxfamily.org/dox/TopicFunctionTakingEigenTypes.html
-        const_cast<Gradient&>(out_gradient) += weight.transpose() * jacobian;
+        out_gradient += weight.transpose() * jacobian;
         return weight.dot(value);
     }
 
