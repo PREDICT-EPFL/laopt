@@ -58,14 +58,10 @@ public:
     std::array<Variable<OCP::NX>, N + 1> X;
     std::array<Variable<OCP::NU>, N + 1> U;
 
-    // Functions we use to define the eq constraints for the dynamics
-    lampc::lib::EQ<dsys_t> dsys_eq;
-
     explicit MultipleShootingTranscription(OCP &ocp_) :
     ocp(ocp_),
     dsys(*this, ocp.tf / N),
-    terminal_cost(*this),
-    dsys_eq(dsys)
+    terminal_cost(*this)
     {
         for(int i = 0; i < N + 1; i++)
         {
@@ -102,8 +98,7 @@ public:
         // add dynamics constraints
         for (int i = 0; i < N; i++)
         {
-//            problem.add_constr(X[i + 1] - dsys(X[i], U[i]) == 0);
-            problem.add_constr(dsys_eq(X[i + 1], X[i], U[i]) == 0);
+            problem.add_constr(X[i + 1] - dsys(X[i], U[i]) == 0);
         }
 
 //        // add last input constraint

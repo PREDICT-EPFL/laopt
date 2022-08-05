@@ -9,23 +9,28 @@ namespace lib {
 
 struct ID : public Differentiable<ID, true>
 {
+    const double multiplier;
+
+    ID() : multiplier(1) {}
+    explicit ID(double multiplier) : multiplier(multiplier) {}
+
     template<typename X>
     EIGEN_STRONG_INLINE typename X::PlainObject
     function_impl(const Eigen::MatrixBase<X>& x) noexcept
     {
-        return x;
+        return multiplier * x;
     }
 
     template<typename OutValue, typename OutJacobian, typename X>
     EIGEN_STRONG_INLINE void
     jacobian_impl(OutValue& value, OutJacobian& jac, const Eigen::MatrixBase<X>& x) noexcept
     {
-        value = x;
+        value = multiplier * x;
 
         using scalar_t = typename Eigen::MatrixBase<X>::Scalar;
         for(int i = 0; i < value.rows(); i++)
         {
-            jac(Eigen::seqN(i,Eigen::fix<1>), Eigen::seqN(i, Eigen::fix<1>)) = Eigen::Matrix<scalar_t, 1, 1>::Constant(1);
+            jac(Eigen::seqN(i,Eigen::fix<1>), Eigen::seqN(i, Eigen::fix<1>)) = Eigen::Matrix<scalar_t, 1, 1>::Constant(multiplier);
         }
     }
 
@@ -33,20 +38,20 @@ struct ID : public Differentiable<ID, true>
     EIGEN_STRONG_INLINE scalar_t
     wsum_impl(const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
     {
-        return weight.dot(x);
+        return multiplier * weight.dot(x);
     }
 
     template <typename Weight, typename OutGradient, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
     gradient_impl(OutGradient& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
     {
-        out_gradient += weight;
+        out_gradient += multiplier * weight;
         return wsum(weight, x);
     }
 
     template <typename Weight, typename OutGradient, typename OutHessian, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
-    hessian_impl(OutGradient& out_gradient, OutHessian& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
+    hessian_impl(OutGradient& out_gradient, OutHessian&, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
     {
         // Hessian is zero, i.e., we don't set any values
         return gradient(std::forward<OutGradient>(out_gradient), weight, x);
@@ -62,7 +67,7 @@ struct NEG : public Differentiable<NEG<F, Tag>, true>
 
     template<typename... Args>
     EIGEN_STRONG_INLINE auto
-    function_impl(const Eigen::MatrixBase<Args>&... args) noexcept
+    function_impl(const Eigen::MatrixBase<Args>&... args) noexcept -> decltype(f(Tag{}, args...))
     {
         return -f(Tag{}, args...);
     }
