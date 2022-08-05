@@ -101,8 +101,8 @@ public:
             problem.add_constr(X[i + 1] - dsys(X[i], U[i]) == 0);
         }
 
-//        // add last input constraint
-//        problem.add_constr(U[N] == U[N - 1]);
+        // add last input constraint
+        problem.add_constr(U[N] - U[N - 1] == 0);
     }
 };
 

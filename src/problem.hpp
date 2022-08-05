@@ -237,6 +237,13 @@ AddExpr<DerivedLhs, DerivedRhs> operator+(const ExprBase<DerivedLhs>& lhs, const
     return AddExpr<DerivedLhs, DerivedRhs>(lhs.derived(), rhs.derived());
 }
 
+// we need this special case to be not ambiguous with Eigen
+template<typename DerivedLhs, typename DerivedRhs>
+AddExpr<IndexedVector<DerivedLhs>, IndexedVector<DerivedRhs>> operator+(const IndexedVector<DerivedLhs>& lhs, const IndexedVector<DerivedRhs>& rhs)
+{
+    return AddExpr<IndexedVector<DerivedLhs>, IndexedVector<DerivedRhs>>(lhs, rhs);
+}
+
 template<typename DerivedLhs, typename DerivedRhs>
 class SubExpr : public ExprBase<SubExpr<DerivedLhs, DerivedRhs>>
 {
@@ -255,6 +262,13 @@ template<typename DerivedLhs, typename DerivedRhs>
 SubExpr<DerivedLhs, DerivedRhs> operator-(const ExprBase<DerivedLhs>& lhs, const ExprBase<DerivedRhs>& rhs)
 {
     return SubExpr<DerivedLhs, DerivedRhs>(lhs.derived(), rhs.derived());
+}
+
+// we need this special case to be not ambiguous with Eigen
+template<typename DerivedLhs, typename DerivedRhs>
+SubExpr<IndexedVector<DerivedLhs>, IndexedVector<DerivedRhs>> operator-(const IndexedVector<DerivedLhs>& lhs, const IndexedVector<DerivedRhs>& rhs)
+{
+    return SubExpr<IndexedVector<DerivedLhs>, IndexedVector<DerivedRhs>>(lhs, rhs);
 }
 
 /**
