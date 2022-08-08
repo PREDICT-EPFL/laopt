@@ -7,12 +7,12 @@ namespace lampc {
 
 namespace lib {
 
-struct ID : public Differentiable<ID, true>
+struct IDENTITY : public Differentiable<IDENTITY, true>
 {
     const double multiplier;
 
-    ID() : multiplier(1) {}
-    explicit ID(double multiplier) : multiplier(multiplier) {}
+    IDENTITY() : multiplier(1) {}
+    explicit IDENTITY(double multiplier) : multiplier(multiplier) {}
 
     template<typename X>
     EIGEN_STRONG_INLINE typename X::PlainObject
@@ -70,40 +70,6 @@ struct NEG : public Differentiable<NEG<F, Tag>, true>
     function_impl(const Eigen::MatrixBase<Args>&... args) noexcept -> decltype(f(Tag{}, args...))
     {
         return -f(Tag{}, args...);
-    }
-};
-
-//
-// For a given function F with Tag, EQ<F, Tag> is the function eq(xp, x...) = -xp + F(Tag, x...)
-//
-template<typename F, typename Tag = DefaultTag>
-struct EQ : public Differentiable<EQ<F, Tag>, true>
-{
-    F& f;
-
-    explicit EQ(F& f) : f(f) {}
-
-    template<typename XP, typename... X>
-    EIGEN_STRONG_INLINE typename XP::PlainObject
-    function_impl(const Eigen::MatrixBase<XP>& xp, const Eigen::MatrixBase<X>&... x) noexcept
-    {
-        return f(Tag{}, x...) - xp;
-    }
-
-    template<typename OutValue, typename OutJacobian, typename XP, typename... X>
-    EIGEN_STRONG_INLINE void
-    jacobian_impl(OutValue& value, OutJacobian& jac, const Eigen::MatrixBase<XP>& xp, const Eigen::MatrixBase<X>&... x) noexcept
-    {
-        // Jacobian is [-I jac_f]
-        constexpr int nx = XP::RowsAtCompileTime;
-        f.jacobian(Tag{}, value, jac(Eigen::all, Eigen::seq(nx, Eigen::last)), x...);
-        value -= xp;
-
-        using scalar_t = typename Eigen::MatrixBase<XP>::Scalar;
-        for(int i = 0; i < value.rows(); i++)
-        {
-            jac(Eigen::seqN(i,Eigen::fix<1>), Eigen::seqN(i, Eigen::fix<1>)) = Eigen::Matrix<scalar_t,1,1>::Constant(-1);
-        }
     }
 };
 

@@ -912,7 +912,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE auto
     function(const IndexedVector<Derived>& indexed_vector)
     {
-        lib::ID id;
+        lib::IDENTITY id;
         return id.function(indexed_vector.cast_base());
     }
 
@@ -920,7 +920,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE void
     jacobian(const IndexedVector<Derived>& indexed_vector, const OutIndices& out_indices, VectorFunction<Matrix, Vector>& out)
     {
-        lib::ID id;
+        lib::IDENTITY id;
         id.jacobian(out.value(out_indices),
                     out.jacobian(out_indices, indexed_vector.indices()),
                     indexed_vector.cast_base());
@@ -930,7 +930,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE auto
     wsum(const IndexedVector<Derived>& indexed_vector, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
     {
-        lib::ID id;
+        lib::IDENTITY id;
         return id.wsum(out.weights(out_indices),
                        indexed_vector.cast_base());
     }
@@ -939,7 +939,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE auto
     gradient(const IndexedVector<Derived>& indexed_vector, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
     {
-        lib::ID id;
+        lib::IDENTITY id;
         return id.gradient(out.gradient(indexed_vector.indices()),
                            out.weights(out_indices),
                            indexed_vector.cast_base());
@@ -949,7 +949,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE auto
     hessian(const IndexedVector<Derived>& indexed_vector, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
     {
-        lib::ID id;
+        lib::IDENTITY id;
         return id.hessian(out.gradient(indexed_vector.indices()),
                           out.hessian(indexed_vector.indices(), indexed_vector.indices()),
                           out.weights(out_indices),
@@ -1027,7 +1027,7 @@ struct ExprEvaluator<NegExpr<IndexedVector<Derived>>>
     static EIGEN_STRONG_INLINE auto
     function(const NegExpr<IndexedVector<Derived>>& expr)
     {
-        lib::ID id(-1);
+        lib::IDENTITY id(-1);
         return id.function(expr.expr.cast_base());
     }
 
@@ -1035,7 +1035,7 @@ struct ExprEvaluator<NegExpr<IndexedVector<Derived>>>
     static EIGEN_STRONG_INLINE void
     jacobian(const NegExpr<IndexedVector<Derived>>& expr, const OutIndices& out_indices, VectorFunction<Matrix, Vector>& out)
     {
-        lib::ID id(-1);
+        lib::IDENTITY id(-1);
         id.jacobian(out.value(out_indices),
                     out.jacobian(out_indices, expr.expr.indices()),
                     expr.expr.cast_base());
@@ -1045,7 +1045,7 @@ struct ExprEvaluator<NegExpr<IndexedVector<Derived>>>
     static EIGEN_STRONG_INLINE auto
     wsum(const NegExpr<IndexedVector<Derived>>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
     {
-        lib::ID id(-1);
+        lib::IDENTITY id(-1);
         return id.wsum(out.weights(out_indices),
                        expr.expr.cast_base());
     }
@@ -1054,7 +1054,7 @@ struct ExprEvaluator<NegExpr<IndexedVector<Derived>>>
     static EIGEN_STRONG_INLINE auto
     gradient(const NegExpr<IndexedVector<Derived>>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
     {
-        lib::ID id(-1);
+        lib::IDENTITY id(-1);
         return id.gradient(out.gradient(expr.expr.indices()),
                            out.weights(out_indices),
                            expr.expr.cast_base());
@@ -1064,7 +1064,7 @@ struct ExprEvaluator<NegExpr<IndexedVector<Derived>>>
     static EIGEN_STRONG_INLINE auto
     hessian(const NegExpr<IndexedVector<Derived>>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
     {
-        lib::ID id(-1);
+        lib::IDENTITY id(-1);
         return id.hessian(out.gradient(expr.expr.indices()),
                           out.hessian(expr.expr.indices(), expr.expr.indices()),
                           out.weights(out_indices),
