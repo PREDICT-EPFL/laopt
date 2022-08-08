@@ -190,11 +190,11 @@ protected:
         scalar_t value = 0;
 
         // Copy into buffers
-        for(int i = 0; i < num_outputs; i++) {
+        for(size_t i = 0; i < num_outputs; i++) {
             value += weight(i) * out[i].value().value();
             out_gradient += weight(i) * out[i].value().derivatives();
 
-            for (int j = 0; j < num_inputs; j++) {
+            for (size_t j = 0; j < num_inputs; j++) {
                 out_hessian(j, Eigen::all) += weight(i) * out[i].derivatives()(j).derivatives().transpose();
             }
         }
@@ -210,11 +210,11 @@ protected:
         constexpr size_t n = X::RowsAtCompileTime;
         Eigen::Vector<outerADScalar, n> y;
         // y = x;
-        for (int i=0; i<n; i++) {
+        for (size_t i = 0; i < n; i++) {
             y(i).value().value() = x(i);
             y(i).value().derivatives().setZero();
             y(i).derivatives().setZero();
-            for (int j = 0; j < n; j++) {
+            for (size_t j = 0; j < n; j++) {
                 y(i).derivatives()(j).derivatives().setZero();
             }
         }

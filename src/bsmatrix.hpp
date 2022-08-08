@@ -185,7 +185,7 @@ struct BSMatrix
   Eigen::SparseMatrix<bool> sparsity_structure;
   const std::vector<Segment>  segments;
   const std::vector<CopyInfo> copies;
-  int copy_index; // Current index into copies
+  size_t copy_index; // Current index into copies
 
   scalar_t* target = NULL; // Where we're going to write the data
 
@@ -196,7 +196,7 @@ struct BSMatrix
   inline void execute_operation(Op op, const scalar_t *source)
   {
     int segment_index = copies[copy_index].segment_index;
-    for(int i=0; i<copies[copy_index].num_segments_to_copy; i++)
+    for(size_t i=0; i<copies[copy_index].num_segments_to_copy; i++)
     {
       size_t length = segments[segment_index + i].length;
       size_t index = segments[segment_index + i].index;
@@ -806,7 +806,7 @@ public:
 
 	void resize(Eigen::Index rows, Eigen::Index cols)
 	{
-		if((rows > this->m_rows || cols > this->m_cols) && rows > 0 && cols > 0)
+		if(rows > 0 && cols > 0 && ((size_t) rows > this->m_rows || (size_t) cols > this->m_cols))
 		{
 			// This should never happen during deployment
 			m_mat.conservativeResize(rows, cols);

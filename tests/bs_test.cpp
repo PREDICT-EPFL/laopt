@@ -216,15 +216,6 @@ void test_assignment_speeds()
     const std::array<int, 5> rows{6,7,0,1,2};
     const std::array<int, 5> cols{7,5,3,1,0};
 
-    const lampc::Segment row1{.index=6, .length=2};
-    const lampc::Segment row2{.index=0, .length=3};
-
-    const lampc::Segment col1{.index=7, .length=1};
-    const lampc::Segment col2{.index=5, .length=1};
-    const lampc::Segment col3{.index=3, .length=1};
-    const lampc::Segment col4{.index=1, .length=1};
-    const lampc::Segment col5{.index=0, .length=1};
-
     lampc::BSMatrixDenseDeployment<scalar_t> M;
     Matrix<10,10> buffer(10,10);
     M.set_buffer(buffer);
@@ -242,12 +233,12 @@ void test_assignment_speeds()
 
     auto start = std::chrono::steady_clock::now();
     auto end = std::chrono::steady_clock::now();
-    std::size_t NUM_EXP = 1000000;
+    size_t NUM_EXP = 1000000;
 
     double acc;
     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
     start = std::chrono::steady_clock::now();
-    for(int i = 0; i < NUM_EXP; ++i)
+    for(size_t i = 0; i < NUM_EXP; ++i)
     {
         buffer(6,7) = i+1;
         target = source(rows, cols);
@@ -261,7 +252,7 @@ void test_assignment_speeds()
 
     // acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
     // start = std::chrono::steady_clock::now();
-    // for(int i = 0; i < NUM_EXP; ++i)
+    // for(size_t i = 0; i < NUM_EXP; ++i)
     // {
     //     buffer(6,7) = i+1;
     //     target = source(multiSeq(seqN(6,2),seqN(0,3)), multiSeq(seqN(7,1),seqN(5,1),seqN(3,1),seqN(1,1),seqN(0,1)));
@@ -275,7 +266,7 @@ void test_assignment_speeds()
 
     // acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
     // start = std::chrono::steady_clock::now();
-    // for(int i = 0; i < NUM_EXP; ++i)
+    // for(size_t i = 0; i < NUM_EXP; ++i)
     // {
     //     buffer(6,7) = i+1;
     //     target = source(lampc::multiSeq_to_index<5>({row1, row2}), lampc::multiSeq_to_index<5>({col1, col2, col3, col4, col5}));
@@ -289,7 +280,7 @@ void test_assignment_speeds()
 
     // acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
     // start = std::chrono::steady_clock::now();
-    // for(int i = 0; i < NUM_EXP; ++i)
+    // for(size_t i = 0; i < NUM_EXP; ++i)
     // {
     //     source(0,0) = i+1;
     //     target = source;
@@ -303,7 +294,7 @@ void test_assignment_speeds()
 
     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
     start = std::chrono::steady_clock::now();
-    for(int i = 0; i < NUM_EXP; ++i)
+    for(size_t i = 0; i < NUM_EXP; ++i)
     {
         buffer(6,7) = i+1;
         target = buffer(rows, cols);
@@ -317,7 +308,7 @@ void test_assignment_speeds()
 
     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
     start = std::chrono::steady_clock::now();
-    for(int i = 0; i < NUM_EXP; ++i)
+    for(size_t i = 0; i < NUM_EXP; ++i)
     {
         source(0,0) = i+1;
         target = map;
@@ -331,7 +322,7 @@ void test_assignment_speeds()
 
     acc = 0; buffer.array() = 0; target.array() = 0; source.array() = 0;
     start = std::chrono::steady_clock::now();
-    for(int i = 0; i < NUM_EXP; ++i)
+    for(size_t i = 0; i < NUM_EXP; ++i)
     {
         map_buffer(6,7) = i+1;
         target = map_buffer(rows, cols);

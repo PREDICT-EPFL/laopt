@@ -122,22 +122,6 @@ int main()
     std::cout << "Jacobian = \n" << J << std::endl;
     std::cout << "val = " << val.transpose() << std::endl;
 
-    std::cout << "\n\n=== TESTING EQ ===" << std::endl;
-    lampc::lib::EQ<User, User::Sys> eq_sys(user);
-
-    std::cout << "--- Calling function ---" << std::endl;
-    User::state_t<double> xp;
-    xp << 1, 2;
-    val = eq_sys.function(xp, x, u);
-    std::cout << "val = " << val.transpose() << std::endl;
-
-    std::cout << "--- Testing jacobian ---" << std::endl;
-    Eigen::Matrix<double, 2, 5> Jeq;
-    Jeq.array() = 0;
-    eq_sys.jacobian(val, Jeq, xp, x, u);
-    std::cout << "val = " << val.transpose() << std::endl;
-    std::cout << "Jeq = \n" << Jeq << std::endl;
-
     std::cout << "\n=== TESTING RK4 ===" << std::endl;
     lampc::lib::RK4<User, double, User::Sys> rk4_sys(user, 0.2);
 
@@ -149,20 +133,6 @@ int main()
     rk4_sys.jacobian(val, J, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
     std::cout << "val = " << val.transpose() << std::endl;
-
-    std::cout << "\n=== TESTING RK4 + EQ ===" << std::endl;
-    lampc::lib::EQ<lampc::lib::RK4<User, double, User::Sys>> eq_rk4_sys(rk4_sys);
-
-    std::cout << "--- Evaluation" << std::endl;
-    val = rk4_sys.function(x, u);
-    std::cout << "integrated value = " << val.transpose() << std::endl;
-    std::cout << "xp = " << xp.transpose() << std::endl;
-    val = eq_rk4_sys.function(xp, x, u);
-    std::cout << "eq val = " << val.transpose() << std::endl;
-
-    std::cout << "--- Jacobian" << std::endl;
-    eq_rk4_sys.jacobian(val, Jeq, xp, x, u);
-    std::cout << "Jeq = \n" << Jeq << std::endl;
 
     std::cout << "\n=== TESTING RK4 + RK4 + RK4 ===" << std::endl;
     lampc::lib::RK4<lampc::lib::RK4<User, double, User::Sys>, double> rk4_rk4_sys(rk4_sys, 0.3);
