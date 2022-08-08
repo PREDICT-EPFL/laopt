@@ -15,15 +15,12 @@ message(STATUS "Using IPOPT library found at ${Ipopt_INCLUDE_DIRS}")
 
 add_definitions(-DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB - For both Windows and UNIX
 
-# include_directories(polympc/src)
-# include_directories(qpmad/include/)
-
 option(BUILD_RELEASE "Build release version w/o debugging symbols" ON)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 
 if(BUILD_RELEASE)
@@ -34,8 +31,8 @@ else()
   message(STATUS "Building debug version")
 endif()
 
-include_directories(src ${EIGEN3_INCLUDE_DIR} ${CASADI_INCLUDE_DIR} ${Ipopt_INCLUDE_DIRS})
+include_directories(SYSTEM ${EIGEN3_INCLUDE_DIR} ${CASADI_INCLUDE_DIR} ${Ipopt_INCLUDE_DIRS})
+include_directories(src)
 
 add_subdirectory(examples)
-add_subdirectory(transpiler)
 add_subdirectory(tests)

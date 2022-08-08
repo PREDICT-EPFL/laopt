@@ -184,25 +184,25 @@ ExprLowerUpperBound<Derived, DerivedEq, DerivedEq> operator==(const DerivedEq& e
 template<typename Derived, typename DerivedLb, typename DerivedUb>
 ExprLowerUpperBound<Derived, DerivedLb, DerivedUb> operator<=(const ExprLowerBound<Derived, DerivedLb>& flb, const DerivedUb& ub)
 {
-    return ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>(flb.function_capture, flb.lb, ub);
+    return ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>(flb.expr, flb.lb, ub);
 }
 
 template<typename Derived, typename DerivedLb, typename DerivedUb>
 ExprLowerUpperBound<Derived, DerivedLb, DerivedUb> operator<=(const DerivedLb& lb, const ExprUpperBound<Derived, DerivedUb>& fub)
 {
-    return ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>(fub.function_capture, lb, fub.ub);
+    return ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>(fub.expr, lb, fub.ub);
 }
 
 template<typename Derived, typename DerivedLb, typename DerivedUb>
 ExprLowerUpperBound<Derived, DerivedLb, DerivedUb> operator>=(const DerivedUb& ub, const ExprLowerBound<Derived, DerivedLb>& flb)
 {
-    return ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>(flb.function_capture, flb.lb, ub);
+    return ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>(flb.expr, flb.lb, ub);
 }
 
 template<typename Derived, typename DerivedLb, typename DerivedUb>
 ExprLowerUpperBound<Derived, DerivedLb, DerivedUb> operator>=(const ExprUpperBound<Derived, DerivedUb>& fub, const DerivedLb& lb)
 {
-    return ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>(fub.function_capture, lb, fub.ub);
+    return ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>(fub.expr, lb, fub.ub);
 }
 
 template<typename Derived>
