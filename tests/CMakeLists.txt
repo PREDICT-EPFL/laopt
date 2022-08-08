@@ -34,16 +34,6 @@ target_link_libraries(
 )
 
 add_executable(
-  problem_test
-  problem_test.cpp
-)
-target_link_libraries(
-  problem_test
-  gtest_main
-  gtest
-)
-
-add_executable(
   indexed_vector_test
   indexed_vector_test.cpp
 )
@@ -73,4 +63,3 @@ add_executable(
 include(GoogleTest)
 gtest_discover_tests(func_test)
 gtest_discover_tests(bs_test)
-gtest_discover_tests(problem_test)
