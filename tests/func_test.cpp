@@ -91,15 +91,15 @@ TEST(FunctionTest, GetOutput)
     using Arg2 = Eigen::Vector<scalar_t, 1>;
 
 {
-    int n_inputs = lampc::FuncInfo<TestFunction<scalar_t>, lampc::DefaultTag, Arg1, Arg2>::n_inputs;
-    int n_outputs = lampc::FuncInfo<TestFunction<scalar_t>, lampc::DefaultTag, Arg1, Arg2>::n_outputs;
+    int n_inputs = TestFunction<scalar_t>::FuncInfo<Arg1, Arg2>::n_inputs;
+    int n_outputs = TestFunction<scalar_t>::FuncInfo<Arg1, Arg2>::n_outputs;
     EXPECT_EQ(n_inputs, 3);
     EXPECT_EQ(n_outputs, 2);
 }
 
 {
-    int n_inputs = lampc::FuncInfo<ScalarFunction<scalar_t>, lampc::DefaultTag, Arg1, Arg2>::n_inputs;
-    int n_outputs = lampc::FuncInfo<ScalarFunction<scalar_t>, lampc::DefaultTag, Arg1, Arg2>::n_outputs;
+    int n_inputs = ScalarFunction<scalar_t>::FuncInfo<Arg1, Arg2>::n_inputs;
+    int n_outputs = ScalarFunction<scalar_t>::FuncInfo<Arg1, Arg2>::n_outputs;
     EXPECT_EQ(n_inputs, 3);
     EXPECT_EQ(n_outputs, 1);
 }
@@ -112,7 +112,7 @@ TEST(FunctionTest, GetOutput)
     Eigen::Vector<scalar_t, 1> weight;
     weight << 1;
 
-    using info = lampc::FuncInfo<ScalarFunction<scalar_t>, lampc::DefaultTag, Arg1, Arg2>;
+    using info = ScalarFunction<scalar_t>::FuncInfo<Arg1, Arg2>;
     info::return_t ret;
     info::scalar_t value;
     info::gradient_t gradient;

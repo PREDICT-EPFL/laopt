@@ -13,43 +13,6 @@ namespace lampc
 
 struct DefaultTag {};
 
-struct FunctionImplNonExistenceError {};
-
-template<typename F, typename Tag, typename... Vars>
-static auto user_function_with_tag_return_t_selector(int) -> decltype(std::declval<F>().function_impl(Tag{}, std::declval<Vars>()...));
-template<typename F, typename Tag, typename... Vars>
-static auto user_function_with_tag_return_t_selector(long) -> FunctionImplNonExistenceError;
-
-template<typename F, typename... Vars>
-static auto user_function_without_tag_return_t_selector(int) -> decltype(std::declval<F>().function_impl(std::declval<Vars>()...));
-template<typename F, typename... Vars>
-static auto user_function_without_tag_return_t_selector(long) -> FunctionImplNonExistenceError;
-
-template<typename F, typename Tag, typename... Vars>
-struct FuncInfo
-{
-    using raw_return_t = std::conditional_t<
-            std::is_same<DefaultTag, std::remove_cv_t<std::remove_reference_t<Tag>>>::value,
-            decltype(user_function_without_tag_return_t_selector<F, std::remove_reference_t<Vars>...>(0)),
-            decltype(user_function_with_tag_return_t_selector<F, std::remove_reference_t<Tag>, std::remove_reference_t<Vars>...>(0))
-    >;
-    static_assert(!std::is_same<raw_return_t, FunctionImplNonExistenceError>::value, "function_impl does not exist or has incorrect arguments");
-
-    static constexpr int n_inputs = meta::sum_template<meta::matrix_info<std::remove_reference_t<Vars>>::RowsAtCompileTime...>();
-    static constexpr int n_outputs = meta::matrix_info<raw_return_t>::RowsAtCompileTime;
-
-    using scalar_t = typename meta::matrix_info<raw_return_t>::Scalar;
-
-    using return_t = Eigen::Vector<scalar_t, n_outputs>;
-    using jacobian_t = Eigen::Matrix<scalar_t, n_outputs, n_inputs>;
-    using gradient_t = Eigen::Vector<scalar_t, n_inputs>;
-    using hessian_t = Eigen::Matrix<scalar_t, n_inputs, n_inputs>;
-
-    using is_return_matrix = typename meta::matrix_info<raw_return_t>::is_matrix_t;
-
-    static_assert(n_outputs > 0 && n_inputs >= 0, "The function cannot have a dynamic size.");
-};
-
 /*
  * This struct captures a function call.
  * Capture is a lambda which takes another lambda as input which is then called with the original parameters.
@@ -325,8 +288,32 @@ class Differentiable;
 template<typename Derived>
 class Differentiable<Derived, false> : public DifferentiableBase<Differentiable<Derived, false>>
 {
+public:
+
+    template<typename Tag, typename... Vars>
+    struct FuncInfo
+    {
+        using raw_return_t = decltype(std::declval<Derived>().function_impl(Tag{}, std::declval<Vars>()...));
+
+        static constexpr int n_inputs = meta::sum_template<meta::matrix_info<std::remove_reference_t<Vars>>::RowsAtCompileTime...>();
+        static constexpr int n_outputs = meta::matrix_info<raw_return_t>::RowsAtCompileTime;
+
+        using scalar_t = typename meta::matrix_info<raw_return_t>::Scalar;
+
+        using return_t = Eigen::Vector<scalar_t, n_outputs>;
+        using jacobian_t = Eigen::Matrix<scalar_t, n_outputs, n_inputs>;
+        using gradient_t = Eigen::Vector<scalar_t, n_inputs>;
+        using hessian_t = Eigen::Matrix<scalar_t, n_inputs, n_inputs>;
+
+        using is_return_matrix = typename meta::matrix_info<raw_return_t>::is_matrix_t;
+
+        static_assert(n_outputs > 0 && n_inputs >= 0, "The function cannot have a dynamic size.");
+    };
+
+private:
+
     template<typename Tag, typename... Args>
-    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Tag, Eigen::MatrixBase<Args>...>::return_t
+    EIGEN_STRONG_INLINE typename FuncInfo<Tag, Eigen::MatrixBase<Args>...>::return_t
     call_function_impl_helper(meta::IsScalar, Tag&& tag, const Eigen::MatrixBase<Args>&... args) noexcept
     {
         Eigen::Matrix<meta::get_scalar_t<Args...>, 1, 1> out_value;
@@ -335,17 +322,17 @@ class Differentiable<Derived, false> : public DifferentiableBase<Differentiable<
     }
 
     template<typename Tag, typename... Args>
-    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Tag, Eigen::MatrixBase<Args>...>::return_t
+    EIGEN_STRONG_INLINE typename FuncInfo<Tag, Eigen::MatrixBase<Args>...>::return_t
     call_function_impl_helper(meta::IsMatrix, Tag&& tag, const Eigen::MatrixBase<Args>&... args) noexcept
     {
         return static_cast<Derived*>(this)->function_impl(std::forward<Tag>(tag), args...);
     }
 
     template<typename Tag, typename... Args>
-    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Tag, Eigen::MatrixBase<Args>...>::return_t
+    EIGEN_STRONG_INLINE typename FuncInfo<Tag, Eigen::MatrixBase<Args>...>::return_t
     call_function_impl(Tag&& tag, const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        using F = FuncInfo<Derived, Tag, Args...>;
+        using F = FuncInfo<Tag, Args...>;
         return call_function_impl_helper(typename F::is_return_matrix(), std::forward<Tag>(tag), args...);
     }
 
@@ -353,7 +340,7 @@ public:
 
     // user specified function
     template<typename Tag, typename... Args>
-    EIGEN_STRONG_INLINE typename FuncInfo<Derived, Tag, Eigen::MatrixBase<Args>...>::return_t
+    EIGEN_STRONG_INLINE typename FuncInfo<Tag, Eigen::MatrixBase<Args>...>::return_t
     function(Tag&& tag, const Eigen::MatrixBase<Args>&... args) noexcept
     {
         return call_function_impl(std::forward<Tag>(tag), args...);
@@ -368,7 +355,7 @@ public:
         {
             return f(args...);
         };
-        using Info = FuncInfo<Derived, Tag, Args...>;
+        using Info = FuncInfo<Tag, Args...>;
         return FunctionCapture<Derived, Tag, Info, decltype(capture)>(*static_cast<Derived*>(this), capture);
     }
 
@@ -440,8 +427,32 @@ public:
 template<typename Derived>
 class Differentiable<Derived, true> : public DifferentiableBase<Differentiable<Derived, true>>
 {
+public:
+
+    template<typename... Vars>
+    struct FuncInfo
+    {
+        using raw_return_t = decltype(std::declval<Derived>().function_impl(std::declval<Vars>()...));
+
+        static constexpr int n_inputs = meta::sum_template<meta::matrix_info<std::remove_reference_t<Vars>>::RowsAtCompileTime...>();
+        static constexpr int n_outputs = meta::matrix_info<raw_return_t>::RowsAtCompileTime;
+
+        using scalar_t = typename meta::matrix_info<raw_return_t>::Scalar;
+
+        using return_t = Eigen::Vector<scalar_t, n_outputs>;
+        using jacobian_t = Eigen::Matrix<scalar_t, n_outputs, n_inputs>;
+        using gradient_t = Eigen::Vector<scalar_t, n_inputs>;
+        using hessian_t = Eigen::Matrix<scalar_t, n_inputs, n_inputs>;
+
+        using is_return_matrix = typename meta::matrix_info<raw_return_t>::is_matrix_t;
+
+        static_assert(n_outputs > 0 && n_inputs >= 0, "The function cannot have a dynamic size.");
+    };
+
+private:
+
     template<typename... Args>
-    EIGEN_STRONG_INLINE typename FuncInfo<Derived, DefaultTag, Eigen::MatrixBase<Args>...>::return_t
+    EIGEN_STRONG_INLINE typename FuncInfo<Eigen::MatrixBase<Args>...>::return_t
     call_function_impl_helper(meta::IsScalar, const Eigen::MatrixBase<Args>&... args) noexcept
     {
         Eigen::Matrix<meta::get_scalar_t<Args...>, 1, 1> out_value;
@@ -450,17 +461,17 @@ class Differentiable<Derived, true> : public DifferentiableBase<Differentiable<D
     }
 
     template<typename... Args>
-    EIGEN_STRONG_INLINE typename FuncInfo<Derived, DefaultTag, Eigen::MatrixBase<Args>...>::return_t
+    EIGEN_STRONG_INLINE typename FuncInfo<Eigen::MatrixBase<Args>...>::return_t
     call_function_impl_helper(meta::IsMatrix, const Eigen::MatrixBase<Args>&... args) noexcept
     {
         return static_cast<Derived*>(this)->function_impl(args...);
     }
 
     template<typename... Args>
-    EIGEN_STRONG_INLINE typename FuncInfo<Derived, DefaultTag, Eigen::MatrixBase<Args>...>::return_t
+    EIGEN_STRONG_INLINE typename FuncInfo<Eigen::MatrixBase<Args>...>::return_t
     call_function_impl(const Eigen::MatrixBase<Args>&... args) noexcept
     {
-        using F = FuncInfo<Derived, DefaultTag, Args...>;
+        using F = FuncInfo<Args...>;
         return call_function_impl_helper(typename F::is_return_matrix(), args...);
     }
 
@@ -468,7 +479,7 @@ public:
 
     // user specified function code
     template<typename... Args>
-    EIGEN_STRONG_INLINE typename FuncInfo<Derived, DefaultTag, Eigen::MatrixBase<Args>...>::return_t
+    EIGEN_STRONG_INLINE typename FuncInfo<Eigen::MatrixBase<Args>...>::return_t
     function(const Eigen::MatrixBase<Args>&... args) noexcept
     {
         return call_function_impl(args...);
@@ -483,7 +494,7 @@ public:
         {
             return f(args...);
         };
-        using Info = FuncInfo<Derived, DefaultTag, Args...>;
+        using Info = FuncInfo<Args...>;
         return FunctionCapture<Derived, DefaultTag, Info, decltype(capture)>(*static_cast<Derived*>(this), capture);
     }
 
