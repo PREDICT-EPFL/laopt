@@ -33,6 +33,7 @@ struct FuncInfo
             decltype(user_function_without_tag_return_t_selector<F, std::remove_reference_t<Vars>...>(0)),
             decltype(user_function_with_tag_return_t_selector<F, std::remove_reference_t<Tag>, std::remove_reference_t<Vars>...>(0))
     >;
+    static_assert(!std::is_same<raw_return_t, FunctionImplNonExistenceError>::value, "function_impl does not exist or has incorrect arguments");
 
     static constexpr int n_inputs = meta::sum_template<meta::matrix_info<std::remove_reference_t<Vars>>::RowsAtCompileTime...>();
     static constexpr int n_outputs = meta::matrix_info<raw_return_t>::RowsAtCompileTime;
