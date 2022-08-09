@@ -1224,6 +1224,22 @@ public:
         problem.constraints.extend_variables(n);
         problem.lagrangian.extend_variables(n);
     }
+    template<int n, std::size_t N>
+    EIGEN_STRONG_INLINE void add_variable(std::array<Variable<Scalar, n>, N> & var_array)
+    {
+        for (auto &var : var_array)
+        {
+            problem.variable_callbacks.push_back(var.register_variable(problem.m_num_variables));
+            problem.m_num_variables += n;
+
+            problem.variable_bounds.extend_variables(n);
+            problem.variable_bounds.extend_rows(n); // already extend variable_bounds for bounds
+
+            problem.objective.extend_variables(n);
+            problem.constraints.extend_variables(n);
+            problem.lagrangian.extend_variables(n);
+        }
+    }
 
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_obj(Args...) {}
@@ -1242,8 +1258,8 @@ public:
     explicit ObjectiveEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem, WeightedSum<Matrix, Vector>& objective) :
         problem(problem), objective(objective) {}
 
-    template<int N>
-    EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, N>) {}
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_variable(Args...) {}
 
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value>::type
@@ -1295,8 +1311,8 @@ public:
     explicit VariableBoundsEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem, VectorFunction<Matrix, Vector>& variable_bounds) :
         problem(problem), variable_bounds(variable_bounds) {}
 
-    template<int n>
-    EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>) {}
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_variable(Args...) {}
 
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_obj(Args...) {}
@@ -1384,8 +1400,8 @@ private:
     }
 
 public:
-    template<int n>
-    EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>) {}
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_variable(Args...) {}
 
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_obj(Args...) {}
@@ -1430,8 +1446,8 @@ public:
     explicit WeightedSumConstraintsEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem, WeightedSum<Matrix, Vector>& constraints) :
         problem(problem), constraints(constraints) {}
 
-    template<int n>
-    EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>) {}
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_variable(Args...) {}
 
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_obj(Args...) {}
