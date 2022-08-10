@@ -94,9 +94,9 @@ TEST(BSMatrix, Construction_Complex) {
 
     // Partitioning and assembly function
     auto F = [&](auto& tape){
-        tape(Eigen::seqN(10,A.rows()),lampc::meta::concatenate_indices(Eigen::Vector<int,2>{10,11},Eigen::Vector<int,1>{5})) = A;
-        tape(lampc::meta::concatenate_indices(Eigen::Vector<int,2>{6,7}, Eigen::Vector<int,3>{0,1,2}),
-             lampc::meta::concatenate_indices(Eigen::Vector<int,1>{7},Eigen::Vector<int,1>{5},Eigen::Vector<int,1>{3},Eigen::Vector<int,1>{1},Eigen::Vector<int,1>{0})) = B;
+        tape(Eigen::seqN(10,A.rows()),lampc::concatenate_indices(Eigen::Vector<int,2>{10,11},Eigen::Vector<int,1>{5})) = A;
+        tape(lampc::concatenate_indices(Eigen::Vector<int,2>{6,7}, Eigen::Vector<int,3>{0,1,2}),
+             lampc::concatenate_indices(Eigen::Vector<int,1>{7},Eigen::Vector<int,1>{5},Eigen::Vector<int,1>{3},Eigen::Vector<int,1>{1},Eigen::Vector<int,1>{0})) = B;
     };
 
     auto BS = lampc::template makeBSMatrix<scalar_t>(F, 20,20);

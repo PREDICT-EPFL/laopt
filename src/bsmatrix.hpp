@@ -8,42 +8,6 @@
 
 #include "lampc_utility.hpp"
 
-
-// template<typename... Seq>
-// std::tuple<Seq...> multiSeq(Seq... seq)
-// {
-//   return std::make_tuple(seq...);
-// }
-
-// struct MultiSeq
-// {
-//   /**
-//    * Convert a multi-sequence to a list-of-integer sequence
-//    */
-//   template<typename... Seq>
-//   static std::vector<size_t> to_index(std::tuple<Seq...> mseq, size_t size)
-//   {
-//     return to_index_impl(mseq, size, std::make_index_sequence<sizeof... (Seq)>());
-//   }
-
-//   template<typename... Seq, size_t... I>
-//   static std::vector<size_t> to_index_impl(std::tuple<Seq...> mseq, size_t size, std::index_sequence<I...>)
-//   {
-//     Eigen::VectorXi index(size);
-//     index.setLinSpaced(size,0,size-1);
-//     std::vector<size_t> ret;
-
-//     auto extend_ret = [&ret](auto sub)
-//     {
-//       ret.insert(ret.end(), sub.begin(), sub.end());
-//     };
-
-//     auto l = { (extend_ret(index(std::get<I>(mseq))), 0)...};
-
-//     return ret;
-//   }
-// };
-
 namespace lampc
 {
 
@@ -52,98 +16,43 @@ namespace lampc
  */
 struct Segment
 {
-	size_t index;  // Index into the target.valuePtr()
-	size_t length; // Number of element to copy
+    size_t index;  // Index into the target.valuePtr()
+    size_t length; // Number of element to copy
 
-  bool operator==(const Segment other) const
-  {
-  	return other.index == index && other.length == length;
-  }
+    bool operator==(const Segment other) const {
+        return other.index == index && other.length == length;
+    }
 
-  /**
-   * Return an Eigen ArithmeticSequence representing this Segment
-   */
-	inline auto seq() const
-	{
-		return Eigen::seqN(index, length);
-	};
+    /**
+     * Return an Eigen ArithmeticSequence representing this Segment
+     */
+    inline auto seq() const {
+        return Eigen::seqN(index, length);
+    };
 };
+
 struct CopyInfo
 {
-  size_t segment_index;  // Index into segments
-  size_t num_segments_to_copy;  // Number of segments to copy to execute this task
+    size_t segment_index;  // Index into segments
+    size_t num_segments_to_copy;  // Number of segments to copy to execute this task
 };
-
-/**
- * Convert from a list of Segments into an integer array.
- * 
- * Note: Must know the length of the list at compile time
- */
-// template<int n>
-// inline Eigen::Vector<int, n> multiSeq_to_index(std::initializer_list<Segment> segs)
-// {
-// 	Eigen::Vector<int, n> ret;
-// 	int i = 0;
-// 	for(const auto& seg : segs) 
-// 		for(int j=seg.index; j<seg.index+seg.length; j++)
-// 			ret[i++] = j;
-// 	return ret;
-// }
-
-constexpr bool is_all_positive(std::initializer_list<int> values)
-{
-  for(auto i : values) if(i < 0) return false;
-  return true;
-}
-
-template<typename... T, int n=meta::sum_template<T::SizeAtCompileTime...>()>
-inline Eigen::Vector<int, n> multiSeq_to_index(T... segs)
-{
-  static_assert(is_all_positive({T::SizeAtCompileTime...}), "SIZES OF ARITHMETIC SEQUENCES MUST BE FIXED");
-
-  Eigen::Vector<int, n> ret;
-  int i = 0;
-
-  auto fillme = [&i, &ret](auto seg){
-    for(int j=0; j<decltype(seg)::SizeAtCompileTime; j++)
-      ret[i++] = seg[j];
-  };
-
-  auto l = {
-    (fillme(segs), 0)...
-  };
-  (void) l; // get rid of unused variable warning
-
-  // for(const auto& seg : segs) 
-  //   for(int j=seg.index; j<seg.index+seg.length; j++)
-  //     ret[i++] = j;
-  return ret;
-}
-
-
-// // Captures everything that has an operator[] defined (i.e., Eigen::ArithmeticSequence)
-// template<int len, typename T>
-// inline std::array<int, len> multiSeq_to_index(std::initializer_list<T> segs)
-// {
-//   std::array<int, len> ret;
-//   int i = 0;
-//   for(const auto& seg : segs) 
-//     for(int j=0; j<seg.size(); j++) ret[i++] = seg[j];
-//   return ret;
-// }
-
 
 inline std::ostream &operator<<(std::ostream &os, std::vector<Segment> const &sequence) 
 {
-  for(auto& seg: sequence)
-    os << "(" << seg.index << "," << seg.length << ")";
-  return os;
+    for (auto &seg: sequence)
+    {
+        os << "(" << seg.index << "," << seg.length << ")";
+    }
+    return os;
 }
+
 inline std::ostream &operator<<(std::ostream &os, std::vector<CopyInfo> const &sequence) 
 {
-  for(auto& seg: sequence)
-    os << "(" << seg.segment_index << "," << seg.num_segments_to_copy << ")";
-  return os;
+    for (auto&seg: sequence)
+    {
+        os << "(" << seg.segment_index << "," << seg.num_segments_to_copy << ")";
+    }
+    return os;
 }
 
 /**

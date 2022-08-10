@@ -3,8 +3,8 @@
 
 #include <iostream>
 #include <limits>
-#include "Eigen/Dense"
 #include <type_traits>
+#include "Eigen/Dense"
 
 namespace lampc
 {
@@ -90,28 +90,60 @@ namespace lampc
         };
         template<typename... Args>
         using get_scalar_t = typename get_scalar<Args...>::type;
+    }
 
-        /**
-         * Takes a parameter pack of Eigen::Vector's and concatenates
-         * them into a single Eigen::Vector.
-         * Everything must be fixed-size.
-         */
-        template<int... n>
-        Eigen::Vector<int, lampc::meta::sum_template<n...>()>
-        concatenate_indices(const Eigen::Vector<int, n>&... args)
-        {
-            Eigen::Vector<int, lampc::meta::sum_template<n...>()> out;
-            int offset = 0;
-            auto l = {
-                (
-                    out(Eigen::seqN(offset,n)) = args,
-                    offset += n,
-                    0
-                )...
-            };
-            (void) l; // get rid of unused variable warning
-            return out;
+    /**
+     * Takes a parameter pack of Eigen::Vector's and concatenates
+     * them into a single Eigen::Vector.
+     * Everything must be fixed-size.
+     */
+    template<int... n>
+    Eigen::Vector<int, meta::sum_template<n...>()>
+    concatenate_indices(const Eigen::Vector<int, n>&... args)
+    {
+        Eigen::Vector<int, meta::sum_template<n...>()> out;
+        int offset = 0;
+        auto l = {
+            (
+                out(Eigen::seqN(offset,n)) = args,
+                offset += n,
+                0
+            )...
+        };
+        (void) l; // get rid of unused variable warning
+        return out;
+    }
+
+    constexpr bool is_all_positive(std::initializer_list<int> values)
+    {
+        for (auto i: values) {
+            if (i < 0) {
+                return false;
+            }
         }
+        return true;
+    }
+
+    template<typename... T, int n = meta::sum_template<T::SizeAtCompileTime...>()>
+    inline Eigen::Vector<int, n> multiSeq_to_index(T... segments)
+    {
+        static_assert(is_all_positive({T::SizeAtCompileTime...}), "SIZES OF ARITHMETIC SEQUENCES MUST BE FIXED");
+
+        Eigen::Vector<int, n> ret;
+        int i = 0;
+
+        auto fill_me = [&i, &ret](auto seg) {
+            for (int j = 0; j < decltype(seg)::SizeAtCompileTime; j++) {
+                ret[i++] = seg[j];
+            }
+        };
+
+        auto l = {
+            (fill_me(segments), 0)...
+        };
+        (void) l; // get rid of unused variable warning
+
+        return ret;
     }
 
     template <typename T>
