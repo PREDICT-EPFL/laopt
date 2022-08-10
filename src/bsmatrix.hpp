@@ -8,28 +8,6 @@
 
 #include "lampc_utility.hpp"
 
-/**
- * Takes a parameter pack of Eigen::Vector's and concatenates
- * them into a single Eigen::Vector.
- * Everything must be fixed-size.
- */
-template<int... n>
-Eigen::Vector<int, lampc::meta::sum_template<n...>()>
-concatenate_indices(const Eigen::Vector<int, n>&... args)
-{
-  Eigen::Vector<int, lampc::meta::sum_template<n...>()> out;
-  int offset = 0;
-  auto l = {
-    (
-      out(Eigen::seqN(offset,n)) = args,
-      offset += n,
-      0
-    )...
-  };
-  (void) l; // get rid of unused variable warning
-  return out;
-}
-
 
 // template<typename... Seq>
 // std::tuple<Seq...> multiSeq(Seq... seq)
@@ -337,6 +315,10 @@ struct BSSlice
 {
   Base &base; // Pointer to the top-level matrix
   T M; // Matrix slice
+
+  using Scalar = typename T::Scalar;
+  static constexpr int RowsAtCompileTime = T::RowsAtCompileTime;
+  static constexpr int ColsAtCompileTime = T::ColsAtCompileTime;
 
   BSSlice(Base& base, T M) : base(base), M(std::move(M)) {}
 

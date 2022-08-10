@@ -94,9 +94,9 @@ TEST(BSMatrix, Construction_Complex) {
 
     // Partitioning and assembly function
     auto F = [&](auto& tape){
-        tape(Eigen::seqN(10,A.rows()),concatenate_indices(Eigen::Vector<int,2>{10,11},Eigen::Vector<int,1>{5})) = A;
-        tape(concatenate_indices(Eigen::Vector<int,2>{6,7}, Eigen::Vector<int,3>{0,1,2}),
-             concatenate_indices(Eigen::Vector<int,1>{7},Eigen::Vector<int,1>{5},Eigen::Vector<int,1>{3},Eigen::Vector<int,1>{1},Eigen::Vector<int,1>{0})) = B;
+        tape(Eigen::seqN(10,A.rows()),lampc::meta::concatenate_indices(Eigen::Vector<int,2>{10,11},Eigen::Vector<int,1>{5})) = A;
+        tape(lampc::meta::concatenate_indices(Eigen::Vector<int,2>{6,7}, Eigen::Vector<int,3>{0,1,2}),
+             lampc::meta::concatenate_indices(Eigen::Vector<int,1>{7},Eigen::Vector<int,1>{5},Eigen::Vector<int,1>{3},Eigen::Vector<int,1>{1},Eigen::Vector<int,1>{0})) = B;
     };
 
     auto BS = lampc::template makeBSMatrix<scalar_t>(F, 20,20);
@@ -225,7 +225,7 @@ void test_assignment_speeds()
     // Eigen::Matrix<scalar_t, 20, 20> target_buffer;
     // auto target = target_buffer(seqN(3,fix<5>), seqN(4,fix<5>));
 
-    std::cout << "type(target) = " << type_name<decltype(target)>() << std::endl;
+    std::cout << "type(target) = " << lampc::type_name<decltype(target)>() << std::endl;
 
     Matrix<5,5> source(5,5);
     Eigen::Map<Eigen::Matrix<scalar_t,5,5>> map(buffer.data());

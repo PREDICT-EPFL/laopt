@@ -8,13 +8,6 @@
 
 namespace lampc
 {
-	// template<typename scalar_t>
-	// static constexpr auto INF = std::numeric_limits<scalar_t>::infinity();
-
-	/// /todo Problem with M1 mac - limits doesn't seem to be defined yet.
-	template<typename scalar_t>
-	static constexpr auto INF = 1e20;
-
     namespace meta
     {
         // Sum the inputs to get total number of inputs
@@ -97,75 +90,52 @@ namespace lampc
         };
         template<typename... Args>
         using get_scalar_t = typename get_scalar<Args...>::type;
-    };
 
-}
+        /**
+         * Takes a parameter pack of Eigen::Vector's and concatenates
+         * them into a single Eigen::Vector.
+         * Everything must be fixed-size.
+         */
+        template<int... n>
+        Eigen::Vector<int, lampc::meta::sum_template<n...>()>
+        concatenate_indices(const Eigen::Vector<int, n>&... args)
+        {
+            Eigen::Vector<int, lampc::meta::sum_template<n...>()> out;
+            int offset = 0;
+            auto l = {
+                (
+                    out(Eigen::seqN(offset,n)) = args,
+                    offset += n,
+                    0
+                )...
+            };
+            (void) l; // get rid of unused variable warning
+            return out;
+        }
+    }
 
-
-// /*************************************************************
-//     Meta-programming helper functions
-//  *************************************************************/
-
-// // Sum the inputs to get total number of inputs
-// template<int... S>
-// constexpr int sum_template() {
-//     int result = 0;
-//     for(auto s : { S... }) result += s;
-//     return result;
-// }
-
-// // Build an array at compile time
-// template <typename T, typename... Args>
-// constexpr std::array<T, sizeof...(Args)> make_array(Args... args)
-// {
-//     return {args...};
-// }
-
-// // Helper function to reshape an eigen matrix while maintaining const'ness
-// template <typename map_to, typename scalar_t>
-// constexpr auto _map_matrix(const scalar_t* x) {
-//     return Eigen::Map<const map_to>(x);
-// }
-
-// template <typename map_to, typename scalar_t>
-// constexpr auto _map_matrix(scalar_t* x) {
-//     return Eigen::Map<map_to>(x);
-// }
-
-template <typename T>
-auto type_name() noexcept {
+    template <typename T>
+    auto type_name() noexcept {
 #ifdef __clang__
-    std::string name = __PRETTY_FUNCTION__;
-    std::string prefix = "auto type_name() [T = ";
-    std::string suffix = "]";
+        std::string name = __PRETTY_FUNCTION__;
+        std::string prefix = "auto type_name() [T = ";
+        std::string suffix = "]";
 #elif defined(__GNUC__)
-    std::string name = __PRETTY_FUNCTION__;
-    std::string prefix = "auto type_name() [with T = ";
-    std::string suffix = "]";
+        std::string name = __PRETTY_FUNCTION__;
+        std::string prefix = "auto type_name() [with T = ";
+        std::string suffix = "]";
 #elif defined(_MSC_VER)
-    std::string name = __FUNCSIG__;
-    std::string prefix = "auto __cdecl type_name<";
-    std::string suffix = ">(void) noexcept";
+        std::string name = __FUNCSIG__;
+        std::string prefix = "auto __cdecl type_name<";
+        std::string suffix = ">(void) noexcept";
 #else
-    std::string name = "Error: unsupported compiler";
-    std::string prefix = "";
-    std::string suffix = "";
+        std::string name = "Error: unsupported compiler";
+        std::string prefix = "";
+        std::string suffix = "";
 #endif
-    return name.substr(prefix.length(), name.length() - prefix.length() - suffix.length());
+        return name.substr(prefix.length(), name.length() - prefix.length() - suffix.length());
+    }
+
 }
-
-// /*
-//  * Extracts the return-type of a function
-//  * 
-//  * Use like this:     
-//  *  std::cout << type_name<decltype(ret(f))>() << std::endl;
-//  */
- 
-// template<typename R, typename... A>
-// R ret(R(*)(A...)) ;
-
-// template<typename C, typename R, typename... A>
-// R ret(R(C::*)(A...));
-
 
 #endif // LAMPC_UTILITY
