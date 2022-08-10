@@ -1224,22 +1224,6 @@ public:
         problem.constraints.extend_variables(n);
         problem.lagrangian.extend_variables(n);
     }
-    template<int n, std::size_t N>
-    EIGEN_STRONG_INLINE void add_variable(std::array<Variable<Scalar, n>, N> & var_array)
-    {
-        for (auto &var : var_array)
-        {
-            problem.variable_callbacks.push_back(var.register_variable(problem.m_num_variables));
-            problem.m_num_variables += n;
-
-            problem.variable_bounds.extend_variables(n);
-            problem.variable_bounds.extend_rows(n); // already extend variable_bounds for bounds
-
-            problem.objective.extend_variables(n);
-            problem.constraints.extend_variables(n);
-            problem.lagrangian.extend_variables(n);
-        }
-    }
 
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_obj(Args...) {}
