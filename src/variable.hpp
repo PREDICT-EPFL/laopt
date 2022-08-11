@@ -21,10 +21,10 @@ class Variable : public IndexedVector<Eigen::Map<Eigen::Vector<_scalar_t, _size>
 public:
     using scalar_t = _scalar_t;
 
-    Variable() : IndexedVectorBase(NULL) {} // The map initially points to NULL
+    Variable() : IndexedVectorBase(nullptr) {} // The map initially points to NULL
 
     constexpr int size() { return m_size; }
-    bool has_data() { return this->data() != NULL; }
+    bool has_data() { return this->data() != nullptr; }
 
     /**
      * offset = offset of this variable into the global decision variable.

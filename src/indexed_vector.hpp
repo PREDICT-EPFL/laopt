@@ -28,11 +28,6 @@ public:
         m_indices.array() = -1;
     }
 
-    explicit IndexedVector(decltype(NULL)) : Base(NULL) {
-        static_assert(Base::ColsAtCompileTime == 1, "you tired using a matrix on an indexed vector");
-        m_indices.array() = -1;
-    }
-
     // This constructor forwards the constructor to the underlying vector type
     template<typename ...Args>
     explicit IndexedVector(Args&& ...args) : Base(std::forward<Args>(args)...) {

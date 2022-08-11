@@ -91,7 +91,7 @@ TEST(IndexedVectorTest, Assignment) {
 TEST(IndexedVectorTest, NullMap) {
 
     using map_t = lampc::IndexedVector<Eigen::Map<Eigen::Vector<double, 3>>>;
-    map_t vec(NULL);
+    map_t vec(nullptr);
     Eigen::Vector<double, 3> x;
     x << 1, 2, 3;
 

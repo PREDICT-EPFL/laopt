@@ -75,7 +75,7 @@ struct BSMatrix
     const std::vector<CopyInfo> copies;
     size_t copy_index; // Current index into copies
 
-    scalar_t *target = NULL; // Where we're going to write the data
+    scalar_t *target = nullptr; // Where we're going to write the data
 
     inline void reset_copy_index() { copy_index = 0; }
 
@@ -146,7 +146,7 @@ public:
      */
     void set_zero()
     {
-        if (target != NULL)
+        if (target != nullptr)
         {
             Eigen::Map<Eigen::VectorX<scalar_t>>(target, sparsity_structure.nonZeros()).array() = 0;
         }
@@ -691,7 +691,7 @@ protected:
 
 public:
 
-    BSMatrixDenseDeployment() : m_mat(NULL, 0, 0) {}
+    BSMatrixDenseDeployment() : m_mat(nullptr, 0, 0) {}
 
     explicit BSMatrixDenseDeployment(const typename BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>::Info& info) : m_mat(NULL, 0, 0) {}
 

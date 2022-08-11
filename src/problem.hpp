@@ -1528,7 +1528,7 @@ struct FunctionMemory {
         value(f.rows(), 1),
         lb(f.rows(), 1),
         ub(f.rows(), 1),
-        jacobian_buffer(NULL, 0)
+        jacobian_buffer(nullptr, 0)
     {
         f.jacobian.allocate_memory(jacobian);
         new (&jacobian_buffer) Eigen::Map<Eigen::VectorX<scalar_t>>(jacobian.valuePtr(), jacobian.nonZeros());
@@ -1560,7 +1560,7 @@ struct WeightedSumMemory
 	explicit WeightedSumMemory(WSum& w) :
         gradient(w.num_variables),
         weights(w.rows()),
-        hessian_buffer(NULL, 0)
+        hessian_buffer(nullptr, 0)
 	{
 		w.hessian.allocate_memory(hessian);
 		new (&hessian_buffer) Eigen::Map<Eigen::VectorX<scalar_t>>(hessian.valuePtr(), hessian.nonZeros());
