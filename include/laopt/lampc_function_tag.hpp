@@ -26,6 +26,7 @@ public:
 
     static constexpr int n_inputs = Info::n_inputs;
     static constexpr int n_outputs = Info::n_outputs;
+    using Scalar = typename Info::scalar_t;
 
     explicit FunctionCapture(Derived& func, const Capture& capture) : func(func), capture(capture) {}
 

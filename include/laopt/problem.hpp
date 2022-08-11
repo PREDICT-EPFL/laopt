@@ -215,6 +215,7 @@ public:
     static_assert(DerivedLhs::n_outputs == DerivedRhs::n_outputs, "Output dimension of expressions must be the same");
     static constexpr int n_inputs = DerivedLhs::n_inputs + DerivedRhs::n_inputs;
     static constexpr int n_outputs = DerivedLhs::n_outputs;
+    using Scalar = typename DerivedLhs::Scalar;
 
     explicit AddExpr(const DerivedLhs& lhs, const DerivedRhs& rhs) : lhs(lhs), rhs(rhs) {}
 
@@ -247,6 +248,7 @@ public:
     static_assert(DerivedLhs::n_outputs == DerivedRhs::n_outputs, "Output dimension of expressions must be the same");
     static constexpr int n_inputs = DerivedLhs::n_inputs + DerivedRhs::n_inputs;
     static constexpr int n_outputs = DerivedLhs::n_outputs;
+    using Scalar = typename DerivedLhs::Scalar;
 
     explicit SubExpr(const DerivedLhs& lhs, const DerivedRhs& rhs) : lhs(lhs), rhs(rhs) {}
 
@@ -1072,9 +1074,9 @@ struct ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>
     {
         ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_value, out_jacobian(Eigen::all, Eigen::seqN(0, DerivedLhs::n_inputs)));
 
-        Eigen::Matrix<double, DerivedRhs::n_outputs, 1> out_value_rhs;
+        Eigen::Matrix<typename DerivedRhs::Scalar, DerivedRhs::n_outputs, 1> out_value_rhs;
         out_value_rhs.setZero();
-        Eigen::Matrix<double, DerivedRhs::n_outputs, DerivedRhs::n_inputs> out_jacobian_rhs;
+        Eigen::Matrix<typename DerivedRhs::Scalar, DerivedRhs::n_outputs, DerivedRhs::n_inputs> out_jacobian_rhs;
         out_jacobian_rhs.setZero();
         ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_value_rhs, out_jacobian_rhs);
 
@@ -1095,7 +1097,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>
     {
         auto value = ExprEvaluator<DerivedLhs>::gradient(expr.lhs, out_gradient(Eigen::seqN(0, DerivedLhs::n_inputs)), weight);
 
-        Eigen::Matrix<double, DerivedRhs::n_inputs, 1> out_gradient_rhs;
+        Eigen::Matrix<typename DerivedRhs::Scalar, DerivedRhs::n_inputs, 1> out_gradient_rhs;
         out_gradient_rhs.setZero();
 
         value -= ExprEvaluator<DerivedRhs>::gradient(expr.rhs, out_gradient_rhs, weight);
@@ -1110,9 +1112,9 @@ struct ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>
     {
         auto value = ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_gradient(Eigen::seqN(0, DerivedLhs::n_inputs)), out_hessian(Eigen::seqN(0, DerivedLhs::n_inputs), Eigen::seqN(0, DerivedLhs::n_inputs)), weight);
 
-        Eigen::Matrix<double, DerivedRhs::n_inputs, 1> out_gradient_rhs;
+        Eigen::Matrix<typename DerivedRhs::Scalar, DerivedRhs::n_inputs, 1> out_gradient_rhs;
         out_gradient_rhs.setZero();
-        Eigen::Matrix<double, DerivedRhs::n_inputs, DerivedRhs::n_inputs> out_hessian_rhs;
+        Eigen::Matrix<typename DerivedRhs::Scalar, DerivedRhs::n_inputs, DerivedRhs::n_inputs> out_hessian_rhs;
         out_hessian_rhs.setZero();
 
         value -= ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_gradient_rhs, out_hessian_rhs, weight);
