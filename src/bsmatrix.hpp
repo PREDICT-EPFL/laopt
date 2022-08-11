@@ -102,7 +102,7 @@ public:
      * Note: The BSMatrix owns no memory, and so set_target must be called
      * before any operations are done!
      */
-    BSMatrix(const Eigen::SparseMatrix<bool> &sparsity_structure,
+    BSMatrix(const Eigen::SparseMatrix<bool>& sparsity_structure,
              std::vector<Segment> copy_segments,
              std::vector<CopyInfo> copy_info)
             : sparsity_structure(sparsity_structure),
@@ -110,8 +110,11 @@ public:
               copies(std::move(copy_info)),
               copy_index(0) {}
 
-    explicit BSMatrix(const BSMatrixInfo &info)
-            : sparsity_structure(info.sparsity_structure), segments(info.copy_segments), copies(info.copy_info), copy_index(0) {}
+    explicit BSMatrix(const BSMatrixInfo& info)
+            : sparsity_structure(info.sparsity_structure),
+              segments(info.copy_segments),
+              copies(info.copy_info),
+              copy_index(0) {}
 
     /**
      * Initialize S to the right sparsity structure and set it
@@ -278,8 +281,6 @@ protected:
 template<typename T, typename Base>
 class BSSliceTape : public BSSlice<T, Base>
 {
-    using BSSlice<T, Base>::get_pattern;
-
     /**
      * Record the sequence of memory copies to copy mat to this slice
      */
@@ -301,15 +302,15 @@ public:
     template<typename Derived>
     BSSliceTape& operator=(const Eigen::MatrixBase<Derived>& mat)
     {
-        record_op(get_pattern(mat));
+        record_op(this->get_pattern(mat));
         return *this;
     }
 
     template<typename Derived>
-    void operator+=(const Eigen::MatrixBase<Derived>& mat) { record_op(get_pattern(mat)); }
+    void operator+=(const Eigen::MatrixBase<Derived>& mat) { record_op(this->get_pattern(mat)); }
 
     template<typename Derived>
-    void operator-=(const Eigen::MatrixBase<Derived>& mat) { record_op(get_pattern(mat)); }
+    void operator-=(const Eigen::MatrixBase<Derived>& mat) { record_op(this->get_pattern(mat)); }
 };
 
 /**
@@ -448,13 +449,11 @@ public:
 template<typename T, typename Base>
 class BSSliceSparsity : public BSSlice<T, Base>
 {
-    using BSSlice<T, Base>::get_pattern;
-
     template<typename Derived>
     void create_sparsity_pattern(const Eigen::MatrixBase<Derived>& mat)
     {
         assert(mat.rows() == this->M.rows() && mat.cols() == this->M.cols() && "You assigned a matrix of the wrong size!");
-        this->M = get_pattern(mat);
+        this->M = this->get_pattern(mat);
     }
 
 public:

@@ -15,6 +15,11 @@ public:
     {
         return static_cast<const Derived&>(*this);
     }
+
+    EIGEN_STRONG_INLINE auto indices() const
+    {
+        return static_cast<const Derived*>(this)->indices();
+    }
 };
 
 } // namespace lampc

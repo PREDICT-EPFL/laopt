@@ -58,21 +58,6 @@ struct IDENTITY : public Differentiable<IDENTITY, true>
     }
 };
 
-template<typename F, typename Tag = DefaultTag>
-struct NEG : public Differentiable<NEG<F, Tag>, true>
-{
-    F& f;
-
-    explicit NEG(F& f) : f(f) {}
-
-    template<typename... Args>
-    EIGEN_STRONG_INLINE auto
-    function_impl(const Eigen::MatrixBase<Args>&... args) noexcept -> decltype(f(Tag{}, args...))
-    {
-        return -f(Tag{}, args...);
-    }
-};
-
 template<typename F, typename Scalar, typename Tag = DefaultTag>
 struct RK4 : public Differentiable<RK4<F, Scalar, Tag>, true>
 {

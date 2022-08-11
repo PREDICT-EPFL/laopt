@@ -28,6 +28,13 @@ public:
     static constexpr int n_outputs = Info::n_outputs;
 
     explicit FunctionCapture(Derived& func, const Capture& capture) : func(func), capture(capture) {}
+
+    EIGEN_STRONG_INLINE const Eigen::Vector<int, n_inputs> indices() const
+    {
+        return capture([&](auto&&... vars) {
+            return concatenate_indices(vars.indices()...);
+        });
+    }
 };
 
 
