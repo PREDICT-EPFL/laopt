@@ -3,9 +3,9 @@
  */
 
 #include <iostream>
-#include "lampc.hpp"
+#include "laopt/lampc.hpp"
 
-#include "ipopt_interface.hpp"
+#include "laopt/ipopt_interface.hpp"
 
 #include "test_utils.hpp"
 #include "gtest/gtest.h"

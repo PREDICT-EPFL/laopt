@@ -3,7 +3,7 @@
 
 #include "double_integrator_ocp.hpp"
 #include "multiple_shooting_transcription.hpp"
-#include "ipopt_interface.hpp"
+#include "laopt/ipopt_interface.hpp"
 
 int main()
 {

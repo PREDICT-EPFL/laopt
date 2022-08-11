@@ -2,7 +2,7 @@
  * Unit test for the construction and computation of indexed.
  */
 #include <iostream>
-#include "indexed_vector.hpp"
+#include "laopt/indexed_vector.hpp"
 #include "gtest/gtest.h"
 
 TEST(IndexedVectorTest, Map) {

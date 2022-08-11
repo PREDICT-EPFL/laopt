@@ -32,7 +32,7 @@ else()
 endif()
 
 include_directories(SYSTEM ${EIGEN3_INCLUDE_DIR} ${CASADI_INCLUDE_DIR} ${Ipopt_INCLUDE_DIRS})
-include_directories(src)
+include_directories(include)
 
 add_subdirectory(examples)
 add_subdirectory(tests)

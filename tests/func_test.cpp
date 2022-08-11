@@ -5,10 +5,10 @@
 #include <iostream>
 #include <chrono>
 
-#include "lampc_utility.hpp"
-#include "lampc_function_tag.hpp"
-#include "lampc_function_library.hpp"
-#include "bsmatrix.hpp"
+#include "laopt/lampc_utility.hpp"
+#include "laopt/lampc_function_tag.hpp"
+#include "laopt/lampc_function_library.hpp"
+#include "laopt/bsmatrix.hpp"
 
 #include "test_utils.hpp"
 

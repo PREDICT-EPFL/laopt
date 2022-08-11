@@ -1,9 +1,6 @@
 #include <iostream>
 
-#include "lampc.hpp"
-#include "lampc_function_tag.hpp"
-#include "lampc_functor.hpp"
-#include "lampc_function_library.hpp"
+#include "laopt/lampc.hpp"
 
 template<typename scalar_t>
 struct User : public laopt::Differentiable<User<scalar_t>>

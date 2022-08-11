@@ -4,8 +4,8 @@
 
 #include <iostream>
 #include <iomanip>
-#include "lampc.hpp"
-#include "ipopt_interface.hpp"
+#include "laopt/lampc.hpp"
+#include "laopt/ipopt_interface.hpp"
 
 #include <casadi/casadi.hpp>
 using namespace casadi;

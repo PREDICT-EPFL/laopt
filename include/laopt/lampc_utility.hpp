@@ -1,6 +1,6 @@
-#ifndef LAOPT_LAMPC_UTILITY
-_HPP#define LAOPT_LAMPC_UTILITY
-_HPP
+#ifndef LAOPT_LAMPC_UTILITY_HPP
+#define LAOPT_LAMPC_UTILITY_HPP
+
 #include <iostream>
 #include <limits>
 #include <type_traits>

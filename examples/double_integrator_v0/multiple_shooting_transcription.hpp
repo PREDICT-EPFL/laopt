@@ -2,7 +2,7 @@
 #define LAMPC_MULTIPLE_SHOOTING_TRANSCRIPTION_HPP
 
 #include <Eigen/Dense>
-#include "lampc.hpp"
+#include "laopt/lampc.hpp"
 
 // Advanced user (level 2)
 
