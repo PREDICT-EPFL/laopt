@@ -1,5 +1,5 @@
-#ifndef __LAMPC__HPP
-#define __LAMPC__HPP
+#ifndef LAOPT_LAOPT_HPP
+#define LAOPT_LAOPT_HPP
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
@@ -13,4 +13,4 @@
 #include "problem.hpp"
 
 
-#endif // __LAMPC__HPP
+#endif // LAOPT_LAOPT_HPP

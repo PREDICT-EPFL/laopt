@@ -1,7 +1,7 @@
-#ifndef LAMPC_EXPR_BASE_HPP
-#define LAMPC_EXPR_BASE_HPP
+#ifndef LAOPT_EXPR_BASE_HPP
+#define LAOPT_EXPR_BASE_HPP
 
-namespace lampc {
+namespace laopt {
 
 template<typename Derived>
 class ExprBase {
@@ -22,6 +22,6 @@ public:
     }
 };
 
-} // namespace lampc
+} // namespace laopt
 
-#endif //LAMPC_EXPR_BASE_HPP
+#endif // LAOPT_EXPR_BASE_HPP

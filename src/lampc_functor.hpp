@@ -1,9 +1,9 @@
-#ifndef LAMPC_LAMPC_FUNCTOR_HPP
-#define LAMPC_LAMPC_FUNCTOR_HPP
+#ifndef LAOPT_LAMPC_FUNCTOR_HPP
+#define LAOPT_LAMPC_FUNCTOR_HPP
 
 #include "lampc_function_tag.hpp"
 
-namespace lampc {
+namespace laopt {
 
 template<typename Derived, typename Tag>
 class Function
@@ -90,6 +90,6 @@ public:
     }
 };
 
-} // namespace lampc
+} // namespace laopt
 
-#endif //LAMPC_LAMPC_FUNCTOR_HPP
+#endif // LAOPT_LAMPC_FUNCTOR_HPP

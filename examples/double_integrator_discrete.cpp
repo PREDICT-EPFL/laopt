@@ -9,7 +9,7 @@
 template<typename _scalar_t, int N>
 struct OCP_DoubleIntegrator
 {  
-  using scalar_t = _scalar_t; // lampc::Problem assumes that the user code will contain a scalar_t
+  using scalar_t = _scalar_t; // laopt::Problem assumes that the user code will contain a scalar_t
 
   /**
    * Discrete-time dynamics - double integrator
@@ -33,7 +33,7 @@ struct OCP_DoubleIntegrator
     }
   };
 
-  struct stage_cost_t : public lampc::MakeDifferentiable<stage_cost_t>
+  struct stage_cost_t : public laopt::MakeDifferentiable<stage_cost_t>
   {
     Eigen::Matrix<scalar_t, 2, 2> Q{{1,0},{0,1}};
     Eigen::Matrix<scalar_t, 1, 1> R{0.01};
@@ -50,7 +50,7 @@ struct OCP_DoubleIntegrator
   static constexpr int nu = 1;
 
   template<size_t n>
-  using Variable = lampc::Variable<scalar_t, n>;
+  using Variable = laopt::Variable<scalar_t, n>;
   std::array<Variable<nx>, N>   X;
   std::array<Variable<nu>, N-1> U;
 
@@ -58,10 +58,10 @@ struct OCP_DoubleIntegrator
 
   // Functions we use to define the problem
   sys_t sys;
-  lampc::functions::eq<sys_t> sys_eq; // sys(x,u) - xp
+  laopt::functions::eq<sys_t> sys_eq; // sys(x,u) - xp
   stage_cost_t stage_cost;
 
-  lampc::functions::id id; // Identity
+  laopt::functions::id id; // Identity
 
   OCP_DoubleIntegrator(scalar_t step_size) :
                       sys(step_size),
@@ -108,8 +108,8 @@ struct OCP_DoubleIntegrator
 using scalar_t = double;
 constexpr int N = 10;
 using OCP = OCP_DoubleIntegrator<scalar_t, N>;
-using Problem = lampc::Problem<OCP>;
+using Problem = laopt::Problem<OCP>;
 
-Problem tape_to_problem(lampc::TapeInfo<OCP>& tape, OCP& ocp);
+Problem tape_to_problem(laopt::TapeInfo<OCP>& tape, OCP& ocp);
 
 #endif

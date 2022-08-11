@@ -1,11 +1,11 @@
-#ifndef LAMPC_LAMPC_FUNCTION_LIBRARY_HPP
-#define LAMPC_LAMPC_FUNCTION_LIBRARY_HPP
+#ifndef LAOPT_LAMPC_FUNCTION_LIBRARY_HPP
+#define LAOPT_LAMPC_FUNCTION_LIBRARY_HPP
 
 #include "lampc_function_tag.hpp"
 
-namespace lampc {
+namespace laopt {
 
-namespace lib {
+namespace functions {
 
 struct IDENTITY : public Differentiable<IDENTITY, true>
 {
@@ -79,8 +79,8 @@ struct RK4 : public Differentiable<RK4<F, Scalar, Tag>, true>
     }
 };
 
-} // namespace lib
+} // namespace functions
 
-} // namespace lampc
+} // namespace laopt
 
-#endif //LAMPC_LAMPC_FUNCTION_LIBRARY_HPP
+#endif // LAOPT_LAMPC_FUNCTION_LIBRARY_HPP

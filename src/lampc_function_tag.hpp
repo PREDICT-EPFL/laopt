@@ -1,5 +1,5 @@
-#ifndef __LAMPC__FUNCTION_TAG_HPP
-#define __LAMPC__FUNCTION_TAG_HPP
+#ifndef LAOPT_LAMPC_FUNCTION_TAG_HPP
+#define LAOPT_LAMPC_FUNCTION_TAG_HPP
 
 #include <Eigen/Dense>
 #include <unsupported/Eigen/AutoDiff>
@@ -8,7 +8,7 @@
 #include "expr_base.hpp"
 #include "variable.hpp"
 
-namespace lampc
+namespace laopt
 {
 
 struct DefaultTag {};
@@ -69,10 +69,10 @@ protected:
             const Eigen::MatrixBase<Args>&... args) noexcept // Function arguments
     {
         // Compute the scalar type
-        using Scalar = lampc::meta::get_scalar_t<Eigen::MatrixBase<Args>...>;
+        using Scalar = laopt::meta::get_scalar_t<Eigen::MatrixBase<Args>...>;
 
         // Get the total number of inputs
-        constexpr size_t num_inputs = lampc::meta::sum_template<Eigen::MatrixBase<Args>::RowsAtCompileTime...>();
+        constexpr size_t num_inputs = laopt::meta::sum_template<Eigen::MatrixBase<Args>::RowsAtCompileTime...>();
 
         // First order derivative
         using AD_scalar = Eigen::AutoDiffScalar<Eigen::Vector<Scalar, num_inputs>>;
@@ -610,6 +610,6 @@ public:
     }
 };
 
-}; // namespace lampc
+}; // namespace laopt
 
-#endif // __LAMPC__FUNCTION_TAG_HPP
+#endif // LAOPT_LAMPC_FUNCTION_TAG_HPP

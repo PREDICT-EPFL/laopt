@@ -21,15 +21,15 @@ namespace {
  *       -1 <= x1 <= 1
  */
 template<typename scalar_t_>
-struct IpOpt_example : public lampc::Differentiable<IpOpt_example<scalar_t_>>
+struct IpOpt_example : public laopt::Differentiable<IpOpt_example<scalar_t_>>
 {
   using scalar_t = scalar_t_;
 
   template<typename FunctionTag>
-  using Function = lampc::Function<IpOpt_example<scalar_t>, FunctionTag>;
+  using Function = laopt::Function<IpOpt_example<scalar_t>, FunctionTag>;
 
   template<size_t n>
-  using Variable = lampc::Variable<scalar_t, n>;
+  using Variable = laopt::Variable<scalar_t, n>;
 
   /**
    * Equalities
@@ -81,17 +81,17 @@ TEST(IpOptTest, Construction) {
 
   using UserCode = IpOpt_example<scalar_t>;
   UserCode my_problem;
-  auto sparsity = lampc::generate_sparsity(my_problem);
-  auto tape = lampc::generate_tape(my_problem, sparsity);
+  auto sparsity = laopt::generate_sparsity(my_problem);
+  auto tape = laopt::generate_tape(my_problem, sparsity);
 
   std::cout << sparsity << std::endl;
   std::cout << tape << std::endl;
 
-  using Problem = lampc::Problem<UserCode>;
+  using Problem = laopt::Problem<UserCode>;
   Problem prob(my_problem, tape);
 
   // Create the IPOpt solver
-  auto mynlp = new lampc::Solver_IPOpt<Problem>(prob);
+  auto mynlp = new laopt::Solver_IPOpt<Problem>(prob);
   SmartPtr<IpoptApplication> app = IpoptApplicationFactory();
 
   // app->Options()->SetStringValue("hessian_approximation", "limited-memory");
@@ -118,7 +118,7 @@ TEST(IpOptTest, Construction) {
 // template<typename _scalar_t, int N>
 // struct OCP_DoubleIntegrator
 // {  
-//   using scalar_t = _scalar_t; // lampc::Problem assumes that the user code will contain a scalar_t
+//   using scalar_t = _scalar_t; // laopt::Problem assumes that the user code will contain a scalar_t
 
 //   /**
 //    * Continuous-time dynamics - double integrator
@@ -137,9 +137,9 @@ TEST(IpOptTest, Construction) {
 //   };
 
 //   // Discretized dynamics
-//   using dsys_t = lampc::functions::RK4<sys_t, scalar_t>;
+//   using dsys_t = laopt::functions::RK4<sys_t, scalar_t>;
 
-//   struct stage_cost_t : public lampc::MakeDifferentiable<stage_cost_t>
+//   struct stage_cost_t : public laopt::MakeDifferentiable<stage_cost_t>
 //   {
 //     OCP_DoubleIntegrator& p;
 //     stage_cost_t(OCP_DoubleIntegrator& p) : p(p) {}
@@ -153,11 +153,11 @@ TEST(IpOptTest, Construction) {
 //     }
 
 //     // // Bring all the calls that we're not overloading into scope
-//     // using lampc::MakeDifferentiable<stage_cost_t>::weightedsum; 
+//     // using laopt::MakeDifferentiable<stage_cost_t>::weightedsum;
 
 //     // template<typename OutGradient, typename OutHessian, typename Weight, typename X, typename U>
 //     // EIGEN_STRONG_INLINE scalar_t
-//     // weightedsum(lampc::Hessian,
+//     // weightedsum(laopt::Hessian,
 //     //             OutGradient&& outgradient, OutHessian&& outhessian,
 //     //             const Eigen::MatrixBase<Weight>& weight,
 //     //             const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<X>& xss,
@@ -182,7 +182,7 @@ TEST(IpOptTest, Construction) {
 
 //   };
 
-//   struct terminal_cost_t : public lampc::MakeDifferentiable<terminal_cost_t>
+//   struct terminal_cost_t : public laopt::MakeDifferentiable<terminal_cost_t>
 //   {
 //     OCP_DoubleIntegrator& p;
 //     terminal_cost_t(OCP_DoubleIntegrator& p) : p(p) {}
@@ -199,7 +199,7 @@ TEST(IpOptTest, Construction) {
 //   static constexpr int nu = 1;
 
 //   template<size_t n>
-//   using Variable = lampc::Variable<scalar_t, n>;
+//   using Variable = laopt::Variable<scalar_t, n>;
 //   std::array<Variable<nx>, N>   X;
 //   std::array<Variable<nu>, N-1> U;
 //   Variable<nx> xss;
@@ -215,13 +215,13 @@ TEST(IpOptTest, Construction) {
 //   sys_t sys; // Continuous-time dynamics
 //   dsys_t dsys; // Discrete-time dynamics
 
-//   lampc::functions::eq<dsys_t> dsys_eq; // dsys(x,u) - xp
+//   laopt::functions::eq<dsys_t> dsys_eq; // dsys(x,u) - xp
 
 //   // Tuning parameters
 //   stage_cost_t stage_cost;
 //   terminal_cost_t terminal_cost;
 
-//   lampc::functions::id id; // Identity
+//   laopt::functions::id id; // Identity
 
 //   OCP_DoubleIntegrator(scalar_t step_size) :
 //                       dsys(sys, step_size),
@@ -280,15 +280,15 @@ TEST(IpOptTest, Construction) {
 //   const int N = 100;
 
 //   using OCP = OCP_DoubleIntegrator<scalar_t, N>;
-//   using Problem = lampc::Problem<OCP>;
+//   using Problem = laopt::Problem<OCP>;
 
 //   OCP ocp(0.5);
-//   Problem prob = lampc::generate(ocp);
+//   Problem prob = laopt::generate(ocp);
 
 //   ocp.x0 << 1,0;
 
 //   // Create the IPOpt solver
-//   SmartPtr<lampc::Solver_IPOpt<Problem>> mynlp = new lampc::Solver_IPOpt<Problem>(prob);
+//   SmartPtr<laopt::Solver_IPOpt<Problem>> mynlp = new laopt::Solver_IPOpt<Problem>(prob);
 //   SmartPtr<IpoptApplication> app = IpoptApplicationFactory();
 
 //   // app->Options()->SetStringValue("hessian_approximation", "limited-memory");
@@ -338,9 +338,9 @@ TEST(IpOptTest, Construction) {
  *      1 <= x1,x2,x3,x4 <= 5
  */ 
 template<typename _scalar_t>
-struct Prob71 : public lampc::Differentiable<Prob71<_scalar_t>>
+struct Prob71 : public laopt::Differentiable<Prob71<_scalar_t>>
 {  
-  using scalar_t = _scalar_t; // lampc::Problem assumes that the user code will contain a scalar_t
+  using scalar_t = _scalar_t; // laopt::Problem assumes that the user code will contain a scalar_t
 
   /**
    * x1*x2*x3*x4 >= 25
@@ -369,11 +369,11 @@ struct Prob71 : public lampc::Differentiable<Prob71<_scalar_t>>
   }
 
   // Define our variables
-  lampc::Variable<scalar_t, 4> x;
+  laopt::Variable<scalar_t, 4> x;
 
   // Define our functions
-  lampc::Function<Prob71<scalar_t>, Constraints> constraints;
-  lampc::Function<Prob71<scalar_t>, Obj> objective;
+  laopt::Function<Prob71<scalar_t>, Constraints> constraints;
+  laopt::Function<Prob71<scalar_t>, Obj> objective;
 
   explicit Prob71() : constraints(*this), objective(*this) {};
 
@@ -472,11 +472,11 @@ Eigen::Matrix<scalar_t, 4, 4> hessian_l(const Eigen::MatrixBase<Derived>& x, con
 TEST(ProblemTest, Prob71) {
   using scalar_t = double;
   Prob71<scalar_t> prob71;
-  using Problem = lampc::Problem<Prob71<scalar_t>>;
-  Problem prob = lampc::generate(prob71);
+  using Problem = laopt::Problem<Prob71<scalar_t>>;
+  Problem prob = laopt::generate(prob71);
 
   // Create the IPOpt solver
-  SmartPtr<lampc::Solver_IPOpt<Problem>> mynlp = new lampc::Solver_IPOpt<Problem>(prob);
+  SmartPtr<laopt::Solver_IPOpt<Problem>> mynlp = new laopt::Solver_IPOpt<Problem>(prob);
   SmartPtr<IpoptApplication> app = IpoptApplicationFactory();
 
   app->Options()->SetIntegerValue("print_level", 5);
@@ -509,7 +509,7 @@ TEST(ProblemTest, Prob71) {
   EXPECT_TRUE(mynlp->sol_dual.isApprox(sol_dual, 1e-4));
 
   // Compute the value and jacobian of the constraints at the optimal point
-  lampc::ProblemMemory<scalar_t> mem(prob);
+  laopt::ProblemMemory<scalar_t> mem(prob);
 
   // Check the computation of variable bounds
   prob.eval_variable_bounds(mem.variable_bounds);
@@ -517,19 +517,19 @@ TEST(ProblemTest, Prob71) {
   EXPECT_TRUE(mem.variable_bounds.ub.isApprox(Eigen::Vector<scalar_t,4>{5,5,5,5}, 1e-4));
 
   // Check the computation of the constraints
-  prob.eval_constraints(lampc::Jacobian(), mynlp->sol_primal, mem.constraints);
+  prob.eval_constraints(laopt::Jacobian(), mynlp->sol_primal, mem.constraints);
   EXPECT_TRUE(mem.constraints.lb.isApprox(Eigen::Vector<scalar_t,2>{25,40}, 1e-4));
   EXPECT_TRUE(mem.constraints.ub.isApprox(Eigen::Vector<scalar_t,2>{2e9,40}, 1e-4));
   EXPECT_TRUE(mem.constraints.value.isApprox(g(prob71.x), 1e-4));
   EXPECT_TRUE(Eigen::MatrixX<scalar_t>(mem.constraints.jacobian).isApprox(jac_g(prob71.x), 1e-4));
 
   // Check the computation of the objective
-  scalar_t obj = prob.eval_objective(lampc::Hessian(), mynlp->sol_primal, mem.objective);
+  scalar_t obj = prob.eval_objective(laopt::Hessian(), mynlp->sol_primal, mem.objective);
   EXPECT_NEAR(obj, f(prob71.x), 1e-4);
   EXPECT_TRUE(mem.objective.gradient.isApprox(grad_f(prob71.x), 1e-4));
 
   // Check the computation of the lagrangian
-  prob.eval_lagrangian(lampc::Hessian(), mynlp->sol_primal, 1.0, mynlp->sol_dual, mem.lagrangian);
+  prob.eval_lagrangian(laopt::Hessian(), mynlp->sol_primal, 1.0, mynlp->sol_dual, mem.lagrangian);
   EXPECT_TRUE(Eigen::MatrixX<scalar_t>(mem.lagrangian.hessian).isApprox(hessian_l(prob71.x, mynlp->sol_dual, 1.0), 1e-4));
 };
 

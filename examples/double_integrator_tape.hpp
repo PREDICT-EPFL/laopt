@@ -3,6 +3,6 @@
 
 #include "double_integrator.hpp"
 
-lampc::TapeInfo<OCP> double_integrator_tape(OCP& ocp);
+laopt::TapeInfo<OCP> double_integrator_tape(OCP& ocp);
 
 #endif

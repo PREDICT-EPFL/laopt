@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(lampc)
+project(laopt)
 
 set(CMAKE_MODULE_PATH /usr/local/share/cmake/Modules/)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH};${PROJECT_SOURCE_DIR}/cmake)

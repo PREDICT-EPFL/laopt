@@ -1,5 +1,5 @@
-#ifndef __BSMATRIX_HPP
-#define __BSMATRIX_HPP
+#ifndef LAOPT_BSMATRIX_HPP
+#define LAOPT_BSMATRIX_HPP
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
@@ -8,7 +8,7 @@
 
 #include "lampc_utility.hpp"
 
-namespace lampc
+namespace laopt
 {
 
 /**
@@ -725,4 +725,4 @@ public:
 
 };
 
-#endif // __BSMATRIX_HPP
+#endif // LAOPT_BSMATRIX_HPP

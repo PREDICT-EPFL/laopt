@@ -1,12 +1,12 @@
-#ifndef LAMPC_UTILITY
-#define LAMPC_UTILITY
-
+#ifndef LAOPT_LAMPC_UTILITY
+_HPP#define LAOPT_LAMPC_UTILITY
+_HPP
 #include <iostream>
 #include <limits>
 #include <type_traits>
 #include "Eigen/Dense"
 
-namespace lampc
+namespace laopt
 {
     namespace meta
     {
@@ -170,4 +170,4 @@ namespace lampc
 
 }
 
-#endif // LAMPC_UTILITY
+#endif // LAOPT_LAMPC_UTILITY_HPP

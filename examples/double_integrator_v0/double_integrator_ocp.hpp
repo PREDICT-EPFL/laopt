@@ -7,7 +7,7 @@
 #include "ocp_base.hpp"
 
 // Simple user level
-class DoubleIntegratorOCP : public lampc::OCPBase<double, 2, 1>
+class DoubleIntegratorOCP : public laopt::OCPBase<double, 2, 1>
 {
 public:
     Eigen::Matrix<scalar_t, NX, NX> A{{0,1},{0,0}};

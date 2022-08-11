@@ -1,10 +1,10 @@
-#ifndef LAMPC_VARIABLE_H
-#define LAMPC_VARIABLE_H
+#ifndef LAOPT_INDEXED_VECTOR_HPP
+#define LAOPT_INDEXED_VECTOR_HPP
 
 #include "Eigen/Dense"
 #include "expr_base.hpp"
 
-namespace lampc {
+namespace laopt {
 
 /**
  * A class derived from any Eigen Vector type that records an internal index 
@@ -101,4 +101,4 @@ public:
 
 }
 
-#endif // LAMPC_VARIABLE_H
+#endif // LAOPT_INDEXED_VECTOR_HPP

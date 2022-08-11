@@ -1,5 +1,5 @@
-#ifndef IPOPT_INTERFACE_HPP
-#define IPOPT_INTERFACE_HPP
+#ifndef LAOPT_IPOPT_INTERFACE_HPP
+#define LAOPT_IPOPT_INTERFACE_HPP
 
 #include "Eigen/Dense"
 
@@ -8,7 +8,7 @@
 
 using namespace Ipopt;
 
-namespace lampc
+namespace laopt
 {
 
 template<typename UserProblem>
@@ -104,7 +104,7 @@ public:
 		Eigen::VectorX<scalar_t> var(prob.num_variables());
 		var.array() = 0;
 
-		prob.eval_constraints(lampc::Eval(), var, con, lb, ub);
+		prob.eval_constraints(laopt::Eval(), var, con, lb, ub);
 
 		return true;
 	}
@@ -142,7 +142,7 @@ public:
 	) override
 	{
 		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x), n);
-		obj_value = prob.eval_objective(lampc::Eval(), var);
+		obj_value = prob.eval_objective(laopt::Eval(), var);
 		return true;
 	}
 
@@ -155,7 +155,7 @@ public:
 	{
 		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Number*>(x), n);
 		Eigen::Map<Eigen::VectorX<scalar_t>> grad(grad_f, n);
-		prob.eval_objective(lampc::Gradient(), var, grad);
+		prob.eval_objective(laopt::Gradient(), var, grad);
 		return true;
 	}
 
@@ -171,7 +171,7 @@ public:
 		Eigen::Map<Eigen::VectorX<scalar_t>> constraints(g, m);
 		Eigen::VectorX<scalar_t> lb(m);
 		Eigen::VectorX<scalar_t> ub(m);
-		prob.eval_constraints(lampc::Eval(), var, constraints, lb, ub);
+		prob.eval_constraints(laopt::Eval(), var, constraints, lb, ub);
 
 	   return true;
 	}
@@ -216,7 +216,7 @@ public:
 
 			Eigen::VectorX<scalar_t> lb(m); // Upper/lower bounds (ignored)
 			Eigen::VectorX<scalar_t> ub(m);
-			prob.eval_constraints(lampc::Jacobian(), var, constraints, lb, ub, jacobian_buffer);
+			prob.eval_constraints(laopt::Jacobian(), var, constraints, lb, ub, jacobian_buffer);
 	   }
 
 	   return true;
@@ -269,7 +269,7 @@ public:
 			Eigen::VectorX<scalar_t> gradient(n); // Ignored
 
 			auto dual = Eigen::Map<Eigen::VectorX<scalar_t>>(const_cast<Number*>(lambda), prob.constraints.rows());
-			prob.eval_lagrangian(lampc::Hessian(), var, obj_factor, dual, gradient, lag_hessian);
+			prob.eval_lagrangian(laopt::Hessian(), var, obj_factor, dual, gradient, lag_hessian);
 
 			// Copy the lower triangular part into the ipopt buffer
 			// auto S = prob.lagrangian.hessian.sparsity_structure;
@@ -314,4 +314,4 @@ public:
 
 }
 
-#endif
+#endif // LAOPT_IPOPT_INTERFACE_HPP

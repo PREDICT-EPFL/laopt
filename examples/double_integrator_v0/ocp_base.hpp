@@ -3,7 +3,7 @@
 
 #include <Eigen/Dense>
 
-namespace lampc{
+namespace laopt{
 
 // Provided my lampc
 template<typename cScalar, int cNX, int cNU>

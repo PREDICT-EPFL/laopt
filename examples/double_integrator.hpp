@@ -10,7 +10,7 @@
 template<typename _scalar_t, int N>
 struct OCP_DoubleIntegrator
 {  
-  using scalar_t = _scalar_t; // lampc::Problem assumes that the user code will contain a scalar_t
+  using scalar_t = _scalar_t; // laopt::Problem assumes that the user code will contain a scalar_t
 
   /**
    * Continuous-time dynamics - double integrator
@@ -29,7 +29,7 @@ struct OCP_DoubleIntegrator
   };
 
   // Return the output (position) of the system
-  struct output_t : public lampc::MakeDifferentiable<output_t>
+  struct output_t : public laopt::MakeDifferentiable<output_t>
   {
     template<typename X, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
     EIGEN_STRONG_INLINE Scalar impl(
@@ -40,9 +40,9 @@ struct OCP_DoubleIntegrator
   };
 
   // Discretized dynamics
-  using dsys_t = lampc::functions::RK4<sys_t, scalar_t>;
+  using dsys_t = laopt::functions::RK4<sys_t, scalar_t>;
 
-  struct stage_cost_t : public lampc::MakeDifferentiable<stage_cost_t>
+  struct stage_cost_t : public laopt::MakeDifferentiable<stage_cost_t>
   {
     OCP_DoubleIntegrator& p;
     stage_cost_t(OCP_DoubleIntegrator& p) : p(p) {}
@@ -56,11 +56,11 @@ struct OCP_DoubleIntegrator
     }
 
     // Bring all the calls that we're not overloading into scope
-    using lampc::MakeDifferentiable<stage_cost_t>::weightedsum; 
+    using laopt::MakeDifferentiable<stage_cost_t>::weightedsum;
 
     template<typename OutGradient, typename OutHessian, typename Weight, typename X, typename U>
     EIGEN_STRONG_INLINE scalar_t
-    weightedsum(lampc::Hessian,
+    weightedsum(laopt::Hessian,
                 OutGradient&& outgradient, OutHessian&& outhessian,
                 const Eigen::MatrixBase<Weight>& weight,
                 const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<X>& xss,
@@ -85,7 +85,7 @@ struct OCP_DoubleIntegrator
 
   };
 
-  struct terminal_cost_t : public lampc::MakeDifferentiable<terminal_cost_t>
+  struct terminal_cost_t : public laopt::MakeDifferentiable<terminal_cost_t>
   {
     OCP_DoubleIntegrator& p;
     terminal_cost_t(OCP_DoubleIntegrator& p) : p(p) {}
@@ -102,7 +102,7 @@ struct OCP_DoubleIntegrator
   static constexpr int nu = 1;
 
   template<size_t n>
-  using Variable = lampc::Variable<scalar_t, n>;
+  using Variable = laopt::Variable<scalar_t, n>;
   std::array<Variable<nx>, N>   X;
   std::array<Variable<nu>, N-1> U;
   Variable<nx> xss;
@@ -120,14 +120,14 @@ struct OCP_DoubleIntegrator
   dsys_t dsys; // Discrete-time dynamics
   output_t output;
 
-  lampc::functions::eq<dsys_t> dsys_eq; // dsys(x,u) - xp
-  lampc::functions::dsteady_state_t<dsys_t> steady_state; // dsys(xss,uss) - xss
+  laopt::functions::eq<dsys_t> dsys_eq; // dsys(x,u) - xp
+  laopt::functions::dsteady_state_t<dsys_t> steady_state; // dsys(xss,uss) - xss
 
   // Tuning parameters
   stage_cost_t stage_cost;
   terminal_cost_t terminal_cost;
 
-  lampc::functions::id id; // Identity
+  laopt::functions::id id; // Identity
 
   OCP_DoubleIntegrator(scalar_t step_size) :
                       dsys(sys, step_size),
@@ -189,8 +189,8 @@ struct OCP_DoubleIntegrator
 using scalar_t = double;
 constexpr int N = 20;
 using OCP = OCP_DoubleIntegrator<scalar_t, N>;
-using Problem = lampc::Problem<OCP>;
+using Problem = laopt::Problem<OCP>;
 
-Problem tape_to_problem(lampc::TapeInfo<OCP>& tape, OCP& ocp);
+Problem tape_to_problem(laopt::TapeInfo<OCP>& tape, OCP& ocp);
 
 #endif

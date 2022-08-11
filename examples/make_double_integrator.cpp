@@ -2,6 +2,6 @@
 
 TapeInfo<OCP> create_double_integrator(OCP& ocp)
 {
-  Problem prob = lampc::generate(ocp);
+  Problem prob = laopt::generate(ocp);
   return prob;
 }

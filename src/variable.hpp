@@ -1,9 +1,9 @@
-#ifndef LAMPC_VARIABLE_HPP
-#define LAMPC_VARIABLE_HPP
+#ifndef LAOPT_VARIABLE_HPP
+#define LAOPT_VARIABLE_HPP
 
 #include "indexed_vector.hpp"
 
-namespace lampc
+namespace laopt
 {
 
 /**
@@ -45,4 +45,4 @@ public:
 
 }
 
-#endif //LAMPC_VARIABLE_HPP
+#endif // LAOPT_VARIABLE_HPP

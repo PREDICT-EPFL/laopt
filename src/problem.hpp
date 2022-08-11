@@ -1,5 +1,5 @@
-#ifndef __PROBLEM_HPP
-#define __PROBLEM_HPP
+#ifndef LAOPT_PROBLEM_HPP
+#define LAOPT_PROBLEM_HPP
 
 #include <numeric>
 #include <iterator>
@@ -7,7 +7,7 @@
 #include "expr_base.hpp"
 #include "lampc_function_tag.hpp"
 
-namespace lampc
+namespace laopt
 {
 
 /**
@@ -396,11 +396,11 @@ public:
 	// Put computed values into the structure mem
 	void set_memory(Eval, FunctionMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Eval{}, mem.value, mem.lb, mem.ub);
+		set_memory(laopt::Eval{}, mem.value, mem.lb, mem.ub);
 	}
 	void set_memory(Jacobian, FunctionMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Jacobian{}, mem.value, mem.lb, mem.ub, mem.jacobian_buffer);
+		set_memory(laopt::Jacobian{}, mem.value, mem.lb, mem.ub, mem.jacobian_buffer);
 	}
 	void set_memory(FunctionMemory<scalar_t>& mem)
 	{
@@ -604,16 +604,16 @@ public:
 
 	void set_memory(Eval, Eigen::Ref<Eigen::VectorX<scalar_t>> _weights, WeightedSumMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Eval{}, _weights);
+		set_memory(laopt::Eval{}, _weights);
 	}
 	
 	void set_memory(Gradient, Eigen::Ref<Eigen::VectorX<scalar_t>> _weights, WeightedSumMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Eval{}, _weights, mem.gradient);
+		set_memory(laopt::Eval{}, _weights, mem.gradient);
 	}
 	void set_memory(Hessian, Eigen::Ref<Eigen::VectorX<scalar_t>> _weights, WeightedSumMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Hessian{}, _weights, mem.gradient, mem.hessian_buffer);
+		set_memory(laopt::Hessian{}, _weights, mem.gradient, mem.hessian_buffer);
 	}
 
 	WeightedSumInfo<Matrix,Vector> generate()
@@ -910,7 +910,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE auto
     function(const IndexedVector<Derived>& indexed_vector)
     {
-        lib::IDENTITY id;
+        functions::IDENTITY id;
         return id.function(indexed_vector.cast_base());
     }
 
@@ -918,7 +918,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE void
     jacobian(const IndexedVector<Derived>& indexed_vector, OutValue&& out_value, OutJacobian&& out_jacobian)
     {
-        lib::IDENTITY id;
+        functions::IDENTITY id;
         id.jacobian(out_value,
                     out_jacobian,
                     indexed_vector.cast_base());
@@ -928,7 +928,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE auto
     wsum(const IndexedVector<Derived>& indexed_vector, const Weight& weight)
     {
-        lib::IDENTITY id;
+        functions::IDENTITY id;
         return id.wsum(weight,
                        indexed_vector.cast_base());
     }
@@ -937,7 +937,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE auto
     gradient(const IndexedVector<Derived>& indexed_vector, OutGradient&& out_gradient, const Weight& weight)
     {
-        lib::IDENTITY id;
+        functions::IDENTITY id;
         return id.gradient(out_gradient,
                            weight,
                            indexed_vector.cast_base());
@@ -947,7 +947,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE auto
     hessian(const IndexedVector<Derived>& indexed_vector, OutGradient&& out_gradient, OutHessian&& out_hessian, const Weight& weight)
     {
-        lib::IDENTITY id;
+        functions::IDENTITY id;
         return id.hessian(out_gradient,
                           out_hessian,
                           weight,
@@ -1129,7 +1129,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     static EIGEN_STRONG_INLINE auto
     function(const SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>& expr)
     {
-        lib::IDENTITY id(-1);
+        functions::IDENTITY id(-1);
         return ExprEvaluator<DerivedLhs>::function(expr.lhs) + id.function(expr.rhs.cast_base());
     }
 
@@ -1138,7 +1138,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     jacobian(const SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>& expr, OutValue&& out_value, OutJacobian&& out_jacobian)
     {
         ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_value, out_jacobian(Eigen::all, Eigen::seqN(0, DerivedLhs::n_inputs)));
-        lib::IDENTITY id(-1);
+        functions::IDENTITY id(-1);
         id.jacobian(out_value,
                     out_jacobian(Eigen::all, Eigen::seqN(0, IndexedVector<DerivedRhs>::n_inputs)),
                     expr.rhs.cast_base());
@@ -1148,7 +1148,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     static EIGEN_STRONG_INLINE auto
     wsum(const SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>& expr, const Weight& weight)
     {
-        lib::IDENTITY id(-1);
+        functions::IDENTITY id(-1);
         return ExprEvaluator<DerivedLhs>::wsum(expr.lhs, weight) + id.wsum(weight, expr.rhs.cast_base());
     }
 
@@ -1156,7 +1156,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     static EIGEN_STRONG_INLINE auto
     gradient(const SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>& expr, OutGradient&& out_gradient, const Weight& weight)
     {
-        lib::IDENTITY id(-1);
+        functions::IDENTITY id(-1);
         return ExprEvaluator<DerivedLhs>::gradient(expr.lhs, out_gradient(Eigen::seqN(0, DerivedLhs::n_inputs)), weight)
                + id.gradient(out_gradient(Eigen::seqN(0, IndexedVector<DerivedRhs>::n_inputs)), weight, expr.rhs.cast_base());
     }
@@ -1165,7 +1165,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     static EIGEN_STRONG_INLINE auto
     hessian(const SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>& expr, OutGradient&& out_gradient, OutHessian&& out_hessian, const Weight& weight)
     {
-        lib::IDENTITY id(-1);
+        functions::IDENTITY id(-1);
         return ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_gradient(Eigen::seqN(0, DerivedLhs::n_inputs)), out_hessian(Eigen::seqN(0, DerivedLhs::n_inputs), Eigen::seqN(0, DerivedLhs::n_inputs)), weight)
                + id.hessian(out_gradient(Eigen::seqN(0, IndexedVector<DerivedRhs>::n_inputs)), out_hessian(Eigen::seqN(0, IndexedVector<DerivedRhs>::n_inputs), Eigen::seqN(0, IndexedVector<DerivedRhs>::n_inputs)), weight, expr.rhs.cast_base());
     }
@@ -1658,4 +1658,4 @@ std::ostream& operator<<(std::ostream& o, const std::array<T, N>& arr)
 
 }
 
-#endif // __PROBLEM_HPP
+#endif // LAOPT_PROBLEM_HPP
