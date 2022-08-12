@@ -2,7 +2,7 @@
 #define LAOPT_INDEXED_VECTOR_HPP
 
 #include "Eigen/Dense"
-#include "expr_base.hpp"
+#include "expressions/base_expr.hpp"
 
 namespace laopt {
 
@@ -13,7 +13,7 @@ namespace laopt {
  * indices of the original data elements
  */
 template<typename Base>
-class IndexedVector : public Base, public ExprBase<IndexedVector<Base>> {
+class IndexedVector : public Base, public BaseExpr<IndexedVector<Base>> {
     using index_t = typename Eigen::Vector<int, Base::RowsAtCompileTime>;
     // Indices of the elements of this vector wrt the original IndexedMap
     index_t m_indices;
