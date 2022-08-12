@@ -1,5 +1,5 @@
-#ifndef LAOPT_LAMPC_FUNCTION_LIBRARY_HPP
-#define LAOPT_LAMPC_FUNCTION_LIBRARY_HPP
+#ifndef LAOPT_FUNCTIONS_HPP
+#define LAOPT_FUNCTIONS_HPP
 
 #include "lampc_function_tag.hpp"
 
@@ -7,10 +7,11 @@ namespace laopt {
 
 namespace functions {
 
-struct IDENTITY : public Differentiable<IDENTITY, true>
+class IDENTITY : public Differentiable<IDENTITY, true>
 {
     const double multiplier;
 
+public:
     IDENTITY() : multiplier(1) {}
     explicit IDENTITY(double multiplier) : multiplier(multiplier) {}
 
@@ -59,11 +60,12 @@ struct IDENTITY : public Differentiable<IDENTITY, true>
 };
 
 template<typename F, typename Scalar, typename Tag = DefaultTag>
-struct RK4 : public Differentiable<RK4<F, Scalar, Tag>, true>
+class RK4 : public Differentiable<RK4<F, Scalar, Tag>, true>
 {
     F& f;
     Scalar h;
 
+public:
     explicit RK4(F& f, Scalar step_size) : f(f), h(step_size) {}
 
     template<typename X, typename... Params>
@@ -83,4 +85,4 @@ struct RK4 : public Differentiable<RK4<F, Scalar, Tag>, true>
 
 } // namespace laopt
 
-#endif // LAOPT_LAMPC_FUNCTION_LIBRARY_HPP
+#endif // LAOPT_FUNCTIONS_HPP

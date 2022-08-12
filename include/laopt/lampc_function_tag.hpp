@@ -5,6 +5,7 @@
 #include <unsupported/Eigen/AutoDiff>
 #include "eigen_autodiff_fix.hpp"
 
+#include "lampc_utility.hpp"
 #include "expr_base.hpp"
 #include "variable.hpp"
 

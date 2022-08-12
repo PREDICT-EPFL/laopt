@@ -6,9 +6,8 @@
 #include "bs_matrix.hpp"
 #include "bs_matrix_dense.hpp"
 
-#include "lampc_utility.hpp"
 #include "lampc_function_tag.hpp"
-#include "lampc_function_library.hpp"
+#include "functions.hpp"
 #include "lampc_functor.hpp"
 #include "indexed_vector.hpp"
 #include "problem.hpp"
