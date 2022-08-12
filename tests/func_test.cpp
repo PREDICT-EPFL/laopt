@@ -5,13 +5,9 @@
 #include <iostream>
 #include <chrono>
 
-#include "laopt/lampc_utility.hpp"
-#include "laopt/differentiable.hpp"
-#include "laopt/functions.hpp"
-#include "laopt/bs_matrix.hpp"
+#include "laopt/laopt.hpp"
 
 #include "test_utils.hpp"
-
 #include "gtest/gtest.h"
 
 namespace {

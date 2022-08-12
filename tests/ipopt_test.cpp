@@ -4,11 +4,12 @@
 
 #include <iostream>
 #include "laopt/laopt.hpp"
-
 #include "laopt/ipopt_interface.hpp"
 
 #include "test_utils.hpp"
 #include "gtest/gtest.h"
+
+using namespace Ipopt;
 
 namespace {
 

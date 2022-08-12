@@ -5,8 +5,7 @@
 #include <iostream>
 #include <chrono>
 
-#include "laopt/bs_matrix.hpp"
-#include "laopt/lampc_utility.hpp"
+#include "laopt/laopt.hpp"
 
 #include "test_utils.hpp"
 #include "gtest/gtest.h"

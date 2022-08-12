@@ -150,15 +150,15 @@ namespace laopt
     auto type_name() noexcept {
 #ifdef __clang__
         std::string name = __PRETTY_FUNCTION__;
-        std::string prefix = "auto type_name() [T = ";
+        std::string prefix = "auto laopt::type_name() [T = ";
         std::string suffix = "]";
 #elif defined(__GNUC__)
         std::string name = __PRETTY_FUNCTION__;
-        std::string prefix = "auto type_name() [with T = ";
+        std::string prefix = "auto laopt::type_name() [with T = ";
         std::string suffix = "]";
 #elif defined(_MSC_VER)
         std::string name = __FUNCSIG__;
-        std::string prefix = "auto __cdecl type_name<";
+        std::string prefix = "auto __cdecl laopt::type_name<";
         std::string suffix = ">(void) noexcept";
 #else
         std::string name = "Error: unsupported compiler";
