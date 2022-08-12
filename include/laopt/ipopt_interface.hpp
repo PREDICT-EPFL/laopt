@@ -1,7 +1,7 @@
 #ifndef LAOPT_IPOPT_INTERFACE_HPP
 #define LAOPT_IPOPT_INTERFACE_HPP
 
-#include "Eigen/Dense"
+#include <Eigen/Dense>
 
 #include "IpIpoptApplication.hpp"
 #include "IpTNLP.hpp"
@@ -10,17 +10,19 @@ namespace laopt
 {
 
 template<typename UserProblem>
-struct Solver_IPOpt: public Ipopt::TNLP
+class Solver_IPOpt: public Ipopt::TNLP
 {
-	UserProblem& prob;
-	using scalar_t = typename UserProblem::scalar_t;
+public:
+    using scalar_t = typename UserProblem::scalar_t;
+
+private:
+    UserProblem& prob;
 
 	// IPOPT only wants the lower triangular part of the hessian
 	// So we need to keep a full buffer for the computation
 	Eigen::SparseMatrix<scalar_t> lag_hessian;
 
 public:
-
 	// User-set initial value for the primal variable
 	Eigen::VectorX<scalar_t> init_primal;
 	Eigen::VectorX<scalar_t> init_dual;
