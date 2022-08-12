@@ -57,12 +57,12 @@ public:
 		m = prob.constraints.rows();
 
 		// nonzeros in the jacobian of the constraints
-		nnz_jac_g = prob.constraints.jacobian.sparsity_structure.nonZeros();
+		nnz_jac_g = prob.constraints.jacobian.get_sparsity_structure().nonZeros();
 
 		// nonzeros in the lower-triangular part of the hessian of the lagrangian
 		// Iterate over the non-zeros, counting only those in the lower triangular part
 		int nnz = 0;
-		auto S = prob.lagrangian.hessian.sparsity_structure;
+		auto S = prob.lagrangian.hessian.get_sparsity_structure();
 		for (int col = 0; col < S.outerSize(); ++col)
         {
             for (typename Eigen::SparseMatrix<typename decltype(S)::Scalar>::InnerIterator it(S, col); it; ++it)
@@ -190,7 +190,7 @@ public:
 		if (values == nullptr)
 		{
 			// return the structure of the jacobian of the constraints
-			auto S = prob.constraints.jacobian.sparsity_structure;
+			auto S = prob.constraints.jacobian.get_sparsity_structure();
 			int i = 0;
 			for (int col = 0; col < S.outerSize(); ++col)
             {
@@ -242,7 +242,7 @@ public:
 			// Return the structure of the hessian of the lagrangian. 
 			// This is a symmetric matrix, fill the lower left triangle only.
 
-			auto S = prob.lagrangian.hessian.sparsity_structure;
+			auto S = prob.lagrangian.hessian.get_sparsity_structure();
 			int i = 0;
 			for (int col = 0; col < S.outerSize(); ++col)
             {

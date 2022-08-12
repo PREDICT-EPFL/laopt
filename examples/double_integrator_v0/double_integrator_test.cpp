@@ -24,20 +24,20 @@ int main()
 
     /* Construct LAMPC and IPOPT problems for transcribed OCP using according tape, link decision variables between problems */
     LaProblem nlp(transcription, tape); // Tape is optional here and could also be generated internally
-    SmartPtr<IpoptProblem> ipopt_nlp = new IpoptProblem(nlp);
+    Ipopt::SmartPtr<IpoptProblem> ipopt_nlp = new IpoptProblem(nlp);
     nlp.set_decision_variable(ipopt_nlp->init_primal);
 
     /* Create IPOPT solver, setup, and initialize */
-    SmartPtr<IpoptApplication> ipopt_solver = IpoptApplicationFactory();
+    Ipopt::SmartPtr<Ipopt::IpoptApplication> ipopt_solver = IpoptApplicationFactory();
     // ipopt_solver->Options()->SetStringValue("hessian_approximation", "limited-memory");
     ipopt_solver->Options()->SetIntegerValue("print_level", 5);
-    ApplicationReturnStatus ipopt_status = ipopt_solver->Initialize();
-    if( ipopt_status != Solve_Succeeded ) { std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl; }
+    Ipopt::ApplicationReturnStatus ipopt_status = ipopt_solver->Initialize();
+    if( ipopt_status != Ipopt::Solve_Succeeded ) { std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl; }
  
     /* Set initial state and solve the problem */
     ocp.x0 << 1, 1;
     ipopt_status = ipopt_solver->OptimizeTNLP(ipopt_nlp);
-    if( ipopt_status != Solve_Succeeded ) { std::cout << std::endl << std::endl << "*** Error during solution!" << std::endl; }
+    if( ipopt_status != Ipopt::Solve_Succeeded ) { std::cout << std::endl << std::endl << "*** Error during solution!" << std::endl; }
 
     /* Print out the solution */
     std::cout << std::endl << std::endl << std::endl << std::endl;
