@@ -50,10 +50,11 @@ public:
 /**
 * A tape class to capture the copy pattern.
 */
-struct BSMatrixTape : public BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>
+class BSMatrixTape : public BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>
 {
     Eigen::MatrixX<int> sparsity_structure; // Must have been created a-priori
 
+public:
     BSMatrixTape() : BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>(*this, Eigen::MatrixX<int>()) {}
 
     explicit BSMatrixTape(const Eigen::MatrixX<bool>& structure, Eigen::Index rows = 0, Eigen::Index cols = 0) :

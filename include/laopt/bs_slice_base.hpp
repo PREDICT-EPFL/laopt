@@ -6,13 +6,26 @@
 namespace laopt {
 
 template<typename T, typename Base>
-struct BSSliceBase
+class BSSliceBase
 {
+protected:
     Base& base; // Pointer to the top-level matrix
     T M; // Matrix slice
 
-    using Scalar = double;
+    /**
+     * Extract the sparsity pattern of a given matrix
+     *
+     * Dense matrices are assumed to be dense, sparse have patterns.
+     *
+     * TODO: Implement sparse base
+     */
+    template<typename Derived>
+    Eigen::MatrixX<int> get_pattern(const Eigen::DenseBase<Derived>& mat)
+    {
+        return Eigen::MatrixX<int>::Constant(mat.rows(), mat.cols(), 1);
+    }
 
+public:
     BSSliceBase(Base& base, T M) : base(base), M(std::move(M)) {}
 
     template<typename RowSlice, typename ColSlice>
@@ -44,22 +57,7 @@ struct BSSliceBase
     Eigen::Index cols() { return M.cols(); }
 
     // Only used in BSMatrix
-    inline void reset_copy_index() { }
-
-protected:
-
-    /**
-     * Extract the sparsity pattern of a given matrix
-     *
-     * Dense matrices are assumed to be dense, sparse have patterns.
-     *
-     * TODO: Implement sparse base
-     */
-    template<typename Derived>
-    Eigen::MatrixX<int> get_pattern(const Eigen::DenseBase<Derived>& mat)
-    {
-        return Eigen::MatrixX<int>::Constant(mat.rows(), mat.cols(), 1);
-    }
+    inline void reset_copy_index() {}
 };
 
 } // namespace laopt

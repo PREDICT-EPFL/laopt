@@ -49,8 +49,9 @@ public:
 /**
  * A tape class to capture the sparsity pattern
  */
-struct BSMatrixSparsity : public BSSliceSparsity<Eigen::MatrixX<int>, BSMatrixSparsity>
+class BSMatrixSparsity : public BSSliceSparsity<Eigen::MatrixX<int>, BSMatrixSparsity>
 {
+public:
     explicit BSMatrixSparsity(Eigen::Index rows = 0, Eigen::Index cols = 0)
             : BSSliceSparsity<Eigen::MatrixX<int>, BSMatrixSparsity>(*this, Eigen::MatrixX<int>(0, 0))
     {
