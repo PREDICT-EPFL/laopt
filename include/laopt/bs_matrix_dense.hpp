@@ -10,11 +10,13 @@ namespace laopt {
  * then fixed during deployment.
  */
 template<typename Derived>
-struct BSMatrixDenseBase
+class BSMatrixDenseBase
 {
+protected:
     Eigen::Index m_rows;
     Eigen::Index m_cols;
 
+public:
     BSMatrixDenseBase() : m_rows(0), m_cols(0) {}
 
     // Current size of the m_matrix
@@ -84,12 +86,14 @@ struct BSMatrixDenseBase
 
 
 template<typename scalar_t_>
-struct BSMatrixDenseConstruction : public BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>
+class BSMatrixDenseConstruction : public BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>
 {
+public:
     using scalar_t = scalar_t_;
+
+private:
     friend BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t>>;
 
-protected:
     // Buffer for the matrix during construction
     Eigen::MatrixX<scalar_t> m_mat;
 
@@ -119,17 +123,18 @@ public:
 };
 
 template<typename scalar_t_>
-struct BSMatrixDenseDeployment : public BSMatrixDenseBase<BSMatrixDenseDeployment<scalar_t_>>
+class BSMatrixDenseDeployment : public BSMatrixDenseBase<BSMatrixDenseDeployment<scalar_t_>>
 {
+public:
     using scalar_t = scalar_t_;
+
+private:
     friend BSMatrixDenseBase<BSMatrixDenseDeployment<scalar_t>>;
 
-protected:
     // Buffer for the matrix
     Eigen::Map<Eigen::MatrixX<scalar_t>> m_mat;
 
 public:
-
     BSMatrixDenseDeployment() : m_mat(nullptr, 0, 0) {}
 
     explicit BSMatrixDenseDeployment(const typename BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>::Info& info) : m_mat(NULL, 0, 0) {}
