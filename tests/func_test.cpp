@@ -6,7 +6,7 @@
 #include <chrono>
 
 #include "laopt/lampc_utility.hpp"
-#include "laopt/lampc_function_tag.hpp"
+#include "laopt/differentiable.hpp"
 #include "laopt/functions.hpp"
 #include "laopt/bs_matrix.hpp"
 

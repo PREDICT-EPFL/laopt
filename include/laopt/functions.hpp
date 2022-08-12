@@ -1,7 +1,7 @@
 #ifndef LAOPT_FUNCTIONS_HPP
 #define LAOPT_FUNCTIONS_HPP
 
-#include "lampc_function_tag.hpp"
+#include "differentiable.hpp"
 
 namespace laopt {
 

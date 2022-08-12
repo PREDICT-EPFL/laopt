@@ -1,7 +1,7 @@
-#ifndef LAOPT_LAMPC_FUNCTOR_HPP
-#define LAOPT_LAMPC_FUNCTOR_HPP
+#ifndef LAOPT_DIFFERENTIABLE_FUNCTION_HPP
+#define LAOPT_DIFFERENTIABLE_FUNCTION_HPP
 
-#include "lampc_function_tag.hpp"
+#include "differentiable.hpp"
 
 namespace laopt {
 
@@ -92,4 +92,4 @@ public:
 
 } // namespace laopt
 
-#endif // LAOPT_LAMPC_FUNCTOR_HPP
+#endif // LAOPT_DIFFERENTIABLE_FUNCTION_HPP

@@ -6,10 +6,13 @@
 #include "bs_matrix.hpp"
 #include "bs_matrix_dense.hpp"
 
-#include "lampc_function_tag.hpp"
+#include "differentiable.hpp"
+#include "differentiable_function.hpp"
 #include "functions.hpp"
-#include "lampc_functor.hpp"
+
 #include "indexed_vector.hpp"
+#include "variable.hpp"
+
 #include "problem.hpp"
 
 #endif // LAOPT_LAOPT_HPP

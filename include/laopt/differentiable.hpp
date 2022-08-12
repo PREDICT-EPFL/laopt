@@ -1,5 +1,5 @@
-#ifndef LAOPT_LAMPC_FUNCTION_TAG_HPP
-#define LAOPT_LAMPC_FUNCTION_TAG_HPP
+#ifndef LAOPT_DIFFERENTIABLE_HPP
+#define LAOPT_DIFFERENTIABLE_HPP
 
 #include <Eigen/Dense>
 #include <unsupported/Eigen/AutoDiff>
@@ -613,6 +613,6 @@ public:
     }
 };
 
-}; // namespace laopt
+} // namespace laopt
 
-#endif // LAOPT_LAMPC_FUNCTION_TAG_HPP
+#endif // LAOPT_DIFFERENTIABLE_HPP

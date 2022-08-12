@@ -5,7 +5,7 @@
 #include <iterator>
 #include "variable.hpp"
 #include "expr_base.hpp"
-#include "lampc_function_tag.hpp"
+#include "differentiable.hpp"
 
 namespace laopt
 {
