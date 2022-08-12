@@ -4,7 +4,7 @@
 
 #include <iostream>
 #include <iomanip>
-#include "laopt/lampc.hpp"
+#include "laopt/laopt.hpp"
 #include "laopt/ipopt_interface.hpp"
 
 #include <casadi/casadi.hpp>

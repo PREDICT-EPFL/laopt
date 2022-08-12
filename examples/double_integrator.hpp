@@ -2,7 +2,7 @@
 #define __DOUBLE_INTEGRATOR__HPP
 
 #include <iostream>
-#include "laopt/lampc.hpp"
+#include "laopt/laopt.hpp"
 
 /**
  * Simple linear MPC problem

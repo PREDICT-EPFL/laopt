@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "laopt/lampc.hpp"
+#include "laopt/laopt.hpp"
 
 template<typename scalar_t>
 struct User : public laopt::Differentiable<User<scalar_t>>

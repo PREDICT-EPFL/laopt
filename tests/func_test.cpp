@@ -8,7 +8,7 @@
 #include "laopt/lampc_utility.hpp"
 #include "laopt/lampc_function_tag.hpp"
 #include "laopt/lampc_function_library.hpp"
-#include "laopt/bsmatrix.hpp"
+#include "laopt/bs_matrix.hpp"
 
 #include "test_utils.hpp"
 

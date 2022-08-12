@@ -255,7 +255,8 @@ protected:
         // Call the (possibly overloaded) jacobian
         Eigen::Vector<scalar_t, num_outputs> value;
         Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
-        value.array() = 0; jacobian.array() = 0;
+        value.setZero();
+        jacobian.setZero();
         static_cast<Derived*>(this)->jacobian(std::forward<Tag>(tag), value, jacobian, args...);
         out_gradient += weight.transpose() * jacobian;
         return weight.dot(value);

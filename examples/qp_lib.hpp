@@ -1,7 +1,7 @@
 #ifndef QP_LIB_HPP
 #define QP_LIB_HPP
 
-#include "laopt/lampc.hpp"
+#include "laopt/laopt.hpp"
 
 #include "qp_functions.hpp"
 #include "qp.compiled.hpp"

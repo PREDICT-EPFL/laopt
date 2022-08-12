@@ -1601,7 +1601,7 @@ struct ProblemMemory {
         // prob.variable_bounds.set_zero();
         prob.objective.initialize();
         prob.lagrangian.initialize();
-        var.array() = 0;
+        var.setZero();
         prob.set_decision_variable(var);
 
         for (int i = 0; i < objective.hessian.nonZeros(); i++) objective.hessian.valuePtr()[i] = i;

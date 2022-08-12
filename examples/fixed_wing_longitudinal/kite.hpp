@@ -4,7 +4,7 @@
 #include "casadi/casadi.hpp"
 #include <Eigen/Core>
 #include <unsupported/Eigen/src/AutoDiff/AutoDiffScalar.h>
-#include "eigen_autodiff_fix.hpp"
+#include "laopt/eigen_autodiff_fix.hpp"
 #include "yaml-cpp/yaml.h"
 
 namespace kite_math {
