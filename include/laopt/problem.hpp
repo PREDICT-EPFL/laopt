@@ -899,7 +899,7 @@ public:
         auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
         objective.extend_rows(n_outputs);
 
-        objective.value += ExprEvaluator<Derived>::gradient(expr.derived(), objective.gradient(expr.indices()), objective.weights(out_indices));
+        objective.value += ExprEvaluator<Derived>::gradient(expr.derived(), objective.gradient(expr.derived().indices()), objective.weights(out_indices));
     }
 
     template<typename Derived, typename LocalDType = DType>
@@ -911,7 +911,7 @@ public:
         auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
         objective.extend_rows(n_outputs);
 
-        auto in_indices = expr.indices();
+        auto in_indices = expr.derived().indices();
         objective.value += ExprEvaluator<Derived>::hessian(expr.derived(), objective.gradient(in_indices), objective.hessian(in_indices, in_indices), objective.weights(out_indices));
     }
 
@@ -1046,7 +1046,7 @@ public:
         auto out_indices = Eigen::seqN(constraints.value.rows(), Eigen::fix<n_outputs>);
         constraints.extend_rows(n_outputs);
 
-        ExprEvaluator<Derived>::jacobian(bound.expr.derived(), constraints.value(out_indices), constraints.jacobian(out_indices, bound.expr.indices()));
+        ExprEvaluator<Derived>::jacobian(bound.expr.derived(), constraints.value(out_indices), constraints.jacobian(out_indices, bound.expr.derived().indices()));
         add_bounds(bound, out_indices);
     }
 
@@ -1091,7 +1091,7 @@ public:
         auto out_indices = Eigen::seqN(constraints.weights.rows(), Eigen::fix<n_outputs>);
         constraints.extend_rows(n_outputs);
 
-        constraints.value += ExprEvaluator<Derived>::gradient(bound.expr.derived(), constraints.gradient(bound.expr.indices()), constraints.weights(out_indices));
+        constraints.value += ExprEvaluator<Derived>::gradient(bound.expr.derived(), constraints.gradient(bound.expr.derived().indices()), constraints.weights(out_indices));
     }
 
     template<template<typename...> class Bound, typename Derived, typename ...BoundArgs, typename LocalDType = DType>
@@ -1103,7 +1103,7 @@ public:
         auto out_indices = Eigen::seqN(constraints.weights.rows(), Eigen::fix<n_outputs>);
         constraints.extend_rows(n_outputs);
 
-        auto in_indices = bound.expr.indices();
+        auto in_indices = bound.expr.derived().indices();
         constraints.value += ExprEvaluator<Derived>::hessian(bound.expr.derived(), constraints.gradient(in_indices), constraints.hessian(in_indices, in_indices), constraints.weights(out_indices));
     }
 
