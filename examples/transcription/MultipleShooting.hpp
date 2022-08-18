@@ -28,6 +28,7 @@ protected: // TODO ino1
     Eigen::Vector<Scalar, N + 1> T; // Fixed time
     std::array<variable_t<ControlProblem::NX>, N + 1> X_var;
     std::array<variable_t<ControlProblem::NU>, N + 1> U_var;
+    double h{1.0 / N};
 
 public:
     /* Objective */
@@ -52,23 +53,29 @@ public:
     }
 
     /* Dynamic constraints */
-    struct ContinuousDynamics {};
+    struct DiscreteDynamics {};
     template<typename x_t, typename u_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NX>
-    function_impl(ContinuousDynamics, const Eigen::MatrixBase<x_t> &x, const Eigen::MatrixBase<u_t> &u)
+    function_impl(DiscreteDynamics, const Eigen::MatrixBase<x_t> &x, const Eigen::MatrixBase<u_t> &u)
     {
         Eigen::Vector<scalar_t, ControlProblem::NX> x_dot;
+
+        using Vec = typename x_t::PlainObject;
         controlProblem.template dynamics_impl<scalar_t>(x_dot, x, u);
-        return x_dot;
+        Vec k1 = x_dot;
+        controlProblem.template dynamics_impl<scalar_t>(x_dot, x + h * 0.5 * k1, u);
+        Vec k2 = x_dot;
+        controlProblem.template dynamics_impl<scalar_t>(x_dot, x + h * 0.5 * k2, u);
+        Vec k3 = x_dot;
+        controlProblem.template dynamics_impl<scalar_t>(x_dot, x + h * k3, u);
+        Vec k4 = x_dot;
+        return x + h / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
     }
-    using DiscreteDynamics = laopt::functions::RK4<MultipleShooting<ControlProblem, N>, Scalar, ContinuousDynamics>;
-protected:
-    DiscreteDynamics discreteDynamics;
 
 public:
     explicit MultipleShooting(ControlProblem &ctrlProblem_) :
             controlProblem(ctrlProblem_),
-            discreteDynamics(*this, controlProblem.tf / N) {}
+            h(controlProblem.tf / N) {}
 
     using scalar_t = typename ControlProblem::Scalar; // TODO: Change in laOPT to accept Scalar
     using TimeTrajectory = Eigen::Vector<Scalar, N + 1>;
@@ -90,9 +97,11 @@ public:
         for (int i = 0; i < N; i++)
         {
             T(i) = i * controlProblem.tf / N;
+
             PRINT("T(" << i << ") = " << T(i));
             optProblem.add_obj(this->function(StageCost{}, X_var[i], U_var[i]));
-            optProblem.add_constr(X_var[i + 1] - discreteDynamics(X_var[i], U_var[i]) == 0);
+//            optProblem.add_constr(X_var[i + 1] == discreteDynamics(X_var[i], U_var[i]));
+            optProblem.add_constr(X_var[i + 1] == this->function(DiscreteDynamics{}, X_var[i], U_var[i]));
         }
 
         /* Last discretization point */
@@ -101,7 +110,7 @@ public:
         optProblem.add_obj(this->function(MayerCost{}, X_var[N]));
 
         /* Set last control equal second last for easier data handling */
-//        optProblem.add_constr(U_var[N] - U_var[N - 1] == 0);
+        optProblem.add_constr(U_var[N] == U_var[N - 1]);
 
         /* Box constraints */
         for (int i = 0; i < N + 1; i++)
