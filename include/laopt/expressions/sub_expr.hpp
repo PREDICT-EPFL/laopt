@@ -84,7 +84,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>
         out_gradient_rhs.setZero();
 
         value -= ExprEvaluator<DerivedRhs>::gradient(expr.rhs, out_gradient_rhs, weight);
-        out_gradient(Eigen::seqN(0, DerivedRhs::n_inputs)) -= out_gradient_rhs;
+        out_gradient(Eigen::lastN(DerivedRhs::n_inputs)) -= out_gradient_rhs;
 
         return value;
     }
@@ -101,8 +101,8 @@ struct ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>
         out_hessian_rhs.setZero();
 
         value -= ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_gradient_rhs, out_hessian_rhs, weight);
-        out_gradient(Eigen::seqN(0, DerivedRhs::n_inputs)) -= out_gradient_rhs;
-        out_hessian(Eigen::seqN(0, DerivedRhs::n_inputs), Eigen::seqN(0, DerivedRhs::n_inputs)) -= out_hessian_rhs;
+        out_gradient(Eigen::lastN(DerivedRhs::n_inputs)) -= out_gradient_rhs;
+        out_hessian(Eigen::lastN(DerivedRhs::n_inputs), Eigen::lastN(DerivedRhs::n_inputs)) -= out_hessian_rhs;
 
         return value;
     }
@@ -125,7 +125,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
         ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_value, out_jacobian(Eigen::all, Eigen::seqN(0, DerivedLhs::n_inputs)));
         functions::IDENTITY id(-1);
         id.jacobian(out_value,
-                    out_jacobian(Eigen::all, Eigen::seqN(0, IndexedVector<DerivedRhs>::n_inputs)),
+                    out_jacobian(Eigen::all, Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)),
                     expr.rhs.cast_base());
     }
 
@@ -143,7 +143,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     {
         functions::IDENTITY id(-1);
         return ExprEvaluator<DerivedLhs>::gradient(expr.lhs, out_gradient(Eigen::seqN(0, DerivedLhs::n_inputs)), weight)
-               + id.gradient(out_gradient(Eigen::seqN(0, IndexedVector<DerivedRhs>::n_inputs)), weight, expr.rhs.cast_base());
+               + id.gradient(out_gradient(Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)), weight, expr.rhs.cast_base());
     }
 
     template<typename OutGradient, typename OutHessian, typename Weight>
@@ -152,7 +152,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     {
         functions::IDENTITY id(-1);
         return ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_gradient(Eigen::seqN(0, DerivedLhs::n_inputs)), out_hessian(Eigen::seqN(0, DerivedLhs::n_inputs), Eigen::seqN(0, DerivedLhs::n_inputs)), weight)
-               + id.hessian(out_gradient(Eigen::seqN(0, IndexedVector<DerivedRhs>::n_inputs)), out_hessian(Eigen::seqN(0, IndexedVector<DerivedRhs>::n_inputs), Eigen::seqN(0, IndexedVector<DerivedRhs>::n_inputs)), weight, expr.rhs.cast_base());
+               + id.hessian(out_gradient(Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)), out_hessian(Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs), Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)), weight, expr.rhs.cast_base());
     }
 };
 

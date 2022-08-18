@@ -7,7 +7,7 @@
 namespace laopt {
 
 // ExprEvaluator forward declaration
-template<typename Derived>
+template<typename Derived, typename EnableIf = void>
 struct ExprEvaluator;
 
 template<typename Derived>

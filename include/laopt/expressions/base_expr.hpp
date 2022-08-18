@@ -4,7 +4,8 @@
 namespace laopt {
 
 template<typename Derived>
-class BaseExpr {
+class BaseExpr
+{
 public:
     Derived& derived()
     {
@@ -14,11 +15,6 @@ public:
     const Derived& derived() const
     {
         return static_cast<const Derived&>(*this);
-    }
-
-    EIGEN_STRONG_INLINE auto indices() const
-    {
-        return static_cast<const Derived*>(this)->indices();
     }
 };
 
