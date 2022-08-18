@@ -98,11 +98,11 @@ public:
         // add dynamics constraints
         for (int i = 0; i < N; i++)
         {
-            problem.add_constr(X[i + 1] - dsys(X[i], U[i]) == 0);
+            problem.add_constr(X[i + 1] == dsys(X[i], U[i]));
         }
 
         // add last input constraint
-        problem.add_constr(U[N] - U[N - 1] == 0);
+        problem.add_constr(U[N] == U[N - 1]);
     }
 };
 

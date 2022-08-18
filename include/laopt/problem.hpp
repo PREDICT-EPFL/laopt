@@ -29,181 +29,6 @@ struct Hessian {};
  * just plays back the tape for speed. Only this version needs to be optimized.
  */
 
-struct VariableBound {};
-
-template<typename Derived, typename DerivedLb>
-struct VariableLowerBound : VariableBound
-{
-    const IndexedVector<Derived> &variable;
-    const DerivedLb& lb;
-    explicit VariableLowerBound(const IndexedVector<Derived>& variable, const DerivedLb& lb) : variable(variable), lb(lb) {}
-};
-
-template<typename Derived, typename DerivedUb>
-struct VariableUpperBound : VariableBound
-{
-    const IndexedVector<Derived>& variable;
-    const DerivedUb& ub;
-    explicit VariableUpperBound(const IndexedVector<Derived>& variable, const DerivedUb& ub) : variable(variable), ub(ub) {}
-};
-
-template<typename Derived, typename DerivedLb, typename DerivedUb>
-struct VariableLowerUpperBound : VariableBound
-{
-    const IndexedVector<Derived>& variable;
-    const DerivedLb& lb;
-    const DerivedUb& ub;
-    explicit VariableLowerUpperBound(const IndexedVector<Derived>& variable, const DerivedLb& lb, const DerivedUb& ub) : variable(variable), lb(lb), ub(ub) {}
-};
-
-template<typename Derived, typename DerivedLb>
-VariableLowerBound<Derived, DerivedLb> operator<=(const DerivedLb& lb, const IndexedVector<Derived>& variable)
-{
-    return VariableLowerBound<Derived, DerivedLb>(variable, lb);
-}
-
-template<typename Derived, typename DerivedUb>
-VariableUpperBound<Derived, DerivedUb> operator<=(const IndexedVector<Derived>& variable, const DerivedUb& ub)
-{
-    return VariableUpperBound<Derived, DerivedUb>(variable, ub);
-}
-
-template<typename Derived, typename DerivedUb>
-VariableUpperBound<Derived, DerivedUb> operator>=(const DerivedUb& ub, const IndexedVector<Derived>& variable)
-{
-    return VariableUpperBound<Derived, DerivedUb>(variable, ub);
-}
-
-template<typename Derived, typename DerivedLb>
-VariableLowerBound<Derived, DerivedLb> operator>=(const IndexedVector<Derived>& variable, const DerivedLb& lb)
-{
-    return VariableLowerBound<Derived, DerivedLb>(variable, lb);
-}
-
-template<typename Derived, typename DerivedEq>
-VariableLowerUpperBound<Derived, DerivedEq, DerivedEq> operator==(const IndexedVector<Derived>& variable, const DerivedEq& eq)
-{
-    return VariableLowerUpperBound<Derived, DerivedEq, DerivedEq>(variable, eq, eq);
-}
-
-template<typename Derived, typename DerivedEq>
-VariableLowerUpperBound<Derived, DerivedEq, DerivedEq> operator==(const DerivedEq& eq, const IndexedVector<Derived>& variable)
-{
-    return VariableLowerUpperBound<Derived, DerivedEq, DerivedEq>(variable, eq, eq);
-}
-
-template<typename Derived, typename DerivedLb, typename DerivedUb>
-VariableLowerUpperBound<Derived, DerivedLb, DerivedUb> operator<=(const VariableLowerBound<Derived, DerivedLb>& vlb, const DerivedUb& ub)
-{
-    return VariableLowerUpperBound<Derived, DerivedLb, DerivedUb>(vlb.variable, vlb.lb, ub);
-}
-
-template<typename Derived, typename DerivedLb, typename DerivedUb>
-VariableLowerUpperBound<Derived, DerivedLb, DerivedUb> operator<=(const DerivedLb& lb, const VariableUpperBound<Derived, DerivedUb>& vub)
-{
-    return VariableLowerUpperBound<Derived, DerivedLb, DerivedUb>(vub.variable, lb, vub.ub);
-}
-
-template<typename Derived, typename DerivedLb, typename DerivedUb>
-VariableLowerUpperBound<Derived, DerivedLb, DerivedUb> operator>=(const DerivedUb& ub, const VariableLowerBound<Derived, DerivedLb>& vlb)
-{
-    return VariableLowerUpperBound<Derived, DerivedLb, DerivedUb>(vlb.variable, vlb.lb, ub);
-}
-
-template<typename Derived, typename DerivedLb, typename DerivedUb>
-VariableLowerUpperBound<Derived, DerivedLb, DerivedUb> operator>=(const VariableUpperBound<Derived, DerivedUb>& vub, const DerivedLb& lb)
-{
-    return VariableLowerUpperBound<Derived, DerivedLb, DerivedUb>(vub.variable, lb, vub.ub);
-}
-
-
-struct ExprBound {};
-
-template<typename Derived, typename DerivedLb>
-struct ExprLowerBound : ExprBound
-{
-    const Derived& expr;
-    const DerivedLb& lb;
-    explicit ExprLowerBound(const BaseExpr<Derived>& expr, const DerivedLb& lb) : expr(expr.derived()), lb(lb) {}
-};
-
-template<typename Derived, typename DerivedUb>
-struct ExprUpperBound : ExprBound
-{
-    const Derived& expr;
-    const DerivedUb& ub;
-    explicit ExprUpperBound(const BaseExpr<Derived>& expr, const DerivedUb& ub) : expr(expr.derived()), ub(ub) {}
-};
-
-template<typename Derived, typename DerivedLb, typename DerivedUb>
-struct ExprLowerUpperBound : ExprBound
-{
-    const Derived& expr;
-    const DerivedLb& lb;
-    const DerivedUb& ub;
-    explicit ExprLowerUpperBound(const BaseExpr<Derived>& expr, const DerivedLb& lb, const DerivedUb& ub) : expr(expr.derived()), lb(lb), ub(ub) {}
-};
-
-template<typename Derived, typename DerivedUb>
-ExprUpperBound<Derived, DerivedUb> operator<=(const BaseExpr<Derived>& expr, const DerivedUb& ub)
-{
-    return ExprUpperBound<Derived, DerivedUb>(expr, ub);
-}
-
-template<typename Derived, typename DerivedUb>
-ExprUpperBound<Derived, DerivedUb> operator>=(const DerivedUb& ub, const BaseExpr<Derived>& expr)
-{
-    return ExprUpperBound<Derived, DerivedUb>(expr, ub);
-}
-
-template<typename Derived, typename DerivedLb>
-ExprLowerBound<Derived, DerivedLb> operator<=(const DerivedLb& lb, const BaseExpr<Derived>& expr)
-{
-    return ExprLowerBound<Derived, DerivedLb>(expr, lb);
-}
-
-template<typename Derived, typename DerivedLb>
-ExprLowerBound<Derived, DerivedLb> operator>=(const BaseExpr<Derived>& expr, const DerivedLb& lb)
-{
-    return ExprLowerBound<Derived, DerivedLb>(expr, lb);
-}
-
-template<typename Derived, typename DerivedEq>
-ExprLowerUpperBound<Derived, DerivedEq, DerivedEq> operator==(const BaseExpr<Derived>& expr, const DerivedEq& eq)
-{
-    return ExprLowerUpperBound<Derived, DerivedEq, DerivedEq>(expr, eq, eq);
-}
-
-template<typename Derived, typename DerivedEq>
-ExprLowerUpperBound<Derived, DerivedEq, DerivedEq> operator==(const DerivedEq& eq, const BaseExpr<Derived>& expr)
-{
-    return ExprLowerUpperBound<Derived, DerivedEq, DerivedEq>(expr, eq, eq);
-}
-
-template<typename Derived, typename DerivedLb, typename DerivedUb>
-ExprLowerUpperBound<Derived, DerivedLb, DerivedUb> operator<=(const ExprLowerBound<Derived, DerivedLb>& flb, const DerivedUb& ub)
-{
-    return ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>(flb.expr, flb.lb, ub);
-}
-
-template<typename Derived, typename DerivedLb, typename DerivedUb>
-ExprLowerUpperBound<Derived, DerivedLb, DerivedUb> operator<=(const DerivedLb& lb, const ExprUpperBound<Derived, DerivedUb>& fub)
-{
-    return ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>(fub.expr, lb, fub.ub);
-}
-
-template<typename Derived, typename DerivedLb, typename DerivedUb>
-ExprLowerUpperBound<Derived, DerivedLb, DerivedUb> operator>=(const DerivedUb& ub, const ExprLowerBound<Derived, DerivedLb>& flb)
-{
-    return ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>(flb.expr, flb.lb, ub);
-}
-
-template<typename Derived, typename DerivedLb, typename DerivedUb>
-ExprLowerUpperBound<Derived, DerivedLb, DerivedUb> operator>=(const ExprUpperBound<Derived, DerivedUb>& fub, const DerivedLb& lb)
-{
-    return ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>(fub.expr, lb, fub.ub);
-}
-
 /**
  * Information about the function.
  * 
@@ -374,6 +199,30 @@ public:
 		jacobian.extend(0, variables);
 		num_variables += variables;
 	}
+
+    template<typename Indices, typename Derived>
+    void assign_lower_bound(const Indices& indices, const Eigen::MatrixBase<Derived>& lb_)
+    {
+        lb(indices) = lb_;
+    }
+
+    template<typename Indices, typename Derived>
+    void assign_lower_bound(const Indices& indices, const Derived& lb_)
+    {
+        lb(indices).array() = lb_;
+    }
+
+    template<typename Indices, typename Derived>
+    void assign_upper_bound(const Indices& indices, const Eigen::MatrixBase<Derived>& ub_)
+    {
+        ub(indices) = ub_;
+    }
+
+    template<typename Indices, typename Derived>
+    void assign_upper_bound(const Indices& indices, const Derived& ub_)
+    {
+        ub(indices).array() = ub_;
+    }
 
 	FunctionInfo<Matrix,Vector> generate()
 	{
@@ -935,39 +784,29 @@ public:
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_obj(Args...) {}
 
-    template<typename Derived, typename DerivedBound>
-    EIGEN_STRONG_INLINE void add_constr(const VariableLowerBound<Derived, Eigen::MatrixBase<DerivedBound>>& bound)
+    template<typename DerivedLhs, typename DerivedRhs>
+    EIGEN_STRONG_INLINE typename std::enable_if<is_variable_constraint_expr<IneqConstraintExpr<DerivedLhs, IndexedVector<DerivedRhs>>>::value, void>::type
+    add_constr(const IneqConstraintExpr<DerivedLhs, IndexedVector<DerivedRhs>>& ineq)
     {
-        variable_bounds.lb(bound.variable.indices()) = bound.lb;
+        variable_bounds.assign_lower_bound(ineq.rhs.indices(), ineq.lhs);
     }
 
-    template<typename Derived, typename DerivedScalar>
-    EIGEN_STRONG_INLINE void add_constr(const VariableLowerBound<Derived, DerivedScalar>& bound)
+    template<typename DerivedLhs, typename DerivedRhs>
+    EIGEN_STRONG_INLINE typename std::enable_if<is_variable_constraint_expr<IneqConstraintExpr<IndexedVector<DerivedLhs>, DerivedRhs>>::value, void>::type
+    add_constr(const IneqConstraintExpr<IndexedVector<DerivedLhs>, DerivedRhs>& ineq)
     {
-        variable_bounds.lb(bound.variable.indices()).array() = bound.lb;
+        variable_bounds.assign_upper_bound(ineq.lhs.indices(), ineq.rhs);
     }
 
-    template<typename Derived, typename DerivedBound>
-    EIGEN_STRONG_INLINE void add_constr(const VariableUpperBound<Derived, Eigen::MatrixBase<DerivedBound>>& bound)
+    template<typename DerivedLb, typename Derived, typename DerivedUb>
+    EIGEN_STRONG_INLINE void add_constr(const BoundedExpr<DerivedLb, IndexedVector<Derived>, DerivedUb>& bounded_expr)
     {
-        variable_bounds.ub(bound.variable.indices()) = bound.ub;
+        add_constr(IneqConstraintExpr<DerivedLb, IndexedVector<Derived>>(bounded_expr.lb, bounded_expr.expr));
+        add_constr(IneqConstraintExpr<IndexedVector<Derived>, DerivedUb>(bounded_expr.expr, bounded_expr.ub));
     }
 
-    template<typename Derived, typename DerivedScalar>
-    EIGEN_STRONG_INLINE void add_constr(const VariableUpperBound<Derived, DerivedScalar>& bound)
-    {
-        variable_bounds.ub(bound.variable.indices()).array() = bound.ub;
-    }
-
-    template<typename Derived, typename DerivedLb, typename DerivedUb>
-    EIGEN_STRONG_INLINE void add_constr(const VariableLowerUpperBound<Derived, DerivedLb, DerivedUb>& bound)
-    {
-        add_constr(VariableLowerBound<Derived, DerivedLb>(bound.variable, bound.lb));
-        add_constr(VariableUpperBound<Derived, DerivedUb>(bound.variable, bound.ub));
-    }
-
-    template<typename ...Args>
-    EIGEN_STRONG_INLINE void add_constr(Args...) {}
+    template<typename Derived>
+    EIGEN_STRONG_INLINE void add_constr(ConstraintExpr<Derived>) {}
 };
 
 template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
@@ -980,78 +819,43 @@ public:
     explicit VectorConstraintsEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem, VectorFunction<Matrix, Vector>& constraints) :
         problem(problem), constraints(constraints) {}
 
-private:
-    template<typename Derived, typename DerivedLb, typename OutIndices>
-    EIGEN_STRONG_INLINE void
-    add_bounds(const ExprLowerBound<Derived, Eigen::MatrixBase<DerivedLb>>& bound, const OutIndices& out_indices)
-    {
-        constraints.lb(out_indices) = bound.lb;
-    }
-
-    template<typename Derived, typename DerivedScalar, typename OutIndices>
-    EIGEN_STRONG_INLINE void
-    add_bounds(const ExprLowerBound<Derived, DerivedScalar>& bound, const OutIndices& out_indices)
-    {
-        constraints.lb(out_indices).array() = bound.lb;
-    }
-
-    template<typename Derived, typename DerivedLb, typename OutIndices>
-    EIGEN_STRONG_INLINE void
-    add_bounds(const ExprUpperBound<Derived, Eigen::MatrixBase<DerivedLb>>& bound, const OutIndices& out_indices)
-    {
-        constraints.ub(out_indices) = bound.ub;
-    }
-
-    template<typename Derived, typename DerivedScalar, typename OutIndices>
-    EIGEN_STRONG_INLINE void
-    add_bounds(const ExprUpperBound<Derived, DerivedScalar>& bound, const OutIndices& out_indices)
-    {
-        constraints.ub(out_indices).array() = bound.ub;
-    }
-
-    template<typename Derived, typename DerivedLb, typename DerivedUb, typename OutIndices>
-    EIGEN_STRONG_INLINE void
-    add_bounds(const ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>& bound, const OutIndices& out_indices)
-    {
-        add_bounds(ExprLowerBound<Derived, DerivedLb>(bound.expr, bound.lb), out_indices);
-        add_bounds(ExprUpperBound<Derived, DerivedLb>(bound.expr, bound.ub), out_indices);
-    }
-
-public:
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_variable(Args...) {}
 
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_obj(Args...) {}
 
-    template<template<typename...> class Bound, typename Derived, typename ...BoundArgs, typename LocalDType = DType>
-    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value && std::is_base_of<ExprBound, Bound<Derived, BoundArgs...>>::value>::type
-    add_constr(const Bound<Derived, BoundArgs...>& bound)
+    template<typename Derived, typename LocalDType = DType>
+    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value && !is_variable_constraint_expr<Derived>::value>::type
+    add_constr(const ConstraintExpr<Derived>& const_expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
         auto out_indices = Eigen::seqN(constraints.value.rows(), Eigen::fix<n_outputs>);
         constraints.extend_rows(n_outputs);
 
-        constraints.value(out_indices) = ExprEvaluator<Derived>::function(bound.expr.derived());
-        add_bounds(bound, out_indices);
+        constraints.value(out_indices) = ExprEvaluator<Derived>::function(const_expr.derived());
+        constraints.assign_lower_bound(out_indices, ExprEvaluator<Derived>::lower_bound(const_expr.derived()));
+        constraints.assign_upper_bound(out_indices, ExprEvaluator<Derived>::upper_bound(const_expr.derived()));
     }
 
-    template<template<typename...> class Bound, typename Derived, typename ...BoundArgs, typename LocalDType = DType>
-    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Jacobian>::value && std::is_base_of<ExprBound, Bound<Derived, BoundArgs...>>::value>::type
-    add_constr(const Bound<Derived, BoundArgs...>& bound)
+    template<typename Derived, typename LocalDType = DType>
+    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Jacobian>::value && !is_variable_constraint_expr<Derived>::value>::type
+    add_constr(const ConstraintExpr<Derived>& const_expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
         auto out_indices = Eigen::seqN(constraints.value.rows(), Eigen::fix<n_outputs>);
         constraints.extend_rows(n_outputs);
 
-        ExprEvaluator<Derived>::jacobian(bound.expr.derived(), constraints.value(out_indices), constraints.jacobian(out_indices, bound.expr.derived().indices()));
-        add_bounds(bound, out_indices);
+        ExprEvaluator<Derived>::jacobian(const_expr.derived(), constraints.value(out_indices), constraints.jacobian(out_indices, const_expr.derived().indices()));
+        constraints.assign_lower_bound(out_indices, ExprEvaluator<Derived>::lower_bound(const_expr.derived()));
+        constraints.assign_upper_bound(out_indices, ExprEvaluator<Derived>::upper_bound(const_expr.derived()));
     }
 
-    template<typename ...Args>
-    EIGEN_STRONG_INLINE void add_constr(Args...) {}
+    template<typename Derived>
+    EIGEN_STRONG_INLINE typename std::enable_if<is_variable_constraint_expr<Derived>::value>::type
+    add_constr(ConstraintExpr<Derived>) {}
 };
 
 template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
@@ -1070,45 +874,46 @@ public:
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_obj(Args...) {}
 
-    template<template<typename...> class Bound, typename Derived, typename ...BoundArgs, typename LocalDType = DType>
-    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value && std::is_base_of<ExprBound, Bound<Derived, BoundArgs...>>::value>::type
-    add_constr(const Bound<Derived, BoundArgs...>& bound)
+    template<typename Derived, typename LocalDType = DType>
+    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value && !is_variable_constraint_expr<Derived>::value>::type
+    add_constr(const ConstraintExpr<Derived>& const_expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
         auto out_indices = Eigen::seqN(constraints.weights.rows(), Eigen::fix<n_outputs>);
         constraints.extend_rows(n_outputs);
 
-        constraints.value += ExprEvaluator<Derived>::wsum(bound.expr.derived(), constraints.weights(out_indices));
+        constraints.value += ExprEvaluator<Derived>::wsum(const_expr.derived(), constraints.weights(out_indices));
     }
 
-    template<template<typename...> class Bound, typename Derived, typename ...BoundArgs, typename LocalDType = DType>
-    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Gradient>::value && std::is_base_of<ExprBound, Bound<Derived, BoundArgs...>>::value>::type
-    add_constr(const Bound<Derived, BoundArgs...>& bound)
+    template<typename Derived, typename LocalDType = DType>
+    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Gradient>::value && !is_variable_constraint_expr<Derived>::value>::type
+    add_constr(const ConstraintExpr<Derived>& const_expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
         auto out_indices = Eigen::seqN(constraints.weights.rows(), Eigen::fix<n_outputs>);
         constraints.extend_rows(n_outputs);
 
-        constraints.value += ExprEvaluator<Derived>::gradient(bound.expr.derived(), constraints.gradient(bound.expr.derived().indices()), constraints.weights(out_indices));
+        constraints.value += ExprEvaluator<Derived>::gradient(const_expr.derived(), constraints.gradient(const_expr.derived().indices()), constraints.weights(out_indices));
     }
 
-    template<template<typename...> class Bound, typename Derived, typename ...BoundArgs, typename LocalDType = DType>
-    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Hessian>::value && std::is_base_of<ExprBound, Bound<Derived, BoundArgs...>>::value>::type
-    add_constr(const Bound<Derived, BoundArgs...>& bound)
+    template<typename Derived, typename LocalDType = DType>
+    EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Hessian>::value && !is_variable_constraint_expr<Derived>::value>::type
+    add_constr(const ConstraintExpr<Derived>& const_expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
         auto out_indices = Eigen::seqN(constraints.weights.rows(), Eigen::fix<n_outputs>);
         constraints.extend_rows(n_outputs);
 
-        auto in_indices = bound.expr.derived().indices();
-        constraints.value += ExprEvaluator<Derived>::hessian(bound.expr.derived(), constraints.gradient(in_indices), constraints.hessian(in_indices, in_indices), constraints.weights(out_indices));
+        auto in_indices = const_expr.derived().indices();
+        constraints.value += ExprEvaluator<Derived>::hessian(const_expr.derived(), constraints.gradient(in_indices), constraints.hessian(in_indices, in_indices), constraints.weights(out_indices));
     }
 
-    template<typename ...Args>
-    EIGEN_STRONG_INLINE void add_constr(Args...) {}
+    template<typename Derived>
+    EIGEN_STRONG_INLINE typename std::enable_if<is_variable_constraint_expr<Derived>::value>::type
+    add_constr(ConstraintExpr<Derived>) {}
 };
 
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
