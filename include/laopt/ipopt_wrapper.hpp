@@ -7,15 +7,19 @@
 namespace laopt {
 
 template<typename OptProblem>
-class IpoptWrapper : public Solver_IPOpt<OptProblem>
+class IpoptWrapper
 {
+    using IpoptProblem = laopt::Solver_IPOpt<OptProblem>;
 public:
-    explicit IpoptWrapper(OptProblem &opt_problem) : Solver_IPOpt<OptProblem>(opt_problem)
+    explicit IpoptWrapper(OptProblem &opt_problem)
     {
         using namespace Ipopt;
 
+        std::cout << "IpoptWrapper()\n";
+
         /* Create IPOPT problem and link decision variables to OptProblem */
-        opt_problem.set_decision_variable(this->init_primal);
+        ipopt_problem = new IpoptProblem(opt_problem);
+        opt_problem.set_decision_variable(ipopt_problem->init_primal);
 
         /* Create IPOPT application, setup, and initialize */
         ipopt_app = IpoptApplicationFactory();
@@ -24,17 +28,25 @@ public:
         ApplicationReturnStatus ipopt_status = ipopt_app->Initialize();
         if (ipopt_status != Solve_Succeeded) { std::cout << "\n\n*** Error during initialization!\n"; }
     }
+    ~IpoptWrapper()
+    {
+        std::cout << "~IpoptWrapper()\n";
+        double test = 1;
+    }
 
     bool solve()
     {
+        std::cout << "IpoptWrapper::solve()\n";
+
         using namespace Ipopt;
 
-        ApplicationReturnStatus ipopt_status = ipopt_app->OptimizeTNLP(this);
+        ApplicationReturnStatus ipopt_status = ipopt_app->OptimizeTNLP(ipopt_problem);
         if (ipopt_status != Ipopt::Solve_Succeeded) { std::cout << "\n\n*** Error during solution!\n"; }
         return ipopt_status;
     }
 
-protected:
+public:
+    Ipopt::SmartPtr<IpoptProblem> ipopt_problem;
     Ipopt::SmartPtr<Ipopt::IpoptApplication> ipopt_app;
 };
 

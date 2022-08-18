@@ -2,8 +2,8 @@
 #include <iomanip>
 
 #include "double_integrator_ocp.hpp"
-#include "multiple_shooting_transcription.hpp"
 #include "MultipleShooting.hpp"
+//#include "RadauCollocation.hpp"
 #include "laopt/ipopt_wrapper.hpp"
 
 int main()
@@ -31,7 +31,7 @@ int main()
         /* Define specific Tape, LAMPC, and IPOPT problem types for the resulting NLP */
         using Tape = laopt::TapeInfo<Transcription>;
         using OptProblem = laopt::Problem<Transcription>;
-//        using IpoptProblem = laopt::Solver_IPOpt<OptProblem>;
+        using IpoptProblem = laopt::Solver_IPOpt<OptProblem>;
         using Solver = laopt::IpoptWrapper<OptProblem>;
 
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
@@ -42,7 +42,8 @@ int main()
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
         Solver solver(opt_problem);
 
-        solver.solve();
+        auto res = solver.solve();
+        std::cout << "res: " << res << "\n";
 
         /* Print out the solution */
         std::cout << std::endl << std::endl << std::endl << std::endl;
@@ -54,9 +55,10 @@ int main()
         std::cout << "T = \n" << transcription.get_Topt().transpose() << std::endl;
         std::cout << "Xopt = \n" << Xopt << std::endl;
         std::cout << "Uopt = \n" << Uopt << std::endl;
-        const double objective_eval = opt_problem.eval_objective(laopt::Eval(), solver.sol_primal);
+        const double objective_eval = opt_problem.eval_objective(laopt::Eval(), solver.ipopt_problem->sol_primal);
         std::cout << "obj: " << objective_eval << "\n";
     }
+    double test = 1;
 
     return 0;
 }
