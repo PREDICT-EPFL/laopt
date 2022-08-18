@@ -9,7 +9,7 @@ if(NOT DEFINED EIGEN3_INCLUDE_DIR)
 endif()
 message(STATUS "Using Eigen3 library found at ${EIGEN3_INCLUDE_DIR}")
 
-find_package(CASADI REQUIRED)
+find_package(Casadi REQUIRED)
 find_package(Ipopt REQUIRED)
 message(STATUS "Using IPOPT library found at ${Ipopt_INCLUDE_DIRS}")
 
@@ -19,7 +19,7 @@ option(BUILD_RELEASE "Build release version w/o debugging symbols" ON)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-parameter")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-parameter -fsanitize=address")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wno-unused-parameter")
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 
