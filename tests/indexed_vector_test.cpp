@@ -2,14 +2,14 @@
  * Unit test for the construction and computation of indexed.
  */
 #include <iostream>
-#include "indexed_vector.hpp"
+#include "laopt/indexed_vector.hpp"
 #include "gtest/gtest.h"
 
 TEST(IndexedVectorTest, Map) {
     Eigen::Vector<double, 20> var;
     for (int i = 0; i < 20; i++) var[i] = i;
 
-    lampc::IndexedVector<Eigen::Map<Eigen::Vector<double, 8>>> map(var.data() + 3);
+    laopt::IndexedVector<Eigen::Map<Eigen::Vector<double, 8>>> map(var.data() + 3);
     map.set_offset(5);
 
     testing::internal::CaptureStdout();
@@ -52,7 +52,7 @@ TEST(IndexedVectorTest, Vector) {
 
     Eigen::Vector<double, 3> x;
     x << 1, 2, 3;
-    lampc::IndexedVector<Eigen::Vector<double, 6>> vec;
+    laopt::IndexedVector<Eigen::Vector<double, 6>> vec;
     vec << x, 2 * x;
     vec.set_offset(12);
 
@@ -74,7 +74,7 @@ TEST(IndexedVectorTest, Vector) {
 TEST(IndexedVectorTest, Assignment) {
 
     Eigen::Vector<double, 10> y;
-    lampc::IndexedVector<Eigen::Map<Eigen::Vector<double, 10>>> x(y.data());
+    laopt::IndexedVector<Eigen::Map<Eigen::Vector<double, 10>>> x(y.data());
     x.set_offset(10);
     x << 0, 1, 2, 3, 4, 5, 6, 7, 8, 9;
 
@@ -90,8 +90,8 @@ TEST(IndexedVectorTest, Assignment) {
 
 TEST(IndexedVectorTest, NullMap) {
 
-    using map_t = lampc::IndexedVector<Eigen::Map<Eigen::Vector<double, 3>>>;
-    map_t vec(NULL);
+    using map_t = laopt::IndexedVector<Eigen::Map<Eigen::Vector<double, 3>>>;
+    map_t vec(nullptr);
     Eigen::Vector<double, 3> x;
     x << 1, 2, 3;
 

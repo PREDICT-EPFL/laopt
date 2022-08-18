@@ -1,20 +1,13 @@
-#ifndef LAMPC_UTILITY
-#define LAMPC_UTILITY
+#ifndef LAOPT_LAMPC_UTILITY_HPP
+#define LAOPT_LAMPC_UTILITY_HPP
 
 #include <iostream>
 #include <limits>
-#include "Eigen/Dense"
 #include <type_traits>
+#include "Eigen/Dense"
 
-namespace lampc
+namespace laopt
 {
-	// template<typename scalar_t>
-	// static constexpr auto INF = std::numeric_limits<scalar_t>::infinity();
-
-	/// /todo Problem with M1 mac - limits doesn't seem to be defined yet.
-	template<typename scalar_t>
-	static constexpr auto INF = 1e20;
-
     namespace meta
     {
         // Sum the inputs to get total number of inputs
@@ -97,75 +90,84 @@ namespace lampc
         };
         template<typename... Args>
         using get_scalar_t = typename get_scalar<Args...>::type;
-    };
+    }
 
-}
+    /**
+     * Takes a parameter pack of Eigen::Vector's and concatenates
+     * them into a single Eigen::Vector.
+     * Everything must be fixed-size.
+     */
+    template<int... n>
+    Eigen::Vector<int, meta::sum_template<n...>()>
+    concatenate_indices(const Eigen::Vector<int, n>&... args)
+    {
+        Eigen::Vector<int, meta::sum_template<n...>()> out;
+        int offset = 0;
+        auto l = {
+            (
+                out(Eigen::seqN(offset,n)) = args,
+                offset += n,
+                0
+            )...
+        };
+        (void) l; // get rid of unused variable warning
+        return out;
+    }
 
+    constexpr bool is_all_positive(std::initializer_list<int> values)
+    {
+        for (auto i: values) {
+            if (i < 0) {
+                return false;
+            }
+        }
+        return true;
+    }
 
-// /*************************************************************
-//     Meta-programming helper functions
-//  *************************************************************/
+    template<typename... T, int n = meta::sum_template<T::SizeAtCompileTime...>()>
+    inline Eigen::Vector<int, n> multiSeq_to_index(T... segments)
+    {
+        static_assert(is_all_positive({T::SizeAtCompileTime...}), "SIZES OF ARITHMETIC SEQUENCES MUST BE FIXED");
 
-// // Sum the inputs to get total number of inputs
-// template<int... S>
-// constexpr int sum_template() {
-//     int result = 0;
-//     for(auto s : { S... }) result += s;
-//     return result;
-// }
+        Eigen::Vector<int, n> ret;
+        int i = 0;
 
-// // Build an array at compile time
-// template <typename T, typename... Args>
-// constexpr std::array<T, sizeof...(Args)> make_array(Args... args)
-// {
-//     return {args...};
-// }
+        auto fill_me = [&i, &ret](auto seg) {
+            for (int j = 0; j < decltype(seg)::SizeAtCompileTime; j++) {
+                ret[i++] = seg[j];
+            }
+        };
 
-// // Helper function to reshape an eigen matrix while maintaining const'ness
-// template <typename map_to, typename scalar_t>
-// constexpr auto _map_matrix(const scalar_t* x) {
-//     return Eigen::Map<const map_to>(x);
-// }
+        auto l = {
+            (fill_me(segments), 0)...
+        };
+        (void) l; // get rid of unused variable warning
 
-// template <typename map_to, typename scalar_t>
-// constexpr auto _map_matrix(scalar_t* x) {
-//     return Eigen::Map<map_to>(x);
-// }
+        return ret;
+    }
 
-template <typename T>
-auto type_name() noexcept {
+    template <typename T>
+    auto type_name() noexcept {
 #ifdef __clang__
-    std::string name = __PRETTY_FUNCTION__;
-    std::string prefix = "auto type_name() [T = ";
-    std::string suffix = "]";
+        std::string name = __PRETTY_FUNCTION__;
+        std::string prefix = "auto laopt::type_name() [T = ";
+        std::string suffix = "]";
 #elif defined(__GNUC__)
-    std::string name = __PRETTY_FUNCTION__;
-    std::string prefix = "auto type_name() [with T = ";
-    std::string suffix = "]";
+        std::string name = __PRETTY_FUNCTION__;
+        std::string prefix = "auto laopt::type_name() [with T = ";
+        std::string suffix = "]";
 #elif defined(_MSC_VER)
-    std::string name = __FUNCSIG__;
-    std::string prefix = "auto __cdecl type_name<";
-    std::string suffix = ">(void) noexcept";
+        std::string name = __FUNCSIG__;
+        std::string prefix = "auto __cdecl laopt::type_name<";
+        std::string suffix = ">(void) noexcept";
 #else
-    std::string name = "Error: unsupported compiler";
-    std::string prefix = "";
-    std::string suffix = "";
+        std::string name = "Error: unsupported compiler";
+        std::string prefix = "";
+        std::string suffix = "";
 #endif
-    return name.substr(prefix.length(), name.length() - prefix.length() - suffix.length());
+        return name.substr(prefix.length(), name.length() - prefix.length() - suffix.length());
+    }
+
 }
 
-// /*
-//  * Extracts the return-type of a function
-//  * 
-//  * Use like this:     
-//  *  std::cout << type_name<decltype(ret(f))>() << std::endl;
-//  */
- 
-// template<typename R, typename... A>
-// R ret(R(*)(A...)) ;
-
-// template<typename C, typename R, typename... A>
-// R ret(R(C::*)(A...));
-
-
-#endif // LAMPC_UTILITY
+#endif // LAOPT_LAMPC_UTILITY_HPP

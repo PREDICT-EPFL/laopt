@@ -1,9 +1,9 @@
-#ifndef LAMPC_LAMPC_FUNCTOR_HPP
-#define LAMPC_LAMPC_FUNCTOR_HPP
+#ifndef LAOPT_DIFFERENTIABLE_FUNCTION_HPP
+#define LAOPT_DIFFERENTIABLE_FUNCTION_HPP
 
-#include "lampc_function_tag.hpp"
+#include "differentiable.hpp"
 
-namespace lampc {
+namespace laopt {
 
 template<typename Derived, typename Tag>
 class Function
@@ -90,6 +90,6 @@ public:
     }
 };
 
-} // namespace lampc
+} // namespace laopt
 
-#endif //LAMPC_LAMPC_FUNCTOR_HPP
+#endif // LAOPT_DIFFERENTIABLE_FUNCTION_HPP

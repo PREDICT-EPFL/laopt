@@ -4,14 +4,12 @@
 // Advanced user (level 2)
 
 #include <Eigen/Dense>
-#include "lampc.hpp"
+#include "laopt/laopt.hpp"
 
 #define PRINT(x) \
 //std::cout << __FUNCTION__ << x << std::endl // Comment this line in to activate PRINT function in the code
 
 namespace transcription {
-
-namespace laopt = lampc;
 
 template<typename ControlProblem, int N>
 class MultipleShooting : public laopt::Differentiable<MultipleShooting<ControlProblem, N>>
@@ -63,7 +61,7 @@ public:
         controlProblem.template dynamics_impl<scalar_t>(x_dot, x, u);
         return x_dot;
     }
-    using DiscreteDynamics = lampc::lib::RK4<MultipleShooting<ControlProblem, N>, Scalar, ContinuousDynamics>;
+    using DiscreteDynamics = laopt::functions::RK4<MultipleShooting<ControlProblem, N>, Scalar, ContinuousDynamics>;
 protected:
     DiscreteDynamics discreteDynamics;
 
@@ -103,7 +101,7 @@ public:
         optProblem.add_obj(this->function(MayerCost{}, X_var[N]));
 
         /* Set last control equal second last for easier data handling */
-        optProblem.add_constr(U_var[N] - U_var[N - 1] == 0);
+//        optProblem.add_constr(U_var[N] - U_var[N - 1] == 0);
 
         /* Box constraints */
         for (int i = 0; i < N + 1; i++)

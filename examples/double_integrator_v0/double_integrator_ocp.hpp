@@ -5,9 +5,7 @@
 #include <Eigen/Dense>
 
 #include "ControlProblemBase.hpp"
-#include "lampc.hpp"
-
-namespace laopt = lampc;
+#include "laopt/laopt.hpp"
 
 // End user (level 1)
 

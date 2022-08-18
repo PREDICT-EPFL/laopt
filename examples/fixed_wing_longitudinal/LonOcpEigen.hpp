@@ -11,7 +11,7 @@ namespace lon_ocp {
 
 using LonKite = kite_model::eigen_model::LonKiteDynamics;
 
-class LonFlightOCP : public lampc::OCPBase<double, LonKite::nx + 0, LonKite::nu + 0>
+class LonFlightOCP : public laopt::OCPBase<double, LonKite::nx + 0, LonKite::nu + 0>
 {
 public:
     ~LonFlightOCP() = default;

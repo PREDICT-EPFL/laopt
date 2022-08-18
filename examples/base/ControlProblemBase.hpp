@@ -2,9 +2,7 @@
 #define LAOPT_CTRLPROBLEMBASE_HPP
 
 #include <Eigen/Dense>
-#include "lampc.hpp"
-
-namespace laopt = lampc;
+#include "laopt/laopt.hpp"
 
 template<typename cScalar, int cNX, int cNU>
 class ControlProblemBase

@@ -5,19 +5,15 @@
 #include <iostream>
 #include <chrono>
 
-#include "lampc_utility.hpp"
-#include "lampc_function_tag.hpp"
-#include "lampc_function_library.hpp"
-#include "bsmatrix.hpp"
+#include "laopt/laopt.hpp"
 
 #include "test_utils.hpp"
-
 #include "gtest/gtest.h"
 
 namespace {
 
 template<typename scalar_t>
-struct TestFunction : public lampc::Differentiable<TestFunction<scalar_t>, true>
+struct TestFunction : public laopt::Differentiable<TestFunction<scalar_t>, true>
 {
     const Eigen::Matrix<scalar_t, 2, 2> A{{1,2},{3,4}};
     const Eigen::Matrix<scalar_t, 2, 1> B{{5},{6}};
@@ -31,7 +27,7 @@ struct TestFunction : public lampc::Differentiable<TestFunction<scalar_t>, true>
 };
 
 template<typename scalar_t>
-struct ScalarFunction : public lampc::Differentiable<ScalarFunction<scalar_t>, true>
+struct ScalarFunction : public laopt::Differentiable<ScalarFunction<scalar_t>, true>
 {
     const Eigen::Matrix<scalar_t, 2, 2> Q{{1,0},{0,1}};
     const Eigen::Matrix<scalar_t, 1, 1> R{2};
@@ -333,7 +329,7 @@ TEST(FunctionTest, Jacobian_Speed) {
  * Continuous-time dynamics - double integrator
  */
 template<typename scalar_t>
-struct sys_t : public lampc::Differentiable<sys_t<scalar_t>, true>
+struct sys_t : public laopt::Differentiable<sys_t<scalar_t>, true>
 {
     Eigen::Matrix<scalar_t, 2, 2> A{{0,1},{0,0}};
     Eigen::Matrix<scalar_t, 2, 1> B{{0},{1}};
@@ -349,7 +345,7 @@ struct sys_t : public lampc::Differentiable<sys_t<scalar_t>, true>
 TEST(RK4Test, SimpleTest) {
     using scalar_t = double;
     sys_t<scalar_t> sys;
-    using dsys_t = lampc::lib::RK4<sys_t<scalar_t>, scalar_t>;
+    using dsys_t = laopt::functions::RK4<sys_t<scalar_t>, scalar_t>;
     dsys_t dsys(sys, 0.1);
 
     // Compute the discrete-time system and its jacobian
@@ -402,17 +398,17 @@ TEST(BSMatrixTest, Jacobian) {
             x(0) = i;
             x(1) = 2 * i;
             u(0) = 3 * i;
-            test.jacobian(value(Eigen::seqN(i*2,2)), jacobian(Eigen::seqN(i*2,2), lampc::multiSeq_to_index(Eigen::seqN(i*2, Eigen::fix<2>),Eigen::seqN(10+i,Eigen::fix<1>))), x, u);
+            test.jacobian(value(Eigen::seqN(i*2,2)), jacobian(Eigen::seqN(i*2,2), laopt::multiSeq_to_index(Eigen::seqN(i*2, Eigen::fix<2>),Eigen::seqN(10+i,Eigen::fix<1>))), x, u);
         }
     };
 
-    lampc::BSMatrixDenseConstruction<scalar_t> construct_value;
+    laopt::BSMatrixDenseConstruction<scalar_t> construct_value;
     construct_value.resize(10,1);
-    lampc::BSMatrixSparsity sparsity_jacobian(10, 15);
+    laopt::BSMatrixSparsity sparsity_jacobian(10, 15);
     f(construct_value, sparsity_jacobian); // Extract sparsity pattern
 
     Eigen::VectorX<scalar_t> value_buffer(construct_value.rows());
-    lampc::BSMatrixDenseDeployment<scalar_t> value(value_buffer);
+    laopt::BSMatrixDenseDeployment<scalar_t> value(value_buffer);
 
     auto jacobian_tape = sparsity_jacobian.makeBSTape(10, 15);
     value.resize(10,1);
@@ -439,7 +435,7 @@ TEST(FunctionsTest, id) {
 
     // Discrete dynamics
     using scalar_t = double;
-    lampc::lib::IDENTITY id;
+    laopt::functions::IDENTITY id;
 
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 2> jacobian;
@@ -465,7 +461,7 @@ TEST(FunctionsTest, id) {
  * Test weighted sum
  **************************/
 
-struct wsum_func_t : public lampc::Differentiable<wsum_func_t, true>
+struct wsum_func_t : public laopt::Differentiable<wsum_func_t, true>
 {
     Eigen::Matrix2d Q{{2,1},{1,4}};
 

@@ -3,7 +3,7 @@
 
 #include "LonOcpEigen.hpp"
 #include "../double_integrator_v0/multiple_shooting_transcription.hpp"
-#include "ipopt_interface.hpp"
+#include "laopt/ipopt_interface.hpp"
 
 int main()
 {
@@ -13,9 +13,9 @@ int main()
     using Transcription = MultipleShootingTranscription<Ocp, N>;
 
     /* Define specific Tape, LAMPC, and IPOPT problem types for the resulting NLP */
-    using Tape = lampc::TapeInfo<Transcription>;
-    using LaProblem = lampc::Problem<Transcription>;
-    using IpoptProblem = lampc::Solver_IPOpt<LaProblem>;
+    using Tape = laopt::TapeInfo<Transcription>;
+    using LaProblem = laopt::Problem<Transcription>;
+    using IpoptProblem = laopt::Solver_IPOpt<LaProblem>;
 
     /* Construct and setup OCP */
     Ocp ocp;
@@ -41,7 +41,7 @@ int main()
 
     /* Transcribe OCP */
     Transcription transcription(ocp);
-    Tape tape = lampc::generate_tape(transcription, lampc::generate_sparsity(transcription));
+    Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
 
     /* Construct LAMPC and IPOPT problems for transcribed OCP using according tape, link decision variables between problems */
     LaProblem nlp(transcription, tape); // Tape is optional here and could also be generated internally
@@ -76,7 +76,7 @@ int main()
     std::cout << "T = \n" << transcription.T.transpose() << std::endl;
     std::cout << "X = \n" << X << std::endl;
     std::cout << "U = \n" << U << std::endl;
-    std::cout << "obj = " << nlp.eval_objective(lampc::Eval(), ipopt_nlp->sol_primal) << std::endl;
+    std::cout << "obj = " << nlp.eval_objective(laopt::Eval(), ipopt_nlp->sol_primal) << std::endl;
 
     return 0;
 }

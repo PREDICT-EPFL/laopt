@@ -1,16 +1,17 @@
-#ifndef LAMPC_LAMPC_FUNCTION_LIBRARY_HPP
-#define LAMPC_LAMPC_FUNCTION_LIBRARY_HPP
+#ifndef LAOPT_FUNCTIONS_HPP
+#define LAOPT_FUNCTIONS_HPP
 
-#include "lampc_function_tag.hpp"
+#include "differentiable.hpp"
 
-namespace lampc {
+namespace laopt {
 
-namespace lib {
+namespace functions {
 
-struct IDENTITY : public Differentiable<IDENTITY, true>
+class IDENTITY : public Differentiable<IDENTITY, true>
 {
     const double multiplier;
 
+public:
     IDENTITY() : multiplier(1) {}
     explicit IDENTITY(double multiplier) : multiplier(multiplier) {}
 
@@ -58,27 +59,13 @@ struct IDENTITY : public Differentiable<IDENTITY, true>
     }
 };
 
-template<typename F, typename Tag = DefaultTag>
-struct NEG : public Differentiable<NEG<F, Tag>, true>
-{
-    F& f;
-
-    explicit NEG(F& f) : f(f) {}
-
-    template<typename... Args>
-    EIGEN_STRONG_INLINE auto
-    function_impl(const Eigen::MatrixBase<Args>&... args) noexcept -> decltype(f(Tag{}, args...))
-    {
-        return -f(Tag{}, args...);
-    }
-};
-
 template<typename F, typename Scalar, typename Tag = DefaultTag>
-struct RK4 : public Differentiable<RK4<F, Scalar, Tag>, true>
+class RK4 : public Differentiable<RK4<F, Scalar, Tag>, true>
 {
     F& f;
     Scalar h;
 
+public:
     explicit RK4(F& f, Scalar step_size) : f(f), h(step_size) {}
 
     template<typename X, typename... Params>
@@ -94,8 +81,8 @@ struct RK4 : public Differentiable<RK4<F, Scalar, Tag>, true>
     }
 };
 
-} // namespace lib
+} // namespace functions
 
-} // namespace lampc
+} // namespace laopt
 
-#endif //LAMPC_LAMPC_FUNCTION_LIBRARY_HPP
+#endif // LAOPT_FUNCTIONS_HPP

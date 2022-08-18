@@ -1,10 +1,10 @@
-#ifndef LAMPC_VARIABLE_H
-#define LAMPC_VARIABLE_H
+#ifndef LAOPT_INDEXED_VECTOR_HPP
+#define LAOPT_INDEXED_VECTOR_HPP
 
 #include "Eigen/Dense"
-#include "expr_base.hpp"
+#include "expressions/base_expr.hpp"
 
-namespace lampc {
+namespace laopt {
 
 /**
  * A class derived from any Eigen Vector type that records an internal index 
@@ -13,7 +13,7 @@ namespace lampc {
  * indices of the original data elements
  */
 template<typename Base>
-class IndexedVector : public Base, public ExprBase<IndexedVector<Base>> {
+class IndexedVector : public Base, public BaseExpr<IndexedVector<Base>> {
     using index_t = typename Eigen::Vector<int, Base::RowsAtCompileTime>;
     // Indices of the elements of this vector wrt the original IndexedMap
     index_t m_indices;
@@ -24,11 +24,6 @@ public:
     static constexpr int n_outputs = Base::RowsAtCompileTime;
 
     IndexedVector() : Base() {
-        static_assert(Base::ColsAtCompileTime == 1, "you tired using a matrix on an indexed vector");
-        m_indices.array() = -1;
-    }
-
-    explicit IndexedVector(decltype(NULL)) : Base(NULL) {
         static_assert(Base::ColsAtCompileTime == 1, "you tired using a matrix on an indexed vector");
         m_indices.array() = -1;
     }
@@ -106,4 +101,4 @@ public:
 
 }
 
-#endif // LAMPC_VARIABLE_H
+#endif // LAOPT_INDEXED_VECTOR_HPP

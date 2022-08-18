@@ -67,12 +67,12 @@ jobs:
         working-directory: build_external
         run: bash  ../ci/shared/install_eigen.sh
 
-      - name: Build lampc
+      - name: Build laopt
         working-directory: build
         run: |
           cmake .. -DBUILD_RELEASE=$BUILD_RELEASE -DEIGEN3_INCLUDE_DIR=$GITHUB_WORKSPACE/build_external/eigen
           make -j4
 
-      - name: Test lampc
+      - name: Test laopt
         working-directory: build
         run: ctest --test-dir tests --verbose

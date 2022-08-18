@@ -4,8 +4,8 @@
 
 #include <iostream>
 #include <iomanip>
-#include "lampc.hpp"
-#include "ipopt_interface.hpp"
+#include "laopt/laopt.hpp"
+#include "laopt/ipopt_interface.hpp"
 
 #include <casadi/casadi.hpp>
 using namespace casadi;
@@ -103,11 +103,11 @@ int main()
 
   constexpr double step_size = 0.5;
   OCP ocp(step_size);
-  lampc::TapeInfo<OCP> tape = double_integrator_tape(ocp);
+  laopt::TapeInfo<OCP> tape = double_integrator_tape(ocp);
   Problem prob = tape_to_problem(tape, ocp);
 
   // Create the IPOpt solver
-  SmartPtr<lampc::Solver_IPOpt<Problem>> mynlp = new lampc::Solver_IPOpt<Problem>(prob);
+  SmartPtr<laopt::Solver_IPOpt<Problem>> mynlp = new laopt::Solver_IPOpt<Problem>(prob);
   SmartPtr<IpoptApplication> app = IpoptApplicationFactory();
 
   // app->Options()->SetStringValue("hessian_approximation", "limited-memory");
@@ -143,7 +143,7 @@ int main()
   std::cout << "U = \n" << U << std::endl;
   std::cout << "xss = " << ocp.xss.transpose() << std::endl;
   std::cout << "uss = " << ocp.uss << std::endl;
-  std::cout << "obj = " << prob.eval_objective(lampc::Eval(), mynlp->sol_primal) << std::endl;
+  std::cout << "obj = " << prob.eval_objective(laopt::Eval(), mynlp->sol_primal) << std::endl;
 
 
 
@@ -152,7 +152,7 @@ int main()
   // std::cout << std::setprecision(6) << std::defaultfloat;
  
   // // Compute the value and jacobian of the constraints at the optimal point
-  // lampc::ProblemMemory<scalar_t> mem(prob);
+  // laopt::ProblemMemory<scalar_t> mem(prob);
 
   // std::cout << std::endl;
   // std::cout << "=================== SOLUTION ===================" << std::endl;
@@ -167,7 +167,7 @@ int main()
 
   // std::cout << std::endl;
   // std::cout << "=================== CONSTRAINTS ===================" << std::endl;
-  // prob.eval_constraints(lampc::Jacobian(), mynlp->sol_primal, mem.constraints);
+  // prob.eval_constraints(laopt::Jacobian(), mynlp->sol_primal, mem.constraints);
   // std::cout << "lb = " << mem.constraints.lb.transpose() << std::endl;
   // std::cout << "ub = " << mem.constraints.ub.transpose() << std::endl;
   // std::cout << " con = " << mem.constraints.value.transpose() << std::endl;
@@ -177,7 +177,7 @@ int main()
 
   // std::cout << std::endl;
   // std::cout << "=================== OBJECTIVE ===================" << std::endl;  
-  // std::cout << " obj = " << prob.eval_objective(lampc::Hessian(), mynlp->sol_primal, mem.objective) << std::endl;
+  // std::cout << " obj = " << prob.eval_objective(laopt::Hessian(), mynlp->sol_primal, mem.objective) << std::endl;
   // std::cout << "_obj = " << f(prob71.x) << std::endl;
   // std::cout << "gradient  = " << mem.objective.gradient.transpose() << std::endl;
   // std::cout << "_gradient = " << grad_f(prob71.x).transpose() << std::endl;
@@ -185,7 +185,7 @@ int main()
 
   // std::cout << std::endl;
   // std::cout << "=================== LAGRANGIAN ===================" << std::endl;  
-  // std::cout << "obj = " << prob.eval_lagrangian(lampc::Hessian(), mynlp->sol_primal, 1.0, mynlp->sol_dual, mem.lagrangian) << std::endl;
+  // std::cout << "obj = " << prob.eval_lagrangian(laopt::Hessian(), mynlp->sol_primal, 1.0, mynlp->sol_dual, mem.lagrangian) << std::endl;
   // std::cout << "gradient = " << mem.lagrangian.gradient.transpose() << std::endl;
   // std::cout << " hessian = \n" << Eigen::MatrixX<scalar_t>(mem.lagrangian.hessian) << std::endl;
   // std::cout << "dual = " << mynlp->sol_dual.transpose() << std::endl;

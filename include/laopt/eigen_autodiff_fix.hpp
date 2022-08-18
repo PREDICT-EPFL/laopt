@@ -1,5 +1,5 @@
-#ifndef LAMPC_EIGEN_AUTODIFF_FIX_HPP
-#define LAMPC_EIGEN_AUTODIFF_FIX_HPP
+#ifndef LAOPT_EIGEN_AUTODIFF_FIX_HPP
+#define LAOPT_EIGEN_AUTODIFF_FIX_HPP
 
 namespace Eigen {
 
@@ -16,4 +16,4 @@ typedef AutoDiffScalar<DerType> ReturnType;
 
 } // end namespace Eigen
 
-#endif //LAMPC_EIGEN_AUTODIFF_FIX_HPP
+#endif // LAOPT_EIGEN_AUTODIFF_FIX_HPP

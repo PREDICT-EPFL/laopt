@@ -1,14 +1,15 @@
-#ifndef __LAMPC__FUNCTION_TAG_HPP
-#define __LAMPC__FUNCTION_TAG_HPP
+#ifndef LAOPT_DIFFERENTIABLE_HPP
+#define LAOPT_DIFFERENTIABLE_HPP
 
 #include <Eigen/Dense>
 #include <unsupported/Eigen/AutoDiff>
 #include "eigen_autodiff_fix.hpp"
 
-#include "expr_base.hpp"
+#include "lampc_utility.hpp"
+#include "expressions/base_expr.hpp"
 #include "variable.hpp"
 
-namespace lampc
+namespace laopt
 {
 
 struct DefaultTag {};
@@ -18,7 +19,7 @@ struct DefaultTag {};
  * Capture is a lambda which takes another lambda as input which is then called with the original parameters.
  */
 template<typename Derived, typename Tag, typename Info, typename Capture>
-class FunctionCapture : public ExprBase<FunctionCapture<Derived, Tag, Info, Capture>>
+class FunctionCapture : public BaseExpr<FunctionCapture<Derived, Tag, Info, Capture>>
 {
 public:
     Derived& func;
@@ -26,8 +27,16 @@ public:
 
     static constexpr int n_inputs = Info::n_inputs;
     static constexpr int n_outputs = Info::n_outputs;
+    using Scalar = typename Info::scalar_t;
 
     explicit FunctionCapture(Derived& func, const Capture& capture) : func(func), capture(capture) {}
+
+    EIGEN_STRONG_INLINE const Eigen::Vector<int, n_inputs> indices() const
+    {
+        return capture([&](auto&&... vars) {
+            return concatenate_indices(vars.indices()...);
+        });
+    }
 };
 
 
@@ -62,10 +71,10 @@ protected:
             const Eigen::MatrixBase<Args>&... args) noexcept // Function arguments
     {
         // Compute the scalar type
-        using Scalar = lampc::meta::get_scalar_t<Eigen::MatrixBase<Args>...>;
+        using Scalar = laopt::meta::get_scalar_t<Eigen::MatrixBase<Args>...>;
 
         // Get the total number of inputs
-        constexpr size_t num_inputs = lampc::meta::sum_template<Eigen::MatrixBase<Args>::RowsAtCompileTime...>();
+        constexpr size_t num_inputs = laopt::meta::sum_template<Eigen::MatrixBase<Args>::RowsAtCompileTime...>();
 
         // First order derivative
         using AD_scalar = Eigen::AutoDiffScalar<Eigen::Vector<Scalar, num_inputs>>;
@@ -247,7 +256,8 @@ protected:
         // Call the (possibly overloaded) jacobian
         Eigen::Vector<scalar_t, num_outputs> value;
         Eigen::Matrix<scalar_t, num_outputs, num_inputs> jacobian;
-        value.array() = 0; jacobian.array() = 0;
+        value.setZero();
+        jacobian.setZero();
         static_cast<Derived*>(this)->jacobian(std::forward<Tag>(tag), value, jacobian, args...);
         out_gradient += weight.transpose() * jacobian;
         return weight.dot(value);
@@ -603,6 +613,6 @@ public:
     }
 };
 
-}; // namespace lampc
+} // namespace laopt
 
-#endif // __LAMPC__FUNCTION_TAG_HPP
+#endif // LAOPT_DIFFERENTIABLE_HPP

@@ -5,7 +5,7 @@ template<typename scalar_t>
 void dump_sparse(Eigen::SparseMatrix<scalar_t> S, std::string name="ground")
 {
     std::cout << std::endl;
-    std::cout << "auto " << name << " = triplet_to_sparse<" << type_name<scalar_t>() << ">(" << S.rows() << "," << S.cols() << ",";
+    std::cout << "auto " << name << " = triplet_to_sparse<" << laopt::type_name<scalar_t>() << ">(" << S.rows() << "," << S.cols() << ",";
     std::cout << "{";
     bool first = true;
     std::cout.precision(5);

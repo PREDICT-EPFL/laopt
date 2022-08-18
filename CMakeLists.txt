@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(lampc)
+project(laopt)
 
 set(CMAKE_MODULE_PATH /usr/local/share/cmake/Modules/)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH};${PROJECT_SOURCE_DIR}/cmake)
@@ -32,7 +32,7 @@ else()
 endif()
 
 include_directories(SYSTEM ${EIGEN3_INCLUDE_DIR} ${CASADI_INCLUDE_DIR} ${Ipopt_INCLUDE_DIRS})
-include_directories(src)
+include_directories(include)
 
 add_subdirectory(examples)
 add_subdirectory(tests)

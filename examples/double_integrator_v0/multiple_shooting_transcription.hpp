@@ -2,18 +2,18 @@
 #define LAMPC_MULTIPLE_SHOOTING_TRANSCRIPTION_HPP
 
 #include <Eigen/Dense>
-#include "lampc.hpp"
+#include "laopt/laopt.hpp"
 
 // Advanced user (level 2)
 
 template<typename OCP, int N>
-class MultipleShootingTranscription : public lampc::Differentiable<MultipleShootingTranscription<OCP, N>>
+class MultipleShootingTranscription : public laopt::Differentiable<MultipleShootingTranscription<OCP, N>>
 {
 public:
 
     OCP &ocp;
 
-    using scalar_t = typename OCP::scalar_t; // lampc::Problem assumes that the user code will contain a scalar_t
+    using scalar_t = typename OCP::scalar_t; // laopt::Problem assumes that the user code will contain a scalar_t
 
     // Continuous dynamics
     struct Sys {};
@@ -27,7 +27,7 @@ public:
     }
 
     // Discretized dynamics
-    using dsys_t = lampc::lib::RK4<MultipleShootingTranscription<OCP, N>, scalar_t, Sys>;
+    using dsys_t = laopt::functions::RK4<MultipleShootingTranscription<OCP, N>, scalar_t, Sys>;
     dsys_t dsys;
 
     struct StageCost {};
@@ -49,10 +49,10 @@ public:
         ocp.template mayer_term_impl<Scalar>(mayer, x);
         return mayer;
     }
-    lampc::Function<MultipleShootingTranscription<OCP, N>, TerminalCost> terminal_cost;
+    laopt::Function<MultipleShootingTranscription<OCP, N>, TerminalCost> terminal_cost;
 
     template<size_t n>
-    using Variable = lampc::Variable<scalar_t, n>;
+    using Variable = laopt::Variable<scalar_t, n>;
 
     Eigen::Vector<scalar_t, N + 1> T;
     std::array<Variable<OCP::NX>, N + 1> X;

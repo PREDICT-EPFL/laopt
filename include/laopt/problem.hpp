@@ -1,13 +1,12 @@
-#ifndef __PROBLEM_HPP
-#define __PROBLEM_HPP
+#ifndef LAOPT_PROBLEM_HPP
+#define LAOPT_PROBLEM_HPP
 
 #include <numeric>
 #include <iterator>
-#include "variable.hpp"
-#include "expr_base.hpp"
-#include "lampc_function_tag.hpp"
+#include "indexed_vector.hpp"
+#include "expressions.hpp"
 
-namespace lampc
+namespace laopt
 {
 
 /**
@@ -125,7 +124,7 @@ struct ExprLowerBound : ExprBound
 {
     const Derived& expr;
     const DerivedLb& lb;
-    explicit ExprLowerBound(const ExprBase<Derived>& expr, const DerivedLb& lb) : expr(expr.derived()), lb(lb) {}
+    explicit ExprLowerBound(const BaseExpr<Derived>& expr, const DerivedLb& lb) : expr(expr.derived()), lb(lb) {}
 };
 
 template<typename Derived, typename DerivedUb>
@@ -133,7 +132,7 @@ struct ExprUpperBound : ExprBound
 {
     const Derived& expr;
     const DerivedUb& ub;
-    explicit ExprUpperBound(const ExprBase<Derived>& expr, const DerivedUb& ub) : expr(expr.derived()), ub(ub) {}
+    explicit ExprUpperBound(const BaseExpr<Derived>& expr, const DerivedUb& ub) : expr(expr.derived()), ub(ub) {}
 };
 
 template<typename Derived, typename DerivedLb, typename DerivedUb>
@@ -142,41 +141,41 @@ struct ExprLowerUpperBound : ExprBound
     const Derived& expr;
     const DerivedLb& lb;
     const DerivedUb& ub;
-    explicit ExprLowerUpperBound(const ExprBase<Derived>& expr, const DerivedLb& lb, const DerivedUb& ub) : expr(expr.derived()), lb(lb), ub(ub) {}
+    explicit ExprLowerUpperBound(const BaseExpr<Derived>& expr, const DerivedLb& lb, const DerivedUb& ub) : expr(expr.derived()), lb(lb), ub(ub) {}
 };
 
 template<typename Derived, typename DerivedUb>
-ExprUpperBound<Derived, DerivedUb> operator<=(const ExprBase<Derived>& expr, const DerivedUb& ub)
+ExprUpperBound<Derived, DerivedUb> operator<=(const BaseExpr<Derived>& expr, const DerivedUb& ub)
 {
     return ExprUpperBound<Derived, DerivedUb>(expr, ub);
 }
 
 template<typename Derived, typename DerivedUb>
-ExprUpperBound<Derived, DerivedUb> operator>=(const DerivedUb& ub, const ExprBase<Derived>& expr)
+ExprUpperBound<Derived, DerivedUb> operator>=(const DerivedUb& ub, const BaseExpr<Derived>& expr)
 {
     return ExprUpperBound<Derived, DerivedUb>(expr, ub);
 }
 
 template<typename Derived, typename DerivedLb>
-ExprLowerBound<Derived, DerivedLb> operator<=(const DerivedLb& lb, const ExprBase<Derived>& expr)
+ExprLowerBound<Derived, DerivedLb> operator<=(const DerivedLb& lb, const BaseExpr<Derived>& expr)
 {
     return ExprLowerBound<Derived, DerivedLb>(expr, lb);
 }
 
 template<typename Derived, typename DerivedLb>
-ExprLowerBound<Derived, DerivedLb> operator>=(const ExprBase<Derived>& expr, const DerivedLb& lb)
+ExprLowerBound<Derived, DerivedLb> operator>=(const BaseExpr<Derived>& expr, const DerivedLb& lb)
 {
     return ExprLowerBound<Derived, DerivedLb>(expr, lb);
 }
 
 template<typename Derived, typename DerivedEq>
-ExprLowerUpperBound<Derived, DerivedEq, DerivedEq> operator==(const ExprBase<Derived>& expr, const DerivedEq& eq)
+ExprLowerUpperBound<Derived, DerivedEq, DerivedEq> operator==(const BaseExpr<Derived>& expr, const DerivedEq& eq)
 {
     return ExprLowerUpperBound<Derived, DerivedEq, DerivedEq>(expr, eq, eq);
 }
 
 template<typename Derived, typename DerivedEq>
-ExprLowerUpperBound<Derived, DerivedEq, DerivedEq> operator==(const DerivedEq& eq, const ExprBase<Derived>& expr)
+ExprLowerUpperBound<Derived, DerivedEq, DerivedEq> operator==(const DerivedEq& eq, const BaseExpr<Derived>& expr)
 {
     return ExprLowerUpperBound<Derived, DerivedEq, DerivedEq>(expr, eq, eq);
 }
@@ -203,72 +202,6 @@ template<typename Derived, typename DerivedLb, typename DerivedUb>
 ExprLowerUpperBound<Derived, DerivedLb, DerivedUb> operator>=(const ExprUpperBound<Derived, DerivedUb>& fub, const DerivedLb& lb)
 {
     return ExprLowerUpperBound<Derived, DerivedLb, DerivedUb>(fub.expr, lb, fub.ub);
-}
-
-template<typename Derived>
-class NegExpr : public ExprBase<NegExpr<Derived>>
-{
-public:
-    const Derived& expr;
-
-    static constexpr int n_inputs = Derived::n_inputs;
-    static constexpr int n_outputs = Derived::n_outputs;
-
-    explicit NegExpr(const Derived& expr) : expr(expr) {}
-};
-
-template<typename DerivedLhs, typename DerivedRhs>
-class AddExpr : public ExprBase<AddExpr<DerivedLhs, DerivedRhs>>
-{
-public:
-    const DerivedLhs& lhs;
-    const DerivedRhs& rhs;
-
-    static_assert(DerivedLhs::n_outputs == DerivedRhs::n_outputs, "Output dimension of expressions must be the same");
-    static constexpr int n_inputs = DerivedLhs::n_inputs + DerivedRhs::n_inputs;
-    static constexpr int n_outputs = DerivedLhs::n_outputs;
-
-    explicit AddExpr(const DerivedLhs& lhs, const DerivedRhs& rhs) : lhs(lhs), rhs(rhs) {}
-};
-
-template<typename DerivedLhs, typename DerivedRhs>
-AddExpr<DerivedLhs, DerivedRhs> operator+(const ExprBase<DerivedLhs>& lhs, const ExprBase<DerivedRhs>& rhs)
-{
-    return AddExpr<DerivedLhs, DerivedRhs>(lhs.derived(), rhs.derived());
-}
-
-// we need this special case to be not ambiguous with Eigen
-template<typename DerivedLhs, typename DerivedRhs>
-AddExpr<IndexedVector<DerivedLhs>, IndexedVector<DerivedRhs>> operator+(const IndexedVector<DerivedLhs>& lhs, const IndexedVector<DerivedRhs>& rhs)
-{
-    return AddExpr<IndexedVector<DerivedLhs>, IndexedVector<DerivedRhs>>(lhs, rhs);
-}
-
-template<typename DerivedLhs, typename DerivedRhs>
-class SubExpr : public ExprBase<SubExpr<DerivedLhs, DerivedRhs>>
-{
-public:
-    const DerivedLhs& lhs;
-    const DerivedRhs& rhs;
-
-    static_assert(DerivedLhs::n_outputs == DerivedRhs::n_outputs, "Output dimension of expressions must be the same");
-    static constexpr int n_inputs = DerivedLhs::n_inputs + DerivedRhs::n_inputs;
-    static constexpr int n_outputs = DerivedLhs::n_outputs;
-
-    explicit SubExpr(const DerivedLhs& lhs, const DerivedRhs& rhs) : lhs(lhs), rhs(rhs) {}
-};
-
-template<typename DerivedLhs, typename DerivedRhs>
-SubExpr<DerivedLhs, DerivedRhs> operator-(const ExprBase<DerivedLhs>& lhs, const ExprBase<DerivedRhs>& rhs)
-{
-    return SubExpr<DerivedLhs, DerivedRhs>(lhs.derived(), rhs.derived());
-}
-
-// we need this special case to be not ambiguous with Eigen
-template<typename DerivedLhs, typename DerivedRhs>
-SubExpr<IndexedVector<DerivedLhs>, IndexedVector<DerivedRhs>> operator-(const IndexedVector<DerivedLhs>& lhs, const IndexedVector<DerivedRhs>& rhs)
-{
-    return SubExpr<IndexedVector<DerivedLhs>, IndexedVector<DerivedRhs>>(lhs, rhs);
 }
 
 /**
@@ -398,11 +331,11 @@ public:
 	// Put computed values into the structure mem
 	void set_memory(Eval, FunctionMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Eval{}, mem.value, mem.lb, mem.ub);
+		set_memory(laopt::Eval{}, mem.value, mem.lb, mem.ub);
 	}
 	void set_memory(Jacobian, FunctionMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Jacobian{}, mem.value, mem.lb, mem.ub, mem.jacobian_buffer);
+		set_memory(laopt::Jacobian{}, mem.value, mem.lb, mem.ub, mem.jacobian_buffer);
 	}
 	void set_memory(FunctionMemory<scalar_t>& mem)
 	{
@@ -606,16 +539,16 @@ public:
 
 	void set_memory(Eval, Eigen::Ref<Eigen::VectorX<scalar_t>> _weights, WeightedSumMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Eval{}, _weights);
+		set_memory(laopt::Eval{}, _weights);
 	}
 	
 	void set_memory(Gradient, Eigen::Ref<Eigen::VectorX<scalar_t>> _weights, WeightedSumMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Eval{}, _weights, mem.gradient);
+		set_memory(laopt::Eval{}, _weights, mem.gradient);
 	}
 	void set_memory(Hessian, Eigen::Ref<Eigen::VectorX<scalar_t>> _weights, WeightedSumMemory<scalar_t>& mem)
 	{
-		set_memory(lampc::Hessian{}, _weights, mem.gradient, mem.hessian_buffer);
+		set_memory(laopt::Hessian{}, _weights, mem.gradient, mem.hessian_buffer);
 	}
 
 	WeightedSumInfo<Matrix,Vector> generate()
@@ -903,306 +836,6 @@ public:
 	}
 };
 
-template<typename Derived>
-struct ExprEvaluator;
-
-template<typename Derived>
-struct ExprEvaluator<IndexedVector<Derived>>
-{
-    static EIGEN_STRONG_INLINE auto
-    function(const IndexedVector<Derived>& indexed_vector)
-    {
-        lib::IDENTITY id;
-        return id.function(indexed_vector.cast_base());
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE void
-    jacobian(const IndexedVector<Derived>& indexed_vector, const OutIndices& out_indices, VectorFunction<Matrix, Vector>& out)
-    {
-        lib::IDENTITY id;
-        id.jacobian(out.value(out_indices),
-                    out.jacobian(out_indices, indexed_vector.indices()),
-                    indexed_vector.cast_base());
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    wsum(const IndexedVector<Derived>& indexed_vector, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        lib::IDENTITY id;
-        return id.wsum(out.weights(out_indices),
-                       indexed_vector.cast_base());
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    gradient(const IndexedVector<Derived>& indexed_vector, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        lib::IDENTITY id;
-        return id.gradient(out.gradient(indexed_vector.indices()),
-                           out.weights(out_indices),
-                           indexed_vector.cast_base());
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    hessian(const IndexedVector<Derived>& indexed_vector, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        lib::IDENTITY id;
-        return id.hessian(out.gradient(indexed_vector.indices()),
-                          out.hessian(indexed_vector.indices(), indexed_vector.indices()),
-                          out.weights(out_indices),
-                          indexed_vector.cast_base());
-    }
-};
-
-template<typename Function, typename Tag, typename Info, typename Capture>
-struct ExprEvaluator<FunctionCapture<Function, Tag, Info, Capture>>
-{
-    static EIGEN_STRONG_INLINE auto
-    function(const FunctionCapture<Function, Tag, Info, Capture>& function_capture)
-    {
-        return function_capture.capture([&](auto&&... vars) {
-            return function_capture.func.function(Tag{},
-                                                  vars.cast_base()...);
-        });
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE void
-    jacobian(const FunctionCapture<Function, Tag, Info, Capture>& function_capture, const OutIndices& out_indices, VectorFunction<Matrix, Vector>& out)
-    {
-        function_capture.capture([&](auto&&... vars) {
-            auto in_indices = concatenate_indices(vars.indices()...);
-            function_capture.func.jacobian(Tag{},
-                                           out.value(out_indices),
-                                           out.jacobian(out_indices, in_indices),
-                                           vars.cast_base()...);
-        });
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    wsum(const FunctionCapture<Function, Tag, Info, Capture>& function_capture, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        return function_capture.capture([&](auto&&... vars) {
-            return function_capture.func.wsum(Tag{},
-                                              out.weights(out_indices),
-                                              vars.cast_base()...);
-        });
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    gradient(const FunctionCapture<Function, Tag, Info, Capture>& function_capture, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        return function_capture.capture([&](auto&&... vars) {
-            auto in_indices = concatenate_indices(vars.indices()...);
-            return function_capture.func.gradient(Tag{},
-                                                  out.gradient(in_indices),
-                                                  out.weights(out_indices),
-                                                  vars.cast_base()...);
-        });
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    hessian(const FunctionCapture<Function, Tag, Info, Capture> function_capture, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        return function_capture.capture([&](auto&&... vars) {
-            auto in_indices = concatenate_indices(vars.indices()...);
-            return function_capture.func.hessian(Tag{},
-                                                 out.gradient(in_indices),
-                                                 out.hessian(in_indices, in_indices),
-                                                 out.weights(out_indices),
-                                                 vars.cast_base()...);
-        });
-    }
-};
-
-template<typename Derived>
-struct ExprEvaluator<NegExpr<IndexedVector<Derived>>>
-{
-    static EIGEN_STRONG_INLINE auto
-    function(const NegExpr<IndexedVector<Derived>>& expr)
-    {
-        lib::IDENTITY id(-1);
-        return id.function(expr.expr.cast_base());
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE void
-    jacobian(const NegExpr<IndexedVector<Derived>>& expr, const OutIndices& out_indices, VectorFunction<Matrix, Vector>& out)
-    {
-        lib::IDENTITY id(-1);
-        id.jacobian(out.value(out_indices),
-                    out.jacobian(out_indices, expr.expr.indices()),
-                    expr.expr.cast_base());
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    wsum(const NegExpr<IndexedVector<Derived>>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        lib::IDENTITY id(-1);
-        return id.wsum(out.weights(out_indices),
-                       expr.expr.cast_base());
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    gradient(const NegExpr<IndexedVector<Derived>>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        lib::IDENTITY id(-1);
-        return id.gradient(out.gradient(expr.expr.indices()),
-                           out.weights(out_indices),
-                           expr.expr.cast_base());
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    hessian(const NegExpr<IndexedVector<Derived>>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        lib::IDENTITY id(-1);
-        return id.hessian(out.gradient(expr.expr.indices()),
-                          out.hessian(expr.expr.indices(), expr.expr.indices()),
-                          out.weights(out_indices),
-                          expr.expr.cast_base());
-    }
-};
-
-template<typename Function, typename Tag, typename Info, typename Capture>
-struct ExprEvaluator<NegExpr<FunctionCapture<Function, Tag, Info, Capture>>>
-{
-    static EIGEN_STRONG_INLINE auto
-    function(const NegExpr<FunctionCapture<Function, Tag, Info, Capture>>& expr)
-    {
-        lib::NEG<Function, Tag> neg(expr.expr.func);
-        auto function_capture = expr.expr.capture([&](auto&&... vars) { return neg(vars...); });
-        return ExprEvaluator<decltype(function_capture)>::function(function_capture);
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE void
-    jacobian(const NegExpr<FunctionCapture<Function, Tag, Info, Capture>>& expr, const OutIndices& out_indices, VectorFunction<Matrix, Vector>& out)
-    {
-        lib::NEG<Function, Tag> neg(expr.expr.func);
-        auto function_capture = expr.expr.capture([&](auto&&... vars) { return neg(vars...); });
-        ExprEvaluator<decltype(function_capture)>::jacobian(function_capture, out_indices, out);
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    wsum(const NegExpr<FunctionCapture<Function, Tag, Info, Capture>>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        lib::NEG<Function, Tag> neg(expr.expr.func);
-        auto function_capture = expr.expr.capture([&](auto&&... vars) { return neg(vars...); });
-        return ExprEvaluator<decltype(function_capture)>::wsum(function_capture, out_indices, out);
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    gradient(const NegExpr<FunctionCapture<Function, Tag, Info, Capture>>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        lib::NEG<Function, Tag> neg(expr.expr.func);
-        auto function_capture = expr.expr.capture([&](auto&&... vars) { return neg(vars...); });
-        return ExprEvaluator<decltype(function_capture)>::gradient(function_capture, out_indices, out);
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    hessian(const NegExpr<FunctionCapture<Function, Tag, Info, Capture>>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        lib::NEG<Function, Tag> neg(expr.expr.func);
-        auto function_capture = expr.expr.capture([&](auto&&... vars) { return neg(vars...); });
-        return ExprEvaluator<decltype(function_capture)>::hessian(function_capture, out_indices, out);
-    }
-};
-
-template<typename DerivedLhs, typename DerivedRhs>
-struct ExprEvaluator<AddExpr<DerivedLhs, DerivedRhs>>
-{
-    static EIGEN_STRONG_INLINE auto
-    function(const AddExpr<DerivedLhs, DerivedRhs>& expr) -> decltype(ExprEvaluator<DerivedLhs>::function(expr.lhs))
-    {
-        return ExprEvaluator<DerivedLhs>::function(expr.lhs) + ExprEvaluator<DerivedRhs>::function(expr.rhs);
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE void
-    jacobian(const AddExpr<DerivedLhs, DerivedRhs>& expr, const OutIndices& out_indices, VectorFunction<Matrix, Vector>& out)
-    {
-        ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_indices, out);
-        ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_indices, out);
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    wsum(const AddExpr<DerivedLhs, DerivedRhs>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        return ExprEvaluator<DerivedLhs>::wsum(expr.lhs, out_indices, out) + ExprEvaluator<DerivedRhs>::wsum(expr.rhs, out_indices, out);
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    gradient(const AddExpr<DerivedLhs, DerivedRhs>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        return ExprEvaluator<DerivedLhs>::gradient(expr.lhs, out_indices, out) + ExprEvaluator<DerivedRhs>::gradient(expr.rhs, out_indices, out);
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    hessian(const AddExpr<DerivedLhs, DerivedRhs>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        return ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_indices, out) + ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_indices, out);
-    }
-};
-
-template<typename DerivedLhs, typename DerivedRhs>
-struct ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>
-{
-    static EIGEN_STRONG_INLINE auto
-    function(const SubExpr<DerivedLhs, DerivedRhs>& expr) -> decltype(ExprEvaluator<DerivedLhs>::function(expr.lhs))
-    {
-        NegExpr<DerivedRhs> neg_expr(expr.rhs);
-        return ExprEvaluator<DerivedLhs>::function(expr.lhs) + ExprEvaluator<NegExpr<DerivedRhs>>::function(neg_expr);
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE void
-    jacobian(const SubExpr<DerivedLhs, DerivedRhs>& expr, const OutIndices& out_indices, VectorFunction<Matrix, Vector>& out)
-    {
-        NegExpr<DerivedRhs> neg_expr(expr.rhs);
-        ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_indices, out);
-        ExprEvaluator<NegExpr<DerivedRhs>>::jacobian(neg_expr, out_indices, out);
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    wsum(const SubExpr<DerivedLhs, DerivedRhs>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        NegExpr<DerivedRhs> neg_expr(expr.rhs);
-        return ExprEvaluator<DerivedLhs>::wsum(expr.lhs, out_indices, out) + ExprEvaluator<NegExpr<DerivedRhs>>::wsum(neg_expr, out_indices, out);
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    gradient(const SubExpr<DerivedLhs, DerivedRhs>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        NegExpr<DerivedRhs> neg_expr(expr.rhs);
-        return ExprEvaluator<DerivedLhs>::gradient(expr.lhs, out_indices, out) + ExprEvaluator<NegExpr<DerivedRhs>>::gradient(neg_expr, out_indices, out);
-    }
-
-    template<typename OutIndices, typename Matrix, typename Vector>
-    static EIGEN_STRONG_INLINE auto
-    hessian(const SubExpr<DerivedLhs, DerivedRhs>& expr, const OutIndices& out_indices, WeightedSum<Matrix, Vector>& out)
-    {
-        NegExpr<DerivedRhs> neg_expr(expr.rhs);
-        return ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_indices, out) + ExprEvaluator<NegExpr<DerivedRhs>>::hessian(neg_expr, out_indices, out);
-    }
-};
-
 template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
 class ProblemVariableRegistrar
 {
@@ -1247,38 +880,39 @@ public:
 
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value>::type
-    add_obj(const ExprBase<Derived>& expr)
+    add_obj(const BaseExpr<Derived>& expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
         auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
         objective.extend_rows(n_outputs);
 
-        objective.value += ExprEvaluator<Derived>::wsum(expr.derived(), out_indices, objective);
+        objective.value += ExprEvaluator<Derived>::wsum(expr.derived(), objective.weights(out_indices));
     }
 
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Gradient>::value>::type
-    add_obj(const ExprBase<Derived>& expr)
+    add_obj(const BaseExpr<Derived>& expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
         auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
         objective.extend_rows(n_outputs);
 
-        objective.value += ExprEvaluator<Derived>::gradient(expr.derived(), out_indices, objective);
+        objective.value += ExprEvaluator<Derived>::gradient(expr.derived(), objective.gradient(expr.indices()), objective.weights(out_indices));
     }
 
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Hessian>::value>::type
-    add_obj(const ExprBase<Derived>& expr)
+    add_obj(const BaseExpr<Derived>& expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
         auto out_indices = Eigen::seqN(objective.weights.rows(), Eigen::fix<n_outputs>);
         objective.extend_rows(n_outputs);
 
-        objective.value += ExprEvaluator<Derived>::hessian(expr.derived(), out_indices, objective);
+        auto in_indices = expr.indices();
+        objective.value += ExprEvaluator<Derived>::hessian(expr.derived(), objective.gradient(in_indices), objective.hessian(in_indices, in_indices), objective.weights(out_indices));
     }
 
     template<typename ...Args>
@@ -1412,7 +1046,7 @@ public:
         auto out_indices = Eigen::seqN(constraints.value.rows(), Eigen::fix<n_outputs>);
         constraints.extend_rows(n_outputs);
 
-        ExprEvaluator<Derived>::jacobian(bound.expr.derived(), out_indices, constraints);
+        ExprEvaluator<Derived>::jacobian(bound.expr.derived(), constraints.value(out_indices), constraints.jacobian(out_indices, bound.expr.indices()));
         add_bounds(bound, out_indices);
     }
 
@@ -1445,7 +1079,7 @@ public:
         auto out_indices = Eigen::seqN(constraints.weights.rows(), Eigen::fix<n_outputs>);
         constraints.extend_rows(n_outputs);
 
-        constraints.value += ExprEvaluator<Derived>::wsum(bound.expr.derived(), out_indices, constraints);
+        constraints.value += ExprEvaluator<Derived>::wsum(bound.expr.derived(), constraints.weights(out_indices));
     }
 
     template<template<typename...> class Bound, typename Derived, typename ...BoundArgs, typename LocalDType = DType>
@@ -1457,7 +1091,7 @@ public:
         auto out_indices = Eigen::seqN(constraints.weights.rows(), Eigen::fix<n_outputs>);
         constraints.extend_rows(n_outputs);
 
-        constraints.value += ExprEvaluator<Derived>::gradient(bound.expr.derived(), out_indices, constraints);
+        constraints.value += ExprEvaluator<Derived>::gradient(bound.expr.derived(), constraints.gradient(bound.expr.indices()), constraints.weights(out_indices));
     }
 
     template<template<typename...> class Bound, typename Derived, typename ...BoundArgs, typename LocalDType = DType>
@@ -1469,7 +1103,8 @@ public:
         auto out_indices = Eigen::seqN(constraints.weights.rows(), Eigen::fix<n_outputs>);
         constraints.extend_rows(n_outputs);
 
-        constraints.value += ExprEvaluator<Derived>::hessian(bound.expr.derived(), out_indices, constraints);
+        auto in_indices = bound.expr.indices();
+        constraints.value += ExprEvaluator<Derived>::hessian(bound.expr.derived(), constraints.gradient(in_indices), constraints.hessian(in_indices, in_indices), constraints.weights(out_indices));
     }
 
     template<typename ...Args>
@@ -1558,7 +1193,7 @@ struct FunctionMemory {
         value(f.rows(), 1),
         lb(f.rows(), 1),
         ub(f.rows(), 1),
-        jacobian_buffer(NULL, 0)
+        jacobian_buffer(nullptr, 0)
     {
         f.jacobian.allocate_memory(jacobian);
         new (&jacobian_buffer) Eigen::Map<Eigen::VectorX<scalar_t>>(jacobian.valuePtr(), jacobian.nonZeros());
@@ -1590,7 +1225,7 @@ struct WeightedSumMemory
 	explicit WeightedSumMemory(WSum& w) :
         gradient(w.num_variables),
         weights(w.rows()),
-        hessian_buffer(NULL, 0)
+        hessian_buffer(nullptr, 0)
 	{
 		w.hessian.allocate_memory(hessian);
 		new (&hessian_buffer) Eigen::Map<Eigen::VectorX<scalar_t>>(hessian.valuePtr(), hessian.nonZeros());
@@ -1629,7 +1264,7 @@ struct ProblemMemory {
         // prob.variable_bounds.set_zero();
         prob.objective.initialize();
         prob.lagrangian.initialize();
-        var.array() = 0;
+        var.setZero();
         prob.set_decision_variable(var);
 
         for (int i = 0; i < objective.hessian.nonZeros(); i++) objective.hessian.valuePtr()[i] = i;
@@ -1688,4 +1323,4 @@ std::ostream& operator<<(std::ostream& o, const std::array<T, N>& arr)
 
 }
 
-#endif // __PROBLEM_HPP
+#endif // LAOPT_PROBLEM_HPP

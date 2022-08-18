@@ -5,8 +5,7 @@
 #include <iostream>
 #include <chrono>
 
-#include "bsmatrix.hpp"
-#include "lampc_utility.hpp"
+#include "laopt/laopt.hpp"
 
 #include "test_utils.hpp"
 #include "gtest/gtest.h"
@@ -32,7 +31,7 @@ TEST(BSMatrix, Construction) {
     };
 
     // Get the sparsity structure
-    lampc::BSMatrixSparsity sparsity(6,8);
+    laopt::BSMatrixSparsity sparsity(6,8);
     F(sparsity);
 
     std::cout << "sparsity = \n" << sparsity.get_sparsity() << std::endl;
@@ -45,14 +44,14 @@ TEST(BSMatrix, Construction) {
     }
 
     // Get the copy sequence
-    lampc::BSMatrixTape tape(sparsity.get_sparsity(), sparsity.rows(), sparsity.cols());
+    laopt::BSMatrixTape tape(sparsity.get_sparsity(), sparsity.rows(), sparsity.cols());
     F(tape);
 
     std::cout << "copy sequence = " << tape.copy_segments << std::endl;
 
     // Confirm the correct copy sequence
     {
-        std::vector<lampc::Segment> ground = {lampc::Segment{0,6}, lampc::Segment{6,20}};
+        std::vector<laopt::Segment> ground = {laopt::Segment{0,6}, laopt::Segment{6,20}};
         EXPECT_TRUE(std::equal(ground.begin(), ground.end(), tape.copy_segments.begin()));
     }
 
@@ -94,12 +93,12 @@ TEST(BSMatrix, Construction_Complex) {
 
     // Partitioning and assembly function
     auto F = [&](auto& tape){
-        tape(Eigen::seqN(10,A.rows()),concatenate_indices(Eigen::Vector<int,2>{10,11},Eigen::Vector<int,1>{5})) = A;
-        tape(concatenate_indices(Eigen::Vector<int,2>{6,7}, Eigen::Vector<int,3>{0,1,2}),
-             concatenate_indices(Eigen::Vector<int,1>{7},Eigen::Vector<int,1>{5},Eigen::Vector<int,1>{3},Eigen::Vector<int,1>{1},Eigen::Vector<int,1>{0})) = B;
+        tape(Eigen::seqN(10,A.rows()),laopt::concatenate_indices(Eigen::Vector<int,2>{10,11},Eigen::Vector<int,1>{5})) = A;
+        tape(laopt::concatenate_indices(Eigen::Vector<int,2>{6,7}, Eigen::Vector<int,3>{0,1,2}),
+             laopt::concatenate_indices(Eigen::Vector<int,1>{7},Eigen::Vector<int,1>{5},Eigen::Vector<int,1>{3},Eigen::Vector<int,1>{1},Eigen::Vector<int,1>{0})) = B;
     };
 
-    auto BS = lampc::template makeBSMatrix<scalar_t>(F, 20,20);
+    auto BS = laopt::template makeBSMatrix<scalar_t>(F, 20,20);
     Eigen::SparseMatrix<scalar_t> S;
     BS.allocate_memory(S);
 
@@ -140,7 +139,7 @@ TEST(BSMatrix, SimpleSum) {
         mat(Eigen::seqN(5,A.rows()), Eigen::seqN(5,A.cols())) += A;
     };
 
-    auto BS = lampc::template makeBSMatrix<scalar_t>(F, 10,9);
+    auto BS = laopt::template makeBSMatrix<scalar_t>(F, 10,9);
     Eigen::SparseMatrix<scalar_t> S;
     BS.allocate_memory(S);
 
@@ -185,13 +184,13 @@ TEST(BSMatrixDense, Construction)
     };
 
     using scalar_t = double;
-    lampc::BSMatrixDenseConstruction<scalar_t> D;
+    laopt::BSMatrixDenseConstruction<scalar_t> D;
     F(D);
     Eigen::MatrixX<scalar_t> ground(2,2);
     ground << 1,2,4,5;
     EXPECT_EQ(D.value(), ground);
 
-    lampc::BSMatrixDenseDeployment<scalar_t> DD;
+    laopt::BSMatrixDenseDeployment<scalar_t> DD;
     ASSERT_DEATH(F(DD), "");
     
     Eigen::MatrixX<scalar_t> mat(10,10);
@@ -216,7 +215,7 @@ void test_assignment_speeds()
     const std::array<int, 5> rows{6,7,0,1,2};
     const std::array<int, 5> cols{7,5,3,1,0};
 
-    lampc::BSMatrixDenseDeployment<scalar_t> M;
+    laopt::BSMatrixDenseDeployment<scalar_t> M;
     Matrix<10,10> buffer(10,10);
     M.set_buffer(buffer);
     M.resize(10,10);
@@ -225,7 +224,7 @@ void test_assignment_speeds()
     // Eigen::Matrix<scalar_t, 20, 20> target_buffer;
     // auto target = target_buffer(seqN(3,fix<5>), seqN(4,fix<5>));
 
-    std::cout << "type(target) = " << type_name<decltype(target)>() << std::endl;
+    std::cout << "type(target) = " << laopt::type_name<decltype(target)>() << std::endl;
 
     Matrix<5,5> source(5,5);
     Eigen::Map<Eigen::Matrix<scalar_t,5,5>> map(buffer.data());
@@ -269,7 +268,7 @@ void test_assignment_speeds()
     // for(size_t i = 0; i < NUM_EXP; ++i)
     // {
     //     buffer(6,7) = i+1;
-    //     target = source(lampc::multiSeq_to_index<5>({row1, row2}), lampc::multiSeq_to_index<5>({col1, col2, col3, col4, col5}));
+    //     target = source(laopt::multiSeq_to_index<5>({row1, row2}), laopt::multiSeq_to_index<5>({col1, col2, col3, col4, col5}));
     //     acc += target(0,0);
     // }
     // end = std::chrono::steady_clock::now();
