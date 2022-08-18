@@ -3,7 +3,7 @@
 
 #include "LonOcpEigen.hpp"
 #include "../double_integrator_v0/multiple_shooting_transcription.hpp"
-#include "laopt/ipopt_interface.hpp"
+#include "laopt/ipopt_wrapper.hpp"
 
 int main()
 {
@@ -14,8 +14,8 @@ int main()
 
     /* Define specific Tape, LAMPC, and IPOPT problem types for the resulting NLP */
     using Tape = laopt::TapeInfo<Transcription>;
-    using LaProblem = laopt::Problem<Transcription>;
-    using IpoptProblem = laopt::Solver_IPOpt<LaProblem>;
+    using OptProblem = laopt::Problem<Transcription>;
+    using Solver = laopt::IpoptWrapper<OptProblem>;
 
     /* Construct and setup OCP */
     Ocp ocp;
@@ -44,24 +44,15 @@ int main()
     Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
 
     /* Construct LAMPC and IPOPT problems for transcribed OCP using according tape, link decision variables between problems */
-    LaProblem nlp(transcription, tape); // Tape is optional here and could also be generated internally
-    SmartPtr<IpoptProblem> ipopt_nlp = new IpoptProblem(nlp);
-    nlp.set_decision_variable(ipopt_nlp->init_primal);
-
-    /* Create IPOPT solver, setup, and initialize */
-    SmartPtr<IpoptApplication> ipopt_solver = IpoptApplicationFactory();
-    // ipopt_solver->Options()->SetStringValue("hessian_approximation", "limited-memory");
-    ipopt_solver->Options()->SetIntegerValue("print_level", 5);
-    ApplicationReturnStatus ipopt_status = ipopt_solver->Initialize();
-    if( ipopt_status != Solve_Succeeded ) { std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl; }
+    OptProblem optProblem(transcription, tape); // Tape is optional here and could also be generated internally
+    Solver solver(optProblem);
 
     /* Set initial guess for state trajectory */
     for(auto& x: transcription.X) { x << ocp.model.get_default_initial_state(); }
 
     /* Set initial state and solve the problem (loop later) */
     ocp.x0 << ocp.model.get_default_initial_state();
-    ipopt_status = ipopt_solver->OptimizeTNLP(ipopt_nlp);
-    if( ipopt_status != Solve_Succeeded ) { std::cout << std::endl << std::endl << "*** Error during solution!" << std::endl; }
+    solver.solve();
 
     /* Print out the solution */
     std::cout << std::endl << std::endl << std::endl << std::endl;
@@ -76,7 +67,7 @@ int main()
     std::cout << "T = \n" << transcription.T.transpose() << std::endl;
     std::cout << "X = \n" << X << std::endl;
     std::cout << "U = \n" << U << std::endl;
-    std::cout << "obj = " << nlp.eval_objective(laopt::Eval(), ipopt_nlp->sol_primal) << std::endl;
+    std::cout << "obj = " << optProblem.eval_objective(laopt::Eval(), solver().sol_primal) << std::endl;
 
     return 0;
 }

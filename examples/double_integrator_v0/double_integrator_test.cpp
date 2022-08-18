@@ -3,7 +3,6 @@
 
 #include "double_integrator_ocp.hpp"
 #include "MultipleShooting.hpp"
-//#include "RadauCollocation.hpp"
 #include "laopt/ipopt_wrapper.hpp"
 
 int main()
@@ -55,7 +54,7 @@ int main()
         std::cout << "T = \n" << transcription.get_Topt().transpose() << std::endl;
         std::cout << "Xopt = \n" << Xopt << std::endl;
         std::cout << "Uopt = \n" << Uopt << std::endl;
-        const double objective_eval = opt_problem.eval_objective(laopt::Eval(), solver.ipopt_problem->sol_primal);
+        const double objective_eval = opt_problem.eval_objective(laopt::Eval(), solver().sol_primal);
         std::cout << "obj: " << objective_eval << "\n";
     }
     double test = 1;
