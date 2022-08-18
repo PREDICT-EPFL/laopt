@@ -187,7 +187,7 @@ public:
 	   Ipopt::Number*       values
 	) override
 	{
-		assert(nele_jac == prob.constraints.jacobian.sparsity_structure.nonZeros() && "Number of nonzeros is wrong for the jacobian");
+		assert(nele_jac == prob.constraints.jacobian.get_sparsity_structure().nonZeros() && "Number of nonzeros is wrong for the jacobian");
 
 		if (values == nullptr)
 		{
