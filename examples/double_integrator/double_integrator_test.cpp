@@ -1,39 +1,26 @@
 #include <iostream>
 #include <iomanip>
 
-#include "LonOcpEigen.hpp"
+#include "double_integrator_ocp.hpp"
 #include "MultipleShooting.hpp"
 #include "laopt/ipopt_wrapper.hpp"
 
 int main()
 {
     /* Choose OCP and Transcription */
-    using Ocp = lon_ocp::LonFlightOCP;
+    using Ocp = DoubleIntegratorOcp;
 
-    /* Construct and setup OCP */
+    /* Construct OCP and set OCP-specific properties */
     Ocp ocp;
-    ocp.model.set_state_representation(kite_model::LongitudinalFlightPath);
-    ocp.model.load_params_from_yaml("eg4_xflr-Pvw-YR.yaml");
 
-    ocp.objectives[lon_ocp::TrackAngle] = true;
-//    ocp.objectives[lon_ocp::TrackVa] = true;
-    ocp.objectives[lon_ocp::MinimizeControl] = true;
+    ocp.ubu << 10;
+    ocp.lbu << -3;
 
-    ocp.tf = 1.5;
+    ocp.x_ref << 1, 0;
 
-    ocp.pitch_ref = -20.0 * M_PI / 180.0;
-    ocp.Va_ref = 11.0;
-
-    ocp.mayer_multiplier = 10;
-    ocp.W_pitch_err = 10;
-    ocp.W_Va_err = 1;
-    ocp.R.diagonal() << 1, 0.1;
-
-    ocp.ubu << 0.8 * ocp.model.u_physical_ubound(0), 0.001;
-    ocp.lbu << 0.8 * ocp.model.u_physical_lbound(0), 0;
-
-    /* Set initial state */
-    ocp.set_x0(ocp.model.get_default_initial_state());
+    ocp.set_x0({0.1, 0.2});               // for demonstration, last setting counts
+    ocp.x0_lb = ocp.x0_ub = {0.1, 0.2};   // for demonstration, last setting counts
+    ocp.set_x0({-0.1, -0.2}, {0.1, 0.2}); // for demonstration, last setting counts
 
     /* Solve with Multiple Shooting transcription */
     {
@@ -54,10 +41,6 @@ int main()
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
         Solver solver(opt_problem);
 
-        /* Set initial guess for state trajectory */
-        transcription.set_X_guess(ocp.model.get_default_initial_state());
-        std::cout << "X_guess = \n" << transcription.get_X_opt() << "\n";
-
         solver.solve();
         solver.solve(); // Call second time to test repeatability
 
@@ -70,7 +53,7 @@ int main()
         Transcription::InputTrajectory U_opt = transcription.get_U_opt();
         const double obj_eval = opt_problem.eval_objective(laopt::Eval(), solver.sol_primal());
 
-        std::cout << "Comp. time: " << "?? s, tf = " << T_opt(T_opt.size()-1) << " s, obj = " << obj_eval << "\n";
+        std::cout << "Comp. time: " << "?? s, tf = " << T_opt(T_opt.size() - 1) << " s, obj = " << obj_eval << "\n";
         std::cout << "T = [" << transcription.get_T_opt().transpose() << "];\n";
         std::cout << "X_opt = [\n" << X_opt << "];\n";
         std::cout << "U_opt = [\n" << U_opt << "];\n";

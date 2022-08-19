@@ -1,30 +1,30 @@
 #include <iostream>
 #include <iomanip>
 
-#include "double_integrator_ocp.hpp"
+#include "inverted_pendulum_ocp.hpp"
 #include "MultipleShooting.hpp"
 #include "laopt/ipopt_wrapper.hpp"
 
 int main()
 {
     /* Choose OCP and Transcription */
-    using Ocp = DoubleIntegratorOcp;
+    using Ocp = InvertedPendulumOcp;
 
     /* Construct OCP and set OCP-specific properties */
     Ocp ocp;
 
-    ocp.ubu << 10;
+    ocp.ubu << 3;
     ocp.lbu << -3;
 
-    ocp.x_ref << 1, 0;
+    ocp.tf = 1.5;
 
-    ocp.set_x0({0.1, 0.2});               // for demonstration, last setting counts
-    ocp.x0_lb = ocp.x0_ub = {0.1, 0.2};   // for demonstration, last setting counts
-    ocp.set_x0({-0.1, -0.2}, {0.1, 0.2}); // for demonstration, last setting counts
+    ocp.angle_ref = 20.0 * M_PI / 180.0;
+    ocp.set_x0({M_PI, 0});
 
     /* Solve with Multiple Shooting transcription */
     {
-        const int N = 20;
+        std::cout << "Multiple Shooting\n";
+        const int N = 30;
         using Transcription = transcription::MultipleShooting<Ocp, N>;
 
         /* Define specific Tape, laOPT, and IPOPT problem types for the resulting NLP */
@@ -45,16 +45,18 @@ int main()
 
         /* Print out the solution */
         std::cout << "\n\n";
-        std::cout << std::setprecision(6) << std::defaultfloat;
+        std::cout << std::setprecision(4) << std::defaultfloat;
 
+        Transcription::TimeTrajectory T_opt = transcription.get_T_opt().transpose();
         Transcription::StateTrajectory X_opt = transcription.get_X_opt();
         Transcription::InputTrajectory U_opt = transcription.get_U_opt();
+        const double obj_eval = opt_problem.eval_objective(laopt::Eval(), solver.sol_primal());
 
-        std::cout << "T = \n" << transcription.get_T_opt().transpose() << std::endl;
-        std::cout << "X_opt = \n" << X_opt << "\n";
-        std::cout << "U_opt = \n" << U_opt << "\n";
-        const double objective_eval = opt_problem.eval_objective(laopt::Eval(), solver.sol_primal());
-        std::cout << "obj: " << objective_eval << "\n";
+        std::cout << "Comp. time: " << "?? s, tf = " << T_opt(T_opt.size()-1) << " s, obj = " << obj_eval << "\n";
+        std::cout << "T = [" << transcription.get_T_opt().transpose() << "];\n";
+        std::cout << "X_opt = [\n" << X_opt << "];\n";
+        std::cout << "U_opt = [\n" << U_opt << "];\n";
+        std::cout << "obj = " << obj_eval << ";\n";
     }
 
     return 0;

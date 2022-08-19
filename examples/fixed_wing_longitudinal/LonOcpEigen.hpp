@@ -79,7 +79,7 @@ public:
         control_cost = static_cast<T>(0);
         if (objectives[MinimizeControl])
         {
-            control_cost = u.transpose() * R * u;
+            control_cost += u.dot(R * u);
         }
     }
 

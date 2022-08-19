@@ -39,7 +39,7 @@ public:
     {
         scalar_t lagrange;
         controlProblem.template lagrange_term_impl<scalar_t>(lagrange, x, u);
-        return lagrange;
+        return h * lagrange;
     }
 
     struct MayerCost {};
@@ -60,22 +60,23 @@ public:
     {
         Eigen::Vector<scalar_t, ControlProblem::NX> x_dot;
 
+        const double H = (controlProblem.tf - controlProblem.t0);
+
         using Vec = typename x_t::PlainObject;
         controlProblem.template dynamics_impl<scalar_t>(x_dot, x, u);
-        Vec k1 = x_dot;
+        Vec k1 = H * x_dot;
         controlProblem.template dynamics_impl<scalar_t>(x_dot, x + h * 0.5 * k1, u);
-        Vec k2 = x_dot;
+        Vec k2 = H * x_dot;
         controlProblem.template dynamics_impl<scalar_t>(x_dot, x + h * 0.5 * k2, u);
-        Vec k3 = x_dot;
+        Vec k3 = H * x_dot;
         controlProblem.template dynamics_impl<scalar_t>(x_dot, x + h * k3, u);
-        Vec k4 = x_dot;
+        Vec k4 = H * x_dot;
         return x + h / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
     }
 
 public:
     explicit MultipleShooting(ControlProblem &ctrlProblem_) :
-            controlProblem(ctrlProblem_),
-            h(controlProblem.tf / N) {}
+            controlProblem(ctrlProblem_) {}
 
     using scalar_t = typename ControlProblem::Scalar; // TODO: Change in laOPT to accept Scalar
     using TimeTrajectory = Eigen::Vector<Scalar, N + 1>;
@@ -127,8 +128,7 @@ public:
             T(i) = i * controlProblem.tf / N;
 
             PRINT("T(" << i << ") = " << T(i));
-            optProblem.add_obj(this->function(StageCost{}, X_var[i], U_var[i]));
-//            optProblem.add_constr(X_var[i + 1] == discreteDynamics(X_var[i], U_var[i]));
+            optProblem.add_obj(this->function(StageCost{}, X_var[i], U_var[i])); // TODO eno4: Allow expressions here
             optProblem.add_constr(X_var[i + 1] == this->function(DiscreteDynamics{}, X_var[i], U_var[i]));
         }
 
