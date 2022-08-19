@@ -1,13 +1,13 @@
 #ifndef LAOPT_DOUBLE_INTEGRATOR_OCP_HPP
 #define LAOPT_DOUBLE_INTEGRATOR_OCP_HPP
 
+// End user (level 1)
+
 #include <limits>
 #include <Eigen/Dense>
 
 #include "ControlProblemBase.hpp"
 #include "laopt/laopt.hpp"
-
-// End user (level 1)
 
 class DoubleIntegratorOcp : public ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1>
 {

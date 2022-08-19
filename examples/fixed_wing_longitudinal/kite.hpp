@@ -92,6 +92,7 @@ Eigen::MatrixXd toEigenX(const casadi::DM &casadi_matrix)
     Eigen::MatrixXd eigen_matrix(rows, cols);
     eigen_matrix.setZero();
     std::memcpy(eigen_matrix.data(), casadi_matrix.ptr(), sizeof(double) * rows * cols);
+    return eigen_matrix;
 }
 std::vector<double> toVec(const casadi::DM &casadi_matrix)
 {

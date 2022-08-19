@@ -82,6 +82,34 @@ public:
     using StateTrajectory = Eigen::Matrix<Scalar, ControlProblem::NX, N + 1>;
     using InputTrajectory = Eigen::Matrix<Scalar, ControlProblem::NU, N + 1>;
 
+    /* Set functions */
+    template<int rows, typename Scalar = double>
+    void set_X_guess(const Eigen::Matrix<Scalar, rows, 1> &x_guess)
+    {
+        for (unsigned i = 0; i < X_var.size(); i++) { X_var.at(i) << x_guess; }
+    }
+    template<int rows, int cols, typename Scalar = double>
+    void set_X_guess(const Eigen::Matrix<Scalar, rows, cols> &X_guess)
+    {
+        for (unsigned i = 0; i < X_var.size(); i++) { X_var.at(i) << X_guess.col(i); }
+    }
+
+    /* Get functions */
+    const TimeTrajectory &get_Topt() const { return T; }
+    StateTrajectory get_Xopt()
+    {
+        StateTrajectory Xopt;
+        for (unsigned i = 0; i < X_var.size(); i++) { Xopt.col(i) << X_var.at(i); }
+        return Xopt;
+    }
+    InputTrajectory get_Uopt()
+    {
+        InputTrajectory Uopt;
+        for (unsigned i = 0; i < U_var.size(); i++) { Uopt.col(i) << U_var.at(i); }
+        return Uopt;
+    }
+
+//protected: // TODO ino1 (would like to make this protected)
     template<typename OptProblem>
     void define_problem(OptProblem &optProblem)
     {
@@ -123,22 +151,6 @@ public:
         optProblem.add_constr(controlProblem.x0_lb <= X_var[0] <= controlProblem.x0_ub);
         optProblem.add_constr(controlProblem.xf_lb <= X_var[N] <= controlProblem.xf_ub);
     }
-
-    /* Get functions */
-    const TimeTrajectory &get_Topt() const { return T; }
-    StateTrajectory get_Xopt()
-    {
-        StateTrajectory Xopt;
-        for (unsigned i = 0; i < X_var.size(); i++) { Xopt.col(i) << X_var.at(i); }
-        return Xopt;
-    }
-    InputTrajectory get_Uopt()
-    {
-        InputTrajectory Uopt;
-        for (unsigned i = 0; i < U_var.size(); i++) { Uopt.col(i) << U_var.at(i); }
-        return Uopt;
-    }
-
 };
 
 } // namespace transcription

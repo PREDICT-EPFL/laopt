@@ -1,17 +1,17 @@
 #ifndef SRC_LONOCPEIGEN_HPP
 #define SRC_LONOCPEIGEN_HPP
 
-#include "../double_integrator_v0/ocp_base.hpp"
+// End user (level 1)
+
+#include "ControlProblemBase.hpp"
 #include "LonOcpSettings.hpp"
 #include "kite.hpp"
-
-// Basic user (level 1)
 
 namespace lon_ocp {
 
 using LonKite = kite_model::eigen_model::LonKiteDynamics;
 
-class LonFlightOCP : public laopt::OCPBase<double, LonKite::nx + 0, LonKite::nu + 0>
+class LonFlightOCP : public ControlProblemBase</*Scalar*/ double, /*NX*/ LonKite::nx + 0, /*NU*/LonKite::nu + 0>
 {
 public:
     ~LonFlightOCP() = default;
@@ -57,8 +57,8 @@ public:
     }
 
     template<typename T>
-    void get_non_control_cost(const Eigen::Ref<const state_t <T>> &x,
-                              T &non_control_cost)
+    void get_non_control_cost(T &non_control_cost,
+                              constref_t <state_t<T>> &x)
     {
         non_control_cost = static_cast<T>(0);
         if (objectives[TrackAngle])
@@ -73,8 +73,8 @@ public:
         }
     }
     template<typename T>
-    void get_control_cost(const Eigen::Ref<const control_t <T>> &u,
-                          T &control_cost)
+    void get_control_cost(T &control_cost,
+                          constref_t <input_t<T>> &u)
     {
         control_cost = static_cast<T>(0);
         if (objectives[MinimizeControl])
@@ -83,40 +83,27 @@ public:
         }
     }
 
-    template<typename T>
-    inline void dynamics_impl(Eigen::Ref<state_t<T>> xdot,
-                              const Eigen::Ref<const state_t<T>> &x,
-                              const Eigen::Ref<const control_t<T>> &u) const noexcept
-    {
-//         Linear(ized) dynamics
-//        xdot = A.template cast<T>() * (x - x_trim.template cast<T>()) +
-//               B.template cast<T>() * (u - u_trim.template cast<T>());
 
-        // Nonlinear dynamics
-        Model::param_t <T> p;
-        Model::output_t <T> y;
-        model.dynamics<T>(xdot, x, u, p, y);
-//        xdot *= p(0); // Time-optimal ocp
-    }
     template<typename T>
-    inline void lagrange_term_impl(T &lagrange,
-                                   const Eigen::Ref<const state_t <T>> &x,
-                                   const Eigen::Ref<const control_t <T>> &u) noexcept
+    void lagrange_term_impl(T &lagrange,
+                            constref_t <state_t<T>> &x,
+                            constref_t <input_t<T>> &u)
     {
         T non_control_cost;
-        get_non_control_cost(x, non_control_cost);
+        get_non_control_cost(non_control_cost, x);
         T control_cost;
-        get_control_cost(u, control_cost);
+        get_control_cost(control_cost, u);
 
         lagrange = non_control_cost + control_cost;
 //        lagrange = exp(t) * non_control_cost + control_cost; // Exponentially decaying cost: later error is more exp.
     }
 
     template<typename T>
-    inline void mayer_term_impl(T &mayer, const Eigen::Ref<const state_t <T>> &x) noexcept
+    void mayer_term_impl(T &mayer,
+                         constref_t <state_t<T>> &x)
     {
         T non_control_cost;
-        get_non_control_cost(x, non_control_cost);
+        get_non_control_cost(non_control_cost, x);
 
         mayer = mayer_multiplier * non_control_cost;
 //        mayer = mayer_multiplier * non_control_cost + p(0); // Time-optimal ocp
@@ -128,6 +115,22 @@ public:
 //                -0.0082, 0.0408, 0.0084, 0.0554,
 //                -1.1563, 5.9988, 0.0554, 7.6771;
 //        mayer = x.transpose() * Q_N.template cast<T>() * x;
+    }
+
+    template<typename T>
+    void dynamics_impl(ref_t <state_t<T>> xdot,
+                       constref_t <state_t<T>> &x,
+                       constref_t <input_t<T>> &u)
+    {
+//         Linear(ized) dynamics
+//        xdot = A.template cast<T>() * (x - x_trim.template cast<T>()) +
+//               B.template cast<T>() * (u - u_trim.template cast<T>());
+
+        // Nonlinear dynamics
+        Model::param_t <T> p;
+        Model::output_t <T> y;
+        model.dynamics<T>(xdot, x, u, p, y);
+//        xdot *= p(0); // Time-optimal ocp
     }
 };
 

@@ -2,20 +2,13 @@
 #include <iomanip>
 
 #include "LonOcpEigen.hpp"
-#include "../double_integrator_v0/multiple_shooting_transcription.hpp"
+#include "MultipleShooting.hpp"
 #include "laopt/ipopt_wrapper.hpp"
 
 int main()
 {
     /* Choose OCP and Transcription */
     using Ocp = lon_ocp::LonFlightOCP;
-    const int N = 30;
-    using Transcription = MultipleShootingTranscription<Ocp, N>;
-
-    /* Define specific Tape, LAMPC, and IPOPT problem types for the resulting NLP */
-    using Tape = laopt::TapeInfo<Transcription>;
-    using OptProblem = laopt::Problem<Transcription>;
-    using Solver = laopt::IpoptWrapper<OptProblem>;
 
     /* Construct and setup OCP */
     Ocp ocp;
@@ -39,35 +32,47 @@ int main()
     ocp.ubu << 0.8 * ocp.model.u_physical_ubound(0), 0.001;
     ocp.lbu << 0.8 * ocp.model.u_physical_lbound(0), 0;
 
-    /* Transcribe OCP */
-    Transcription transcription(ocp);
-    Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
+    /* Set initial state */
+    ocp.set_x0(ocp.model.get_default_initial_state());
 
-    /* Construct LAMPC and IPOPT problems for transcribed OCP using according tape, link decision variables between problems */
-    OptProblem optProblem(transcription, tape); // Tape is optional here and could also be generated internally
-    Solver solver(optProblem);
+    /* Solve with Multiple Shooting transcription */
+    {
+        const int N = 30;
+        using Transcription = transcription::MultipleShooting<Ocp, N>;
 
-    /* Set initial guess for state trajectory */
-    for(auto& x: transcription.X) { x << ocp.model.get_default_initial_state(); }
+        /* Define specific Tape, LAMPC, and IPOPT problem types for the resulting NLP */
+        using Tape = laopt::TapeInfo<Transcription>;
+        using OptProblem = laopt::Problem<Transcription>;
+        using Solver = laopt::IpoptWrapper<OptProblem>;
 
-    /* Set initial state and solve the problem (loop later) */
-    ocp.x0 << ocp.model.get_default_initial_state();
-    solver.solve();
+        /* Construct transcription for OCP, optionally generate/store tape for that combination */
+        Transcription transcription(ocp);
+        Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
 
-    /* Print out the solution */
-    std::cout << std::endl << std::endl << std::endl << std::endl;
-    std::cout << std::setprecision(6) << std::defaultfloat;
+        /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
+        OptProblem optProblem(transcription, tape); // Tape is optional here and could also be generated internally
+        Solver solver(optProblem);
 
-    Eigen::Matrix<Ocp::scalar_t, Ocp::NX, transcription.X.size()> X;
-    Eigen::Matrix<Ocp::scalar_t, Ocp::NU, transcription.U.size()> U;
-    int i{0};
-    i = 0; for(auto& x: transcription.X) X.col(i++) << x;
-    i = 0; for(auto& u: transcription.U) U.col(i++) << u;
+        /* Set initial guess for state trajectory */
+        transcription.set_X_guess(ocp.model.get_default_initial_state());
+        std::cout << "X_guess = \n" << transcription.get_Xopt() << "\n";
 
-    std::cout << "T = \n" << transcription.T.transpose() << std::endl;
-    std::cout << "X = \n" << X << std::endl;
-    std::cout << "U = \n" << U << std::endl;
-    std::cout << "obj = " << optProblem.eval_objective(laopt::Eval(), solver().sol_primal) << std::endl;
+        solver.solve();
+        solver.solve();
+
+        /* Print out the solution */
+        std::cout << "\n\n";
+        std::cout << std::setprecision(6) << std::defaultfloat;
+
+        Transcription::StateTrajectory Xopt = transcription.get_Xopt();
+        Transcription::InputTrajectory Uopt = transcription.get_Uopt();
+
+        std::cout << "T = \n" << transcription.get_Topt().transpose() << "\n";
+        std::cout << "Xopt = \n" << Xopt << "\n";
+        std::cout << "Uopt = \n" << Uopt << "\n";
+        const double objective_eval = optProblem.eval_objective(laopt::Eval(), solver.sol_primal);
+        std::cout << "obj: " << objective_eval << "\n";
+    }
 
     return 0;
 }

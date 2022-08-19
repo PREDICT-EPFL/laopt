@@ -30,34 +30,32 @@ int main()
         /* Define specific Tape, LAMPC, and IPOPT problem types for the resulting NLP */
         using Tape = laopt::TapeInfo<Transcription>;
         using OptProblem = laopt::Problem<Transcription>;
-        using IpoptProblem = laopt::Solver_IPOpt<OptProblem>;
         using Solver = laopt::IpoptWrapper<OptProblem>;
 
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
         Transcription transcription(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
 
-        /* Construct laOPT and IPOPT problems for transcribed OCP using according tape, link decision variables between problems */
+        /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
         Solver solver(opt_problem);
 
-        auto res = solver.solve();
-        std::cout << "res: " << res << "\n";
+        solver.solve();
+        solver.solve();
 
         /* Print out the solution */
-        std::cout << std::endl << std::endl << std::endl << std::endl;
+        std::cout << "\n\n";
         std::cout << std::setprecision(6) << std::defaultfloat;
 
         Transcription::StateTrajectory Xopt = transcription.get_Xopt();
         Transcription::InputTrajectory Uopt = transcription.get_Uopt();
 
         std::cout << "T = \n" << transcription.get_Topt().transpose() << std::endl;
-        std::cout << "Xopt = \n" << Xopt << std::endl;
-        std::cout << "Uopt = \n" << Uopt << std::endl;
-        const double objective_eval = opt_problem.eval_objective(laopt::Eval(), solver().sol_primal);
+        std::cout << "Xopt = \n" << Xopt << "\n";
+        std::cout << "Uopt = \n" << Uopt << "\n";
+        const double objective_eval = opt_problem.eval_objective(laopt::Eval(), solver.sol_primal);
         std::cout << "obj: " << objective_eval << "\n";
     }
-    double test = 1;
 
     return 0;
 }
