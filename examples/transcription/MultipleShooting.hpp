@@ -95,18 +95,18 @@ public:
     }
 
     /* Get functions */
-    const TimeTrajectory &get_Topt() const { return T; }
-    StateTrajectory get_Xopt()
+    const TimeTrajectory &get_T_opt() const { return T; }
+    StateTrajectory get_X_opt()
     {
-        StateTrajectory Xopt;
-        for (unsigned i = 0; i < X_var.size(); i++) { Xopt.col(i) << X_var.at(i); }
-        return Xopt;
+        StateTrajectory X_opt;
+        for (unsigned i = 0; i < X_var.size(); i++) { X_opt.col(i) << X_var.at(i); }
+        return X_opt;
     }
-    InputTrajectory get_Uopt()
+    InputTrajectory get_U_opt()
     {
-        InputTrajectory Uopt;
-        for (unsigned i = 0; i < U_var.size(); i++) { Uopt.col(i) << U_var.at(i); }
-        return Uopt;
+        InputTrajectory U_opt;
+        for (unsigned i = 0; i < U_var.size(); i++) { U_opt.col(i) << U_var.at(i); }
+        return U_opt;
     }
 
 //protected: // TODO ino1 (would like to make this protected)

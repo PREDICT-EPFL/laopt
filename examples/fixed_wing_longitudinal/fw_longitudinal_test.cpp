@@ -40,7 +40,7 @@ int main()
         const int N = 30;
         using Transcription = transcription::MultipleShooting<Ocp, N>;
 
-        /* Define specific Tape, LAMPC, and IPOPT problem types for the resulting NLP */
+        /* Define specific Tape, laOPT, and IPOPT problem types for the resulting NLP */
         using Tape = laopt::TapeInfo<Transcription>;
         using OptProblem = laopt::Problem<Transcription>;
         using Solver = laopt::IpoptWrapper<OptProblem>;
@@ -55,21 +55,21 @@ int main()
 
         /* Set initial guess for state trajectory */
         transcription.set_X_guess(ocp.model.get_default_initial_state());
-        std::cout << "X_guess = \n" << transcription.get_Xopt() << "\n";
+        std::cout << "X_guess = \n" << transcription.get_X_opt() << "\n";
 
         solver.solve();
-        solver.solve();
+        solver.solve(); // Call second time to test repeatability
 
         /* Print out the solution */
         std::cout << "\n\n";
         std::cout << std::setprecision(6) << std::defaultfloat;
 
-        Transcription::StateTrajectory Xopt = transcription.get_Xopt();
-        Transcription::InputTrajectory Uopt = transcription.get_Uopt();
+        Transcription::StateTrajectory X_opt = transcription.get_X_opt();
+        Transcription::InputTrajectory U_opt = transcription.get_U_opt();
 
-        std::cout << "T = \n" << transcription.get_Topt().transpose() << "\n";
-        std::cout << "Xopt = \n" << Xopt << "\n";
-        std::cout << "Uopt = \n" << Uopt << "\n";
+        std::cout << "T = \n" << transcription.get_T_opt().transpose() << "\n";
+        std::cout << "X_opt = \n" << X_opt << "\n";
+        std::cout << "U_opt = \n" << U_opt << "\n";
         const double objective_eval = optProblem.eval_objective(laopt::Eval(), solver.sol_primal);
         std::cout << "obj: " << objective_eval << "\n";
     }
