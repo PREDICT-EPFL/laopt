@@ -70,7 +70,7 @@ int main()
         std::cout << "T = \n" << transcription.get_T_opt().transpose() << "\n";
         std::cout << "X_opt = \n" << X_opt << "\n";
         std::cout << "U_opt = \n" << U_opt << "\n";
-        const double objective_eval = optProblem.eval_objective(laopt::Eval(), solver.sol_primal);
+        const double objective_eval = optProblem.eval_objective(laopt::Eval(), solver.sol_primal());
         std::cout << "obj: " << objective_eval << "\n";
     }
 
