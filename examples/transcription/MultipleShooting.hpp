@@ -11,7 +11,13 @@
 
 namespace transcription {
 
-template<typename ControlProblem, int N>
+/*
+ * Multiple Shooting
+ * |    |    |    |   ...    |    |
+ * 0    1    2    3   ...   N-1   N     Decision variable indices (initial condition + number of segments)
+ *   1    2    3                N       Number of segments
+ * */
+template<typename ControlProblem, unsigned N>
 class MultipleShooting : public laopt::Differentiable<MultipleShooting<ControlProblem, N>>
 {
 protected: // TODO ino1
@@ -116,14 +122,14 @@ public:
     {
         PRINT("define_problem");
         /* Register variables */
-        for (int i = 0; i < N + 1; i++)
+        for (unsigned i = 0; i < N + 1; i++)
         {
             optProblem.add_variable(X_var[i]); // TODO eno1: Loop through array in add_variable()
             optProblem.add_variable(U_var[i]);
         }
 
         /* Loop through discretization points */
-        for (int i = 0; i < N; i++)
+        for (unsigned i = 0; i < N; i++)
         {
             T(i) = i * controlProblem.tf / N;
 
@@ -141,7 +147,7 @@ public:
         optProblem.add_constr(U_var[N] == U_var[N - 1]);
 
         /* Box constraints */
-        for (int i = 0; i < N + 1; i++)
+        for (unsigned i = 0; i < N + 1; i++)
         {
             optProblem.add_constr(controlProblem.lbx <= X_var[i] <= controlProblem.ubx);
             optProblem.add_constr(controlProblem.lbu <= U_var[i] <= controlProblem.ubu);

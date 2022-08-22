@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <chrono>
 
 #include "inverted_pendulum_ocp.hpp"
 #include "MultipleShooting.hpp"
@@ -7,6 +8,8 @@
 
 int main()
 {
+    using namespace std::chrono;
+
     /* Choose OCP and Transcription */
     using Ocp = InvertedPendulumOcp;
 
@@ -19,6 +22,8 @@ int main()
     ocp.tf = 1.5;
 
     ocp.angle_ref = 20.0 * M_PI / 180.0;
+    ocp.mayer_multiplier = 0;
+
     ocp.set_x0({M_PI, 0});
 
     /* Solve with Multiple Shooting transcription */
@@ -40,8 +45,12 @@ int main()
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
         Solver solver(opt_problem);
 
+        const steady_clock::time_point tstart = steady_clock::now();
         solver.solve();
-        solver.solve(); // Call second time to test repeatability
+        const steady_clock::time_point tend = steady_clock::now();
+        const long duration_us = duration_cast<microseconds>(tend - tstart).count();
+
+//        solver.solve(); // Call second time to test repeatability
 
         /* Print out the solution */
         std::cout << "\n\n";
@@ -52,7 +61,7 @@ int main()
         Transcription::InputTrajectory U_opt = transcription.get_U_opt();
         const double obj_eval = opt_problem.eval_objective(laopt::Eval(), solver.sol_primal());
 
-        std::cout << "Comp. time: " << "?? s, tf = " << T_opt(T_opt.size()-1) << " s, obj = " << obj_eval << "\n";
+        std::cout << "Comp. time: " << duration_us << " us, tf = " << T_opt(T_opt.size() - 1) << " s, obj = " << obj_eval << "\n";
         std::cout << "T = [" << transcription.get_T_opt().transpose() << "];\n";
         std::cout << "X_opt = [\n" << X_opt << "];\n";
         std::cout << "U_opt = [\n" << U_opt << "];\n";

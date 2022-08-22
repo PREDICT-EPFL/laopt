@@ -42,6 +42,7 @@ public:
         get_non_control_cost(non_control_cost, x);
 
         mayer = mayer_multiplier * non_control_cost;
+//        mayer += w_tf * tf_var;
     }
 
     template<typename T>
@@ -65,6 +66,8 @@ public:
         // Dynamics
         x_dot << theta_dot,
                 (m * g * l * sin(theta) - b * theta_dot + torque) / (m * l * l);
+
+//        x_dot *= tf_var;
     }
 
     template<typename T>

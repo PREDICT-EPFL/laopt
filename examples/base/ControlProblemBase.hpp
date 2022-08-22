@@ -28,6 +28,9 @@ public:
     Scalar t0 = 0;
     Scalar tf = 1;
 
+//    variable_t<1> tf_var;
+//    double w_tf{0};
+
     Input ubu = Input::Constant(std::numeric_limits<Scalar>::infinity());
     Input lbu = -ubu;
     State ubx = State::Constant(std::numeric_limits<Scalar>::infinity());
