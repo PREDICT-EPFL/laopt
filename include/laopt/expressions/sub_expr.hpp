@@ -112,7 +112,7 @@ template<typename DerivedLhs, typename DerivedRhs>
 struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
 {
     static EIGEN_STRONG_INLINE auto
-    function(const SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>& expr)
+    function(const SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>& expr) -> decltype(ExprEvaluator<DerivedLhs>::function(expr.lhs))
     {
         functions::IDENTITY id(-1);
         return ExprEvaluator<DerivedLhs>::function(expr.lhs) + id.function(expr.rhs.cast_base());
