@@ -226,7 +226,7 @@ void test_assignment_speeds()
 
     std::cout << "type(target) = " << laopt::type_name<decltype(target)>() << std::endl;
 
-    Matrix<5,5> source(5,5);
+    Matrix<10,10> source(10,10);
     Eigen::Map<Eigen::Matrix<scalar_t,5,5>> map(buffer.data());
     Eigen::Map<Eigen::Matrix<scalar_t,10,10>> map_buffer(buffer.data());
 
