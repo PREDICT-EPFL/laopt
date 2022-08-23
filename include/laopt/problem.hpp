@@ -1085,23 +1085,20 @@ std::ostream& operator<<(std::ostream &o, const ProblemInfo<BSMatrixSparsity, BS
     o << "Variables    : " << info.num_variables << std::endl;
 
     o << "Constraints  : " << info.constraints.rows << std::endl;
-    Eigen::SparseMatrix<bool> sparsity_structure = (info.constraints.jacobian.array() > 0).matrix().sparseView();
-    o << "  Non-zeros  : " << sparsity_structure.nonZeros() << std::endl;
+    o << "  Non-zeros  : " << info.constraints.jacobian.nonZeros() << std::endl;
 
     o << "Variable bnds: " << info.variable_bounds.rows << std::endl;
 
     o << "Objective    : " << info.objective.hessian.rows() << std::endl;
-    Eigen::SparseMatrix<bool> objective_sparsity_structure = (info.objective.hessian.array() > 0).matrix().sparseView();
-    o << "  Non-zeros  : " << objective_sparsity_structure.nonZeros() << std::endl;
+    o << "  Non-zeros  : " << info.objective.hessian.nonZeros() << std::endl;
 
     o << "Lagrangian    : " << info.lagrangian.hessian.rows() << std::endl;
-    Eigen::SparseMatrix<bool> lagrangian_sparsity_structure = (info.lagrangian.hessian.array() > 0).matrix().sparseView();
-    o << "  Non-zeros  : " << lagrangian_sparsity_structure.nonZeros() << std::endl;
+    o << "  Non-zeros  : " << info.lagrangian.hessian.nonZeros() << std::endl;
     return o;
 }
 
 template <typename scalar_t>
-std::ostream& operator<<(std::ostream& o, const ProblemInfo<BSMatrixTape,BSMatrixDenseConstruction<scalar_t>>& info)
+std::ostream& operator<<(std::ostream& o, const ProblemInfo<BSMatrixTape, BSMatrixDenseConstruction<scalar_t>>& info)
 {
 	o << "==== Problem Tape Information ====\n";
     o << "Variables    : " << info.num_variables << std::endl;
