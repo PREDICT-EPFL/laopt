@@ -8,7 +8,7 @@ if(NOT DEFINED EIGEN3_INCLUDE_DIR)
 endif()
 message(STATUS "Using Eigen3 library found at ${EIGEN3_INCLUDE_DIR}")
 
-find_package(Casadi REQUIRED)
+find_package(CASADI REQUIRED)
 find_package(Ipopt REQUIRED)
 message(STATUS "Using IPOPT library found at ${Ipopt_INCLUDE_DIRS}")
 
