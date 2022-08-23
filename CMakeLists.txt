@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 project(laopt)
 
-set(CMAKE_MODULE_PATH /usr/local/share/cmake/Modules/)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH};${PROJECT_SOURCE_DIR}/cmake)
 
 if(NOT DEFINED EIGEN3_INCLUDE_DIR)
