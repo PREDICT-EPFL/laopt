@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <chrono>
 
 #include "LonOcpEigen.hpp"
 #include "MultipleShooting.hpp"
@@ -7,6 +8,8 @@
 
 int main()
 {
+    using namespace std::chrono;
+
     /* Choose OCP and Transcription */
     using Ocp = lon_ocp::LonFlightOCP;
 
@@ -58,7 +61,11 @@ int main()
         transcription.set_X_guess(ocp.model.get_default_initial_state());
         std::cout << "X_guess = \n" << transcription.get_X_opt() << "\n";
 
+        const steady_clock::time_point t_start = steady_clock::now();
         solver.solve();
+        const steady_clock::time_point t_end = steady_clock::now();
+        const long duration_us = duration_cast<microseconds>(t_end - t_start).count();
+
         solver.solve(); // Call second time to test repeatability
 
         /* Print out the solution */
@@ -68,9 +75,10 @@ int main()
         Transcription::TimeTrajectory T_opt = transcription.get_T_opt().transpose();
         Transcription::StateTrajectory X_opt = transcription.get_X_opt();
         Transcription::InputTrajectory U_opt = transcription.get_U_opt();
-        const double obj_eval = opt_problem.eval_objective(laopt::Eval(), solver.sol_primal());
+        Eigen::VectorX<Solver::Scalar> sol_primal = solver.sol_primal();
+        const double obj_eval = opt_problem.eval_objective(laopt::Eval(), sol_primal);
 
-        std::cout << "Comp. time: " << "?? s, tf = " << T_opt(T_opt.size()-1) << " s, obj = " << obj_eval << "\n";
+        std::cout << "Comp. time: " << duration_us << " us, tf = " << T_opt(T_opt.size() - 1) << " s, obj = " << obj_eval << "\n";
         std::cout << "T = [" << transcription.get_T_opt().transpose() << "];\n";
         std::cout << "X_opt = [\n" << X_opt << "];\n";
         std::cout << "U_opt = [\n" << U_opt << "];\n";

@@ -57,10 +57,9 @@ public:
     }
 
     template<typename T>
-    void get_non_control_cost(T &non_control_cost,
-                              constref_t <state_t<T>> &x)
+    T get_non_control_cost(const Eigen::Ref<const state_t<T>> &x)
     {
-        non_control_cost = static_cast<T>(0);
+        T non_control_cost(0);
         if (objectives[TrackAngle])
         {
             T pitch_err = pitch_ref - x(3);
@@ -71,41 +70,31 @@ public:
             T Va_err = Va_ref - x(0);
             non_control_cost += W_Va_err * Va_err * Va_err;
         }
+        return non_control_cost;
     }
     template<typename T>
-    void get_control_cost(T &control_cost,
-                          constref_t <input_t<T>> &u)
+    T get_control_cost(const Eigen::Ref<const input_t<T>> &u)
     {
-        control_cost = static_cast<T>(0);
+        T control_cost(0);
         if (objectives[MinimizeControl])
         {
             control_cost += u.dot(R * u);
         }
+        return control_cost;
     }
 
 
     template<typename T>
-    void lagrange_term_impl(T &lagrange,
-                            constref_t <state_t<T>> &x,
-                            constref_t <input_t<T>> &u)
+    T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
+                         const Eigen::Ref<const input_t<T>> &u)
     {
-        T non_control_cost;
-        get_non_control_cost(non_control_cost, x);
-        T control_cost;
-        get_control_cost(control_cost, u);
-
-        lagrange = non_control_cost + control_cost;
-//        lagrange = exp(t) * non_control_cost + control_cost; // Exponentially decaying cost: later error is more exp.
+        return get_non_control_cost(x) + get_control_cost(u);
     }
 
     template<typename T>
-    void mayer_term_impl(T &mayer,
-                         constref_t <state_t<T>> &x)
+    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &x)
     {
-        T non_control_cost;
-        get_non_control_cost(non_control_cost, x);
-
-        mayer = mayer_multiplier * non_control_cost;
+        T mayer = mayer_multiplier * get_non_control_cost(x);;
 //        mayer = mayer_multiplier * non_control_cost + p(0); // Time-optimal ocp
 
         // LQR terminal weight
@@ -115,12 +104,12 @@ public:
 //                -0.0082, 0.0408, 0.0084, 0.0554,
 //                -1.1563, 5.9988, 0.0554, 7.6771;
 //        mayer = x.transpose() * Q_N.template cast<T>() * x;
+        return mayer;
     }
 
     template<typename T>
-    void dynamics_impl(ref_t <state_t<T>> xdot,
-                       constref_t <state_t<T>> &x,
-                       constref_t <input_t<T>> &u)
+    state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
+                             const Eigen::Ref<const input_t<T>> &u)
     {
 //         Linear(ized) dynamics
 //        xdot = A.template cast<T>() * (x - x_trim.template cast<T>()) +
@@ -129,8 +118,10 @@ public:
         // Nonlinear dynamics
         Model::param_t <T> p;
         Model::output_t <T> y;
+        state_t<T> xdot;
         model.dynamics<T>(xdot, x, u, p, y);
 //        xdot *= p(0); // Time-optimal ocp
+        return tf * xdot;
     }
 };
 

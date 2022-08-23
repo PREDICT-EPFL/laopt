@@ -20,35 +20,40 @@ public:
 
     Eigen::Matrix<Scalar, NU, NU> R{{1}};
 
+    template<typename T>
+    T get_non_control_cost(const Eigen::Ref<const state_t<T>> &x)
+    {
+        T non_control_cost = static_cast<T>(0);
+        T angle_err = angle_ref - x(0);
+        non_control_cost += W_angle_err * angle_err * angle_err;
+        return non_control_cost;
+    }
+    template<typename T>
+    T get_control_cost(const Eigen::Ref<const input_t<T>> &u)
+    {
+        T control_cost = static_cast<T>(0);
+        control_cost += u.dot(R * u);
+        return control_cost;
+    }
+
     /* Override function implementations from base class ------------------------------ */
     template<typename T>
-    void lagrange_term_impl(T &lagrange,
-                            constref_t <state_t<T>> &x,
-                            constref_t <input_t<T>> &u)
+    T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
+                         const Eigen::Ref<const input_t<T>> &u)
     {
-        T non_control_cost;
-        get_non_control_cost(non_control_cost, x);
-        T control_cost;
-        get_control_cost(control_cost, u);
-
-        lagrange = non_control_cost + control_cost;
+        return get_non_control_cost(x) + get_control_cost(u);
     }
 
     template<typename T>
-    void mayer_term_impl(T &mayer,
-                         constref_t <state_t<T>> &x)
+    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &x)
     {
-        T non_control_cost;
-        get_non_control_cost(non_control_cost, x);
-
-        mayer = mayer_multiplier * non_control_cost;
-//        mayer += w_tf * tf_var;
+        return mayer_multiplier * get_non_control_cost(x);
+//       return = w_tf * tf_var;
     }
 
     template<typename T>
-    void dynamics_impl(ref_t <state_t<T>> x_dot,
-                       constref_t <state_t<T>> &x,
-                       constref_t <input_t<T>> &u)
+    state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
+                             const Eigen::Ref<const input_t<T>> &u)
     {
         // Constants
         const double g = 9.81; // gravity constant [m/s^2]
@@ -64,28 +69,11 @@ public:
         T torque = u(0);
 
         // Dynamics
+        state_t <T> x_dot;
         x_dot << theta_dot,
                 (m * g * l * sin(theta) - b * theta_dot + torque) / (m * l * l);
-
-//        x_dot *= tf_var;
+        return tf * x_dot;
     }
-
-    template<typename T>
-    void get_non_control_cost(T &non_control_cost,
-                              constref_t <state_t<T>> &x)
-    {
-        non_control_cost = static_cast<T>(0);
-        T angle_err = angle_ref - x(0);
-        non_control_cost += W_angle_err * angle_err * angle_err;
-    }
-    template<typename T>
-    void get_control_cost(T &control_cost,
-                          constref_t <input_t<T>> &u)
-    {
-        control_cost = static_cast<T>(0);
-        control_cost += u.dot(R * u);
-    }
-
 };
 
 #endif //LAOPT_INVERTED_PENDULUM_OCP_HPP

@@ -25,26 +25,24 @@ public:
 
     /* Override function implementations from base class ------------------------------ */
     template<typename T>
-    void lagrange_term_impl(T &lagrange,
-                            constref_t <state_t<T>> &x,
-                            constref_t <input_t<T>> &u)
+    T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
+                         const Eigen::Ref<const input_t<T>> &u)
     {
-        lagrange = (x_ref - x).dot(Q * (x_ref - x)) + u.dot(R * u);
+        return (x_ref - x).dot(Q * (x_ref - x)) + u.dot(R * u);
     }
 
     template<typename T>
-    void mayer_term_impl(T &mayer,
-                         constref_t <state_t<T>> &x)
+    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &x)
     {
-        mayer = (x_ref - x).dot(Q * (x_ref - x));
+        return (x_ref - x).dot(Q * (x_ref - x));
     }
 
     template<typename T>
-    void dynamics_impl(ref_t <state_t<T>> x_dot,
-                       constref_t <state_t<T>> &x,
-                       constref_t <input_t<T>> &u)
+    state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
+                             const Eigen::Ref<const input_t<T>> &u)
     {
-        x_dot = A * x + B * u;
+        state_t<T> x_dot = A * x + B * u;
+        return tf * x_dot;
     }
 
 };

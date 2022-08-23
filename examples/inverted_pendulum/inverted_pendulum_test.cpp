@@ -16,20 +16,20 @@ int main()
     /* Construct OCP and set OCP-specific properties */
     Ocp ocp;
 
-    ocp.ubu << 3;
-    ocp.lbu << -3;
+//    ocp.ubu << 3;
+//    ocp.lbu << -3;
 
     ocp.tf = 1.5;
 
-    ocp.angle_ref = 20.0 * M_PI / 180.0;
-    ocp.mayer_multiplier = 0;
+//    ocp.angle_ref = 20.0 * M_PI / 180.0;
+//    ocp.mayer_multiplier = 0;
 
-    ocp.set_x0({M_PI, 0});
+    ocp.set_x0({3.14, 0});
 
     /* Solve with Multiple Shooting transcription */
     {
         std::cout << "Multiple Shooting\n";
-        const int N = 30;
+        const int N = 20;
         using Transcription = transcription::MultipleShooting<Ocp, N>;
 
         /* Define specific Tape, laOPT, and IPOPT problem types for the resulting NLP */
@@ -45,12 +45,12 @@ int main()
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
         Solver solver(opt_problem);
 
-        const steady_clock::time_point tstart = steady_clock::now();
+        const steady_clock::time_point t_start = steady_clock::now();
         solver.solve();
-        const steady_clock::time_point tend = steady_clock::now();
-        const long duration_us = duration_cast<microseconds>(tend - tstart).count();
+        const steady_clock::time_point t_end = steady_clock::now();
+        const long duration_us = duration_cast<microseconds>(t_end - t_start).count();
 
-//        solver.solve(); // Call second time to test repeatability
+        solver.solve(); // Call second time to test repeatability
 
         /* Print out the solution */
         std::cout << "\n\n";
@@ -59,7 +59,8 @@ int main()
         Transcription::TimeTrajectory T_opt = transcription.get_T_opt().transpose();
         Transcription::StateTrajectory X_opt = transcription.get_X_opt();
         Transcription::InputTrajectory U_opt = transcription.get_U_opt();
-        const double obj_eval = opt_problem.eval_objective(laopt::Eval(), solver.sol_primal());
+        Eigen::VectorX<Solver::Scalar> sol_primal = solver.sol_primal();
+        const double obj_eval = opt_problem.eval_objective(laopt::Eval(), sol_primal);
 
         std::cout << "Comp. time: " << duration_us << " us, tf = " << T_opt(T_opt.size() - 1) << " s, obj = " << obj_eval << "\n";
         std::cout << "T = [" << transcription.get_T_opt().transpose() << "];\n";

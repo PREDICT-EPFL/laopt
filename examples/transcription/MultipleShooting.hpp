@@ -17,8 +17,8 @@ namespace transcription {
  * 0    1    2    3   ...   N-1   N     Decision variable indices (initial condition + number of segments)
  *   1    2    3                N       Number of segments
  * */
-template<typename ControlProblem, unsigned N>
-class MultipleShooting : public laopt::Differentiable<MultipleShooting<ControlProblem, N>>
+template<typename ControlProblem, unsigned N_segs>
+class MultipleShooting : public laopt::Differentiable<MultipleShooting<ControlProblem, N_segs>>
 {
 protected: // TODO ino1
     /* Mirror scalar type (from ControlProblem), define variable template with scalar type */
@@ -31,10 +31,11 @@ protected: // TODO ino1
 
     /* Create discrete problem variables (define U_var with same length than X_var for easier data handling,
      * although last u will not be used */
-    Eigen::Vector<Scalar, N + 1> T; // Fixed time
+    static const unsigned N = N_segs; // Last index
+    const double h{1.0 / N};
+    Eigen::Vector<Scalar, N + 1> T; // Normalized time grid (0 ... 1)
     std::array<variable_t<ControlProblem::NX>, N + 1> X_var;
     std::array<variable_t<ControlProblem::NU>, N + 1> U_var;
-    double h{1.0 / N};
 
 public:
     /* Objective */
@@ -43,9 +44,7 @@ public:
     EIGEN_STRONG_INLINE scalar_t
     function_impl(StageCost, const Eigen::MatrixBase<x_t> &x, const Eigen::MatrixBase<u_t> &u)
     {
-        scalar_t lagrange;
-        controlProblem.template lagrange_term_impl<scalar_t>(lagrange, x, u);
-        return h * lagrange;
+        return h * controlProblem.template lagrange_term_impl<scalar_t>(x, u);
     }
 
     struct MayerCost {};
@@ -53,9 +52,7 @@ public:
     EIGEN_STRONG_INLINE scalar_t
     function_impl(MayerCost, const Eigen::MatrixBase<x_t> &x)
     {
-        scalar_t mayer;
-        controlProblem.template mayer_term_impl<scalar_t>(mayer, x);
-        return mayer;
+        return controlProblem.template mayer_term_impl<scalar_t>(x);
     }
 
     /* Dynamic constraints */
@@ -64,19 +61,11 @@ public:
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NX>
     function_impl(DiscreteDynamics, const Eigen::MatrixBase<x_t> &x, const Eigen::MatrixBase<u_t> &u)
     {
-        Eigen::Vector<scalar_t, ControlProblem::NX> x_dot;
-
-        const double H = (controlProblem.tf - controlProblem.t0);
-
-        using Vec = typename x_t::PlainObject;
-        controlProblem.template dynamics_impl<scalar_t>(x_dot, x, u);
-        Vec k1 = H * x_dot;
-        controlProblem.template dynamics_impl<scalar_t>(x_dot, x + h * 0.5 * k1, u);
-        Vec k2 = H * x_dot;
-        controlProblem.template dynamics_impl<scalar_t>(x_dot, x + h * 0.5 * k2, u);
-        Vec k3 = H * x_dot;
-        controlProblem.template dynamics_impl<scalar_t>(x_dot, x + h * k3, u);
-        Vec k4 = H * x_dot;
+        using state_t = typename x_t::PlainObject;
+        state_t k1 = controlProblem.template dynamics_impl<scalar_t>(x, u);
+        state_t k2 = controlProblem.template dynamics_impl<scalar_t>(x + h * 0.5 * k1, u);
+        state_t k3 = controlProblem.template dynamics_impl<scalar_t>(x + h * 0.5 * k2, u);
+        state_t k4 = controlProblem.template dynamics_impl<scalar_t>(x + h * k3, u);
         return x + h / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
     }
 
@@ -122,13 +111,13 @@ public:
     {
         PRINT("define_problem");
         /* Register variables */
-        for (unsigned i = 0; i < N + 1; i++)
+        for (unsigned i = 0; i <= N; i++)
         {
-            optProblem.add_variable(X_var[i]); // TODO eno1: Loop through array in add_variable()
+            optProblem.add_variable(X_var[i]); // TODO eno1: Loop through array in add_variable() -> Do not want that
             optProblem.add_variable(U_var[i]);
         }
 
-        /* Loop through discretization points */
+        /* Loop through grid points */
         for (unsigned i = 0; i < N; i++)
         {
             T(i) = i * controlProblem.tf / N;
@@ -138,16 +127,13 @@ public:
             optProblem.add_constr(X_var[i + 1] == this->function(DiscreteDynamics{}, X_var[i], U_var[i]));
         }
 
-        /* Last discretization point */
+        /* Last grid point */
         T(N) = controlProblem.tf;
         PRINT("T(" << N << ") = " << T(N));
         optProblem.add_obj(this->function(MayerCost{}, X_var[N]));
 
-        /* Set last control equal second last for easier data handling */
-        optProblem.add_constr(U_var[N] == U_var[N - 1]);
-
         /* Box constraints */
-        for (unsigned i = 0; i < N + 1; i++)
+        for (unsigned i = 0; i <= N; i++)
         {
             optProblem.add_constr(controlProblem.lbx <= X_var[i] <= controlProblem.ubx);
             optProblem.add_constr(controlProblem.lbu <= U_var[i] <= controlProblem.ubu);
@@ -156,6 +142,9 @@ public:
         /* Boundary constraints */
         optProblem.add_constr(controlProblem.x0_lb <= X_var[0] <= controlProblem.x0_ub);
         optProblem.add_constr(controlProblem.xf_lb <= X_var[N] <= controlProblem.xf_ub);
+
+        /* Set last control equal second last for easier data handling */
+        optProblem.add_constr(U_var[N] == U_var[N - 1]);
     }
 };
 
