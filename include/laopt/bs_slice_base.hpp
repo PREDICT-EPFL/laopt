@@ -12,17 +12,92 @@ protected:
     Base& base; // Pointer to the top-level matrix
     T M; // Matrix slice
 
-    /**
-     * Extract the sparsity pattern of a given matrix
-     *
-     * Dense matrices are assumed to be dense, sparse have patterns.
-     *
-     * TODO: Implement sparse base
-     */
-    template<typename Derived>
-    Eigen::MatrixX<int> get_pattern(const Eigen::DenseBase<Derived>& mat)
+    template<int BlockRows, int BlockCols, bool InnerPanel>
+    Eigen::Vector<int, BlockRows> row_indices(const Eigen::Block<Eigen::Map<Eigen::MatrixX<int>>, BlockRows, BlockCols, InnerPanel>& mat)
     {
-        return Eigen::MatrixX<int>::Constant(mat.rows(), mat.cols(), 1);
+        Eigen::Vector<int, BlockRows> indices(mat.rows());
+        for (Eigen::Index i = 0; i < mat.rows(); i++)
+        {
+            indices(i) = mat.startRow() + i;
+        }
+        return indices;
+    }
+
+    template<int BlockRows, int BlockCols, bool InnerPanel>
+    Eigen::Vector<int, BlockCols> col_indices(const Eigen::Block<Eigen::Map<Eigen::MatrixX<int>>, BlockRows, BlockCols, InnerPanel>& mat)
+    {
+        Eigen::Vector<int, BlockCols> indices(mat.cols());
+        for (Eigen::Index i = 0; i < mat.cols(); i++)
+        {
+            indices(i) = mat.startCol() + i;
+        }
+        return indices;
+    }
+
+    template<typename Derived, int BlockRows, int BlockCols, bool InnerPanel>
+    Eigen::Vector<int, BlockRows> row_indices(const Eigen::Block<Derived, BlockRows, BlockCols, InnerPanel>& mat)
+    {
+        auto derived_row_indices = row_indices(mat.nestedExpression());
+
+        Eigen::Vector<int, BlockRows> indices(mat.rows());
+        for (Eigen::Index i = 0; i < mat.rows(); i++)
+        {
+            indices(i) = derived_row_indices[mat.startRow() + i];
+        }
+        return indices;
+    }
+
+    template<typename Derived, int BlockRows, int BlockCols, bool InnerPanel>
+    Eigen::Vector<int, BlockCols> col_indices(const Eigen::Block<Derived, BlockRows, BlockCols, InnerPanel>& mat)
+    {
+        auto derived_col_indices = col_indices(mat.nestedExpression());
+
+        Eigen::Vector<int, BlockCols> indices(mat.cols());
+        for (Eigen::Index i = 0; i < mat.cols(); i++)
+        {
+            indices(i) = derived_col_indices[mat.startCol() + i];
+        }
+        return indices;
+    }
+
+    template<typename RowIndices, typename ColIndices>
+    RowIndices row_indices(const Eigen::IndexedView<Eigen::Map<Eigen::MatrixX<int>>, RowIndices, ColIndices>& mat)
+    {
+        return mat.rowIndices();
+    }
+
+    template<typename RowIndices, typename ColIndices>
+    ColIndices col_indices(const Eigen::IndexedView<Eigen::Map<Eigen::MatrixX<int>>, RowIndices, ColIndices>& mat)
+    {
+        return mat.colIndices();
+    }
+
+    template<typename Derived, typename RowIndices, typename ColIndices>
+    Eigen::Vector<int, Eigen::IndexedView<Derived, RowIndices, ColIndices>::RowsAtCompileTime>
+    row_indices(const Eigen::IndexedView<Derived, RowIndices, ColIndices>& mat)
+    {
+        auto derived_row_indices = row_indices(mat.nestedExpression());
+
+        Eigen::Vector<int, Eigen::IndexedView<Derived, RowIndices, ColIndices>::RowsAtCompileTime> indices(mat.rows());
+        for (Eigen::Index i = 0; i < mat.rows(); i++)
+        {
+            indices(i) = derived_row_indices[mat.rowIndices()[i]];
+        }
+        return indices;
+    }
+
+    template<typename Derived, typename RowIndices, typename ColIndices>
+    Eigen::Vector<int, Eigen::IndexedView<Derived, RowIndices, ColIndices>::ColsAtCompileTime>
+    col_indices(const Eigen::IndexedView<Derived, RowIndices, ColIndices>& mat)
+    {
+        auto derived_col_indices = col_indices(mat.nestedExpression());
+
+        Eigen::Vector<int, Eigen::IndexedView<Derived, RowIndices, ColIndices>::RowsAtCompileTime> indices(mat.cols());
+        for (Eigen::Index i = 0; i < mat.cols(); i++)
+        {
+            indices(i) = derived_col_indices[mat.colIndices()[i]];
+        }
+        return indices;
     }
 
 public:

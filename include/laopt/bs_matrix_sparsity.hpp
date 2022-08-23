@@ -2,6 +2,7 @@
 #define LAOPT_BS_MATRIX_SPARSITY_HPP
 
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 
 #include "bs_slice_base.hpp"
 #include "bs_matrix_tape.hpp"
@@ -14,23 +15,26 @@ namespace laopt {
 template<typename T, typename Base>
 class BSSliceSparsity : public BSSliceBase<T, Base>
 {
+private:
     template<typename Derived>
-    void create_sparsity_pattern(const Eigen::MatrixBase<Derived>& mat)
+    void create_sparsity_pattern(const Eigen::DenseBase<Derived>& mat)
     {
         assert(mat.rows() == this->M.rows() && mat.cols() == this->M.cols() && "You assigned a matrix of the wrong size!");
-        this->M = this->get_pattern(mat);
+
+        auto m_row_indices = this->row_indices(this->M);
+        auto m_col_indices = this->col_indices(this->M);
+
+        for (Eigen::Index i = 0; i < m_row_indices.size(); i++)
+        {
+            for (Eigen::Index j = 0; j < m_col_indices.size(); j++)
+            {
+                this->base.sparsity_pattern.coeffRef(m_row_indices[i], m_col_indices[j]) = 1;
+            }
+        }
     }
 
 public:
     BSSliceSparsity(Base& base, T M) : BSSliceBase<T, Base>(base, M) {}
-
-    /**
-     * Returns a DENSE matrix where 1's are the non-zeros
-     */
-    Eigen::MatrixX<bool> get_sparsity()
-    {
-        return ((this->M).array() == 1).matrix();
-    }
 
     template<typename Derived>
     BSSliceSparsity& operator=(const Eigen::MatrixBase<Derived>& mat)
@@ -49,20 +53,22 @@ public:
 /**
  * A tape class to capture the sparsity pattern
  */
-class BSMatrixSparsity : public BSSliceSparsity<Eigen::MatrixX<int>, BSMatrixSparsity>
+class BSMatrixSparsity : public BSSliceSparsity<Eigen::Map<Eigen::MatrixX<int>>, BSMatrixSparsity>
 {
+private:
+    template<typename, typename>
+    friend class BSSliceBase;
+    template<typename, typename>
+    friend class BSSliceSparsity;
+
+    Eigen::SparseMatrix<bool> sparsity_pattern;
+
 public:
     explicit BSMatrixSparsity(Eigen::Index rows = 0, Eigen::Index cols = 0)
-            : BSSliceSparsity<Eigen::MatrixX<int>, BSMatrixSparsity>(*this, Eigen::MatrixX<int>(0, 0))
+            : BSSliceSparsity<Eigen::Map<Eigen::MatrixX<int>>, BSMatrixSparsity>(*this, Eigen::Map<Eigen::MatrixX<int>>(nullptr, 0, 0))
     {
         resize(rows, cols);
     };
-
-    template<typename Derived>
-    auto makeSlice(Derived sub_matrix)
-    {
-        return BSSliceSparsity<Derived, BSMatrixSparsity>(*this, sub_matrix);
-    }
 
     void set_zero() {}
 
@@ -73,16 +79,8 @@ public:
      */
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
-        Eigen::Index curr_rows = M.rows();
-        Eigen::Index curr_cols = M.cols();
-        if (curr_rows == 0 || curr_cols == 0)
-            M.resize(rows, cols);
-        else
-            M.conservativeResize(rows, cols);
-
-        // Set new elements to zero == sparse
-        if (cols > curr_cols) M(Eigen::all, Eigen::seq(curr_cols, Eigen::last)).setZero();
-        if (rows > curr_rows) M(Eigen::seq(curr_rows, Eigen::last), Eigen::all).setZero();
+        new(&M) Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols);
+        sparsity_pattern.conservativeResize(rows, cols);
     }
 
     /**
@@ -93,22 +91,39 @@ public:
         resize(M.rows() + rows, M.cols() + cols);
     }
 
+
+    /**
+     * Returns sparsity pattern.
+     */
+    Eigen::SparseMatrix<bool> get_sparsity_pattern()
+    {
+        sparsity_pattern.makeCompressed();
+        return sparsity_pattern;
+    }
+
     /**
      * Create a BSMatrixTape from this sparsity structure
      */
     BSMatrixTape makeBSTape(Eigen::Index rows, Eigen::Index cols)
     {
-        return BSMatrixTape(get_sparsity(), rows, cols);
+        return BSMatrixTape(get_sparsity_pattern(), rows, cols);
     }
 
     /**
      * Return a structure that can be passed to a BSMatrixTape to initialize it
      */
-    using Info = Eigen::MatrixX<bool>;
+    using Info = Eigen::SparseMatrix<bool>;
 
     Info generate()
     {
-        return get_sparsity();
+        return get_sparsity_pattern();
+    }
+
+private:
+    template<typename Derived>
+    auto makeSlice(Derived sub_matrix)
+    {
+        return BSSliceSparsity<Derived, BSMatrixSparsity>(*this, sub_matrix);
     }
 };
 

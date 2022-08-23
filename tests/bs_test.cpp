@@ -34,25 +34,25 @@ TEST(BSMatrix, Construction) {
     laopt::BSMatrixSparsity sparsity(6,8);
     F(sparsity);
 
-    std::cout << "sparsity = \n" << sparsity.get_sparsity() << std::endl;
+    std::cout << "sparsity = \n" << Eigen::MatrixX<bool>(sparsity.get_sparsity_pattern()) << std::endl;
 
     // Confirm the correct sparsity structure
     {
         Eigen::MatrixX<bool> ground(6,8);
         ground << 1,1,1,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,1,1,1,1,1,0,0,0,1,1,1,1,1,0,0,0,1,1,1,1,1;
-        EXPECT_EQ(ground, sparsity.get_sparsity());
+        EXPECT_EQ(ground, Eigen::MatrixX<bool>(sparsity.get_sparsity_pattern()));
     }
 
     // Get the copy sequence
-    laopt::BSMatrixTape tape(sparsity.get_sparsity(), sparsity.rows(), sparsity.cols());
+    laopt::BSMatrixTape tape(sparsity.get_sparsity_pattern(), sparsity.rows(), sparsity.cols());
     F(tape);
 
-    std::cout << "copy sequence = " << tape.copy_segments << std::endl;
+    std::cout << "copy sequence = " << tape.generate().copy_segments << std::endl;
 
     // Confirm the correct copy sequence
     {
         std::vector<laopt::Segment> ground = {laopt::Segment{0,6}, laopt::Segment{6,20}};
-        EXPECT_TRUE(std::equal(ground.begin(), ground.end(), tape.copy_segments.begin()));
+        EXPECT_TRUE(std::equal(ground.begin(), ground.end(), tape.generate().copy_segments.begin()));
     }
 
     // Build the BSMatrix
@@ -64,7 +64,7 @@ TEST(BSMatrix, Construction) {
     BS.set_zero();
     F(BS);
 
-    std::cout << "result = " << Eigen::MatrixX<scalar_t>(S) << std::endl;
+    std::cout << "result = \n" << Eigen::MatrixX<scalar_t>(S) << std::endl;
 
     {
         auto ground = triplet_to_sparse<double>(6,8,{{0,0,1},{1,0,4},{0,1,2},{1,1,5},{0,2,3},{1,2,6},{2,3,7},{3,3,12},{4,3,17},{5,3,22},{2,4,8},{3,4,13},{4,4,18},{5,4,23},{2,5,9},{3,5,14},{4,5,19},{5,5,24},{2,6,10},{3,6,15},{4,6,20},{5,6,25},{2,7,11},{3,7,16},{4,7,21},{5,7,26}});
@@ -226,7 +226,7 @@ void test_assignment_speeds()
 
     std::cout << "type(target) = " << laopt::type_name<decltype(target)>() << std::endl;
 
-    Matrix<5,5> source(5,5);
+    Matrix<10,10> source(10,10);
     Eigen::Map<Eigen::Matrix<scalar_t,5,5>> map(buffer.data());
     Eigen::Map<Eigen::Matrix<scalar_t,10,10>> map_buffer(buffer.data());
 

@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 
 #include "bs_matrix.hpp"
 #include "bs_slice_base.hpp"
@@ -18,13 +19,45 @@ class BSSliceTape : public BSSliceBase<T, Base>
     /**
      * Record the sequence of memory copies to copy mat to this slice
      */
-    inline void record_op(const Eigen::MatrixX<int>& mat)
+    template<typename Derived>
+    inline void record_op(const Eigen::DenseBase<Derived>& mat)
     {
         assert(mat.rows() == this->M.rows() && mat.cols() == this->M.cols() && "You assigned a matrix of the wrong size!");
 
-        // M is the set of indices into the sparse matrix that we'll be copying this block into
+        auto m_row_indices = this->row_indices(this->M);
+        auto m_col_indices = this->col_indices(this->M);
+
+        Eigen::VectorX<int> sequence(mat.rows() * mat.cols());
+        if (Eigen::DenseBase<Derived>::IsRowMajor)
+        {
+            Eigen::Index s_i = 0;
+            for (Eigen::Index i = 0; i < m_row_indices.size(); i++)
+            {
+                for (Eigen::Index j = 0; j < m_col_indices.size(); j++)
+                {
+                    int csc_index = this->base.sparsity_structure.coeff(m_row_indices[i], m_col_indices[j]);
+                    assert(csc_index != 0 && "Sparsity structure does not match!");
+                    sequence(s_i++) = csc_index - 1;
+                }
+            }
+        }
+        else
+        {
+            Eigen::Index s_i = 0;
+            for (Eigen::Index j = 0; j < m_col_indices.size(); j++)
+            {
+                for (Eigen::Index i = 0; i < m_row_indices.size(); i++)
+                {
+                    int csc_index = this->base.sparsity_structure.coeff(m_row_indices[i], m_col_indices[j]);
+                    assert(csc_index != 0 && "Sparsity structure does not match!");
+                    sequence(s_i++) = csc_index - 1;
+                }
+            }
+        }
+
+        // sequence is the set of indices into the sparse matrix that we'll be copying this block into
         // Compress the index sequence into contiguous blocks
-        this->base.record_copy_sequence(this->M.reshaped());
+        this->base.record_copy_sequence(sequence);
     }
 
 public:
@@ -36,57 +69,51 @@ public:
     template<typename Derived>
     BSSliceTape& operator=(const Eigen::MatrixBase<Derived>& mat)
     {
-        record_op(this->get_pattern(mat));
+        record_op(mat);
         return *this;
     }
 
     template<typename Derived>
-    void operator+=(const Eigen::MatrixBase<Derived>& mat) { record_op(this->get_pattern(mat)); }
+    void operator+=(const Eigen::MatrixBase<Derived>& mat) { record_op(mat); }
 
     template<typename Derived>
-    void operator-=(const Eigen::MatrixBase<Derived>& mat) { record_op(this->get_pattern(mat)); }
+    void operator-=(const Eigen::MatrixBase<Derived>& mat) { record_op(mat); }
 };
 
 /**
 * A tape class to capture the copy pattern.
 */
-class BSMatrixTape : public BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>
+class BSMatrixTape : public BSSliceTape<Eigen::Map<Eigen::MatrixX<int>>, BSMatrixTape>
 {
-    Eigen::MatrixX<int> sparsity_structure; // Must have been created a-priori
+private:
+    template<typename, typename>
+    friend class BSSliceBase;
+    template<typename, typename>
+    friend class BSSliceTape;
+
+    Eigen::SparseMatrix<int> sparsity_structure; // Must have been created a-priori
 
 public:
-    BSMatrixTape() : BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>(*this, Eigen::MatrixX<int>()) {}
-
-    explicit BSMatrixTape(const Eigen::MatrixX<bool>& structure, Eigen::Index rows = 0, Eigen::Index cols = 0) :
-            BSSliceTape<Eigen::MatrixX<int>, BSMatrixTape>(*this, Eigen::MatrixX<int>())
+    explicit BSMatrixTape(const Eigen::SparseMatrix<bool>& structure, Eigen::Index rows = 0, Eigen::Index cols = 0)
+    : BSSliceTape<Eigen::Map<Eigen::MatrixX<int>>, BSMatrixTape>(*this, Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols))
     {
         initialize(structure, rows, cols);
     };
 
-    void initialize(const Eigen::MatrixX<bool>& structure, Eigen::Index rows = 0, Eigen::Index cols = 0)
+    void initialize(const Eigen::SparseMatrix<bool>& structure, Eigen::Index rows, Eigen::Index cols)
     {
-        sparsity_structure.resizeLike(structure);
+        sparsity_structure = structure.cast<int>();
+        sparsity_structure.makeCompressed();
 
-        // We set the zero elements to -1
-        // We set the non-zero elements to what their index into the data of a csc-sparse matrix
-        // would be
-        sparsity_structure.array() = -1; // Zero elements == -1, non-zeros == 0
-        int index = 0;
-        for (int c = 0; c < sparsity_structure.cols(); c++)
-            for (int r = 0; r < sparsity_structure.rows(); r++)
-                if (structure(r, c) == 1) sparsity_structure(r, c) = index++;
-
-        // Copy in the sparsity structure for the initial size matrix
-        resize(rows, cols);
+        // We set the non-zero elements to what their index into the data of a csc-sparse matrix.
+        // The index is stored in 1-indexing format to distinguish 0 elements in the sparse matrix
+        // and the original 0-index.
+        for (Eigen::Index i = 0; i < sparsity_structure.nonZeros(); i++) {
+            sparsity_structure.valuePtr()[i] = static_cast<int>(i + 1);
+        }
     };
 
     void set_zero() {}
-
-    template<typename Derived>
-    auto makeSlice(Derived sub_matrix)
-    {
-        return BSSliceTape<Derived, BSMatrixTape>(*this, sub_matrix);
-    }
 
     /**
      * Resize the matrix M.
@@ -97,13 +124,7 @@ public:
      */
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
-        Eigen::Index curr_rows = M.rows();
-        Eigen::Index curr_cols = M.cols();
-        M.conservativeResize(rows, cols);
-
-        // Set new elements to that from the sparsity structure
-        M(Eigen::all, Eigen::seq(curr_cols, cols - 1)) = sparsity_structure(Eigen::seq(0, rows - 1), Eigen::seq(curr_cols, cols - 1));
-        M(Eigen::seq(curr_rows, rows - 1), Eigen::all) = sparsity_structure(Eigen::seq(curr_rows, rows - 1), Eigen::seq(0, cols - 1));
+        new(&M) Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols);
     }
 
     /**
@@ -114,47 +135,13 @@ public:
         resize(M.rows() + rows, M.cols() + cols);
     }
 
-public:
-    // Sequence of copy operations
-    std::vector<Segment> copy_segments;
-    std::vector<CopyInfo> copy_info;
-
-public:
-    /**
-     * Takes a sequence of integers and converts them into a sequence of segments.
-     *
-     * e.g., [1,2,3,5,6,7,2,4] will compress into
-     *  {Segment(1,3), Segment(5,3), Segment(2,1), Segment(4,1)}
-     *
-     * Store this as a single "copy" operation in the tape.
-     */
-    void record_copy_sequence(const Eigen::VectorX<int>& sequence)
-    {
-        std::vector<Segment> segments;
-
-        int next_contiguous = -2; // The next value if we're in a contiguous segment
-        for (const auto& i: sequence) {
-            if (i == next_contiguous) {
-                next_contiguous++;
-                segments.back().length++;
-            } else {
-                segments.push_back(Segment{.index=static_cast<size_t>(i), .length=1});
-                next_contiguous = i + 1;
-            }
-        }
-
-        copy_info.push_back(CopyInfo{.segment_index=copy_segments.size(), .num_segments_to_copy=segments.size()});
-        copy_segments.insert(copy_segments.end(), segments.begin(), segments.end());
-    }
-
     /**
      * Create a BSMatrix from this tape
      */
     template<typename scalar_t>
     BSMatrix<scalar_t> makeBSMatrix()
     {
-        Eigen::MatrixX<bool> bob = (sparsity_structure.array() >= 0).matrix();
-        return BSMatrix<scalar_t>(bob.sparseView(), copy_segments, copy_info);
+        return BSMatrix<scalar_t>(sparsity_structure.cast<bool>(), copy_segments, copy_info);
     }
 
     /**
@@ -169,12 +156,49 @@ public:
         info.rows = rows();
         info.cols = cols();
 
-        Eigen::MatrixX<bool> bob = (sparsity_structure.array() >= 0).matrix();
-        info.sparsity_structure = bob.sparseView();
+        info.sparsity_structure = sparsity_structure.cast<bool>();
         info.copy_segments = copy_segments;
         info.copy_info = copy_info;
 
         return info;
+    }
+
+private:
+    // Sequence of copy operations
+    std::vector<Segment> copy_segments;
+    std::vector<CopyInfo> copy_info;
+
+    template<typename Derived>
+    auto makeSlice(Derived sub_matrix)
+    {
+        return BSSliceTape<Derived, BSMatrixTape>(*this, sub_matrix);
+    }
+
+    /**
+     * Takes a sequence of integers and converts them into a sequence of segments.
+     *
+     * e.g., [1,2,3,5,6,7,2,4] will compress into
+     *  {Segment(1,3), Segment(5,3), Segment(2,1), Segment(4,1)}
+     *
+     * Store this as a single "copy" operation in the tape.
+     */
+    void record_copy_sequence(const Eigen::VectorX<int>& sequence)
+    {
+        std::vector<Segment> segments;
+
+        int next_contiguous = -2; // The next value if we're in a contiguous segment
+        for (const int& i: sequence) {
+            if (i == next_contiguous) {
+                next_contiguous++;
+                segments.back().length++;
+            } else {
+                segments.push_back(Segment{.index=static_cast<size_t>(i), .length=1});
+                next_contiguous = i + 1;
+            }
+        }
+
+        copy_info.push_back(CopyInfo{.segment_index=copy_segments.size(), .num_segments_to_copy=segments.size()});
+        copy_segments.insert(copy_segments.end(), segments.begin(), segments.end());
     }
 };
 
