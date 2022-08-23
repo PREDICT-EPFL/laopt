@@ -57,9 +57,9 @@ class BSMatrixSparsity : public BSSliceSparsity<Eigen::Map<Eigen::MatrixX<int>>,
 {
 private:
     template<typename, typename>
-    friend class BSSliceBase;
+    friend class laopt::BSSliceBase;
     template<typename, typename>
-    friend class BSSliceSparsity;
+    friend class laopt::BSSliceSparsity;
 
     Eigen::SparseMatrix<bool> sparsity_pattern;
 

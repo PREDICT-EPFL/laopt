@@ -87,9 +87,9 @@ class BSMatrixTape : public BSSliceTape<Eigen::Map<Eigen::MatrixX<int>>, BSMatri
 {
 private:
     template<typename, typename>
-    friend class BSSliceBase;
+    friend class laopt::BSSliceBase;
     template<typename, typename>
-    friend class BSSliceTape;
+    friend class laopt::BSSliceTape;
 
     Eigen::SparseMatrix<int> sparsity_structure; // Must have been created a-priori
 
