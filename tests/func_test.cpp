@@ -65,6 +65,8 @@ TEST(FunctionTest, Jacobian) {
     val << 38, 56;
     EXPECT_EQ(value, val);
 
+    value.setZero();
+    jacobian.setZero();
     test.jacobian(value, jacobian, x, u);
 
     Eigen::Matrix<scalar_t, 2, 3> jac;
