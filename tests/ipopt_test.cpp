@@ -94,10 +94,8 @@ TEST(IpoptTest, IpoptExample)
 
     solver.solve();
 
-    Eigen::Vector<scalar_t, 2> solver_solution;
-    solver_solution << my_problem.x1_var, my_problem.x2_var;
-    Eigen::Vector<scalar_t, 2> sol{1, 0};
-    EXPECT_TRUE(solver_solution.isApprox(sol, 1e-6));
+    EXPECT_NEAR(my_problem.x1_var.cast_base()(0), 1, 1e-4);
+    EXPECT_NEAR(my_problem.x2_var.cast_base()(0), 0, 1e-4);
 };
 
 /*
@@ -289,20 +287,23 @@ TEST(IpoptTest, Prob71)
     EXPECT_TRUE(mem.variable_bounds.ub.isApprox(Eigen::Vector<scalar_t, 4>{5, 5, 5, 5}, 1e-4));
 
     // Check the computation of the constraints
-    prob.eval_constraints(laopt::Jacobian(), solver.sol_primal(), mem.constraints);
+    Eigen::VectorX<scalar_t> var = solver.sol_primal();
+    Eigen::VectorX<scalar_t> dual = solver.sol_dual();
+
+    prob.eval_constraints(laopt::Jacobian(), var, mem.constraints);
     EXPECT_TRUE(mem.constraints.lb.isApprox(Eigen::Vector<scalar_t, 2>{25, 40}, 1e-4));
     EXPECT_TRUE(mem.constraints.ub.isApprox(Eigen::Vector<scalar_t, 2>{2e9, 40}, 1e-4));
     EXPECT_TRUE(mem.constraints.value.isApprox(g(prob71.x_var), 1e-4));
     EXPECT_TRUE(Eigen::MatrixX<scalar_t>(mem.constraints.jacobian).isApprox(jac_g(prob71.x_var), 1e-4));
 
     // Check the computation of the objective
-    scalar_t obj = prob.eval_objective(laopt::Hessian(), solver.sol_primal(), mem.objective);
-    EXPECT_NEAR(obj, f(prob71.x_var), 1e-4);
-    EXPECT_TRUE(mem.objective.gradient.isApprox(grad_f(prob71.x_var), 1e-4));
+    scalar_t obj = prob.eval_objective(laopt::Hessian(), var, mem.objective);
+    EXPECT_NEAR(obj, f(var), 1e-4);
+    EXPECT_TRUE(mem.objective.gradient.isApprox(grad_f(var), 1e-4));
 
     // Check the computation of the lagrangian
-    prob.eval_lagrangian(laopt::Hessian(), solver.sol_primal(), 1.0, solver.sol_dual(), mem.lagrangian);
-    EXPECT_TRUE(Eigen::MatrixX<scalar_t>(mem.lagrangian.hessian).isApprox(hessian_l(prob71.x_var, solver.sol_dual(), 1.0), 1e-4));
+    prob.eval_lagrangian(laopt::Hessian(), var, 1.0, dual, mem.lagrangian);
+    EXPECT_TRUE(Eigen::MatrixX<scalar_t>(mem.lagrangian.hessian).isApprox(hessian_l(var, dual, 1.0), 1e-4));
 }
 
 } // end namespace
