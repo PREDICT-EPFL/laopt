@@ -137,27 +137,27 @@ static void BM_LAOPT_GRADIENT(benchmark::State& state)
     }
 }
 
-//template<int n_mass>
-//static void BM_LAOPT_HESSIAN(benchmark::State& state)
-//{
-//    LAOptChainMass<n_mass> chain_mass;
-//    laopt::functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
-//
-//    Eigen::Vector<double, LAOptChainMass<n_mass>::NX> x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
-//    Eigen::Vector<double, LAOptChainMass<n_mass>::NU> u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
-//    Eigen::Vector<double, LAOptChainMass<n_mass>::NX> weight = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
-//    double value;
-//    Eigen::Vector<double, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> gradient;
-//    Eigen::Matrix<double, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> hessian;
-//
-//    for (auto _: state)
-//    {
-//        value = chain_mass_d.hessian(gradient, hessian, weight, x, u);
-//        benchmark::DoNotOptimize(value);
-//        benchmark::DoNotOptimize(gradient);
-//        benchmark::DoNotOptimize(hessian);
-//    }
-//}
+template<int n_mass>
+static void BM_LAOPT_HESSIAN(benchmark::State& state)
+{
+    LAOptChainMass<n_mass> chain_mass;
+    laopt::functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
+
+    Eigen::Vector<double, LAOptChainMass<n_mass>::NX> x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
+    Eigen::Vector<double, LAOptChainMass<n_mass>::NU> u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
+    Eigen::Vector<double, LAOptChainMass<n_mass>::NX> weight = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
+    double value;
+    Eigen::Vector<double, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> gradient;
+    Eigen::Matrix<double, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> hessian;
+
+    for (auto _: state)
+    {
+        value = chain_mass_d.hessian(gradient, hessian, weight, x, u);
+        benchmark::DoNotOptimize(value);
+        benchmark::DoNotOptimize(gradient);
+        benchmark::DoNotOptimize(hessian);
+    }
+}
 
 template<int n_mass = 10>
 struct CasadiSXChainMass
@@ -430,18 +430,17 @@ static void BM_CASADI_CODEGEN_HESSIAN(benchmark::State& state)
 }
 
 
-BENCHMARK_TEMPLATE(BM_LAOPT_FUNCTION, 10);
-BENCHMARK_TEMPLATE(BM_LAOPT_JACOBIAN, 10);
-BENCHMARK_TEMPLATE(BM_LAOPT_WSUM, 10);
-BENCHMARK_TEMPLATE(BM_LAOPT_GRADIENT, 10);
-// Hessian doesn't compile because hessian doesn't fit into stack memory
-//BENCHMARK_TEMPLATE(BM_LAOPT_HESSIAN, 10);
+BENCHMARK_TEMPLATE(BM_LAOPT_FUNCTION, 5);
+BENCHMARK_TEMPLATE(BM_LAOPT_JACOBIAN, 5);
+BENCHMARK_TEMPLATE(BM_LAOPT_WSUM, 5);
+BENCHMARK_TEMPLATE(BM_LAOPT_GRADIENT, 5);
+BENCHMARK_TEMPLATE(BM_LAOPT_HESSIAN, 5);
 
-BENCHMARK_TEMPLATE(BM_CASADI_SX_FUNCTION, 10);
-BENCHMARK_TEMPLATE(BM_CASADI_SX_JACOBIAN, 10);
-BENCHMARK_TEMPLATE(BM_CASADI_SX_WSUM, 10);
-BENCHMARK_TEMPLATE(BM_CASADI_SX_GRADIENT, 10);
-BENCHMARK_TEMPLATE(BM_CASADI_SX_HESSIAN, 10);
+BENCHMARK_TEMPLATE(BM_CASADI_SX_FUNCTION, 5);
+BENCHMARK_TEMPLATE(BM_CASADI_SX_JACOBIAN, 5);
+BENCHMARK_TEMPLATE(BM_CASADI_SX_WSUM, 5);
+BENCHMARK_TEMPLATE(BM_CASADI_SX_GRADIENT, 5);
+BENCHMARK_TEMPLATE(BM_CASADI_SX_HESSIAN, 5);
 
 BENCHMARK(BM_CASADI_CODEGEN_FUNCTION);
 BENCHMARK(BM_CASADI_CODEGEN_JACOBIAN);
@@ -453,7 +452,7 @@ BENCHMARK_MAIN();
 
 //int main()
 //{
-//    CasadiSXChainMass<10> chain_mass;
+//    CasadiSXChainMass<5> chain_mass;
 //    chain_mass.generate_code();
 //
 //    return 0;
