@@ -30,7 +30,7 @@ jobs:
           mkdir -p build
 
       - name: Install dependencies
-        run: sudo apt-get -y install libyaml-cpp-dev
+        run: sudo apt-get -y install libyaml-cpp-dev libbenchmark-dev
 
       - name: Cache Ipopt
         id: cache-ipopt
