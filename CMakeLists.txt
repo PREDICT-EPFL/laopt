@@ -3,14 +3,13 @@ project(laopt)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH};${PROJECT_SOURCE_DIR}/cmake)
 
-if(NOT DEFINED EIGEN3_INCLUDE_DIR)
+if(NOT DEFINED EIGEN3_INCLUDE_DIRS)
   find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 endif()
-message(STATUS "Using Eigen3 library found at ${EIGEN3_INCLUDE_DIR}")
+message(STATUS "Found Eigen3: ${EIGEN3_INCLUDE_DIRS}")
 
-find_package(CASADI REQUIRED)
+find_package(Casadi REQUIRED)
 find_package(Ipopt REQUIRED)
-message(STATUS "Using IPOPT library found at ${Ipopt_INCLUDE_DIRS}")
 
 add_definitions(-DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB - For both Windows and UNIX
 
@@ -36,7 +35,7 @@ else()
   message(STATUS "Building debug version")
 endif()
 
-include_directories(SYSTEM ${EIGEN3_INCLUDE_DIR} ${CASADI_INCLUDE_DIR} ${Ipopt_INCLUDE_DIRS})
+include_directories(${EIGEN3_INCLUDE_DIRS} ${CASADI_INCLUDE_DIR} ${Ipopt_INCLUDE_DIRS})
 include_directories(include)
 
 add_subdirectory(examples)

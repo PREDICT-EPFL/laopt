@@ -5,9 +5,7 @@ find_package(yaml-cpp REQUIRED)
 add_executable(test_fixed_wing_longitudinal
         fw_longitudinal_test.cpp)
 target_link_libraries(test_fixed_wing_longitudinal
-        ${CASADI_LIBRARIES}
-        ${Ipopt_LIBRARIES}
-        yaml-cpp)
+        casadi ${Ipopt_LIBRARIES} yaml-cpp)
 add_custom_command(
         TARGET test_fixed_wing_longitudinal POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
