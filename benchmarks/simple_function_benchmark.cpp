@@ -145,7 +145,7 @@ static void BM_CASADI_SX_FUNCTION(benchmark::State& state)
 
     for (auto _: state)
     {
-        value = test_function.function(SXVector({x, u}))[0];
+        value = test_function.function(DMVector({x, u}))[0];
         benchmark::DoNotOptimize(value);
     }
 }
@@ -159,7 +159,7 @@ static void BM_CASADI_SX_JACOBIAN(benchmark::State& state)
 
     for (auto _: state)
     {
-        jacobian = test_function.jacobian(SXVector({x, u}))[0];
+        jacobian = test_function.jacobian(DMVector({x, u}))[0];
         benchmark::DoNotOptimize(jacobian);
     }
 }
@@ -174,7 +174,7 @@ static void BM_CASADI_SX_WSUM(benchmark::State& state)
 
     for (auto _: state)
     {
-        wsum = test_function.wsum(SXVector({weight, x, u}))[0];
+        wsum = test_function.wsum(DMVector({weight, x, u}))[0];
         benchmark::DoNotOptimize(wsum);
     }
 }
@@ -189,7 +189,7 @@ static void BM_CASADI_SX_GRADIENT(benchmark::State& state)
 
     for (auto _: state)
     {
-        gradient = test_function.gradient(SXVector({weight, x, u}))[0];
+        gradient = test_function.gradient(DMVector({weight, x, u}))[0];
         benchmark::DoNotOptimize(gradient);
     }
 }
@@ -204,7 +204,7 @@ static void BM_CASADI_SX_HESSIAN(benchmark::State& state)
 
     for (auto _: state)
     {
-        hessian = test_function.hessian(SXVector({weight, x, u}))[0];
+        hessian = test_function.hessian(DMVector({weight, x, u}))[0];
         benchmark::DoNotOptimize(hessian);
     }
 }
