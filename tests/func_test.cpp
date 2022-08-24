@@ -585,7 +585,6 @@ TEST(Functions, Hessian_TestSpeed)
 }
 #else
 
-#include "colormod.hpp"
 TEST(Functions, TestSpeed)
 {
     std::cout << "Skipping weighted sum Hessian speeed test because we're in debug mode";
