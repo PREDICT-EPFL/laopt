@@ -6,6 +6,8 @@
 #include "MultipleShooting.hpp"
 #include "laopt/ipopt_wrapper.hpp"
 
+#include "examples_helper.hpp"
+
 int main()
 {
     using namespace std::chrono;
@@ -53,20 +55,7 @@ int main()
         solver.solve(); // Call second time to test repeatability
 
         /* Print out the solution */
-        std::cout << "\n\n";
-        std::cout << std::setprecision(4) << std::defaultfloat;
-
-        const Transcription::TimeTrajectory T_opt = transcription.get_T_opt().transpose();
-        const Transcription::StateTrajectory X_opt = transcription.get_X_opt();
-        const Transcription::InputTrajectory U_opt = transcription.get_U_opt();
-        Eigen::VectorX<Solver::Scalar> sol_primal = solver.sol_primal();
-        const double obj_eval = opt_problem.eval_objective(laopt::Eval(), sol_primal);
-
-        std::cout << "Comp. time: " << duration_us/1e3 << " ms, tf = " << T_opt(T_opt.size() - 1) << " s, obj = " << obj_eval << "\n";
-        std::cout << "T = [" << transcription.get_T_opt().transpose() << "];\n";
-        std::cout << "X_opt = [\n" << X_opt << "];\n";
-        std::cout << "U_opt = [\n" << U_opt << "];\n";
-        std::cout << "obj = " << obj_eval << ";\n";
+        print_solution(transcription, opt_problem, solver, duration_us);
     }
 
     return 0;

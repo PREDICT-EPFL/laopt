@@ -13,9 +13,9 @@ namespace transcription {
 
 /*
  * Multiple Shooting
- * |    |    |    |   ...    |    |
- * 0    1    2    3   ...   N-1   N     Decision variable indices (initial condition + number of segments)
- *   1    2    3                N       Number of segments
+ * |     |     |     |    ...     |     |
+ * 0     1     2     3    ...    N-1    N     Decision variable indices (initial condition + number of segments)
+ * 0     1     2     3         N_segs-1       Segment indices of N_segs segments
  * */
 template<typename ControlProblem, unsigned N_segs>
 class MultipleShooting : public laopt::Differentiable<MultipleShooting<ControlProblem, N_segs>>
@@ -31,7 +31,7 @@ protected: // TODO ino1
 
     /* Create discrete problem variables (define U_var with same length than X_var for easier data handling,
      * although last u will not be used */
-    static const unsigned N = N_segs; // Last index
+    static const unsigned N = N_segs; // Last index of decision variables
     const double h{1.0 / N};
     Eigen::Vector<Scalar, N + 1> T; // Normalized time grid (0 ... 1)
     std::array<variable_t<ControlProblem::NX>, N + 1> X_var;
