@@ -46,6 +46,7 @@ static void BM_LAOPT_JACOBIAN(benchmark::State& state)
     {
         test_function.jacobian(value, jacobian, x, u);
         benchmark::DoNotOptimize(value);
+        benchmark::DoNotOptimize(jacobian);
     }
 }
 
@@ -77,6 +78,7 @@ static void BM_LAOPT_GRADIENT(benchmark::State& state)
     {
         value = test_function.gradient(gradient, weight, x, u);
         benchmark::DoNotOptimize(value);
+        benchmark::DoNotOptimize(gradient);
     }
 }
 
@@ -94,6 +96,8 @@ static void BM_LAOPT_HESSIAN(benchmark::State& state)
     {
         value = test_function.hessian(gradient, hessian, weight, x, u);
         benchmark::DoNotOptimize(value);
+        benchmark::DoNotOptimize(gradient);
+        benchmark::DoNotOptimize(hessian);
     }
 }
 
@@ -244,6 +248,7 @@ static void BM_CASADI_CODEGEN_FUNCTION(benchmark::State& state)
     for (auto _: state)
     {
         function((const casadi_real**) arg, res, nullptr, nullptr, 0);
+        benchmark::DoNotOptimize(res);
     }
 }
 
@@ -262,6 +267,7 @@ static void BM_CASADI_CODEGEN_JACOBIAN(benchmark::State& state)
     for (auto _: state)
     {
         jacobian((const casadi_real**) arg, res, nullptr, nullptr, 0);
+        benchmark::DoNotOptimize(res);
     }
 }
 
@@ -282,6 +288,7 @@ static void BM_CASADI_CODEGEN_WSUM(benchmark::State& state)
     for (auto _: state)
     {
         wsum((const casadi_real**) arg, res, nullptr, nullptr, 0);
+        benchmark::DoNotOptimize(res);
     }
 }
 
@@ -302,6 +309,7 @@ static void BM_CASADI_CODEGEN_GRADIENT(benchmark::State& state)
     for (auto _: state)
     {
         gradient((const casadi_real**) arg, res, nullptr, nullptr, 0);
+        benchmark::DoNotOptimize(res);
     }
 }
 
@@ -322,6 +330,7 @@ static void BM_CASADI_CODEGEN_HESSIAN(benchmark::State& state)
     for (auto _: state)
     {
         hessian((const casadi_real**) arg, res, nullptr, nullptr, 0);
+        benchmark::DoNotOptimize(res);
     }
 }
 
