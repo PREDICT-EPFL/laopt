@@ -3,7 +3,61 @@
  */
 #include <iostream>
 #include "laopt/indexed_vector.hpp"
+#include "laopt/variable.hpp"
 #include "gtest/gtest.h"
+
+#include "laopt/utility.hpp"
+
+/**
+ * Given an array of N Eigen vectors, return a vector from first of size number
+ * 
+ * stack_variables([x1,x2,x3,x4,5], 1,2) = [x2,x3]
+ */
+template<int number_elements, typename array_t>
+auto stack_variables(array_t& vars, int first)
+{
+    // Eigen type of the elements of the array
+    using element_t = typename array_t::value_type; //typename std::decay<decltype(std::declval<T>()[0])>::type;
+
+    // Get the element at the given index in the concantenation
+    auto get = [vars=std::move(vars),first](int row, int col)
+    {
+        auto ind = std::div(row, element_t::RowsAtCompileTime);
+        return vars[ind.quot + first].cast_base()(ind.rem, 0);
+    };
+
+    constexpr int NumRows = element_t::RowsAtCompileTime * number_elements;
+    auto stack_vector = Eigen::Vector<decltype(get(0,0)), NumRows>::NullaryExpr(get);
+    laopt::IndexedVector<decltype(stack_vector)> stack(NumRows, 1, get);
+
+    // Set the indices
+    for(int i=0; i<number_elements; i++)
+    {
+        constexpr int N = element_t::RowsAtCompileTime;
+        stack.indices()(Eigen::seqN(i*N,N)) = vars[i+first].indices();
+    }
+
+    return stack;
+};
+
+TEST(VariableTest, StackTest) {
+    constexpr int N = 10;
+    constexpr int n = 2;
+
+    // Create our array of variables
+    std::array<laopt::Variable<double, n>, N> var_array;
+
+    // Register the variables to the master_var
+    Eigen::Vector<double, N*n> master_var;
+    for (int i = 0; i < N*n; i++) master_var[i] = i;
+    for(int i=0; i<N; i++) var_array[i].register_variable(i*n)(master_var.data());
+
+    // Create a stack of 4 variables starting at element 3
+    auto stack = stack_variables<4>(var_array, 3);
+    std::cout << "stack = " << stack.transpose() << std::endl;
+    std::cout << "stack.indices = " << stack.indices().transpose() << std::endl;
+};
+
 
 TEST(IndexedVectorTest, Map) {
     Eigen::Vector<double, 20> var;
@@ -18,6 +72,12 @@ TEST(IndexedVectorTest, Map) {
     testing::internal::CaptureStdout();
     std::cout << "map.indices() = " << map.indices().transpose();
     EXPECT_EQ(testing::internal::GetCapturedStdout(), "map.indices() =  5  6  7  8  9 10 11 12");
+
+    // auto tmp = map(std::array<int, 3>({3, 2, 1}));
+    // std::cout << "tmp = " << tmp.transpose() << std::endl;
+    // for (int i = 0; i < 20; i++) var[i] = 2*i;
+    // std::cout << "tmp = " << tmp.transpose() << std::endl;
+    // std::cout << laopt::type_name<decltype(tmp)>() << std::endl;
 
     testing::internal::CaptureStdout();
     std::cout << "map({3,2,1}) = " << map(std::array<int, 3>({3, 2, 1})).transpose();

@@ -48,6 +48,11 @@ public:
         return m_indices;
     }
 
+    index_t& indices() 
+    {
+        return m_indices;
+    }
+
     int offset() { return m_indices[0]; } // Returns the first index (even if they're not contiguous)
 
     /**
