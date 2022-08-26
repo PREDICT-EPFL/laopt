@@ -55,8 +55,66 @@ TEST(VariableTest, StackTest) {
     // Create a stack of 4 variables starting at element 3
     auto stack = stack_variables<4>(var_array, 3);
     std::cout << "stack = " << stack.transpose() << std::endl;
-    std::cout << "stack.indices = " << stack.indices().transpose() << std::endl;
+    std::cout << "stack.indices = " << stack.indices().transpose() << std::endl;    
 };
+
+
+
+
+// Given a Variable of length N*n, return an array
+// of length N of Variables of length n partitioning
+// X.
+
+template<int n, int N, typename T, int... ints>
+auto make_variable_array_helper(T& X, std::integer_sequence<int, ints...>)
+{
+    using element_t = decltype(X(Eigen::seqN(0 * n,n)));
+    return std::array<element_t, N> {X(Eigen::seqN(ints * n,n))...};
+};
+
+template<int n, int N, typename T>
+auto make_variable_array(T& X)
+{
+    return make_variable_array_helper<n,N>(X, std::make_integer_sequence<int, N>{});
+};
+
+
+// Option 2
+// Define a large X-variable and then decompose it
+TEST(VariableTest, VarTest) {
+    constexpr int N = 10;
+    constexpr int n = 2;
+
+    // Create our state variable
+    laopt::Variable<double, N*n> X;
+
+    // Register X to the master_var
+    Eigen::Vector<double, N*n> master_var;
+    for (int i = 0; i < N*n; i++) master_var[i] = i;
+    X.register_variable(0)(master_var.data());
+
+    std::cout << "X = " << X.transpose() << std::endl;
+
+    auto x = make_variable_array<n, N>(X);
+
+    for(int i=0; i<N; i++)
+        std::cout << "x[i] = " << x[i].transpose() << "  indices = " << x[i].indices().transpose() << std::endl;
+
+    // Confirm that these things share memory
+    std::cout << "Changing the master variable" << std::endl;
+    X(Eigen::seqN(4,1)) << 100;
+    std::cout << "X = " << X.transpose() << std::endl;
+    for(int i=0; i<N; i++)
+        std::cout << "x[i] = " << x[i].transpose() << "  indices = " << x[i].indices().transpose() << std::endl;
+
+    std::cout << "Changing the array of variables" << std::endl;
+    x[4] << 100, 200;
+    std::cout << "X = " << X.transpose() << std::endl;
+    for(int i=0; i<N; i++)
+        std::cout << "x[i] = " << x[i].transpose() << "  indices = " << x[i].indices().transpose() << std::endl;
+
+};
+
 
 
 TEST(IndexedVectorTest, Map) {
