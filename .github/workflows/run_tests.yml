@@ -53,7 +53,7 @@ jobs:
         if: failure() && steps.install-ipopt.outcome == 'failure'
         uses: octokit/request-action@v2.x
         with:
-          route: DELETE /repos/{owner}/{repo}/actions/caches
+          route: DELETE /repos/{owner}/{repo}/actions/caches?key={key}
           owner: ${{ github.repository_owner }}
           repo: ${{ github.event.repository.name }}
           key: ${{ runner.os }}-ipopt${{ env.IPOPT_VERSION }}
