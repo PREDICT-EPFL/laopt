@@ -209,7 +209,7 @@ TEST(FunctionTest, BSMatrixJacobain) {
             x(0) = i;
             x(1) = 2 * i;
             u(0) = 3 * i;
-            test.jacobian(value(Eigen::seqN(i*2,2)), jacobian(Eigen::seqN(i*2,2), laopt::multiSeq_to_index(Eigen::seqN(i*2, Eigen::fix<2>),Eigen::seqN(10+i,Eigen::fix<1>))), x, u);
+            test.jacobian(value(Eigen::seqN(i*2, Eigen::fix<2>)), jacobian(Eigen::seqN(i*2, Eigen::fix<2>), laopt::multiSeq_to_index(Eigen::seqN(i*2, Eigen::fix<2>),Eigen::seqN(10+i, Eigen::fix<1>))), x, u);
         }
     };
 

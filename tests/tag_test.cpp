@@ -39,8 +39,8 @@ struct User : public laopt::Differentiable<User<scalar_t>>
 
         out = this->function(SysX{}, x, u);
 
-        jac(Eigen::all, Eigen::seqN(0, nx)) = A;
-        jac(Eigen::all, Eigen::seqN(nx, nu)) = B;
+        jac(Eigen::all, Eigen::seqN(0, Eigen::fix<nx>)) = A;
+        jac(Eigen::all, Eigen::seqN(Eigen::fix<nx>, Eigen::fix<nu>)) = B;
     }
 
     // Example of using RK4 in a user function

@@ -34,7 +34,7 @@ auto stack_variables(array_t& vars, int first)
     for(int i=0; i<number_elements; i++)
     {
         constexpr int N = element_t::RowsAtCompileTime;
-        stack.indices()(Eigen::seqN(i*N,N)) = vars[i+first].indices();
+        stack.indices()(Eigen::seqN(i * N, Eigen::fix<N>)) = vars[i+first].indices();
     }
 
     return stack;

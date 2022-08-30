@@ -90,6 +90,23 @@ namespace laopt
         };
         template<typename... Args>
         using get_scalar_t = typename get_scalar<Args...>::type;
+
+
+        /**
+         * Checks
+         */
+        template <typename Tp, typename... List>
+        struct contains : std::true_type {};
+
+        template <typename Tp, typename Head, typename... Rest>
+        struct contains<Tp, Head, Rest...>
+                : std::conditional<std::is_same<Tp, Head>::value,
+                        std::true_type,
+                        contains<Tp, Rest...>
+                >::type {};
+
+        template < typename Tp >
+        struct contains<Tp> : std::false_type {};
     }
 
     /**
@@ -105,7 +122,7 @@ namespace laopt
         int offset = 0;
         auto l = {
             (
-                out(Eigen::seqN(offset,n)) = args,
+                out(Eigen::seqN(offset, Eigen::fix<n>)) = args,
                 offset += n,
                 0
             )...

@@ -102,7 +102,7 @@ int main()
 
     // Our variables are just indices into the master
     constexpr int N = 10;
-    auto x = master_variable(Eigen::seqN(4,N));
+    auto x = master_variable(Eigen::seqN(4, Eigen::fix<N>));
 
     // We can't refer to the memory of x because there isn't any allocated yet, 
     // but we can get the index information

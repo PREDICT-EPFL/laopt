@@ -31,7 +31,7 @@ public:
         using scalar_t = typename Eigen::MatrixBase<X>::Scalar;
         for(int i = 0; i < value.rows(); i++)
         {
-            jac(Eigen::seqN(i,Eigen::fix<1>), Eigen::seqN(i, Eigen::fix<1>)) = Eigen::Matrix<scalar_t, 1, 1>::Constant(multiplier);
+            jac(Eigen::seqN(i, Eigen::fix<1>), Eigen::seqN(i, Eigen::fix<1>)) = Eigen::Matrix<scalar_t, 1, 1>::Constant(multiplier);
         }
     }
 

@@ -55,8 +55,8 @@ struct ExprEvaluator<AddExpr<DerivedLhs, DerivedRhs>>
     static EIGEN_STRONG_INLINE void
     jacobian(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutValue&& out_value, OutJacobian&& out_jacobian)
     {
-        ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_value, out_jacobian(Eigen::all, Eigen::seqN(0, DerivedLhs::n_inputs)));
-        ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_value, out_jacobian(Eigen::all, Eigen::lastN(DerivedRhs::n_inputs)));
+        ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_value, out_jacobian(Eigen::all, Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)));
+        ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_value, out_jacobian(Eigen::all, Eigen::lastN(Eigen::fix<DerivedRhs::n_inputs>)));
     }
 
     template<typename Weight>
@@ -70,16 +70,16 @@ struct ExprEvaluator<AddExpr<DerivedLhs, DerivedRhs>>
     static EIGEN_STRONG_INLINE auto
     gradient(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutGradient&& out_gradient, const Weight& weight)
     {
-        return ExprEvaluator<DerivedLhs>::gradient(expr.lhs, out_gradient(Eigen::seqN(0, DerivedLhs::n_inputs)), weight)
-               + ExprEvaluator<DerivedRhs>::gradient(expr.rhs, out_gradient(Eigen::lastN(DerivedRhs::n_inputs)), weight);
+        return ExprEvaluator<DerivedLhs>::gradient(expr.lhs, out_gradient(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight)
+               + ExprEvaluator<DerivedRhs>::gradient(expr.rhs, out_gradient(Eigen::lastN(Eigen::fix<DerivedRhs::n_inputs>)), weight);
     }
 
     template<typename OutGradient, typename OutHessian, typename Weight>
     static EIGEN_STRONG_INLINE auto
     hessian(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutGradient&& out_gradient, OutHessian&& out_hessian, const Weight& weight)
     {
-        return ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_gradient(Eigen::seqN(0, DerivedLhs::n_inputs)), out_hessian(Eigen::seqN(0, DerivedLhs::n_inputs), Eigen::seqN(0, DerivedLhs::n_inputs)), weight)
-               + ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_gradient(Eigen::seqN(0, DerivedRhs::n_inputs)), out_hessian(Eigen::seqN(0, DerivedRhs::n_inputs), Eigen::seqN(0, DerivedRhs::n_inputs)), weight);
+        return ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_gradient(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), out_hessian(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight)
+               + ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_gradient(Eigen::seqN(0, Eigen::fix<DerivedRhs::n_inputs>)), out_hessian(Eigen::seqN(0, Eigen::fix<DerivedRhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedRhs::n_inputs>)), weight);
     }
 };
 
