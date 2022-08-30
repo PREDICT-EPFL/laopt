@@ -45,8 +45,20 @@ jobs:
         run: bash ../ci/shared/install_ipopt.sh
 
       - name: Install Ipopt
+        id: install-ipopt
         working-directory: build_external/coinbrew
         run: sudo ./coinbrew install Ipopt --build-dir build-ipopt --prefix=/usr/local
+
+      - name: Clear Ipopt Cache on failure
+        if: failure() && steps.install-ipopt.outcome == 'failure'
+        uses: octokit/request-action@v2.x
+        with:
+          route: DELETE /repos/{owner}/{repo}/actions/caches
+          owner: ${{ github.repository_owner }}
+          repo: ${{ github.event.repository.name }}
+          key: ${{ runner.os }}-ipopt${{ env.IPOPT_VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache Casadi
         id: cache-casadi
