@@ -416,18 +416,21 @@ public:
 };
 
 template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
-class ProblemVariableRegistrar;
+class ProblemSizeEvaluator;
 
-template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
+template<typename Scalar>
+class DecisionVariableSetter;
+
+template<typename DType, typename Matrix, typename Vector>
 class ObjectiveEvaluator;
 
-template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
+template<typename Matrix, typename Vector>
 class VariableBoundsEvaluator;
 
-template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
+template<typename DType, typename Matrix, typename Vector>
 class VectorConstraintsEvaluator;
 
-template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
+template<typename DType, typename Matrix, typename Vector>
 class WeightedSumConstraintsEvaluator;
 
 template<typename Matrix, typename Vector>
@@ -459,9 +462,6 @@ public:
     constraint_t constraints;
     lagrangian_t lagrangian;
 
-    // Callbacks used to register the global decision variable with each variable
-    std::vector<std::function<void(scalar_t*)>> variable_callbacks;
-
     int m_num_variables = 0;
 
 public:
@@ -471,8 +471,8 @@ public:
 	 */
 	explicit ProblemBase(UserCode& user_code) : user_code(user_code)
 	{
-        ProblemVariableRegistrar<UserCode, Scalar, Matrix, Vector> problem_variable_registrar(*this);
-		user_code.define_problem(problem_variable_registrar);
+        ProblemSizeEvaluator<UserCode, Scalar, Matrix, Vector> problem_size_evaluator(*this);
+		user_code.define_problem(problem_size_evaluator);
 	}
 
 	/**
@@ -483,8 +483,8 @@ public:
 		user_code(user_code),
         objective(info.objective), variable_bounds(info.variable_bounds), constraints(info.constraints), lagrangian(info.lagrangian)
 	{
-        ProblemVariableRegistrar<UserCode, Scalar, Matrix, Vector> problem_variable_registrar(*this);
-        user_code.define_problem(problem_variable_registrar);
+        ProblemSizeEvaluator<UserCode, Scalar, Matrix, Vector> problem_size_evaluator(*this);
+        user_code.define_problem(problem_size_evaluator);
 	}
 
 	/**
@@ -520,17 +520,17 @@ public:
         objective.initialize();
         objective.set_zero(dtype);
 
-        ObjectiveEvaluator<DType, UserCode, Scalar, Matrix, Vector> objective_evaluator(*this, objective);
+        ObjectiveEvaluator<DType, Matrix, Vector> objective_evaluator(objective);
         user_code.define_problem(objective_evaluator);
     }
 
     void eval_variable_bounds_construction()
     {
-        // We don't initialize the variable bounds because they are already set by the ProblemVariableRegistrar
+        // We don't initialize the variable bounds because they are already set by the ProblemSizeEvaluator
         variable_bounds.lb(Eigen::seqN(0, num_variables())).array() = -std::numeric_limits<Scalar>::infinity();
         variable_bounds.ub(Eigen::seqN(0, num_variables())).array() = std::numeric_limits<Scalar>::infinity();
 
-        VariableBoundsEvaluator<UserCode, Scalar, Matrix, Vector> variable_bounds_evaluator(*this, variable_bounds);
+        VariableBoundsEvaluator<Matrix, Vector> variable_bounds_evaluator(variable_bounds);
         user_code.define_problem(variable_bounds_evaluator);
     }
     
@@ -540,7 +540,7 @@ public:
         constraints.initialize();
         constraints.set_zero(dtype);
 
-        VectorConstraintsEvaluator<DType, UserCode, Scalar, Matrix, Vector> constraints_evaluator(*this, constraints);
+        VectorConstraintsEvaluator<DType, Matrix, Vector> constraints_evaluator(constraints);
         user_code.define_problem(constraints_evaluator);
     }
 
@@ -550,9 +550,9 @@ public:
         lagrangian.initialize();
         lagrangian.set_zero(dtype);
 
-        ObjectiveEvaluator<DType, UserCode, Scalar, Matrix, Vector> lagrangian_objective_evaluator(*this, lagrangian);
+        ObjectiveEvaluator<DType, Matrix, Vector> lagrangian_objective_evaluator(lagrangian);
         user_code.define_problem(lagrangian_objective_evaluator);
-        WeightedSumConstraintsEvaluator<DType, UserCode, Scalar, Matrix, Vector> lagrangian_constraints_evaluator(*this, lagrangian);
+        WeightedSumConstraintsEvaluator<DType, Matrix, Vector> lagrangian_constraints_evaluator(lagrangian);
         user_code.define_problem(lagrangian_constraints_evaluator);
     }
 
@@ -578,7 +578,7 @@ public:
         objective.initialize();
         objective.set_zero(dtype);
 
-        ObjectiveEvaluator<DType, UserCode, Scalar, Matrix, Vector> objective_evaluator(*this, objective);
+        ObjectiveEvaluator<DType, Matrix, Vector> objective_evaluator(objective);
         user_code.define_problem(objective_evaluator);
 
         return objective.value;
@@ -588,11 +588,11 @@ public:
     void eval_variable_bounds(Args &&... args)
     {
         variable_bounds.set_memory(args...);
-        // We don't initialize the variable bounds because they are already set by the ProblemVariableRegistrar
+        // We don't initialize the variable bounds because they are already set by the ProblemSizeEvaluator
         variable_bounds.lb(Eigen::seqN(0, num_variables())).array() = -std::numeric_limits<Scalar>::infinity();
         variable_bounds.ub(Eigen::seqN(0, num_variables())).array() = std::numeric_limits<Scalar>::infinity();
 
-        VariableBoundsEvaluator<UserCode, Scalar, Matrix, Vector> variable_bounds_evaluator(*this, variable_bounds);
+        VariableBoundsEvaluator<Matrix, Vector> variable_bounds_evaluator(variable_bounds);
         user_code.define_problem(variable_bounds_evaluator);
     }
 
@@ -606,7 +606,7 @@ public:
         constraints.initialize();
         constraints.set_zero(dtype);
 
-        VectorConstraintsEvaluator<DType, UserCode, Scalar, Matrix, Vector> constraints_evaluator(*this, constraints);
+        VectorConstraintsEvaluator<DType, Matrix, Vector> constraints_evaluator(constraints);
         user_code.define_problem(constraints_evaluator);
     }
 
@@ -639,9 +639,9 @@ public:
         lagrangian.set_zero(dtype);
 
         // TODO : Evaluate variable bounds in lagrangian function
-        ObjectiveEvaluator<DType, UserCode, Scalar, Matrix, Vector> lagrangian_objective_evaluator(*this, lagrangian);
+        ObjectiveEvaluator<DType, Matrix, Vector> lagrangian_objective_evaluator(lagrangian);
         user_code.define_problem(lagrangian_objective_evaluator);
-        WeightedSumConstraintsEvaluator<DType, UserCode, Scalar, Matrix, Vector> lagrangian_constraints_evaluator(*this, lagrangian);
+        WeightedSumConstraintsEvaluator<DType, Matrix, Vector> lagrangian_constraints_evaluator(lagrangian);
         user_code.define_problem(lagrangian_constraints_evaluator);
 
         return lagrangian.value;
@@ -658,10 +658,8 @@ public:
 	void set_decision_variable(Eigen::Ref<Eigen::VectorX<scalar_t>> var)
 	{
 		assert(var.rows() == num_variables() && "Decision variable is the wrong size");
-		for(auto& call : variable_callbacks)
-        {
-            call(var.data());
-        }
+        DecisionVariableSetter<Scalar> decision_variable_setter(var);
+        user_code.define_problem(decision_variable_setter);
 	}
 
 	/**
@@ -686,17 +684,16 @@ public:
 };
 
 template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
-class ProblemVariableRegistrar
+class ProblemSizeEvaluator
 {
     ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
 
 public:
-    explicit ProblemVariableRegistrar(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem) : problem(problem) {}
+    explicit ProblemSizeEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem) : problem(problem) {}
 
     template<int n>
     EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>& var)
     {
-        problem.variable_callbacks.push_back(var.register_variable(problem.m_num_variables));
         problem.m_num_variables += n;
 
         problem.variable_bounds.extend_variables(n);
@@ -714,15 +711,36 @@ public:
     EIGEN_STRONG_INLINE void add_constr(Args...) {}
 };
 
-template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
+template<typename Scalar>
+class DecisionVariableSetter
+{
+    Eigen::Ref<Eigen::VectorX<Scalar>>& master_var;
+    int offset = 0;
+
+public:
+    explicit DecisionVariableSetter(Eigen::Ref<Eigen::VectorX<Scalar>>& var) : master_var(var) {}
+
+    template<int n>
+    EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>& var)
+    {
+        var.set_memory(offset, master_var.data());
+        offset += n;
+    }
+
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_obj(Args...) {}
+
+    template<typename ...Args>
+    EIGEN_STRONG_INLINE void add_constr(Args...) {}
+};
+
+template<typename DType, typename Matrix, typename Vector>
 class ObjectiveEvaluator
 {
-    ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
     WeightedSum<Matrix, Vector>& objective;
 
 public:
-    explicit ObjectiveEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem, WeightedSum<Matrix, Vector>& objective) :
-        problem(problem), objective(objective) {}
+    explicit ObjectiveEvaluator(WeightedSum<Matrix, Vector>& objective) : objective(objective) {}
 
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_variable(Args...) {}
@@ -768,15 +786,13 @@ public:
     EIGEN_STRONG_INLINE void add_constr(Args...) {}
 };
 
-template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
+template<typename Matrix, typename Vector>
 class VariableBoundsEvaluator
 {
-    ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
     VectorFunction<Matrix, Vector>& variable_bounds;
 
 public:
-    explicit VariableBoundsEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem, VectorFunction<Matrix, Vector>& variable_bounds) :
-        problem(problem), variable_bounds(variable_bounds) {}
+    explicit VariableBoundsEvaluator(VectorFunction<Matrix, Vector>& variable_bounds) : variable_bounds(variable_bounds) {}
 
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_variable(Args...) {}
@@ -809,15 +825,13 @@ public:
     EIGEN_STRONG_INLINE void add_constr(ConstraintExpr<Derived>) {}
 };
 
-template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
+template<typename DType, typename Matrix, typename Vector>
 class VectorConstraintsEvaluator
 {
-    ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
     VectorFunction<Matrix, Vector>& constraints;
 
 public:
-    explicit VectorConstraintsEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem, VectorFunction<Matrix, Vector>& constraints) :
-        problem(problem), constraints(constraints) {}
+    explicit VectorConstraintsEvaluator(VectorFunction<Matrix, Vector>& constraints) : constraints(constraints) {}
 
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_variable(Args...) {}
@@ -858,15 +872,13 @@ public:
     add_constr(ConstraintExpr<Derived>) {}
 };
 
-template<typename DType, typename UserCode, typename Scalar, typename Matrix, typename Vector>
+template<typename DType, typename Matrix, typename Vector>
 class WeightedSumConstraintsEvaluator
 {
-    ProblemBase<UserCode, Scalar, Matrix, Vector>& problem;
     WeightedSum<Matrix, Vector>& constraints;
 
 public:
-    explicit WeightedSumConstraintsEvaluator(ProblemBase<UserCode, Scalar, Matrix, Vector>& problem, WeightedSum<Matrix, Vector>& constraints) :
-        problem(problem), constraints(constraints) {}
+    explicit WeightedSumConstraintsEvaluator(WeightedSum<Matrix, Vector>& constraints) : constraints(constraints) {}
 
     template<typename ...Args>
     EIGEN_STRONG_INLINE void add_variable(Args...) {}

@@ -7,7 +7,7 @@
 
 #include "utility.hpp"
 #include "expressions/base_expr.hpp"
-#include "variable.hpp"
+#include "indexed_vector.hpp"
 
 namespace laopt
 {

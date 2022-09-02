@@ -6,6 +6,9 @@
 
 namespace laopt {
 
+template<typename Derived>
+class VariableBase : public BaseExpr<Derived> {};
+
 /**
  * A class derived from any Eigen Vector type that records an internal index 
  * vector. As slicing operations are done to the vector, the same slices are
@@ -13,26 +16,46 @@ namespace laopt {
  * indices of the original data elements
  */
 template<typename Base>
-class IndexedVector : public Base, public BaseExpr<IndexedVector<Base>> {
+class IndexedVector : public Base, public VariableBase<IndexedVector<Base>> {
     using index_t = typename Eigen::Vector<int, Base::RowsAtCompileTime>;
     // Indices of the elements of this vector wrt the original IndexedMap
     index_t m_indices;
+
+    // If Base is Eigen::Map we have to initialize with a nullptr, otherwise we use the default constructor
+    template<typename Derived>
+    struct constructor_selector {};
+
+    template<typename PlainObjectType, int MapOptions, typename StrideType>
+    explicit IndexedVector(constructor_selector<Eigen::Map<PlainObjectType, MapOptions, StrideType>>) : Base(nullptr) {};
+
+    template<typename Derived>
+    explicit IndexedVector(constructor_selector<Derived>) : Base() {};
 
 public:
 
     static constexpr int n_inputs = Base::RowsAtCompileTime;
     static constexpr int n_outputs = Base::RowsAtCompileTime;
 
-    IndexedVector() : Base() {
-        static_assert(Base::ColsAtCompileTime == 1, "you tired using a matrix on an indexed vector");
+    static_assert(Base::RowsAtCompileTime > 0, "Variables have to have a compile time size. If you used Eigen::seq or Eigen::seqN, make sure you use Eigen::fix<> for compile time size information.");
+    static_assert(Base::ColsAtCompileTime == 1, "You tired using a matrix on an indexed vector");
+
+    IndexedVector() : IndexedVector(constructor_selector<Base>{}) {
         m_indices.array() = -1;
     }
 
     // This constructor forwards the constructor to the underlying vector type
     template<typename ...Args>
     explicit IndexedVector(Args&& ...args) : Base(std::forward<Args>(args)...) {
-        static_assert(Base::ColsAtCompileTime == 1, "you tired using a matrix on an indexed vector");
         m_indices.array() = -1;
+    }
+
+    /**
+     * Sets the memory of the indexed vector to a section of the global decision variable with an offset.
+     */
+    void set_memory(int offset, typename Base::Scalar* master_variable)
+    {
+        this->set_offset(offset);
+        new (this) Base(master_variable + offset);
     }
 
     // This method allows you to assign Eigen expressions to IndexedVector
@@ -53,13 +76,19 @@ public:
         return m_indices;
     }
 
-    int offset() { return m_indices[0]; } // Returns the first index (even if they're not contiguous)
+    int offset()
+    {
+        return m_indices[0]; // Returns the first index (even if they're not contiguous)
+    }
 
     /**
      * Sets the index of the first element, and assumes the rest are contiguous.
      */
     void set_offset(int offset) {
-        for (int i = 0; i < m_indices.rows(); i++) m_indices[i] = offset + i;
+        for (int i = 0; i < m_indices.rows(); i++)
+        {
+            m_indices[i] = offset + i;
+        }
     }
 
     /**
@@ -85,7 +114,7 @@ public:
      * Forwards vector access operator
      */
     template<typename ...Args>
-    inline auto operator()(Args&& ...args) {
+    EIGEN_STRONG_INLINE auto operator()(Args&& ...args) {
         using RetType = decltype(Base::operator()(std::forward<Args>(args)...));
         IndexedVector<RetType> ret(Base::operator()(std::forward<Args>(args)...));
         ret.set_indices(m_indices(std::forward<Args>(args)...));
@@ -96,13 +125,16 @@ public:
      * Indices given by raw array or initializer list
      */
     template<typename RowIndicesT, std::size_t RowIndicesN>
-    inline auto operator()(const RowIndicesT (&rowIndices)[RowIndicesN]) {
+    EIGEN_STRONG_INLINE auto operator()(const RowIndicesT (&rowIndices)[RowIndicesN]) {
         using RetType = decltype(Base::operator()(rowIndices));
         IndexedVector<RetType> ret(Base::operator()(rowIndices));
         ret.set_indices(m_indices(rowIndices));
         return ret;
     }
 };
+
+template<typename Scalar, int n>
+using Variable = IndexedVector<Eigen::Map<Eigen::Vector<Scalar, n>>>;
 
 }
 

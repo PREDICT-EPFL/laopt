@@ -10,7 +10,7 @@
 #include "differentiable_function.hpp"
 #include "functions.hpp"
 
-#include "variable.hpp"
+#include "indexed_vector.hpp"
 #include "expressions.hpp"
 
 #include "problem.hpp"

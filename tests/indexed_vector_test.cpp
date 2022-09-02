@@ -3,7 +3,6 @@
  */
 #include <iostream>
 #include "laopt/indexed_vector.hpp"
-#include "laopt/variable.hpp"
 #include "gtest/gtest.h"
 
 #include "laopt/utility.hpp"
@@ -19,22 +18,20 @@ auto stack_variables(array_t& vars, int first)
     // Eigen type of the elements of the array
     using element_t = typename array_t::value_type; //typename std::decay<decltype(std::declval<T>()[0])>::type;
 
-    // Get the element at the given index in the concantenation
-    auto get = [vars=std::move(vars),first](int row, int col)
-    {
+    // Get the element at the given index in the concatenation
+    auto get = [vars = std::move(vars), first](int row, int col) {
         auto ind = std::div(row, element_t::RowsAtCompileTime);
         return vars[ind.quot + first].cast_base()(ind.rem, 0);
     };
 
     constexpr int NumRows = element_t::RowsAtCompileTime * number_elements;
-    auto stack_vector = Eigen::Vector<decltype(get(0,0)), NumRows>::NullaryExpr(get);
+    auto stack_vector = Eigen::Vector<decltype(get(0, 0)), NumRows>::NullaryExpr(get);
     laopt::IndexedVector<decltype(stack_vector)> stack(NumRows, 1, get);
 
     // Set the indices
-    for(int i=0; i<number_elements; i++)
-    {
+    for (int i = 0; i < number_elements; i++) {
         constexpr int N = element_t::RowsAtCompileTime;
-        stack.indices()(Eigen::seqN(i * N, Eigen::fix<N>)) = vars[i+first].indices();
+        stack.indices()(Eigen::seqN(i * N, Eigen::fix<N>)) = vars[i + first].indices();
     }
 
     return stack;
@@ -49,8 +46,8 @@ TEST(VariableTest, StackTest) {
 
     // Register the variables to the master_var
     Eigen::Vector<double, N*n> master_var;
-    for (int i = 0; i < N*n; i++) master_var[i] = i;
-    for(int i=0; i<N; i++) var_array[i].register_variable(i*n)(master_var.data());
+    for (int i = 0; i < N * n; i++) master_var[i] = i;
+    for (int i = 0; i < N; i++) var_array[i].set_memory(i * n, master_var.data());
 
     // Create a stack of 4 variables starting at element 3
     auto stack = stack_variables<4>(var_array, 3);
@@ -68,8 +65,8 @@ TEST(VariableTest, StackTest) {
 template<int n, int N, typename T, int... ints>
 auto make_variable_array_helper(T& X, std::integer_sequence<int, ints...>)
 {
-    using element_t = decltype(X(Eigen::seqN(0 * n,n)));
-    return std::array<element_t, N> {X(Eigen::seqN(ints * n,n))...};
+    using element_t = decltype(X(Eigen::seqN(0 * n, Eigen::fix<n>)));
+    return std::array<element_t, N>{X(Eigen::seqN(ints * n, Eigen::fix<n>))...};
 };
 
 template<int n, int N, typename T>
@@ -86,33 +83,32 @@ TEST(VariableTest, VarTest) {
     constexpr int n = 2;
 
     // Create our state variable
-    laopt::Variable<double, N*n> X;
+    laopt::Variable<double, N * n> X;
 
     // Register X to the master_var
-    Eigen::Vector<double, N*n> master_var;
-    for (int i = 0; i < N*n; i++) master_var[i] = i;
-    X.register_variable(0)(master_var.data());
+    Eigen::Vector<double, N * n> master_var;
+    for (int i = 0; i < N * n; i++) master_var[i] = i;
+    X.set_memory(0, master_var.data());
 
     std::cout << "X = " << X.transpose() << std::endl;
 
     auto x = make_variable_array<n, N>(X);
 
-    for(int i=0; i<N; i++)
+    for (int i = 0; i < N; i++)
         std::cout << "x[i] = " << x[i].transpose() << "  indices = " << x[i].indices().transpose() << std::endl;
 
     // Confirm that these things share memory
     std::cout << "Changing the master variable" << std::endl;
-    X(Eigen::seqN(4,1)) << 100;
+    X(Eigen::seqN(4, Eigen::fix<1>)) << 100;
     std::cout << "X = " << X.transpose() << std::endl;
-    for(int i=0; i<N; i++)
+    for (int i = 0; i < N; i++)
         std::cout << "x[i] = " << x[i].transpose() << "  indices = " << x[i].indices().transpose() << std::endl;
 
     std::cout << "Changing the array of variables" << std::endl;
     x[4] << 100, 200;
     std::cout << "X = " << X.transpose() << std::endl;
-    for(int i=0; i<N; i++)
+    for (int i = 0; i < N; i++)
         std::cout << "x[i] = " << x[i].transpose() << "  indices = " << x[i].indices().transpose() << std::endl;
-
 };
 
 
@@ -131,12 +127,6 @@ TEST(IndexedVectorTest, Map) {
     std::cout << "map.indices() = " << map.indices().transpose();
     EXPECT_EQ(testing::internal::GetCapturedStdout(), "map.indices() =  5  6  7  8  9 10 11 12");
 
-    // auto tmp = map(std::array<int, 3>({3, 2, 1}));
-    // std::cout << "tmp = " << tmp.transpose() << std::endl;
-    // for (int i = 0; i < 20; i++) var[i] = 2*i;
-    // std::cout << "tmp = " << tmp.transpose() << std::endl;
-    // std::cout << laopt::type_name<decltype(tmp)>() << std::endl;
-
     testing::internal::CaptureStdout();
     std::cout << "map({3,2,1}) = " << map(std::array<int, 3>({3, 2, 1})).transpose();
     EXPECT_EQ(testing::internal::GetCapturedStdout(), "map({3,2,1}) = 6 5 4");
@@ -145,10 +135,10 @@ TEST(IndexedVectorTest, Map) {
     EXPECT_EQ(testing::internal::GetCapturedStdout(), "map({3,2,1}).indices() = 8 7 6");
 
     testing::internal::CaptureStdout();
-    std::cout << "map(seq(2,3)) = " << map(Eigen::seq(2, 3)).transpose();
+    std::cout << "map(seq(2,3)) = " << map(Eigen::seq(Eigen::fix<2>, Eigen::fix<3>)).transpose();
     EXPECT_EQ(testing::internal::GetCapturedStdout(), "map(seq(2,3)) = 5 6");
     testing::internal::CaptureStdout();
-    std::cout << "map(seq(2,3)).indices() = " << map(Eigen::seq(2, 3)).indices().transpose();
+    std::cout << "map(seq(2,3)).indices() = " << map(Eigen::seq(Eigen::fix<2>, Eigen::fix<3>)).indices().transpose();
     EXPECT_EQ(testing::internal::GetCapturedStdout(), "map(seq(2,3)).indices() = 7 8");
 
     testing::internal::CaptureStdout();
@@ -182,10 +172,10 @@ TEST(IndexedVectorTest, Vector) {
     EXPECT_EQ(testing::internal::GetCapturedStdout(), "vec.indices() = 12 13 14 15 16 17");
 
     testing::internal::CaptureStdout();
-    std::cout << "vec(seqN(1,4))(seqN(1,2)) = " << vec(Eigen::seqN(1, 4))(Eigen::seqN(1, 2)).transpose();
+    std::cout << "vec(seqN(1,4))(seqN(1,2)) = " << vec(Eigen::seqN(1, Eigen::fix<4>))(Eigen::seqN(1,  Eigen::fix<2>)).transpose();
     EXPECT_EQ(testing::internal::GetCapturedStdout(), "vec(seqN(1,4))(seqN(1,2)) = 3 2");
     testing::internal::CaptureStdout();
-    std::cout << "vec(seqN(1,4))(seqN(1,2)).indices() = " << vec(Eigen::seqN(1, 4))(Eigen::seqN(1, 2)).indices().transpose();
+    std::cout << "vec(seqN(1,4))(seqN(1,2)).indices() = " << vec(Eigen::seqN(1, Eigen::fix<4>))(Eigen::seqN(1, Eigen::fix<2>)).indices().transpose();
     EXPECT_EQ(testing::internal::GetCapturedStdout(), "vec(seqN(1,4))(seqN(1,2)).indices() = 14 15");
 }
 
