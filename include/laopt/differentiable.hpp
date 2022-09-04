@@ -570,9 +570,9 @@ public:
     // define DefaultTag for function
     template<typename... Args>
     EIGEN_STRONG_INLINE auto
-    function(DefaultTag, Args&&... args) noexcept
+    function(DefaultTag, const Args&... args) noexcept
     {
-        return function(std::forward<Args>(args)...);
+        return function(args...);
     }
 
     // user specified jacobian code
