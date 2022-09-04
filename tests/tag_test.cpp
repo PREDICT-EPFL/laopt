@@ -74,8 +74,8 @@ int main()
 
     User user;
 
-    User::state_t<double> x;
-    User::input_t<double> u;
+    laopt::IndexedVector<User::state_t<double>> x;
+    laopt::IndexedVector<User::input_t<double>> u;
     x << 1, 2;
     u << 3;
     User::state_t<double> val;
@@ -84,7 +84,7 @@ int main()
     p << 1, 2, 3;
 
     std::cout << "\n=== CALLING Function for SYS ===" << std::endl;
-    val = user.function(User::Sys{}, x, u);
+    val = user.function(User::Sys{}, x.cast_base(), u.cast_base());
     std::cout << "user(Sys, x,u) = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING Jacobian FOR SYS ===" << std::endl;
@@ -93,7 +93,7 @@ int main()
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING Function for SYS FUNCTOR ===" << std::endl;
-    val = user.sys.function(x, u);
+    val = user.sys.function(x.cast_base(), u.cast_base());
     std::cout << "user(Sys, x,u) = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING Jacobian FOR SYS FUNCTOR ===" << std::endl;
@@ -102,7 +102,7 @@ int main()
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING Function on SYSX ===" << std::endl;
-    val = user.function(User::SysX{}, x, u);
+    val = user.function(User::SysX{}, x.cast_base(), u.cast_base());
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING custom Jacobian on SYSX ===" << std::endl;
@@ -111,7 +111,7 @@ int main()
     std::cout << "Jacobian = \n" << J << std::endl;
 
     std::cout << "\n=== CALLING Function for SYSRK4 ===" << std::endl;
-    val = user.function(User::SysRK4{}, x, u);
+    val = user.function(User::SysRK4{}, x.cast_base(), u.cast_base());
     std::cout << "user(SysRK4, x,u) = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING Jacobian FOR SYSRK4 ===" << std::endl;
@@ -123,7 +123,7 @@ int main()
     laopt::functions::RK4<User, double, User::Sys> rk4_sys(user, 0.2);
 
     std::cout << "--- Evaluation" << std::endl;
-    val = rk4_sys.function(x, u);
+    val = rk4_sys.function(x.cast_base(), u.cast_base());
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "--- Jacobian" << std::endl;
@@ -136,7 +136,7 @@ int main()
     laopt::functions::RK4<laopt::functions::RK4<laopt::functions::RK4<User, double, User::Sys>, double>, double> rk4_rk4_rk4_sys(rk4_rk4_sys, 0.4);
 
     std::cout << "--- Evaluation" << std::endl;
-    val = rk4_rk4_rk4_sys.function(x, u);
+    val = rk4_rk4_rk4_sys.function(x.cast_base(), u.cast_base());
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "--- Jacobian" << std::endl;

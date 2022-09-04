@@ -27,7 +27,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
         functions::IDENTITY id;
         id.jacobian(out_value,
                     out_jacobian,
-                    indexed_vector.cast_base());
+                    indexed_vector);
     }
 
     template<typename Weight>
@@ -36,7 +36,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     {
         functions::IDENTITY id;
         return id.wsum(weight,
-                       indexed_vector.cast_base());
+                       indexed_vector);
     }
 
     template<typename OutGradient, typename Weight>
@@ -46,7 +46,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
         functions::IDENTITY id;
         return id.gradient(out_gradient,
                            weight,
-                           indexed_vector.cast_base());
+                           indexed_vector);
     }
 
     template<typename OutGradient, typename OutHessian, typename Weight>
@@ -57,19 +57,33 @@ struct ExprEvaluator<IndexedVector<Derived>>
         return id.hessian(out_gradient,
                           out_hessian,
                           weight,
-                          indexed_vector.cast_base());
+                          indexed_vector);
     }
 };
 
 template<typename Function, typename Tag, typename Info, typename Capture>
 struct ExprEvaluator<FunctionCapture<Function, Tag, Info, Capture>>
 {
+private:
+    template<typename Base>
+    static EIGEN_STRONG_INLINE const Base& cast_variable_to_base(const IndexedVector<Base>& arg)
+    {
+        return arg.cast_base();
+    }
+
+    template<typename T>
+    static EIGEN_STRONG_INLINE const T& cast_variable_to_base(const T& arg)
+    {
+        return arg;
+    }
+
+public:
     static EIGEN_STRONG_INLINE auto
     function(const FunctionCapture<Function, Tag, Info, Capture>& function_capture)
     {
         return function_capture.capture([&](auto&&... vars) {
             return function_capture.func.function(Tag{},
-                                                  vars.cast_base()...);
+                                                  cast_variable_to_base(vars)...);
         });
     }
 
@@ -81,7 +95,7 @@ struct ExprEvaluator<FunctionCapture<Function, Tag, Info, Capture>>
             function_capture.func.jacobian(Tag{},
                                            out_value,
                                            out_jacobian,
-                                           vars.cast_base()...);
+                                           vars...);
         });
     }
 
@@ -92,7 +106,7 @@ struct ExprEvaluator<FunctionCapture<Function, Tag, Info, Capture>>
         return function_capture.capture([&](auto&&... vars) {
             return function_capture.func.wsum(Tag{},
                                               weight,
-                                              vars.cast_base()...);
+                                              vars...);
         });
     }
 
@@ -104,7 +118,7 @@ struct ExprEvaluator<FunctionCapture<Function, Tag, Info, Capture>>
             return function_capture.func.gradient(Tag{},
                                                   out_gradient,
                                                   weight,
-                                                  vars.cast_base()...);
+                                                  vars...);
         });
     }
 
@@ -117,7 +131,7 @@ struct ExprEvaluator<FunctionCapture<Function, Tag, Info, Capture>>
                                                  out_gradient,
                                                  out_hessian,
                                                  weight,
-                                                 vars.cast_base()...);
+                                                 vars...);
         });
     }
 };

@@ -6,6 +6,8 @@
 #include <type_traits>
 #include "Eigen/Dense"
 
+#include "indexed_vector.hpp"
+
 namespace laopt
 {
     namespace meta
@@ -33,8 +35,8 @@ namespace laopt
         }
 
         /**
-         * Extracts compile time info about an Eigen matrix. 
-         * If the type passed in is not a matrix (i.e., it's a scalar), 
+         * Extracts compile time info about an Eigen matrix.
+         * If the type passed in is not a matrix (i.e., it's a scalar),
          * then its shape is 1 x 1 and is_matrix is false.
          */
 
@@ -42,23 +44,12 @@ namespace laopt
         struct IsScalar {};
         struct IsMatrix {};
 
-        /**
-         * has_eval<T>::value == true if and only if T has a member function "eval"
-         * We use this to test if T is an Eigen expression or matrix
-         */
-        template <typename T>
-        struct has_eval
+        template<class Type, bool is_eigen = std::is_base_of<Eigen::MatrixBase<Type>, Type>::value>
+        struct matrix_info;
+
+        template <class Type>
+        struct matrix_info<Type, false>
         {
-          template<typename U> static decltype(std::declval<U>().eval(), std::true_type{}) test (std::remove_reference_t<U>*); 
-          template<typename U> static std::false_type test (...);
-          using  type = decltype(test<T>(nullptr));
-          static constexpr bool value { type::value };
-        };
-
-        template < class Type, bool is_eigen = has_eval<Type>::value > struct matrix_info;
-
-        template < class Type >
-        struct matrix_info<Type, false> {
             using Scalar = Type;
             static constexpr int RowsAtCompileTime = 1;
             static constexpr int ColsAtCompileTime = 1;
@@ -66,24 +57,25 @@ namespace laopt
             using is_matrix_t = IsScalar;
         };
 
-        template < class Type >
-        struct matrix_info<Type, true> {
+        template<class Type>
+        struct matrix_info<Type, true>
+        {
             using Scalar = typename Type::Scalar;
             static constexpr int RowsAtCompileTime = Type::RowsAtCompileTime;
             static constexpr int ColsAtCompileTime = Type::ColsAtCompileTime;
 
             using is_matrix_t = IsMatrix;
         };
-        
+
 
         /**
          * Compute the scalar type of the arguments
-         * 
+         *
          * Note: We take the scalar type of the first argument, and assume that the
          * rest are the same, or can be auto-cast to be the same.
          * We should likely test them all at compile time...
          */
-        template<typename Arg, typename... Args>
+        template<typename Arg, typename...>
         struct get_scalar
         {
             using type = typename Arg::Scalar;
@@ -93,21 +85,37 @@ namespace laopt
 
 
         /**
-         * Checks
+         * Checks if arguments contain a variable.
          */
-        template <typename Tp, typename... List>
-        struct contains : std::true_type {};
+        template <typename...>
+        struct contains_variable : std::true_type {};
 
-        template <typename Tp, typename Head, typename... Rest>
-        struct contains<Tp, Head, Rest...>
-                : std::conditional<std::is_same<Tp, Head>::value,
+        template <typename Arg, typename... Args>
+        struct contains_variable<Arg, Args...>
+                : std::conditional<std::is_base_of<VariableBase<Arg>, Arg>::value,
                         std::true_type,
-                        contains<Tp, Rest...>
+                        contains_variable<Args...>
                 >::type {};
 
-        template < typename Tp >
-        struct contains<Tp> : std::false_type {};
-    }
+        template<>
+        struct contains_variable<> : std::false_type {};
+
+        /**
+         * Used to get information about variables.
+         */
+        template<typename Derived>
+        struct variable_info
+        {
+            // If it's not a variable we ignore it
+            static constexpr int size = 0;
+        };
+        template<typename Base>
+        struct variable_info<IndexedVector<Base>>
+        {
+            static constexpr int size = IndexedVector<Base>::RowsAtCompileTime;
+        };
+
+    } // end namespace meta
 
     /**
      * Takes a parameter pack of Eigen::Vector's and concatenates

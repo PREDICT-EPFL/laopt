@@ -37,8 +37,8 @@ static void BM_LAOPT_FUNCTION(benchmark::State& state)
 static void BM_LAOPT_JACOBIAN(benchmark::State& state)
 {
     LAOptTestFunction test_function;
-    Eigen::Vector<double, 2> x{1, 1};
-    Eigen::Vector<double, 1> u{1};
+    laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
+    laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
     Eigen::Vector<double, 2> value;
     Eigen::Matrix<double, 2, 3> jacobian;
 
@@ -53,8 +53,8 @@ static void BM_LAOPT_JACOBIAN(benchmark::State& state)
 static void BM_LAOPT_WSUM(benchmark::State& state)
 {
     LAOptTestFunction test_function;
-    Eigen::Vector<double, 2> x{1, 1};
-    Eigen::Vector<double, 1> u{1};
+    laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
+    laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
     Eigen::Vector<double, 2> weight{1, 1};
     double value;
 
@@ -68,8 +68,8 @@ static void BM_LAOPT_WSUM(benchmark::State& state)
 static void BM_LAOPT_GRADIENT(benchmark::State& state)
 {
     LAOptTestFunction test_function;
-    Eigen::Vector<double, 2> x{1, 1};
-    Eigen::Vector<double, 1> u{1};
+    laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
+    laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
     Eigen::Vector<double, 2> weight{1, 1};
     double value;
     Eigen::Vector<double, 3> gradient;
@@ -85,8 +85,8 @@ static void BM_LAOPT_GRADIENT(benchmark::State& state)
 static void BM_LAOPT_HESSIAN(benchmark::State& state)
 {
     LAOptTestFunction test_function;
-    Eigen::Vector<double, 2> x{1, 1};
-    Eigen::Vector<double, 1> u{1};
+    laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
+    laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
     Eigen::Vector<double, 2> weight{1, 1};
     double value;
     Eigen::Vector<double, 3> gradient;

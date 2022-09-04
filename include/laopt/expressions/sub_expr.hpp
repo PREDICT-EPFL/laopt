@@ -126,7 +126,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
         functions::IDENTITY id(-1);
         id.jacobian(out_value,
                     out_jacobian(Eigen::all, Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)),
-                    expr.rhs.cast_base());
+                    expr.rhs);
     }
 
     template<typename Weight>
@@ -134,7 +134,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     wsum(const SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>& expr, const Weight& weight)
     {
         functions::IDENTITY id(-1);
-        return ExprEvaluator<DerivedLhs>::wsum(expr.lhs, weight) + id.wsum(weight, expr.rhs.cast_base());
+        return ExprEvaluator<DerivedLhs>::wsum(expr.lhs, weight) + id.wsum(weight, expr.rhs);
     }
 
     template<typename OutGradient, typename Weight>
@@ -143,7 +143,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     {
         functions::IDENTITY id(-1);
         return ExprEvaluator<DerivedLhs>::gradient(expr.lhs, out_gradient(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight)
-               + id.gradient(out_gradient(Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)), weight, expr.rhs.cast_base());
+               + id.gradient(out_gradient(Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)), weight, expr.rhs);
     }
 
     template<typename OutGradient, typename OutHessian, typename Weight>
@@ -152,7 +152,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     {
         functions::IDENTITY id(-1);
         return ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_gradient(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), out_hessian(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight)
-               + id.hessian(out_gradient(Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)), out_hessian(Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs), Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)), weight, expr.rhs.cast_base());
+               + id.hessian(out_gradient(Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)), out_hessian(Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs), Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)), weight, expr.rhs);
     }
 };
 
