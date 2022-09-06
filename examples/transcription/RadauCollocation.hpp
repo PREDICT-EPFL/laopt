@@ -45,7 +45,7 @@ protected:
     {
         /* Pretend X_t is a column-wise reshaped matrix */
         const unsigned i0 = col_index * mat_rows;
-        return X.template segment<mat_rows>(i0);
+        return X(Eigen::seqN(i0, Eigen::fix<mat_rows>));
     }
 
     /* Collocation basis and grid */
@@ -126,37 +126,17 @@ protected:
     const IntMat int_mat = get_int_mat();
 
 public:
-    struct StateAt {};
+    struct DifferentialApproximation {};
     template<typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NX>
-    function_impl(StateAt,
-                  const Eigen::MatrixBase<X_t> &X_vec, unsigned k)
-    {
-        return get_col<NX>(X_vec, k);
-    }
-    struct InputAt {};
-    template<typename U_t, typename scalar_t = typename Eigen::MatrixBase<U_t>::Scalar>
-    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NU>
-    function_impl(InputAt,
-                  const Eigen::MatrixBase<U_t> &U_vec, unsigned k)
-    {
-        return get_col<NU>(U_vec, k);
-    }
-
-    struct DifferentialApproximationAt {};
-    template<typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
-    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NX>
-    function_impl(DifferentialApproximationAt,
-                  const Eigen::MatrixBase<X_t> &X_vec, unsigned seg_start, unsigned j_node)
+    function_impl(DifferentialApproximation, const Eigen::MatrixBase<X_t> &X_vec, unsigned j_node)
     {
         /* Construct differential approximation at node j_node */
         Eigen::Vector<scalar_t, NX> x_apr; // NX x 1
         x_apr.setZero();
+        for (unsigned l = 0; l <= D_poly; l++)
         {
-            for (unsigned l = 0; l <= D_poly; l++)
-            {
-                x_apr += get_col<NX>(X_vec, seg_start + l) * dL(l, Tau(j_node));
-            }
+            x_apr += get_col<NX>(X_vec, l) * dL(l, Tau(j_node));
         }
         return 2.0 / h_seg * x_apr;
     }
@@ -165,16 +145,15 @@ public:
     struct SegmentCost {};
     template<typename X_t, typename U_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
-    function_impl(SegmentCost,
-                  const Eigen::MatrixBase<X_t> &X_vec, const Eigen::MatrixBase<U_t> &U_vec, unsigned seg_start)
+    function_impl(SegmentCost, const Eigen::MatrixBase<X_t> &X_vec, const Eigen::MatrixBase<U_t> &U_vec)
     {
         /* Construct integral approximation of segment */
         scalar_t cost{0};
         for (unsigned l = 0; l < D_poly; l++)
         {
             cost += int_mat(int_mat.rows() - 1, l) *
-                    controlProblem.template lagrange_term_impl<scalar_t>(get_col<NX>(X_vec, seg_start + l),
-                                                                         get_col<NU>(U_vec, seg_start + l));
+                    controlProblem.template lagrange_term_impl<scalar_t>(get_col<NX>(X_vec, l),
+                                                                         get_col<NU>(U_vec, l));
         }
         return h_seg / 2.0 * cost;
     }
@@ -182,20 +161,18 @@ public:
     struct MayerCost {};
     template<typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
-    function_impl(MayerCost,
-                  const Eigen::MatrixBase<X_t> &X_vec, unsigned k)
+    function_impl(MayerCost, const Eigen::MatrixBase<X_t> &x)
     {
-        return controlProblem.template mayer_term_impl<scalar_t>(get_col<NX>(X_vec, k));
+        return controlProblem.template mayer_term_impl<scalar_t>(x);
     }
 
     /* Dynamic constraints */
-    struct ContinuousDynamicsAt {};
+    struct ContinuousDynamics {};
     template<typename X_t, typename U_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NX>
-    function_impl(ContinuousDynamicsAt,
-                  const Eigen::MatrixBase<X_t> &X_vec, const Eigen::MatrixBase<U_t> &U_vec, unsigned k)
+    function_impl(ContinuousDynamics, const Eigen::MatrixBase<X_t> &x, const Eigen::MatrixBase<U_t> &u)
     {
-        return controlProblem.template dynamics_impl<scalar_t>(get_col<NX>(X_vec, k), get_col<NU>(U_vec, k));
+        return controlProblem.template dynamics_impl<scalar_t>(x, u);
     }
 
 public:
@@ -270,8 +247,10 @@ public:
         for (unsigned i_seg = 0; i_seg < N_segs; i_seg++) // i_seg loops through all segments
         {
             const unsigned id_seg_start = i_seg * D_poly;
+            auto X_seg = X_var(Eigen::seqN(id_seg_start * NX, Eigen::fix<NX * D_poly>));
+            auto U_seg = U_var(Eigen::seqN(id_seg_start * NU, Eigen::fix<NU * D_poly>));
 
-            optProblem.add_obj(this->function(SegmentCost{}, X_var, U_var, id_seg_start));
+            optProblem.add_obj(this->function(SegmentCost{}, X_seg, U_seg));
 
             /* For each node on the segment, add differential constraint */
             for (unsigned j_node = 0; j_node < D_poly; j_node++)
@@ -279,15 +258,16 @@ public:
                 const unsigned k = id_seg_start + j_node; // Index of this node in the trajectory
                 T(k) = i_seg * h_seg + h_seg * (Tau(j_node) + 1) / 2.0;
 
-                optProblem.add_constr(this->function(DifferentialApproximationAt{}, X_var, id_seg_start, j_node) ==
-                                      this->function(ContinuousDynamicsAt{}, X_var, U_var, k));
+                auto X_seg_node = X_var(Eigen::seqN(id_seg_start * NX, Eigen::fix<NX * (D_poly + 1)>));
+                optProblem.add_constr(this->function(DifferentialApproximation{}, X_seg_node, j_node) ==
+                                      this->function(ContinuousDynamics{}, get_col<NX>(X_var, k), get_col<NU>(U_var, k)));
             }
         }
 
         /* Last grid point */
         T(N) = 1;
         PRINT("T(" << N << ") = " << T(N));
-        optProblem.add_obj(this->function(MayerCost{}, X_var, N_)); // Can't use N directly -> linking error, undefined reference to N
+        optProblem.add_obj(this->function(MayerCost{}, get_col<NX>(X_var, N_))); // Can't use N directly -> linking error, undefined reference to N
 
         /* Box constraints */
         const Eigen::Vector<Scalar, (N + 1) * NX> LBX = controlProblem.lbx.template replicate<N + 1, 1>();
@@ -298,11 +278,11 @@ public:
         optProblem.add_constr(LBU <= U_var <= UBU);
 
         /* Boundary constraints */
-        optProblem.add_constr(controlProblem.x0_lb <= this->function(StateAt{}, X_var, 0) <= controlProblem.x0_ub);
-        optProblem.add_constr(controlProblem.xf_lb <= this->function(StateAt{}, X_var, N_) <= controlProblem.xf_ub);
+        optProblem.add_constr(controlProblem.x0_lb <= get_col<NX>(X_var, 0) <= controlProblem.x0_ub);
+        optProblem.add_constr(controlProblem.xf_lb <= get_col<NX>(X_var, N_) <= controlProblem.xf_ub);
 
         /* Set last control equal second last for easier data handling */
-        optProblem.add_constr(this->function(InputAt{}, U_var, N_) == this->function(InputAt{}, U_var, N_ - 1));
+        optProblem.add_constr(get_col<NU>(U_var, N_) == get_col<NU>(U_var, N_ - 1));
     }
 };
 
