@@ -30,6 +30,7 @@ int main()
     ocp.set_x0({3.14, 0});
 
     /* Solve with Multiple Shooting transcription */
+    if (false)
     {
         std::cout << "Multiple Shooting\n";
         const int N = 20;
@@ -60,6 +61,7 @@ int main()
     }
 
     /* Solve with Radau Collocatoin transcription */
+    if (true)
     {
         std::cout << "Radau Collocation\n";
         const int D_poly = 4;

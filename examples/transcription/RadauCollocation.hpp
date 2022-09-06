@@ -37,13 +37,11 @@ protected:
     static constexpr unsigned N = D_poly * N_segs; // Last index of decision variables
     const double h_seg{1.0 / N_segs};
     Eigen::Vector<Scalar, N + 1> T; // Normalized time grid (0 ... 1)
-//    std::array<variable_t<ControlProblem::NX>, N + 1> X_var;
-//    std::array<variable_t<NU>, N + 1> U_var;
     variable_t<(N + 1) * NX> X_var;
     variable_t<(N + 1) * NU> U_var;
 
     template<unsigned mat_rows, typename X_t>
-    auto get_col(const X_t &X, unsigned col_index)
+    static auto get_col(const X_t &X, unsigned col_index)
     {
         /* Pretend X_t is a column-wise reshaped matrix */
         const unsigned i0 = col_index * mat_rows;
@@ -59,7 +57,7 @@ protected:
         if (nodes(0) >= 0) { nodes = (nodes + CollocationPoints::Constant(1.0)) / 2.0; }
         return nodes;
     }
-    Eigen::Vector<Scalar, D_poly + 1> Tau = get_collocation_points(); // collocation_points::get();
+    const Eigen::Vector<Scalar, D_poly + 1> Tau = get_collocation_points(); // collocation_points::get();
     /* Lagrange polynomials */
     Scalar L(unsigned j, Scalar tau_eval) const
     {
@@ -118,7 +116,14 @@ protected:
         return D;
     }
     const DiffMat diff_mat = get_diff_mat();
+
     using IntMat = Eigen::Matrix<Scalar, D_poly, D_poly>;
+    IntMat get_int_mat() const
+    {
+        DiffMat D = get_diff_mat();
+        return D.template block<D_poly, D_poly>(0, 1).inverse();
+    }
+    const IntMat int_mat = get_int_mat();
 
 public:
     struct StateAt {};
@@ -156,13 +161,21 @@ public:
     }
 
     /* Objective */
-    struct StageCost {};
+    struct SegmentCost {};
     template<typename X_t, typename U_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
-    function_impl(StageCost,
-                  const Eigen::MatrixBase<X_t> &X_vec, const Eigen::MatrixBase<U_t> &U_vec, unsigned k)
+    function_impl(SegmentCost,
+                  const Eigen::MatrixBase<X_t> &X_vec, const Eigen::MatrixBase<U_t> &U_vec, unsigned seg_start)
     {
-        return controlProblem.template lagrange_term_impl<scalar_t>(get_col<NX>(X_vec, k), get_col<NU>(U_vec, k));
+        /* Construct integral approximation of segment */
+        scalar_t cost{0};
+        for (unsigned l = 0; l < D_poly; l++)
+        {
+            cost += int_mat(int_mat.rows() - 1, l) *
+                    controlProblem.template lagrange_term_impl<scalar_t>(get_col<NX>(X_vec, seg_start + l),
+                                                                         get_col<NU>(U_vec, seg_start + l));
+        }
+        return h_seg / 2.0 * cost;
     }
 
     struct MayerCost {};
@@ -190,6 +203,7 @@ public:
     {
         PRINT("nodes: " << get_collocation_points().transpose() << "\n");
         PRINT("D    :\n" << get_diff_mat() << "\n");
+        PRINT("I    :\n" << get_int_mat() << "\n");
     }
 
     using scalar_t = typename ControlProblem::Scalar; // TODO: Change in laOPT to accept Scalar
@@ -256,13 +270,14 @@ public:
         {
             const unsigned id_seg_start = i_seg * D_poly;
 
+            optProblem.add_obj(this->function(SegmentCost{}, X_var, U_var, id_seg_start));
+
             /* For each node on the segment, add differential constraint */
             for (unsigned j_node = 0; j_node < D_poly; j_node++)
             {
                 const unsigned k = id_seg_start + j_node; // Index of this node in the trajectory
                 T(k) = i_seg * h_seg + h_seg * (Tau(j_node) + 1) / 2.0;
 
-                optProblem.add_obj(this->function(StageCost{}, X_var, U_var, k));
                 optProblem.add_constr(this->function(DifferentialApproximationAt{}, X_var, id_seg_start, j_node) ==
                                       this->function(ContinuousDynamicsAt{}, X_var, U_var, k));
             }
@@ -280,13 +295,6 @@ public:
         const Eigen::Vector<Scalar, (N + 1) * NU> UBU = controlProblem.ubu.template replicate<N + 1, 1>();
         optProblem.add_constr(LBX <= X_var <= UBX);
         optProblem.add_constr(LBU <= U_var <= UBU);
-
-//        optProblem.add_constr(controlProblem.lbx.template replicate<N + 1, 1>()
-//                              <= X_var <=
-//                              controlProblem.ubx.template replicate<N + 1, 1>());
-        optProblem.add_constr(controlProblem.lbu.template replicate<N + 1, 1>()
-                              <= U_var <=
-                              controlProblem.ubu.template replicate<N + 1, 1>());
 
         /* Boundary constraints */
         optProblem.add_constr(controlProblem.x0_lb <= this->function(StateAt{}, X_var, 0) <= controlProblem.x0_ub);
