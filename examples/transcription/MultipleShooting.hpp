@@ -7,7 +7,7 @@
 #include "laopt/laopt.hpp"
 
 #define PRINT(x) \
-//std::cout << __FUNCTION__ << x << std::endl // Comment this line in to activate PRINT function in the code
+//std::cout << __FUNCTION__ << ": " << x << std::endl // Comment this line in to activate PRINT function in the code
 
 namespace transcription {
 
@@ -42,7 +42,8 @@ public:
     struct StageCost {};
     template<typename x_t, typename u_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
-    function_impl(StageCost, const Eigen::MatrixBase<x_t> &x, const Eigen::MatrixBase<u_t> &u)
+    function_impl(StageCost,
+                  const Eigen::MatrixBase<x_t> &x, const Eigen::MatrixBase<u_t> &u)
     {
         return h * controlProblem.template lagrange_term_impl<scalar_t>(x, u);
     }
@@ -50,7 +51,8 @@ public:
     struct MayerCost {};
     template<typename x_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
-    function_impl(MayerCost, const Eigen::MatrixBase<x_t> &x)
+    function_impl(MayerCost,
+                  const Eigen::MatrixBase<x_t> &x)
     {
         return controlProblem.template mayer_term_impl<scalar_t>(x);
     }
@@ -59,7 +61,8 @@ public:
     struct DiscreteDynamics {};
     template<typename x_t, typename u_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NX>
-    function_impl(DiscreteDynamics, const Eigen::MatrixBase<x_t> &x, const Eigen::MatrixBase<u_t> &u)
+    function_impl(DiscreteDynamics,
+                  const Eigen::MatrixBase<x_t> &x, const Eigen::MatrixBase<u_t> &u)
     {
         using state_t = typename x_t::PlainObject;
         state_t k1 = controlProblem.template dynamics_impl<scalar_t>(x, u);
@@ -109,7 +112,6 @@ public:
     template<typename OptProblem>
     void define_problem(OptProblem &optProblem)
     {
-        PRINT("define_problem");
         /* Register variables */
         for (unsigned i = 0; i <= N; i++)
         {
@@ -143,7 +145,7 @@ public:
         optProblem.add_constr(controlProblem.x0_lb <= X_var[0] <= controlProblem.x0_ub);
         optProblem.add_constr(controlProblem.xf_lb <= X_var[N] <= controlProblem.xf_ub);
 
-        /* Set last control equal second last for easier data handling */
+        /* Set last control equal second last */
         optProblem.add_constr(U_var[N] == U_var[N - 1]);
     }
 };
