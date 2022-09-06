@@ -17,10 +17,13 @@ void print_solution(Transcription &transcription, OptProblem &opt_problem, Solve
     double obj_eval = opt_problem.eval_objective(laopt::Eval(), sol_primal);
 
     std::cout << "Comp. time: " << duration_us/1e3 << " ms, tf = " << T_opt(T_opt.size() - 1) << " s, obj = " << obj_eval << "\n";
+    std::cout << "MATLAB-copyable output:\n";
     std::cout << "T = [" << transcription.get_T_opt().transpose() << "];\n";
     std::cout << "X_opt = [\n" << X_opt << "];\n";
     std::cout << "U_opt = [\n" << U_opt << "];\n";
     std::cout << "obj = " << obj_eval << ";\n";
+    std::cout << "comp_time = " << duration_us / 1e6 << ";\n";
+    std::cout << "\n";
 }
 
 #endif //LAOPT_EXAMPLES_HELPER_HPP

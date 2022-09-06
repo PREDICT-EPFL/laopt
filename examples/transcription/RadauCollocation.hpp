@@ -210,7 +210,10 @@ public:
     }
 
     /* Get functions */
-    const TimeTrajectory &get_T_opt() const { return T; }
+    TimeTrajectory get_T_opt()
+    {
+        return TimeTrajectory::Constant(controlProblem.t0) + (controlProblem.tf - controlProblem.t0) * T;
+    }
     StateTrajectory get_X_opt()
     {
         Eigen::Vector<Scalar, (N + 1) * NX> X_opt_vec;
@@ -243,7 +246,7 @@ public:
     template<typename OptProblem>
     void define_problem(OptProblem &optProblem)
     {
-        const unsigned N_ = N;
+        constexpr unsigned N_ = N;
 
         /* Register variables */
         optProblem.add_variable(X_var);
@@ -266,7 +269,7 @@ public:
         }
 
         /* Last grid point */
-        T(N) = controlProblem.tf;
+        T(N) = 1;
         PRINT("T(" << N << ") = " << T(N));
         optProblem.add_obj(this->function(MayerCost{}, X_var, N_)); // Can't use N directly -> linking error, undefined reference to N
 
