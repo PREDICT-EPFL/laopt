@@ -4,6 +4,7 @@
 // Advanced user (level 2)
 
 #include <Eigen/Dense>
+#include "unsupported/Eigen/Polynomials"
 #include "laopt/laopt.hpp"
 
 #define PRINT(x) \
@@ -22,7 +23,7 @@ template<typename ControlProblem, unsigned N_segs, unsigned D_poly>
 class RadauCollocation : public laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly>>
 {
 protected:
-    /* Mirror scalar type (from ControlProblem), define variable template with scalar type */
+    /* Mirror types from ControlProblem, define variable template with scalar type */
     using Scalar = typename ControlProblem::Scalar;
     static const unsigned NX = ControlProblem::NX;
     static const unsigned NU = ControlProblem::NU;
@@ -40,6 +41,9 @@ protected:
     variable_t<(N + 1) * NX> X_var;
     variable_t<(N + 1) * NU> U_var;
 
+    /*
+     * Static functions
+     */
     template<unsigned mat_rows, typename X_t>
     static auto get_col(const X_t &X, unsigned col_index_start)
     {
@@ -55,12 +59,100 @@ protected:
     }
 
     /* Collocation basis and grid */
+    template<typename Derived, typename DerivedB>
+    static typename Derived::PlainObject
+    poly_mul(const Eigen::MatrixBase<Derived> &p1, const Eigen::MatrixBase<DerivedB> &p2)
+    {
+        /*
+         * This function was copied together from PolyMPC
+         */
+        typename Derived::PlainObject product = Derived::PlainObject::Zero();
+        const int p1_size = Derived::RowsAtCompileTime;
+        const int p2_size = Derived::RowsAtCompileTime;
+        static_assert(p1_size == p2_size, "poly_mul: Polynomials must be of the same order!");
+
+        using Scalar_ = typename Derived::Scalar;
+        Scalar_ eps = std::numeric_limits<Scalar_>::epsilon();
+
+        /* Detect nonzeros */
+        int nnz_p1, nnz_p2;
+        for (int i = 0; i < p1_size; ++i)
+        {
+            if (std::fabs(p1[i]) >= eps) { nnz_p1 = i; }
+            if (std::fabs(p2[i]) >= eps) { nnz_p2 = i; }
+        }
+
+        for (int i = 0; i <= nnz_p2; ++i)
+        {
+            for (int j = 0; j <= nnz_p1; ++j)
+            {
+                /* Truncate higher orders if necessary */
+                if ((i + j) == p1_size) { break; }
+                product[i + j] = p1[j] * p2[i];
+            }
+        }
+
+        return product;
+    }
+    /*
+     * End of Static functions
+     */
+
+protected:
     using CollocationPoints = Eigen::Vector<Scalar, D_poly + 1>;
     CollocationPoints get_collocation_points() const
     {
-        Eigen::Vector<Scalar, D_poly + 1> nodes;
-        nodes << -1.0000, -0.5753, 0.1811, 0.8228, 1.0000;
-        if (nodes(0) >= 0) { nodes = (nodes + CollocationPoints::Constant(1.0)) / 2.0; }
+        /*
+         * This function was copied together from PolyMPC
+         */
+        using Basis = Eigen::Matrix<Scalar, D_poly + 1, D_poly + 1>;
+
+        /* Compute basis --------------------------------------------------------- */
+        Basis Ln = Basis::Zero();
+        /* The first basis polynomial is L0(x) = 1 */
+        Ln(0, 0) = 1;
+        /* The second basis polynomial is L1(x) = x */
+        Ln(1, 1) = 1;
+
+        /* Compute recurrent coefficients */
+        CollocationPoints a = CollocationPoints::Zero();
+        CollocationPoints c = CollocationPoints::Zero();
+        CollocationPoints x = CollocationPoints::Zero(); // p(x) = x
+        x[1] = 1;
+        for (unsigned n = 0; n <= D_poly; ++n)
+        {
+            a(n) = scalar_t(2 * n + 1) / (n + 1);
+            c(n) = scalar_t(n) / (n + 1);
+        }
+
+        /* Create polynomial basis */
+        for (unsigned n = 1; n < D_poly; ++n)
+        {
+            Ln.col(n + 1) = a(n) * poly_mul(Ln.col(n), x) - c(n) * Ln.col(n - 1);
+        }
+
+        /* Compute collocation points --------------------------------------------------------- */
+        /* Legendre Gauss Radau (LGR) collocation points for the interval [-1, 1]*/
+        /* Compute roots of LN-1 + LN */
+        CollocationPoints Ln_sum = Ln.col(D_poly - 1) + Ln.col(D_poly);
+        Scalar eps = std::numeric_limits<Scalar>::epsilon();
+
+        /* prepare the polynomial for the solver */
+        for (unsigned i = 0; i < D_poly; ++i)
+        {
+            if (std::fabs(Ln_sum[i]) <= eps) { Ln_sum[i] = Scalar(0); }
+        }
+
+        Eigen::PolynomialSolver<Scalar, D_poly> root_finder;
+        root_finder.compute(Ln_sum);
+
+        CollocationPoints nodes = CollocationPoints::Zero();
+        nodes[D_poly] = 1;
+
+        nodes.template segment<D_poly>(0) = root_finder.roots().real();
+
+        /* Sort the nodes in ascending order */
+        std::sort(nodes.data(), nodes.data() + nodes.size());
         return nodes;
     }
     const Eigen::Vector<Scalar, D_poly + 1> Tau = get_collocation_points(); // collocation_points::get();
@@ -139,7 +231,7 @@ public:
         x_apr.setZero();
         for (unsigned l = 0; l <= D_poly; l++)
         {
-            x_apr += get_col<NX>(X_vec, l) * dL(l, Tau(j_node));
+            x_apr += diff_mat(j_node, l) * get_col<NX>(X_vec, l);
         }
         return 2.0 / h_seg * x_apr;
     }
