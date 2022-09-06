@@ -151,6 +151,7 @@ public:
     {
         /* Construct differential approximation at node j_node */
         Eigen::Vector<scalar_t, NX> x_apr; // NX x 1
+        x_apr.setZero();
         {
             for (unsigned l = 0; l <= D_poly; l++)
             {
