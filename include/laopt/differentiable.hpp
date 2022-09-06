@@ -91,8 +91,7 @@ protected:
         using AD_Output = Eigen::Vector<AD_scalar, Info::n_outputs>;
 
         // Convert the arguments to AD variables, and call the function
-        AD_Output out;
-        seed_and_call(std::forward<Tag>(tag), out, make_ad<AD_scalar>(args)...);
+        AD_Output out = seed_and_call(std::forward<Tag>(tag), make_ad<AD_scalar>(args)...);
 
         // Copy out into output variables
         for(int i = 0; i < out.rows(); i++)
@@ -123,9 +122,9 @@ protected:
         return x;
     }
 
-    template<typename Tag, typename Output, typename... Args>
-    EIGEN_STRONG_INLINE void
-    seed_and_call(Tag&& tag, Output& out, Args&&... args) noexcept
+    template<typename Tag, typename... Args>
+    EIGEN_STRONG_INLINE auto
+    seed_and_call(Tag&& tag, Args&&... args) noexcept
     {
         // Set derivative equal to identity
         int offset = 0;
@@ -136,7 +135,7 @@ protected:
             )...
         };
 
-        out = static_cast<Derived*>(this)->function(std::forward<Tag>(tag), std::forward<Args>(args)...);
+        return static_cast<Derived*>(this)->function(std::forward<Tag>(tag), std::forward<Args>(args)...);
     }
 
     // Sets the input derivatives to the identity.
@@ -181,8 +180,7 @@ protected:
         using outerAD_t = Eigen::Vector<outerADScalar, Info::n_outputs>;
 
         // Convert to AD variables for the inputs and call our function
-        outerAD_t out;
-        seed_and_call2(std::forward<Tag>(tag), out, make_ad2<outerADScalar>(args)...);
+        outerAD_t out = seed_and_call2(std::forward<Tag>(tag), make_ad2<outerADScalar>(args)...);
 
         scalar_t value = 0;
 
@@ -226,8 +224,8 @@ protected:
         return x;
     }
 
-    template<typename Tag, typename Output, typename... Args>
-    EIGEN_STRONG_INLINE void seed_and_call2(Tag&& tag, Output& out, Args&&... args) noexcept
+    template<typename Tag, typename... Args>
+    EIGEN_STRONG_INLINE auto seed_and_call2(Tag&& tag, Args&&... args) noexcept
     {
         // Set derivative equal to identity
         int offset = 0;
@@ -239,7 +237,7 @@ protected:
         };
 
         // Call our function
-        out = static_cast<Derived*>(this)->function(std::forward<Tag>(tag), std::forward<Args>(args)...);
+        return static_cast<Derived*>(this)->function(std::forward<Tag>(tag), std::forward<Args>(args)...);
     }
 
     // Sets the input derivatives to the identity.

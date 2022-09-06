@@ -114,7 +114,7 @@ public:
      * Forwards vector access operator
      */
     template<typename ...Args>
-    EIGEN_STRONG_INLINE auto operator()(Args&& ...args) {
+    EIGEN_STRONG_INLINE auto operator()(Args&& ...args) const {
         using RetType = decltype(Base::operator()(std::forward<Args>(args)...));
         IndexedVector<RetType> ret(Base::operator()(std::forward<Args>(args)...));
         ret.set_indices(m_indices(std::forward<Args>(args)...));
@@ -125,7 +125,7 @@ public:
      * Indices given by raw array or initializer list
      */
     template<typename RowIndicesT, std::size_t RowIndicesN>
-    EIGEN_STRONG_INLINE auto operator()(const RowIndicesT (&rowIndices)[RowIndicesN]) {
+    EIGEN_STRONG_INLINE auto operator()(const RowIndicesT (&rowIndices)[RowIndicesN]) const {
         using RetType = decltype(Base::operator()(rowIndices));
         IndexedVector<RetType> ret(Base::operator()(rowIndices));
         ret.set_indices(m_indices(rowIndices));
