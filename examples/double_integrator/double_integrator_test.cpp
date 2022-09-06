@@ -53,9 +53,11 @@ int main()
         const long duration_us = duration_cast<microseconds>(t_end - t_start).count();
 
         solver.solve(); // Call second time to test repeatability
+        const steady_clock::time_point t_end2 = steady_clock::now();
+        const long duration2_us = duration_cast<microseconds>(t_end2 - t_end).count();
 
         /* Print out the solution */
-        print_solution(transcription, opt_problem, solver, duration_us);
+        print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
     }
 
     return 0;

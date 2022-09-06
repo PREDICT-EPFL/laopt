@@ -4,7 +4,8 @@
 #include <iostream>
 
 template<typename Transcription, typename OptProblem, typename Solver, typename Duration>
-void print_solution(Transcription &transcription, OptProblem &opt_problem, Solver &solver, Duration &duration_us)
+void print_solution(Transcription &transcription, OptProblem &opt_problem, Solver &solver,
+                    Duration &duration_us, Duration &duration2_us)
 {
     /* Print out the solution */
     std::cout << "\n\n";
@@ -16,7 +17,7 @@ void print_solution(Transcription &transcription, OptProblem &opt_problem, Solve
     Eigen::VectorX<typename Solver::Scalar> sol_primal = solver.sol_primal();
     double obj_eval = opt_problem.eval_objective(laopt::Eval(), sol_primal);
 
-    std::cout << "Comp. time: " << duration_us/1e3 << " ms, tf = " << T_opt(T_opt.size() - 1) << " s, obj = " << obj_eval << "\n";
+    std::cout << "Comp. time (warm): " << duration_us/1e3 << " (" << duration2_us/1e3 << ") ms, tf = " << T_opt(T_opt.size() - 1) << " s, obj = " << obj_eval << "\n";
     std::cout << "MATLAB-copyable output:\n";
     std::cout << "T = [" << transcription.get_T_opt().transpose() << "];\n";
     std::cout << "X_opt = [\n" << X_opt << "];\n";

@@ -74,7 +74,11 @@ public:
 
 public:
     explicit MultipleShooting(ControlProblem &ctrlProblem_) :
-            controlProblem(ctrlProblem_) {}
+            controlProblem(ctrlProblem_)
+    {
+        /* Construct trajectory time grid on [0, 1] */
+        for (unsigned i = 0; i <= N; i++) { T(i) = i * h; }
+    }
 
     using scalar_t = typename ControlProblem::Scalar; // TODO: Change in laOPT to accept Scalar
     using TimeTrajectory = Eigen::Vector<Scalar, N + 1>;
@@ -94,7 +98,10 @@ public:
     }
 
     /* Get functions */
-    const TimeTrajectory &get_T_opt() const { return T; }
+    TimeTrajectory get_T_opt() const
+    {
+        return TimeTrajectory::Constant(controlProblem.t0) + (controlProblem.tf - controlProblem.t0) * T;
+    }
     StateTrajectory get_X_opt()
     {
         StateTrajectory X_opt;
@@ -122,16 +129,11 @@ public:
         /* Loop through grid points */
         for (unsigned i = 0; i < N; i++)
         {
-            T(i) = i * controlProblem.tf / N;
-
-            PRINT("T(" << i << ") = " << T(i));
             optProblem.add_obj(this->function(StageCost{}, X_var[i], U_var[i])); // TODO eno4: Allow expressions here
             optProblem.add_constr(X_var[i + 1] == this->function(DiscreteDynamics{}, X_var[i], U_var[i]));
         }
 
         /* Last grid point */
-        T(N) = controlProblem.tf;
-        PRINT("T(" << N << ") = " << T(N));
         optProblem.add_obj(this->function(MayerCost{}, X_var[N]));
 
         /* Box constraints */

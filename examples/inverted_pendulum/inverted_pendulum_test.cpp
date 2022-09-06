@@ -55,9 +55,11 @@ int main()
         const long duration_us = duration_cast<microseconds>(t_end - t_start).count();
 
         solver.solve(); // Call second time to test repeatability
+        const steady_clock::time_point t_end2 = steady_clock::now();
+        const long duration2_us = duration_cast<microseconds>(t_end2 - t_end).count();
 
         /* Print out the solution */
-        print_solution(transcription, opt_problem, solver, duration_us);
+        print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
     }
 
     /* Solve with Radau Collocatoin transcription */
@@ -76,6 +78,8 @@ int main()
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
         Transcription transcription(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
+        std::cout << "tape constraints jacobian sparsity:\n" << tape.constraints.jacobian.sparsity_structure << std::endl;
+        std::cout << "tape objective hession sparsity:\n" << tape.objective.hessian.sparsity_structure << std::endl;
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
@@ -87,9 +91,11 @@ int main()
         const long duration_us = duration_cast<microseconds>(t_end - t_start).count();
 
         solver.solve(); // Call second time to test repeatability
+        const steady_clock::time_point t_end2 = steady_clock::now();
+        const long duration2_us = duration_cast<microseconds>(t_end2 - t_end).count();
 
         /* Print out the solution */
-        print_solution(transcription, opt_problem, solver, duration_us);
+        print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
     }
 
     return 0;
