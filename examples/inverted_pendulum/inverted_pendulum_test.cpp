@@ -19,8 +19,8 @@ int main()
     /* Construct OCP and set OCP-specific properties */
     Ocp ocp;
 
-//    ocp.ubu << 3;
-//    ocp.lbu << -3;
+    ocp.ubu << 3;
+    ocp.lbu << -3;
 
     ocp.tf = 1.5;
 
@@ -30,7 +30,7 @@ int main()
     ocp.set_x0({3.14, 0});
 
     /* Solve with Multiple Shooting transcription */
-    if (false)
+    if (true)
     {
         std::cout << "Multiple Shooting\n";
         const int N = 20;
@@ -44,6 +44,8 @@ int main()
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
         Transcription transcription(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
+        std::cout << "tape constraints jacobian sparsity:\n" << tape.constraints.jacobian.sparsity_structure << std::endl;
+        std::cout << "tape objective hession sparsity:\n" << tape.objective.hessian.sparsity_structure << std::endl;
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally

@@ -22,43 +22,32 @@ namespace transcription {
 template<typename ControlProblem, unsigned N_segs, unsigned D_poly>
 class RadauCollocation : public laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly>>
 {
-protected:
-    /* Mirror types from ControlProblem, define variable template with scalar type */
-    using Scalar = typename ControlProblem::Scalar;
-    static const unsigned NX = ControlProblem::NX;
-    static const unsigned NU = ControlProblem::NU;
-    template<int n>
-    using variable_t = laopt::Variable<Scalar, n>;
-
-    /* Instance of end user's ControlProblem */
-    ControlProblem &controlProblem;
-
-    /* Create discrete problem variables (define U_var with same length than X_var for easier data handling,
-     * although last u will not be used */
-    static const unsigned N = D_poly * N_segs; // Last index of decision variables
-    const double h_seg{1.0 / N_segs};
-    Eigen::Vector<Scalar, N + 1> T; // Normalized time grid (0 ... 1)
-    variable_t<(N + 1) * NX> X_var;
-    variable_t<(N + 1) * NU> U_var;
-
+private:
     /*
      * Static functions
      */
-    template<unsigned mat_rows, typename X_t>
-    static auto get_col(const X_t &X, unsigned col_index_start)
+    template<unsigned mat_rows, unsigned row_start, unsigned N_rows, unsigned N_cols, typename Vec_t>
+    static auto get_slice(Vec_t& vec, unsigned col_index)
+    {
+        std::array<unsigned, N_cols * N_rows> ind{};
+        unsigned k = 0;
+        for (unsigned iCol = col_index; iCol < (col_index + N_cols); iCol++)
+        {
+            for (unsigned jRow = row_start; jRow < (row_start + N_rows); jRow++)
+            {
+                ind[k++] = iCol * mat_rows + jRow;
+            }
+        }
+        /* Pretend the long vector vec is a reshaped matrix of (NX + NU) x (N + 1) */
+        return vec(ind);
+    }
+    template<unsigned mat_rows, typename Vec_t>
+    static auto get_col(Vec_t &vec, unsigned col_index_start)
     {
         /* Call more generic function with one column */
-        return get_cols<mat_rows, 1>(X, col_index_start);
-    }
-    template<unsigned mat_rows, unsigned N_cols, typename X_t>
-    static auto get_cols(const X_t &X, unsigned col_index_start)
-    {
-        /* Pretend X_t is a column-wise reshaped matrix with mat_rows */
-        const unsigned i0 = col_index_start * mat_rows;
-        return X(Eigen::seqN(i0, Eigen::fix<N_cols * mat_rows>));
+        return get_slice<mat_rows, 0, mat_rows, 1>(vec, col_index_start);
     }
 
-    /* Collocation basis and grid */
     template<typename Derived, typename DerivedB>
     static typename Derived::PlainObject
     poly_mul(const Eigen::MatrixBase<Derived> &p1, const Eigen::MatrixBase<DerivedB> &p2)
@@ -94,11 +83,36 @@ protected:
 
         return product;
     }
-    /*
-     * End of Static functions
-     */
 
 protected:
+    /* Mirror types from ControlProblem, define variable template with scalar type */
+    using Scalar = typename ControlProblem::Scalar;
+    static const unsigned NX = ControlProblem::NX;
+    static const unsigned NU = ControlProblem::NU;
+    template<int n>
+    using variable_t = laopt::Variable<Scalar, n>;
+
+    /* Instance of end user's ControlProblem */
+    ControlProblem &controlProblem;
+
+    /* Decision variables (same number of inputs as states for easier data handling) */
+    static const unsigned N = D_poly * N_segs; // Last index of decision variables
+    const double h_seg{1.0 / N_segs};
+    Eigen::Vector<Scalar, N + 1> T; // Normalized time grid (0 ... 1)
+    variable_t<(N + 1) * (NX + NU)> XU_var;
+
+    /* Helper functions to extract single states and inputs from long decision variable vector */
+    template<typename XU_t>
+    auto get_x(XU_t &XU_Vec, unsigned k) const { return get_slice<NX + NU, 0, NX, 1>(XU_Vec, k); }
+    template<unsigned N_cols, typename XU_t>
+    auto get_x(XU_t &XU_Vec, unsigned k) const { return get_slice<NX + NU, 0, NX, N_cols>(XU_Vec, k); }
+
+    template<typename XU_t>
+    auto get_u(XU_t &XU_Vec, unsigned k) const { return get_slice<NX + NU, NX, NU, 1>(XU_Vec, k); }
+    template<unsigned N_cols, typename XU_t>
+    auto get_u(XU_t &XU_Vec, unsigned k) const { return get_slice<NX + NU, NX, NU, N_cols>(XU_Vec, k); }
+
+    /* Collocation grid, differentiation and integration matrices */
     using CollocationPoints = Eigen::Vector<Scalar, D_poly + 1>;
     CollocationPoints get_collocation_points() const
     {
@@ -155,7 +169,8 @@ protected:
         std::sort(nodes.data(), nodes.data() + nodes.size());
         return nodes;
     }
-    const Eigen::Vector<Scalar, D_poly + 1> Tau = get_collocation_points(); // collocation_points::get();
+    const CollocationPoints Tau = get_collocation_points();
+
     /* Lagrange polynomials */
     Scalar L(unsigned j, Scalar tau_eval) const
     {
@@ -280,7 +295,7 @@ public:
             for (unsigned j_node = 0; j_node < D_poly; j_node++)
             {
                 const unsigned k = id_seg_start + j_node;
-                T(k) = i_seg * h_seg + h_seg * (Tau(j_node) + 1) / 2.0;
+                T(k) = i_seg * h_seg + h_seg * (Tau(j_node) + 1.0) / 2.0;
             }
         }
         T(N) = 1;
@@ -299,12 +314,12 @@ public:
     template<int rows, typename Scalar = double>
     void set_X_guess(const Eigen::Matrix<Scalar, rows, 1> &x_guess)
     {
-        for (unsigned i = 0; i < X_var.size(); i++) { X_var.at(i) << x_guess; }
+        for (unsigned k = 0; k < XU_var.size(); k++) { get_x(XU_var, k) << x_guess; }
     }
     template<int rows, int cols, typename Scalar = double>
     void set_X_guess(const Eigen::Matrix<Scalar, rows, cols> &X_guess)
     {
-        for (unsigned i = 0; i < X_var.size(); i++) { X_var.at(i) << X_guess.col(i); }
+        for (unsigned k = 0; k < XU_var.size(); k++) { get_x(XU_var, k) << X_guess.col(k); }
     }
 
     /* Get functions */
@@ -312,32 +327,30 @@ public:
     {
         return TimeTrajectory::Constant(controlProblem.t0) + (controlProblem.tf - controlProblem.t0) * T;
     }
-    StateTrajectory get_X_opt()
+    StateTrajectory get_X_opt() const
     {
-        Eigen::Vector<Scalar, (N + 1) * NX> X_opt_vec;
-        X_opt_vec.setZero();
-        X_opt_vec << X_var;
-
         StateTrajectory X_opt = StateTrajectory::Zero();
-        for (unsigned i = 0; i <= N; i++)
-        {
-            using namespace Eigen;
-            X_opt.col(i) << X_opt_vec.template segment<NX>(i * NX);
-        }
+        for (unsigned i = 0; i <= N; i++) { X_opt.col(i) << get_x(XU_var, i); }
         return X_opt;
     }
-    InputTrajectory get_U_opt()
+    InputTrajectory get_U_opt() const
     {
-        Eigen::Vector<Scalar, (N + 1) * NU> U_opt_vec;
-        U_opt_vec.setZero();
-        U_opt_vec << U_var;
-
-        InputTrajectory U_opt;
-        for (unsigned i = 0; i <= N; i++)
-        {
-            U_opt.col(i) << U_opt_vec.template segment<NU>(i * NU);
-        }
+        InputTrajectory U_opt = InputTrajectory::Zero();
+        for (unsigned i = 0; i <= N; i++) { U_opt.col(i) << get_u(XU_var, i); }
         return U_opt;
+    }
+
+    Eigen::VectorX<Scalar> get_T_resampled(Scalar Ts)
+    {
+        //return ;
+    }
+    Eigen::MatrixX<Scalar> get_X_resampled(Scalar Ts)
+    {
+        //return ;
+    }
+    Eigen::MatrixX<Scalar> get_U_resampled(Scalar Ts)
+    {
+        //return ;
     }
 
 //protected: // TODO ino1 (would like to make this protected)
@@ -345,43 +358,45 @@ public:
     void define_problem(OptProblem &optProblem)
     {
         /* Register variables */
-        optProblem.add_variable(X_var);
-        optProblem.add_variable(U_var);
+        optProblem.add_variable(XU_var);
 
-        for (unsigned i_seg = 0; i_seg < N_segs; i_seg++) // i_seg loops through all segments
+        /* Loop through segments */
+        for (unsigned i_seg = 0; i_seg < N_segs; i_seg++)
         {
             const unsigned id_seg_start = i_seg * D_poly;
-            const auto X_seg = get_cols<NX, D_poly + 1>(X_var, id_seg_start);
-            const auto U_seg = get_cols<NU, D_poly + 1>(U_var, id_seg_start);
+            const auto X_seg_diff = get_x<D_poly + 1>(XU_var, id_seg_start); // Diff. approx depends on all points
+            const auto X_seg_int = get_x<D_poly>(XU_var, id_seg_start); // Int. approx is independent of last point
+            const auto U_seg_int = get_u<D_poly>(XU_var, id_seg_start); // Int. approx is independent of last point
 
-            optProblem.add_obj(this->function(SegmentCost{}, X_seg, U_seg));
+            /* Add segment cost from integral approximation */
+            optProblem.add_obj(this->function(SegmentCost{}, X_seg_int, U_seg_int));
 
             /* Loop through nodes in segment and add differential constraint */
             for (unsigned j_node = 0; j_node < D_poly; j_node++)
             {
                 const unsigned k = id_seg_start + j_node; // Index of this node in the trajectory
 
-                optProblem.add_constr(this->function(DifferentialApproximation{}, X_seg, j_node) ==
-                                      this->function(ContinuousDynamics{},
-                                                     get_col<NX>(X_var, k), get_col<NU>(U_var, k)));
+                optProblem.add_constr(this->function(DifferentialApproximation{}, X_seg_diff, j_node) ==
+                                      this->function(ContinuousDynamics{}, get_x(XU_var, k), get_u(XU_var, k)));
             }
         }
 
         /* Last grid point */
-        optProblem.add_obj(this->function(MayerCost{}, get_col<NX>(X_var, N)));
+        optProblem.add_obj(this->function(MayerCost{}, get_x(XU_var, N)));
 
         /* Box constraints */
-        optProblem.add_constr(controlProblem.lbx.template replicate<N + 1, 1>() <= X_var <=
-                              controlProblem.ubx.template replicate<N + 1, 1>());
-        optProblem.add_constr(controlProblem.lbu.template replicate<N + 1, 1>() <= U_var <=
-                              controlProblem.ubu.template replicate<N + 1, 1>());
+        for (unsigned k = 0; k <= N; k++)
+        {
+            optProblem.add_constr(controlProblem.lbx <= get_x(XU_var, k) <= controlProblem.ubx);
+            optProblem.add_constr(controlProblem.lbu <= get_u(XU_var, k) <= controlProblem.ubu);
+        }
 
         /* Boundary constraints */
-        optProblem.add_constr(controlProblem.x0_lb <= get_col<NX>(X_var, 0) <= controlProblem.x0_ub);
-        optProblem.add_constr(controlProblem.xf_lb <= get_col<NX>(X_var, N) <= controlProblem.xf_ub);
+        optProblem.add_constr(controlProblem.x0_lb <= get_x(XU_var, 0) <= controlProblem.x0_ub);
+        optProblem.add_constr(controlProblem.xf_lb <= get_x(XU_var, N) <= controlProblem.xf_ub);
 
         /* Set last control equal second last for easier data handling */
-        optProblem.add_constr(get_col<NU>(U_var, N) == get_col<NU>(U_var, N - 1));
+        optProblem.add_constr(get_u(XU_var, N) == get_u(XU_var, N - 1));
     }
 };
 
