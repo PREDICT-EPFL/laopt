@@ -22,10 +22,7 @@ namespace transcription {
 template<typename ControlProblem, unsigned N_segs, unsigned D_poly>
 class RadauCollocation : public laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly>>
 {
-private:
-    /*
-     * Static functions
-     */
+private: // Static functions
     template<unsigned mat_rows, unsigned row_start, unsigned N_rows, unsigned N_cols, typename Vec_t>
     static auto get_slice(Vec_t& vec, unsigned col_index)
     {
@@ -235,20 +232,20 @@ protected:
     }
     const IntMat int_mat = get_int_mat();
 
-public:
+public: //protected: // TODO ino1 (would like to make this protected)
     struct DifferentialApproximation {};
     template<typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NX>
     function_impl(DifferentialApproximation, const Eigen::MatrixBase<X_t> &X_vec, unsigned j_node)
     {
         /* Loop through nodes in segment and add contribution to differential approximation at node j_node */
-        Eigen::Vector<scalar_t, NX> x_apr; // NX x 1
-        x_apr.setZero();
+        Eigen::Vector<scalar_t, NX> dx_apr; // NX x 1
+        dx_apr.setZero();
         for (unsigned l = 0; l <= D_poly; l++)
         {
-            x_apr += diff_mat(j_node, l) * get_col<NX>(X_vec, l);
+            dx_apr += diff_mat(j_node, l) * get_col<NX>(X_vec, l);
         }
-        return 2.0 / h_seg * x_apr;
+        return 2.0 / h_seg * dx_apr;
     }
 
     /* Objective */
@@ -284,76 +281,6 @@ public:
         return controlProblem.template dynamics_impl<scalar_t>(x, u);
     }
 
-public:
-    explicit RadauCollocation(ControlProblem &ctrlProblem_) :
-            controlProblem(ctrlProblem_)
-    {
-        /* Construct trajectory time grid on [0, 1] */
-        for (unsigned i_seg = 0; i_seg < N_segs; i_seg++)
-        {
-            const unsigned id_seg_start = i_seg * D_poly;
-            for (unsigned j_node = 0; j_node < D_poly; j_node++)
-            {
-                const unsigned k = id_seg_start + j_node;
-                T(k) = i_seg * h_seg + h_seg * (Tau(j_node) + 1.0) / 2.0;
-            }
-        }
-        T(N) = 1;
-
-        PRINT("nodes: " << get_collocation_points().transpose() << "\n");
-        PRINT("D    :\n" << get_diff_mat() << "\n");
-        PRINT("I    :\n" << get_int_mat() << "\n");
-    }
-
-    using scalar_t = typename ControlProblem::Scalar; // TODO: Change in laOPT to accept Scalar
-    using TimeTrajectory = Eigen::Vector<Scalar, N + 1>;
-    using StateTrajectory = Eigen::Matrix<Scalar, NX, N + 1>;
-    using InputTrajectory = Eigen::Matrix<Scalar, NU, N + 1>;
-
-    /* Set functions */
-    template<int rows, typename Scalar = double>
-    void set_X_guess(const Eigen::Matrix<Scalar, rows, 1> &x_guess)
-    {
-        for (unsigned k = 0; k < XU_var.size(); k++) { get_x(XU_var, k) << x_guess; }
-    }
-    template<int rows, int cols, typename Scalar = double>
-    void set_X_guess(const Eigen::Matrix<Scalar, rows, cols> &X_guess)
-    {
-        for (unsigned k = 0; k < XU_var.size(); k++) { get_x(XU_var, k) << X_guess.col(k); }
-    }
-
-    /* Get functions */
-    TimeTrajectory get_T_opt()
-    {
-        return TimeTrajectory::Constant(controlProblem.t0) + (controlProblem.tf - controlProblem.t0) * T;
-    }
-    StateTrajectory get_X_opt() const
-    {
-        StateTrajectory X_opt = StateTrajectory::Zero();
-        for (unsigned i = 0; i <= N; i++) { X_opt.col(i) << get_x(XU_var, i); }
-        return X_opt;
-    }
-    InputTrajectory get_U_opt() const
-    {
-        InputTrajectory U_opt = InputTrajectory::Zero();
-        for (unsigned i = 0; i <= N; i++) { U_opt.col(i) << get_u(XU_var, i); }
-        return U_opt;
-    }
-
-    Eigen::VectorX<Scalar> get_T_resampled(Scalar Ts)
-    {
-        //return ;
-    }
-    Eigen::MatrixX<Scalar> get_X_resampled(Scalar Ts)
-    {
-        //return ;
-    }
-    Eigen::MatrixX<Scalar> get_U_resampled(Scalar Ts)
-    {
-        //return ;
-    }
-
-//protected: // TODO ino1 (would like to make this protected)
     template<typename OptProblem>
     void define_problem(OptProblem &optProblem)
     {
@@ -397,6 +324,75 @@ public:
 
         /* Set last control equal second last for easier data handling */
         optProblem.add_constr(get_u(XU_var, N) == get_u(XU_var, N - 1));
+    }
+
+public:
+    explicit RadauCollocation(ControlProblem &ctrlProblem_) :
+            controlProblem(ctrlProblem_)
+    {
+        /* Construct trajectory time grid on [0, 1] */
+        for (unsigned i_seg = 0; i_seg < N_segs; i_seg++)
+        {
+            const unsigned id_seg_start = i_seg * D_poly;
+            for (unsigned j_node = 0; j_node < D_poly; j_node++)
+            {
+                const unsigned k = id_seg_start + j_node;
+                T(k) = i_seg * h_seg + h_seg * (Tau(j_node) + 1.0) / 2.0;
+            }
+        }
+        T(N) = 1;
+
+        PRINT("nodes: " << get_collocation_points().transpose() << "\n");
+        PRINT("D    :\n" << get_diff_mat() << "\n");
+        PRINT("I    :\n" << get_int_mat() << "\n");
+    }
+
+    using scalar_t = typename ControlProblem::Scalar; // TODO: Change in laOPT to accept Scalar
+    using TimeTrajectory = Eigen::Vector<Scalar, N + 1>;
+    using StateTrajectory = Eigen::Matrix<Scalar, NX, N + 1>;
+    using InputTrajectory = Eigen::Matrix<Scalar, NU, N + 1>;
+
+    /* Set functions */
+    template<int rows, typename Scalar = double>
+    void set_X_guess(const Eigen::Matrix<Scalar, rows, 1> &x_guess)
+    {
+        for (unsigned k = 0; k <= N; k++) { get_x(XU_var, k) << x_guess; }
+    }
+    template<int rows, int cols, typename Scalar = double>
+    void set_X_guess(const Eigen::Matrix<Scalar, rows, cols> &X_guess)
+    {
+        for (unsigned k = 0; k <= N; k++) { get_x(XU_var, k) << X_guess.col(k); }
+    }
+
+    /* Get functions */
+    TimeTrajectory get_T_opt()
+    {
+        return TimeTrajectory::Constant(controlProblem.t0) + (controlProblem.tf - controlProblem.t0) * T;
+    }
+    StateTrajectory get_X_opt() const
+    {
+        StateTrajectory X_opt = StateTrajectory::Zero();
+        for (unsigned i = 0; i <= N; i++) { X_opt.col(i) << get_x(XU_var, i); }
+        return X_opt;
+    }
+    InputTrajectory get_U_opt() const
+    {
+        InputTrajectory U_opt = InputTrajectory::Zero();
+        for (unsigned i = 0; i <= N; i++) { U_opt.col(i) << get_u(XU_var, i); }
+        return U_opt;
+    }
+
+    Eigen::VectorX<Scalar> get_T_resampled(Scalar Ts)
+    {
+        //return ;
+    }
+    Eigen::MatrixX<Scalar> get_X_resampled(Scalar Ts)
+    {
+        //return ;
+    }
+    Eigen::MatrixX<Scalar> get_U_resampled(Scalar Ts)
+    {
+        //return ;
     }
 };
 

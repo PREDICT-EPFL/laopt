@@ -35,8 +35,8 @@ int main()
     ocp.W_Va_err = 1;
     ocp.R.diagonal() << 1, 0.1;
 
-    ocp.ubu << 0.8 * ocp.model.u_physical_ubound(0), 0.001;
-    ocp.lbu << 0.8 * ocp.model.u_physical_lbound(0), 0;
+//    ocp.ubu << 0.8 * ocp.model.u_physical_ubound(0), 0.001;
+//    ocp.lbu << 0.8 * ocp.model.u_physical_lbound(0), 0;
 
     /* Set initial state */
     ocp.set_x0(ocp.model.get_default_initial_state());
@@ -78,7 +78,7 @@ int main()
         print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
     }
 
-    /* Solve with Radau Collocatoin transcription */
+    /* Solve with Radau Collocation transcription */
     if (true)
     {
         std::cout << "Radau Collocation\n";

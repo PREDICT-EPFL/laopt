@@ -44,8 +44,8 @@ int main()
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
         Transcription transcription(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
-        std::cout << "tape constraints jacobian sparsity:\n" << tape.constraints.jacobian.sparsity_structure << std::endl;
-        std::cout << "tape objective hession sparsity:\n" << tape.objective.hessian.sparsity_structure << std::endl;
+        std::cout << "Constraints Jacobian sparsity:\n" << tape.constraints.jacobian.sparsity_structure << std::endl;
+        std::cout << "Objective Hessian sparsity:\n" << tape.objective.hessian.sparsity_structure << std::endl;
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
@@ -64,7 +64,7 @@ int main()
         print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
     }
 
-    /* Solve with Radau Collocatoin transcription */
+    /* Solve with Radau Collocation transcription */
     if (true)
     {
         std::cout << "Radau Collocation\n";
@@ -80,8 +80,8 @@ int main()
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
         Transcription transcription(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
-        std::cout << "tape constraints jacobian sparsity:\n" << tape.constraints.jacobian.sparsity_structure << std::endl;
-        std::cout << "tape objective hession sparsity:\n" << tape.objective.hessian.sparsity_structure << std::endl;
+        std::cout << "Constraints Jacobian sparsity:\n" << tape.constraints.jacobian.sparsity_structure << std::endl;
+        std::cout << "Objective Hessian sparsity:\n" << tape.objective.hessian.sparsity_structure << std::endl;
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally

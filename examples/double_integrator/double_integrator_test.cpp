@@ -61,7 +61,7 @@ int main()
         print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
     }
 
-    /* Solve with Radau Collocatoin transcription */
+    /* Solve with Radau Collocation transcription */
     if (true)
     {
         std::cout << "Radau Collocation\n";
