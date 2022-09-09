@@ -12,7 +12,7 @@ class IpoptWrapper
 public:
     using IpoptProblem = laopt::Solver_IPOpt<OptProblem>;
 
-    explicit IpoptWrapper(OptProblem &opt_problem)
+    explicit IpoptWrapper(OptProblem &opt_problem, int print_level = 0)
     {
         using namespace Ipopt;
 
@@ -23,7 +23,7 @@ public:
         /* Create IPOPT application, setup, and initialize */
         ipopt_application = IpoptApplicationFactory();
         // ipoptApp->Options()->SetStringValue("hessian_approximation", "limited-memory");
-        ipopt_application->Options()->SetIntegerValue("print_level", 5);
+        ipopt_application->Options()->SetIntegerValue("print_level", print_level);
         ipopt_application->Options()->SetNumericValue("tol", 1e-3);
         ApplicationReturnStatus ipopt_status = ipopt_application->Initialize();
         if (ipopt_status != Solve_Succeeded) { std::cout << "\n*** IpoptWrapper: Error during initialization!\n\n"; }

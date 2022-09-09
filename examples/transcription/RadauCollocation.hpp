@@ -24,7 +24,7 @@ class RadauCollocation : public laopt::Differentiable<RadauCollocation<ControlPr
 {
 private: // Static functions
     template<unsigned mat_rows, unsigned row_start, unsigned N_rows, unsigned N_cols, typename Vec_t>
-    static auto get_slice(Vec_t& vec, unsigned col_index)
+    static auto get_slice(Vec_t &vec, unsigned col_index)
     {
         std::array<unsigned, N_cols * N_rows> ind{};
         unsigned k = 0;
@@ -113,6 +113,26 @@ protected:
     using CollocationPoints = Eigen::Vector<Scalar, D_poly + 1>;
     CollocationPoints get_collocation_points() const
     {
+        if (0 < D_poly && D_poly < 10)
+        {
+            std::vector<std::vector<Scalar>> Radau_static{
+                    {0.0, 1.0},
+                    {0.0, 0.33333333333333337,  1.0},
+                    {0.0, 0.15505102572168222,  0.6449489742783179,  1.0},
+                    {0.0, 0.0885879595127042,   0.40946686444073466, 0.787659461760847,   1.0},
+                    {0.0, 0.057104196114518224, 0.2768430136381237,  0.5835904323689168,  0.8602401356562193, 1.0},
+                    {0.0, 0.039809857051469055, 0.19801341787360788, 0.4379748102473862,  0.695464273353636,  0.9014649142011735, 1.0},
+                    {0.0, 0.02931642715978522,  0.14807859966848436, 0.3369846902811542,  0.5586715187715502, 0.7692338620300545, 0.926945671319741,  1.0},
+                    {0.0, 0.022479386438713056, 0.11467905316090415, 0.2657898227845895,  0.4528463736694446, 0.6473752828868304, 0.8197593082631076, 0.9437374394630773, 1.0},
+                    {0.0, 0.017779915147363934, 0.09132360789979432, 0.21430847939563036, 0.3719321645832724, 0.5451866848034266, 0.7131752428555695, 0.8556337429578544, 0.9553660447100301, 1.0},
+            };
+            return 2.0 *
+                   (CollocationPoints::Constant(1.0) -
+                    Eigen::Map<const CollocationPoints>(Radau_static.at(D_poly - 1).data())
+                   ).reverse()
+                   - CollocationPoints::Constant(1.0);
+        }
+
         /*
          * This function was copied together from PolyMPC
          */
@@ -169,6 +189,17 @@ protected:
     const CollocationPoints Tau = get_collocation_points();
 
     /* Lagrange polynomials */
+    template<unsigned n, typename scalar_t = Scalar>
+    Eigen::Vector<Scalar, n> interpolate(const Eigen::Vector<Scalar, n * (D_poly + 1)> &X_seg, Scalar tau_eval) const
+    {
+        Eigen::Vector<scalar_t, n> x_apr; // n x 1
+        x_apr.setZero();
+        for (unsigned l = 0; l <= D_poly; l++)
+        {
+            x_apr += L(l, tau_eval) * get_col<n>(X_seg, l);
+        }
+        return x_apr;
+    }
     Scalar L(unsigned j, Scalar tau_eval) const
     {
         /* First create indexing for more convenient looping afterwards */
@@ -231,6 +262,62 @@ protected:
         return D.template block<D_poly, D_poly>(0, 1).inverse();
     }
     const IntMat int_mat = get_int_mat();
+
+    template<int DerivedNT1, int DerivedNT2, int DerivedNX>
+    Eigen::Matrix<Scalar, DerivedNX + 1, -1> resample_trajectory(const Eigen::Vector<Scalar, DerivedNT1> &T_opt,
+                                                                 const Eigen::Matrix<Scalar, DerivedNX, DerivedNT2> &X_opt,
+                                                                 Scalar Ts_max) const
+    {
+        static_assert(DerivedNT1 == DerivedNT2, "T and X must be of same length.");
+
+        const Scalar dT = (T_opt(D_poly) - T_opt(0));
+        unsigned n_per_seg = std::floor(dT / Ts_max);
+        if (n_per_seg * Ts_max < dT) { ++n_per_seg; };
+        const unsigned n = N_segs * n_per_seg;
+        PRINT("T_opt(D_poly): " << T_opt(D_poly) << ", n_per_seg: " << n_per_seg << ", n (total): " << n);
+
+        Eigen::Matrix<Scalar, DerivedNX + 1, -1> TXn(DerivedNX + 1, n + 1);
+        TXn.setZero();
+
+        using namespace Eigen;
+        for (unsigned i_seg = 0; i_seg < N_segs; i_seg++)
+        {
+            const unsigned i_seg_start = i_seg * D_poly;
+            const unsigned k_seg_start = i_seg * n_per_seg;
+            PRINT("-------------------------- \n"
+                  "i_seg: " << i_seg << ", i_seg_start: " << i_seg_start << ", k_seg_start: " << k_seg_start);
+
+            const auto X_seg = X_opt(all, seqN(i_seg_start, D_poly + 1));
+            PRINT("X_seg:\n" << X_seg);
+
+            for (unsigned j = 0; j < n_per_seg; j++)
+            {
+                const unsigned k = k_seg_start + j;
+                const Scalar T_eval = j * 1.0 / n_per_seg; // Time on [0 ... 1]
+                const Scalar tau_eval = 2.0 * T_eval - 1;  // Time on [-1 ... 1]
+                PRINT("j: " << j << ", k: " << k << ", tau: " << tau_eval);
+
+                TXn(0, k) = (i_seg * h_seg + h_seg * T_eval);
+                TXn(seqN(1, DerivedNX), k) << interpolate<DerivedNX>(X_seg.template reshaped<ColMajor>(), tau_eval);
+            }
+
+            /* In last segment, write last point */
+            if (i_seg == N_segs - 1)
+            {
+                TXn(0, n) = controlProblem.tf;
+                /* Copy or extrapolate */
+                TXn(seqN(1, DerivedNX), n) << X_opt(all, last);
+//                TXn(seqN(1, DerivedNX), n) << interpolate<DerivedNX>(X_seg.template reshaped<ColMajor>(), 1);
+            }
+
+            /* Transform time by absolute horizon range (except  */
+            TXn(0, seqN(k_seg_start, n_per_seg)) =
+                    Eigen::MatrixX<Scalar>::Constant(1, n_per_seg, controlProblem.t0) +
+                    (controlProblem.tf - controlProblem.t0) * TXn(0, seqN(k_seg_start, n_per_seg));
+            PRINT("\n" << TXn << "\n");
+        }
+        return TXn;
+    }
 
 public: //protected: // TODO ino1 (would like to make this protected)
     struct DifferentialApproximation {};
@@ -353,46 +440,74 @@ public:
     using InputTrajectory = Eigen::Matrix<Scalar, NU, N + 1>;
 
     /* Set functions */
-    template<int rows, typename Scalar = double>
-    void set_X_guess(const Eigen::Matrix<Scalar, rows, 1> &x_guess)
+    void set_X_guess(const typename ControlProblem::State &x_guess)
     {
         for (unsigned k = 0; k <= N; k++) { get_x(XU_var, k) << x_guess; }
     }
-    template<int rows, int cols, typename Scalar = double>
-    void set_X_guess(const Eigen::Matrix<Scalar, rows, cols> &X_guess)
+    void set_X_guess(const StateTrajectory &X_guess)
     {
         for (unsigned k = 0; k <= N; k++) { get_x(XU_var, k) << X_guess.col(k); }
     }
 
     /* Get functions */
-    TimeTrajectory get_T_opt()
+    TimeTrajectory get_T_opt() const
     {
         return TimeTrajectory::Constant(controlProblem.t0) + (controlProblem.tf - controlProblem.t0) * T;
     }
     StateTrajectory get_X_opt() const
     {
-        StateTrajectory X_opt = StateTrajectory::Zero();
+        StateTrajectory X_opt;
+        X_opt.setZero();
         for (unsigned i = 0; i <= N; i++) { X_opt.col(i) << get_x(XU_var, i); }
         return X_opt;
     }
     InputTrajectory get_U_opt() const
     {
-        InputTrajectory U_opt = InputTrajectory::Zero();
+        InputTrajectory U_opt;
+        U_opt.setZero();
         for (unsigned i = 0; i <= N; i++) { U_opt.col(i) << get_u(XU_var, i); }
         return U_opt;
     }
 
-    Eigen::VectorX<Scalar> get_T_resampled(Scalar Ts)
+    Eigen::Vector<Scalar, NX> get_x_at(const Scalar &t) const
     {
-        //return ;
+        const Scalar T_eval = (t - controlProblem.t0) / (controlProblem.tf - controlProblem.t0); // on [0 ... 1]|traj;
+
+        /* Find segment to sample from */
+        const unsigned i_seg = std::floor(T_eval / h_seg);
+        const unsigned i_seg_start = i_seg * D_poly;
+        PRINT("i_seg: " << i_seg << ", i_seg_start: " << i_seg_start);
+
+        const Eigen::Vector<Scalar, NX * (D_poly + 1)> X_seg = get_x<D_poly + 1>(XU_var, i_seg_start);
+        const Scalar t_eval = T_eval - i_seg * h_seg;     // Time in segment [0 ... 1]|seg
+        const Scalar tau_eval = 2.0 * t_eval / h_seg - 1; // Time on [-1 ... 1]|
+        PRINT("X_seg:\n" << X_seg);
+        PRINT("t_eval: " << t_eval);
+        PRINT("tau_eval: " << tau_eval);
+        return interpolate<NX>(X_seg, tau_eval);
     }
-    Eigen::MatrixX<Scalar> get_X_resampled(Scalar Ts)
+    Eigen::Vector<Scalar, NU> get_u_at(const Scalar &t) const
     {
-        //return ;
+        const Scalar T_eval = t / (controlProblem.tf - controlProblem.t0) - controlProblem.t0; // on [0 ... 1];
+
+        /* Find segment to sample from */
+        const unsigned i_seg = std::floor(T_eval / h_seg);
+        const unsigned i_seg_start = i_seg * D_poly;
+
+        /* Sample from segment */
+        const Eigen::Vector<Scalar, NU * (D_poly + 1)> X_seg = get_u<D_poly + 1>(XU_var, i_seg_start);
+        const Scalar t_eval = T_eval - i_seg * h_seg;     // Time in segment [0 ... 1]|seg
+        const Scalar tau_eval = 2.0 * t_eval / h_seg - 1; // Time on [-1 ... 1]|
+        return interpolate<NU>(X_seg, tau_eval);
     }
-    Eigen::MatrixX<Scalar> get_U_resampled(Scalar Ts)
+
+    Eigen::MatrixX<Scalar> get_TX_resampled(const Scalar &Ts_max) const
     {
-        //return ;
+        return resample_trajectory(get_T_opt(), get_X_opt(), Ts_max);
+    }
+    Eigen::MatrixX<Scalar> get_TU_resampled(const Scalar &Ts_max) const
+    {
+        return resample_trajectory(get_T_opt(), get_U_opt(), Ts_max);
     }
 };
 

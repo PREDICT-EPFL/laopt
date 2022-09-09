@@ -102,17 +102,23 @@ public:
     {
         return TimeTrajectory::Constant(controlProblem.t0) + (controlProblem.tf - controlProblem.t0) * T;
     }
-    StateTrajectory get_X_opt()
+    StateTrajectory get_X_opt() const
     {
         StateTrajectory X_opt;
+        X_opt.setZero();
         for (unsigned i = 0; i < X_var.size(); i++) { X_opt.col(i) << X_var.at(i); }
         return X_opt;
     }
-    InputTrajectory get_U_opt()
+    InputTrajectory get_U_opt() const
     {
         InputTrajectory U_opt;
+        U_opt.setZero();
         for (unsigned i = 0; i < U_var.size(); i++) { U_opt.col(i) << U_var.at(i); }
         return U_opt;
+    }
+    Scalar get_obj() const
+    {
+
     }
 
 //protected: // TODO ino1 (would like to make this protected)

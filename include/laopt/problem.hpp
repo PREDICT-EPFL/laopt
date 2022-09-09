@@ -614,7 +614,7 @@ public:
      * Compute the lagrangian function.
      *
      * Note that we actually compute the lagrangian of
-     *   L(prim,dual) = obj(prim) + dual'*g(prima)
+     *   L(prim,dual) = obj(prim) + dual'*g(prim)
      * i.e., we ignore the variable bounds.
      * This is done at the moment because IPOpt only uses the hessian of the lagrangian, so it
      * doesn't matter, but this needs to be fixed.

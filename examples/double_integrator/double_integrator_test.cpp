@@ -30,6 +30,7 @@ int main()
     ocp.x0_lb << -0.1, -0.2;
 
     /* Solve with Multiple Shooting transcription */
+    if (true)
     {
         std::cout << "Multiple Shooting\n";
         const int N = 20;
@@ -46,7 +47,7 @@ int main()
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
-        Solver solver(opt_problem);
+        Solver solver(opt_problem, /* print_level */ 3);
 
         const steady_clock::time_point t_start = steady_clock::now();
         solver.solve();
@@ -80,7 +81,7 @@ int main()
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
-        Solver solver(opt_problem);
+        Solver solver(opt_problem, /* print_level */ 3);
 
         const steady_clock::time_point t_start = steady_clock::now();
         solver.solve();
