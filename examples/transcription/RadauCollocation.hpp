@@ -320,6 +320,15 @@ protected:
     }
 
 public: //protected: // TODO ino1 (would like to make this protected)
+    /* Dynamic constraints */
+    struct ContinuousDynamics {};
+    template<typename x_t, typename u_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NX>
+    function_impl(ContinuousDynamics, const Eigen::MatrixBase<x_t> &x, const Eigen::MatrixBase<u_t> &u)
+    {
+        return controlProblem.template dynamics_impl<scalar_t>(x, u);
+    }
+
     struct DifferentialApproximation {};
     template<typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NX>
@@ -357,15 +366,6 @@ public: //protected: // TODO ino1 (would like to make this protected)
     function_impl(MayerCost, const Eigen::MatrixBase<x_t> &x)
     {
         return controlProblem.template mayer_term_impl<scalar_t>(x);
-    }
-
-    /* Dynamic constraints */
-    struct ContinuousDynamics {};
-    template<typename x_t, typename u_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
-    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NX>
-    function_impl(ContinuousDynamics, const Eigen::MatrixBase<x_t> &x, const Eigen::MatrixBase<u_t> &u)
-    {
-        return controlProblem.template dynamics_impl<scalar_t>(x, u);
     }
 
     template<typename OptProblem>
