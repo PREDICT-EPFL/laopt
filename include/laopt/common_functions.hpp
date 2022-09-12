@@ -1,11 +1,11 @@
-#ifndef LAOPT_FUNCTIONS_HPP
-#define LAOPT_FUNCTIONS_HPP
+#ifndef LAOPT_COMMON_FUNCTIONS_HPP
+#define LAOPT_COMMON_FUNCTIONS_HPP
 
 #include "differentiable.hpp"
 
 namespace laopt {
 
-namespace functions {
+namespace common_functions {
 
 class IDENTITY : public Differentiable<IDENTITY, true>
 {
@@ -81,8 +81,8 @@ public:
     }
 };
 
-} // namespace functions
+} // namespace common_functions
 
 } // namespace laopt
 
-#endif // LAOPT_FUNCTIONS_HPP
+#endif // LAOPT_COMMON_FUNCTIONS_HPP

@@ -8,7 +8,7 @@
 
 #include "differentiable.hpp"
 #include "differentiable_function.hpp"
-#include "functions.hpp"
+#include "common_functions.hpp"
 
 #include "indexed_vector.hpp"
 #include "expressions.hpp"

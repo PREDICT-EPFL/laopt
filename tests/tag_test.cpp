@@ -60,7 +60,7 @@ struct User : public laopt::Differentiable<User<scalar_t>>
         return x(0) * u(0) * (A * x + B * u);
     }
 
-    laopt::functions::RK4<User<scalar_t>, double, Sys> rk4_sys;
+    laopt::common_functions::RK4<User<scalar_t>, double, Sys> rk4_sys;
     laopt::Function<User<scalar_t>, Sys> sys;
 
     User() : rk4_sys(*this, 0.2), sys(*this) {}
@@ -120,7 +120,7 @@ int main()
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "\n=== TESTING RK4 ===" << std::endl;
-    laopt::functions::RK4<User, double, User::Sys> rk4_sys(user, 0.2);
+    laopt::common_functions::RK4<User, double, User::Sys> rk4_sys(user, 0.2);
 
     std::cout << "--- Evaluation" << std::endl;
     val = rk4_sys.function(x.cast_base(), u.cast_base());
@@ -132,8 +132,8 @@ int main()
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "\n=== TESTING RK4 + RK4 + RK4 ===" << std::endl;
-    laopt::functions::RK4<laopt::functions::RK4<User, double, User::Sys>, double> rk4_rk4_sys(rk4_sys, 0.3);
-    laopt::functions::RK4<laopt::functions::RK4<laopt::functions::RK4<User, double, User::Sys>, double>, double> rk4_rk4_rk4_sys(rk4_rk4_sys, 0.4);
+    laopt::common_functions::RK4<laopt::common_functions::RK4<User, double, User::Sys>, double> rk4_rk4_sys(rk4_sys, 0.3);
+    laopt::common_functions::RK4<laopt::common_functions::RK4<laopt::common_functions::RK4<User, double, User::Sys>, double>, double> rk4_rk4_rk4_sys(rk4_rk4_sys, 0.4);
 
     std::cout << "--- Evaluation" << std::endl;
     val = rk4_rk4_rk4_sys.function(x.cast_base(), u.cast_base());

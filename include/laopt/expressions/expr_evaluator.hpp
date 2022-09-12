@@ -2,7 +2,7 @@
 #define LAOPT_EXPR_EVALUATOR_HPP
 
 #include "../indexed_vector.hpp"
-#include "../functions.hpp"
+#include "../common_functions.hpp"
 
 namespace laopt {
 
@@ -16,7 +16,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE auto
     function(const IndexedVector<Derived>& indexed_vector)
     {
-        functions::IDENTITY id;
+        common_functions::IDENTITY id;
         return id.function(indexed_vector.cast_base());
     }
 
@@ -24,7 +24,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE void
     jacobian(const IndexedVector<Derived>& indexed_vector, OutValue&& out_value, OutJacobian&& out_jacobian)
     {
-        functions::IDENTITY id;
+        common_functions::IDENTITY id;
         id.jacobian(out_value,
                     out_jacobian,
                     indexed_vector);
@@ -34,7 +34,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE auto
     wsum(const IndexedVector<Derived>& indexed_vector, const Weight& weight)
     {
-        functions::IDENTITY id;
+        common_functions::IDENTITY id;
         return id.wsum(weight,
                        indexed_vector);
     }
@@ -43,7 +43,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE auto
     gradient(const IndexedVector<Derived>& indexed_vector, OutGradient&& out_gradient, const Weight& weight)
     {
-        functions::IDENTITY id;
+        common_functions::IDENTITY id;
         return id.gradient(out_gradient,
                            weight,
                            indexed_vector);
@@ -53,7 +53,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     static EIGEN_STRONG_INLINE auto
     hessian(const IndexedVector<Derived>& indexed_vector, OutGradient&& out_gradient, OutHessian&& out_hessian, const Weight& weight)
     {
-        functions::IDENTITY id;
+        common_functions::IDENTITY id;
         return id.hessian(out_gradient,
                           out_hessian,
                           weight,

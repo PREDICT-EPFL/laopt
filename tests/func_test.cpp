@@ -1,5 +1,5 @@
 /**
- * Unit test for the construction and computation of LAMPC functions.
+ * Unit test for the construction and computation of LAMPC common_functions.
  */
 
 #include <iostream>
@@ -209,7 +209,7 @@ struct sys_t : public laopt::Differentiable<sys_t<scalar_t>, true>
 TEST(FunctionTest, RK4) {
     using scalar_t = double;
     sys_t<scalar_t> sys;
-    using dsys_t = laopt::functions::RK4<sys_t<scalar_t>, scalar_t>;
+    using dsys_t = laopt::common_functions::RK4<sys_t<scalar_t>, scalar_t>;
     dsys_t dsys(sys, 0.1);
 
     // Compute the discrete-time system and its jacobian
@@ -298,7 +298,7 @@ TEST(FunctionTest, Identity) {
 
     // Discrete dynamics
     using scalar_t = double;
-    laopt::functions::IDENTITY id;
+    laopt::common_functions::IDENTITY id;
 
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 2> jacobian;
