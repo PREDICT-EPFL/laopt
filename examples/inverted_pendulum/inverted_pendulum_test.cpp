@@ -29,8 +29,12 @@ int main()
 
     ocp.set_x0({3.14, 0});
 
+    /* Resampling test parameters */
+    const double Ts_max = 0.02;
+    const double t_test = 0.166;
+
     /* Solve with Multiple Shooting transcription */
-    if (false)
+    if (true)
     {
         std::cout << "Multiple Shooting\n";
         const int N = 20;
@@ -44,12 +48,12 @@ int main()
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
         Transcription transcription(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
-        std::cout << "Constraints Jacobian sparsity:\n" << tape.constraints.jacobian.sparsity_structure << std::endl;
-        std::cout << "Objective Hessian sparsity:\n" << tape.objective.hessian.sparsity_structure << std::endl;
+//        std::cout << "Constraints Jacobian sparsity:\n" << tape.constraints.jacobian.sparsity_structure << std::endl;
+//        std::cout << "Objective Hessian sparsity:\n" << tape.objective.hessian.sparsity_structure << std::endl;
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
-        Solver solver(opt_problem, /* print_level */ 3);
+        Solver solver(opt_problem, /* print_level (default = 0) */ 0);
 
         const steady_clock::time_point t_start = steady_clock::now();
         solver.solve();
@@ -62,6 +66,7 @@ int main()
 
         /* Print out the solution */
         print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
+        print_sampled_solution(transcription, Ts_max, t_test);
     }
 
     /* Solve with Radau Collocation transcription */
@@ -80,12 +85,12 @@ int main()
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
         Transcription transcription(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
-        std::cout << "Constraints Jacobian sparsity:\n" << tape.constraints.jacobian.sparsity_structure << std::endl;
-        std::cout << "Objective Hessian sparsity:\n" << tape.objective.hessian.sparsity_structure << std::endl;
+//        std::cout << "Constraints Jacobian sparsity:\n" << tape.constraints.jacobian.sparsity_structure << std::endl;
+//        std::cout << "Objective Hessian sparsity:\n" << tape.objective.hessian.sparsity_structure << std::endl;
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
-        Solver solver(opt_problem, /* print_level */ 3);
+        Solver solver(opt_problem, /* print_level (default = 0) */ 0);
 
         const steady_clock::time_point t_start = steady_clock::now();
         solver.solve();
@@ -98,19 +103,7 @@ int main()
 
         /* Print out the solution */
         print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
-
-        const double Ts = 0.02;
-        const auto TXn = transcription.get_TX_resampled(Ts);
-        const auto TUn = transcription.get_TU_resampled(Ts);
-        std::cout << "TXn: \n" << TXn << "\n";
-        std::cout << "TUn: \n" << TUn << "\n";
-
-        const double t = 0.66;
-        const auto x = transcription.get_x_at(t);
-        std::cout << "x(" << t << "): \n" << x << "\n";
-
-        const auto u = transcription.get_u_at(t);
-        std::cout << "u(" << t << "): \n" << u << "\n";
+        print_sampled_solution(transcription, Ts_max, t_test);
     }
 
     return 0;

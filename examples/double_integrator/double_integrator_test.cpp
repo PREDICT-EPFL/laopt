@@ -29,6 +29,10 @@ int main()
     ocp.x0_ub << 0.1, 0.2;                // for demonstration, last setting counts
     ocp.x0_lb << -0.1, -0.2;
 
+    /* Resampling test parameters */
+    const double Ts_max = 0.02;
+    const double t_test = 0.166;
+
     /* Solve with Multiple Shooting transcription */
     if (true)
     {
@@ -60,6 +64,7 @@ int main()
 
         /* Print out the solution */
         print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
+        print_sampled_solution(transcription, Ts_max, t_test);
     }
 
     /* Solve with Radau Collocation transcription */
@@ -94,6 +99,7 @@ int main()
 
         /* Print out the solution */
         print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
+        print_sampled_solution(transcription, Ts_max, t_test);
     }
 
     return 0;

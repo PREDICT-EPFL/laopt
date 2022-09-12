@@ -41,6 +41,10 @@ int main()
     /* Set initial state */
     ocp.set_x0(ocp.model.get_default_initial_state());
 
+    /* Resampling test parameters */
+    const double Ts_max = 0.02;
+    const double t_test = 0.166;
+
     /* Solve with Multiple Shooting transcription */
     if (true)
     {
@@ -76,6 +80,7 @@ int main()
 
         /* Print out the solution */
         print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
+        print_sampled_solution(transcription, Ts_max, t_test);
     }
 
     /* Solve with Radau Collocation transcription */
@@ -114,6 +119,7 @@ int main()
 
         /* Print out the solution */
         print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
+        print_sampled_solution(transcription, Ts_max, t_test);
     }
     return 0;
 }

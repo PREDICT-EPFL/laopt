@@ -17,13 +17,33 @@ void print_solution(const Transcription &transcription, const OptProblem &opt_pr
     Eigen::VectorX<typename Solver::Scalar> sol_primal = solver.sol_primal();
     double obj_eval = -1;// opt_problem.eval_objective(laopt::Eval(), sol_primal);
 
-    std::cout << "Comp. time (warm): " << duration_us/1e3 << " (" << duration2_us/1e3 << ") ms, tf = " << T_opt(T_opt.size() - 1) << " s, obj = " << obj_eval << "\n";
+    std::cout << "Comp. time (warm): " << duration_us / 1e3 << " (" << duration2_us / 1e3 << ") ms, tf = "
+              << T_opt(T_opt.size() - 1) << " s, obj = " << obj_eval << "\n";
     std::cout << "MATLAB-copyable output:\n";
     std::cout << "T_opt = [\n" << T_opt.transpose() << "];\n";
     std::cout << "X_opt = [\n" << X_opt << "];\n";
     std::cout << "U_opt = [\n" << U_opt << "];\n";
     std::cout << "obj = " << obj_eval << ";\n";
     std::cout << "comp_time = " << duration_us / 1e6 << ";\n";
+    std::cout << "\n";
+}
+
+template<typename Transcription, typename Scalar>
+void print_sampled_solution(const Transcription &transcription,
+                            const Scalar &Ts_max = 0.01, const Scalar &t_test = 0.166)
+{
+    const auto TXn = transcription.get_TX_resampled(Ts_max);
+    const auto TUn = transcription.get_TU_resampled(Ts_max);
+    const auto x_test = transcription.get_x_at(t_test);
+    const auto u_test = transcription.get_u_at(t_test);
+
+    std::cout << "Resampling at " << TXn(0, 1) - TXn(0, 0) << " s  (" << Ts_max << " max)\n";
+    std::cout << "MATLAB-copyable output:\n";
+    std::cout << "TXn = [\n" << TXn << "];\n";
+    std::cout << "TUn = [\n" << TUn << "];\n";
+    std::cout << "t_test = " << t_test << "];\n";
+    std::cout << "x_test =[" << x_test << "];\n";
+    std::cout << "u_test =[" << u_test << ";\n";
     std::cout << "\n";
 }
 
