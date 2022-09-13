@@ -67,7 +67,7 @@ template<int n_mass>
 static void BM_LAOPT_FUNCTION(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
+    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
 
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
     Eigen::Vector<double, LAOptChainMass<n_mass>::NU> u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
@@ -84,7 +84,7 @@ template<int n_mass>
 static void BM_LAOPT_JACOBIAN(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
+    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
 
     laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NX>> x;
     x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
@@ -105,7 +105,7 @@ template<int n_mass>
 static void BM_LAOPT_WSUM(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
+    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
 
     laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NX>> x;
     x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
@@ -125,7 +125,7 @@ template<int n_mass>
 static void BM_LAOPT_GRADIENT(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
+    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
 
     laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NX>> x;
     x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
@@ -147,7 +147,7 @@ template<int n_mass>
 static void BM_LAOPT_HESSIAN(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
+    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
 
     laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NX>> x;
     x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
