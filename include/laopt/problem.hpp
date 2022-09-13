@@ -393,7 +393,7 @@ public:
 	
 	void set_memory(Gradient, Eigen::Ref<Eigen::VectorX<scalar_t>> _weights, WeightedSumMemory<scalar_t>& mem)
 	{
-		set_memory(laopt::Eval{}, _weights, mem.gradient);
+		set_memory(laopt::Gradient{}, _weights, mem.gradient);
 	}
 	void set_memory(Hessian, Eigen::Ref<Eigen::VectorX<scalar_t>> _weights, WeightedSumMemory<scalar_t>& mem)
 	{
@@ -487,6 +487,11 @@ public:
         user_code.define_problem(problem_size_evaluator);
 	}
 
+    int num_variables()
+    {
+        return m_num_variables;
+    }
+
 	/**
 	 * Computes the number of equalities based on how many of the upper and lower bounds are equal
 	 */
@@ -507,55 +512,15 @@ public:
 	}
 
     /**
-	 * Compute the various elements of the problem by calling the 
-	 * user-code. Stores the result in constraints/objective and lagrangian respectively
-	 * 
-	 * These calls are only made internally when the Matrix and Vector types manage
-	 * their own memory (i.e., during construction). They should not be called
-	 * by the user or during deployment.
-	 */
-    template<typename DType>
-    void eval_objective_construction(DType dtype)
+     * Use the memory in var as the global decision variable
+     */
+    void set_decision_variable(Eigen::Ref<Eigen::VectorX<scalar_t>> var)
     {
-        objective.initialize();
-        objective.set_zero(dtype);
+        assert(var.rows() == num_variables() && "Decision variable is the wrong size");
 
-        ObjectiveEvaluator<DType, Matrix, Vector> objective_evaluator(objective);
-        user_code.define_problem(objective_evaluator);
+        DecisionVariableSetter<Scalar> decision_variable_setter(var);
+        user_code.define_problem(decision_variable_setter);
     }
-
-    void eval_variable_bounds_construction()
-    {
-        // We don't initialize the variable bounds because they are already set by the ProblemSizeEvaluator
-        variable_bounds.lb(Eigen::seqN(0, num_variables())).array() = -std::numeric_limits<Scalar>::infinity();
-        variable_bounds.ub(Eigen::seqN(0, num_variables())).array() = std::numeric_limits<Scalar>::infinity();
-
-        VariableBoundsEvaluator<Matrix, Vector> variable_bounds_evaluator(variable_bounds);
-        user_code.define_problem(variable_bounds_evaluator);
-    }
-    
-    template<typename DType>
-    void eval_constraints_construction(DType dtype)
-    {
-        constraints.initialize();
-        constraints.set_zero(dtype);
-
-        VectorConstraintsEvaluator<DType, Matrix, Vector> constraints_evaluator(constraints);
-        user_code.define_problem(constraints_evaluator);
-    }
-
-    template<typename DType>
-    void eval_lagrangian_construction(DType dtype)
-    {
-        lagrangian.initialize();
-        lagrangian.set_zero(dtype);
-
-        ObjectiveEvaluator<DType, Matrix, Vector> lagrangian_objective_evaluator(lagrangian);
-        user_code.define_problem(lagrangian_objective_evaluator);
-        WeightedSumConstraintsEvaluator<DType, Matrix, Vector> lagrangian_constraints_evaluator(lagrangian);
-        user_code.define_problem(lagrangian_constraints_evaluator);
-    }
-
 
 	/**
 	 * Compute the various elements of the problem by calling the 
@@ -564,17 +529,65 @@ public:
 	 * Mem must be compatible with set_memory
 	 */
     template<typename DType, typename... Args>
-    scalar_t eval_objective(DType dtype,
-                            Eigen::Ref<Eigen::VectorX<scalar_t>> var,
-                            Args &... args)
+    scalar_t eval_objective(DType dtype, Args&&... args)
     {
         // Weights for the objective are always 1
         // TODO: Don't allocated a new dynamic vector at every evaluation since it introduces a malloc and free each time. Maybe move to solver interface?
         Eigen::VectorX<scalar_t> weights(objective.rows());
         weights.array() = 1;
 
-        set_decision_variable(var);
-        objective.set_memory(dtype, weights, args...);
+        objective.set_memory(dtype, weights, std::forward<Args>(args)...);
+        return eval_objective_no_memory(dtype);
+    }
+
+    template<typename... Args>
+    void eval_variable_bounds(Args&&... args)
+    {
+        variable_bounds.set_memory(std::forward<Args>(args)...);
+        eval_variable_bounds_no_memory();
+    }
+
+    template<typename DType, typename... Args>
+    void eval_constraints(DType dtype, Args&&... args)
+    {
+        constraints.set_memory(dtype, std::forward<Args>(args)...);
+        eval_constraints_no_memory(dtype);
+    }
+
+    /**
+     * Compute the lagrangian function.
+     *
+     * Note that we actually compute the lagrangian of
+     *   L(prim, dual) = weights'*obj(prim) + dual'*g(prim)
+     */
+    template<typename DType, typename... Args>
+    scalar_t eval_lagrangian(DType dtype,
+                             const scalar_t obj_factor, // Weight to multiply the objective by [normally 1]
+                             const Eigen::Ref<Eigen::VectorX<scalar_t>> dual, // Dual variable
+                             Args&&... args)
+    {
+        assert(dual.rows() == constraints.rows() && "Dual vector is the wrong length");
+
+        // TODO: Don't allocated a new dynamic vector at every evaluation since it introduces a malloc and free each time. Maybe move to solver interface?
+        Eigen::VectorX<scalar_t> weights(lagrangian.rows());
+        weights(Eigen::seqN(0, objective.rows())).array() = obj_factor;
+        weights.tail(constraints.rows()) = dual;
+
+        lagrangian.set_memory(dtype, weights, std::forward<Args>(args)...);
+        return eval_lagrangian_no_memory(dtype);
+    }
+
+    /**
+	 * Compute the various elements of the problem by calling the
+	 * user-code. Stores the result in constraints/objective and lagrangian respectively
+	 *
+	 * These calls are only made internally when the Matrix and Vector types manage
+	 * their own memory (i.e., during construction). They should not be called
+	 * by the user or during deployment.
+	 */
+    template<typename DType>
+    scalar_t eval_objective_no_memory(DType dtype)
+    {
         objective.initialize();
         objective.set_zero(dtype);
 
@@ -584,10 +597,8 @@ public:
         return objective.value;
     }
 
-    template<typename... Args>
-    void eval_variable_bounds(Args &&... args)
+    void eval_variable_bounds_no_memory()
     {
-        variable_bounds.set_memory(args...);
         // We don't initialize the variable bounds because they are already set by the ProblemSizeEvaluator
         variable_bounds.lb(Eigen::seqN(0, num_variables())).array() = -std::numeric_limits<Scalar>::infinity();
         variable_bounds.ub(Eigen::seqN(0, num_variables())).array() = std::numeric_limits<Scalar>::infinity();
@@ -596,13 +607,9 @@ public:
         user_code.define_problem(variable_bounds_evaluator);
     }
 
-    template<typename DType, typename... Args>
-    void eval_constraints(DType dtype,
-                          Eigen::Ref<Eigen::VectorX<scalar_t>> var,
-                          Args &... args)
+    template<typename DType>
+    void eval_constraints_no_memory(DType dtype)
     {
-        set_decision_variable(var);
-        constraints.set_memory(dtype, args...);
         constraints.initialize();
         constraints.set_zero(dtype);
 
@@ -610,35 +617,12 @@ public:
         user_code.define_problem(constraints_evaluator);
     }
 
-    /**
-     * Compute the lagrangian function.
-     *
-     * Note that we actually compute the lagrangian of
-     *   L(prim,dual) = obj(prim) + dual'*g(prim)
-     * i.e., we ignore the variable bounds.
-     * This is done at the moment because IPOpt only uses the hessian of the lagrangian, so it
-     * doesn't matter, but this needs to be fixed.
-     */
-    template<typename DType, typename... Args>
-    scalar_t eval_lagrangian(DType dtype,
-                             Eigen::Ref<Eigen::VectorX<scalar_t>> var,
-                             scalar_t obj_factor, // Weight to multiply the objective by [normally 1]
-                             Eigen::Ref<Eigen::VectorX<scalar_t>> dual, // Dual variable
-                             Args &... args)
+    template<typename DType>
+    scalar_t eval_lagrangian_no_memory(DType dtype)
     {
-        assert(dual.rows() == constraints.rows() && "Dual vector is the wrong length");
-
-        // TODO: Don't allocated a new dynamic vector at every evaluation since it introduces a malloc and free each time. Maybe move to solver interface?
-        Eigen::VectorX<scalar_t> weights(lagrangian.rows());
-        weights(Eigen::seqN(0, objective.rows())).array() = obj_factor;
-        weights.tail(constraints.rows()) = dual;
-
-        set_decision_variable(var);
-        lagrangian.set_memory(dtype, weights, args...);
         lagrangian.initialize();
         lagrangian.set_zero(dtype);
 
-        // TODO : Evaluate variable bounds in lagrangian function
         ObjectiveEvaluator<DType, Matrix, Vector> lagrangian_objective_evaluator(lagrangian);
         user_code.define_problem(lagrangian_objective_evaluator);
         WeightedSumConstraintsEvaluator<DType, Matrix, Vector> lagrangian_constraints_evaluator(lagrangian);
@@ -646,21 +630,6 @@ public:
 
         return lagrangian.value;
     }
-
-	int num_variables()
-    {
-        return m_num_variables;
-    }
-
-	/**
-	 * Use the memory in var as the global decision variable
-	 */	
-	void set_decision_variable(Eigen::Ref<Eigen::VectorX<scalar_t>> var)
-	{
-		assert(var.rows() == num_variables() && "Decision variable is the wrong size");
-        DecisionVariableSetter<Scalar> decision_variable_setter(var);
-        user_code.define_problem(decision_variable_setter);
-	}
 
 	/**
 	 * Generate data for this problem.
@@ -953,10 +922,10 @@ SparsityInfo<UserCode> generate_sparsity(UserCode& user_code)
     var.setZero();
     prob.set_decision_variable(var);
 
-    prob.eval_constraints_construction(Jacobian{});
-    prob.eval_variable_bounds_construction();
-    prob.eval_objective_construction(Hessian{});
-    prob.eval_lagrangian_construction(Hessian{});
+    prob.eval_constraints_no_memory(Jacobian{});
+    prob.eval_variable_bounds_no_memory();
+    prob.eval_objective_no_memory(Hessian{});
+    prob.eval_lagrangian_no_memory(Hessian{});
 
     return prob.generate();
 }
@@ -973,10 +942,10 @@ TapeInfo<UserCode> generate_tape(UserCode& user_code, SparsityInfo<UserCode> spa
     var.setZero();
     prob.set_decision_variable(var);
 
-    prob.eval_constraints_construction(Jacobian{});
-    prob.eval_variable_bounds_construction();
-    prob.eval_objective_construction(Hessian{});
-    prob.eval_lagrangian_construction(Hessian{});
+    prob.eval_constraints_no_memory(Jacobian{});
+    prob.eval_variable_bounds_no_memory();
+    prob.eval_objective_no_memory(Hessian{});
+    prob.eval_lagrangian_no_memory(Hessian{});
 
     return prob.generate();
 }
@@ -1044,6 +1013,8 @@ struct WeightedSumMemory
         weights(w.rows()),
         hessian_buffer(nullptr, 0)
 	{
+        weights.array() = 1;
+
 		w.hessian.allocate_memory(hessian);
 		new (&hessian_buffer) Eigen::Map<Eigen::VectorX<scalar_t>>(hessian.valuePtr(), hessian.nonZeros());
 

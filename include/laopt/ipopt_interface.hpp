@@ -23,28 +23,30 @@ private:
 	Eigen::SparseMatrix<scalar_t> lag_hessian;
 
 public:
-	// User-set initial value for the primal variable
-	Eigen::VectorX<scalar_t> init_primal;
-	Eigen::VectorX<scalar_t> init_dual;
+	// internal storage for primal and dual variables
+	Eigen::VectorX<scalar_t> primal;
+    Eigen::VectorX<scalar_t> dual_lb;
+    Eigen::VectorX<scalar_t> dual_ub;
+    Eigen::VectorX<scalar_t> dual;
 
-	// User-get initial value for the primal variable
-	Eigen::VectorX<scalar_t> sol_primal;
-	Eigen::VectorX<scalar_t> sol_dual;    // Dual variables
-	Eigen::VectorX<scalar_t> sol_dual_x;  // Dual variables for bound constraints
-
-	// TODO: Add initial values for the dual and variable bound duals
-
-	/* Constructor. */
+    /* Constructor. */
 	explicit Solver_IPOpt(UserProblem& prob) :
         prob(prob),
-        init_primal(prob.num_variables()),
-        init_dual(prob.constraints.rows()),
-        sol_primal(prob.num_variables())
+        primal(prob.num_variables()),
+        dual_lb(prob.num_variables()),
+        dual_ub(prob.num_variables()),
+        dual(prob.constraints.rows())
 	{
-		init_primal.setZero(); // Default to zero if user doesn't set
-		init_dual.setZero();
+        // Default to zero if user doesn't set
+        primal.setZero();
+        dual_lb.setZero();
+        dual_ub.setZero();
+        dual.setZero();
 
 		prob.lagrangian.hessian.allocate_memory(lag_hessian);
+
+        // set memory of decision variables
+        prob.set_decision_variable(primal);
 	}
 
 	bool get_nlp_info(
@@ -101,10 +103,7 @@ public:
 		Eigen::Map<Eigen::VectorX<scalar_t>> lb(g_l, m);
 		Eigen::Map<Eigen::VectorX<scalar_t>> ub(g_u, m);
 
-		Eigen::VectorX<scalar_t> var(prob.num_variables());
-		var.array() = 0;
-
-		prob.eval_constraints(laopt::Eval(), var, con, lb, ub);
+		prob.eval_constraints(laopt::Eval(), con, lb, ub);
 
 		return true;
 	}
@@ -124,12 +123,12 @@ public:
 		// Initialize to user-specified value
 		if (init_x)
         {
-            Eigen::Map<Eigen::VectorX<scalar_t>>(x, n) = init_primal;
+            Eigen::Map<Eigen::VectorX<scalar_t>>(x, n) = primal;
         }
 
 		if (init_lambda)
         {
-            Eigen::Map<Eigen::VectorX<scalar_t>>(lambda, m) = init_dual;
+            Eigen::Map<Eigen::VectorX<scalar_t>>(lambda, m) = dual;
         }
 		return true;
 	}
@@ -142,8 +141,12 @@ public:
 	) override
 	{
 		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Ipopt::Number*>(x), n);
-		obj_value = prob.eval_objective(laopt::Eval(), var);
-		return true;
+
+        prob.set_decision_variable(var);
+		obj_value = prob.eval_objective(laopt::Eval());
+        prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
+
+        return true;
 	}
 
 	bool eval_grad_f(
@@ -155,8 +158,12 @@ public:
 	{
 		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Ipopt::Number*>(x), n);
 		Eigen::Map<Eigen::VectorX<scalar_t>> grad(grad_f, n);
-		prob.eval_objective(laopt::Gradient(), var, grad);
-		return true;
+
+        prob.set_decision_variable(var);
+		prob.eval_objective(laopt::Gradient(), grad);
+        prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
+
+        return true;
 	}
 
 	bool eval_g(
@@ -171,9 +178,12 @@ public:
 		Eigen::Map<Eigen::VectorX<scalar_t>> constraints(g, m);
 		Eigen::VectorX<scalar_t> lb(m);
 		Eigen::VectorX<scalar_t> ub(m);
-		prob.eval_constraints(laopt::Eval(), var, constraints, lb, ub);
 
-	   return true;
+        prob.set_decision_variable(var);
+		prob.eval_constraints(laopt::Eval(), constraints, lb, ub);
+        prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
+
+        return true;
 	}
 
 	bool eval_jac_g(
@@ -216,7 +226,9 @@ public:
 
 			Eigen::VectorX<scalar_t> lb(m); // Upper/lower bounds (ignored)
 			Eigen::VectorX<scalar_t> ub(m);
-			prob.eval_constraints(laopt::Jacobian(), var, constraints, lb, ub, jacobian_buffer);
+            prob.set_decision_variable(var);
+			prob.eval_constraints(laopt::Jacobian(), constraints, lb, ub, jacobian_buffer);
+            prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
 	   }
 
 	   return true;
@@ -265,11 +277,13 @@ public:
 		{
 			// return the values of the hessian of the lagrangian in the same order as the sparsity was defined
 			Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Ipopt::Number*>(x), n);
-
+            Eigen::Map<Eigen::VectorX<scalar_t>> dual_var(const_cast<Ipopt::Number*>(lambda), prob.constraints.rows());
 			Eigen::VectorX<scalar_t> gradient(n); // Ignored
 
-			auto dual = Eigen::Map<Eigen::VectorX<scalar_t>>(const_cast<Ipopt::Number*>(lambda), prob.constraints.rows());
-			prob.eval_lagrangian(laopt::Hessian(), var, obj_factor, dual, gradient, lag_hessian);
+
+            prob.set_decision_variable(var);
+            prob.eval_lagrangian(laopt::Hessian(), obj_factor, dual_var, gradient, lag_hessian);
+            prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
 
 			// Copy the lower triangular part into the ipopt buffer
 			// auto S = prob.lagrangian.hessian.sparsity_structure;
@@ -305,10 +319,8 @@ public:
        Ipopt::IpoptCalculatedQuantities* ip_cq
 	) override
 	{
-		sol_primal = Eigen::Map<const Eigen::VectorX<Ipopt::Number>>(x, n);
-		prob.set_decision_variable(sol_primal);
-
-		sol_dual = Eigen::Map<const Eigen::VectorX<Ipopt::Number>>(lambda, m);
+		primal = Eigen::Map<const Eigen::VectorX<Ipopt::Number>>(x, n);
+		dual = Eigen::Map<const Eigen::VectorX<Ipopt::Number>>(lambda, m);
 	}
 };
 

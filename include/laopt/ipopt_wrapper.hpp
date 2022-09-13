@@ -18,7 +18,6 @@ public:
 
         /* Create IPOPT problem and link decision variables to OptProblem */
         ipopt_problem = new IpoptProblem(opt_problem);
-        opt_problem.set_decision_variable(ipopt_problem->init_primal);
 
         /* Create IPOPT application, setup, and initialize */
         ipopt_application = IpoptApplicationFactory();
@@ -40,14 +39,14 @@ public:
 
     using Scalar = typename OptProblem::scalar_t;
     /* Setters */
-    void set_initial_primal(const Eigen::VectorX<Scalar> &init_primal) { ipopt_problem->init_primal = init_primal; }
-    void set_initial_dual(const Eigen::VectorX<Scalar> &init_dual) { ipopt_problem->init_dual = init_dual; }
+    void set_initial_primal(const Eigen::VectorX<Scalar> &init_primal) { ipopt_problem->primal = init_primal; }
+    void set_initial_dual(const Eigen::VectorX<Scalar> &init_dual) { ipopt_problem->dual = init_dual; }
 
     /* Getters */
-    const Eigen::VectorX<Scalar> &initial_primal() const { return ipopt_problem->init_primal; }
-    const Eigen::VectorX<Scalar> &initial_dual() const { return ipopt_problem->init_dual; }
-    const Eigen::VectorX<Scalar> &sol_primal() const { return ipopt_problem->sol_primal; }
-    const Eigen::VectorX<Scalar> &sol_dual() const { return ipopt_problem->sol_dual; }
+    const Eigen::VectorX<Scalar> &primal() const { return ipopt_problem->primal; }
+    const Eigen::VectorX<Scalar> &dual_lb() const { return ipopt_problem->dual_lb; }
+    const Eigen::VectorX<Scalar> &dual_ub() const { return ipopt_problem->dual_ub; }
+    const Eigen::VectorX<Scalar> &dual() const { return ipopt_problem->dual; }
 
 protected:
     Ipopt::SmartPtr<IpoptProblem> ipopt_problem;

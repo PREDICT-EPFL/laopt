@@ -4,7 +4,7 @@
 #include <iostream>
 
 template<typename Transcription, typename OptProblem, typename Solver, typename Duration>
-void print_solution(const Transcription &transcription, const OptProblem &opt_problem, const Solver &solver,
+void print_solution(const Transcription &transcription, OptProblem &opt_problem, const Solver &solver,
                     const Duration &duration_us, const Duration &duration2_us)
 {
     /* Print out the solution */
@@ -14,8 +14,7 @@ void print_solution(const Transcription &transcription, const OptProblem &opt_pr
     const Eigen::VectorXd T_opt = transcription.get_T_opt();
     const Eigen::MatrixXd X_opt = transcription.get_X_opt();
     const Eigen::MatrixXd U_opt = transcription.get_U_opt();
-    Eigen::VectorX<typename Solver::Scalar> sol_primal = solver.sol_primal();
-    double obj_eval = -1;// opt_problem.eval_objective(laopt::Eval(), sol_primal);
+    double obj_eval = opt_problem.eval_objective(laopt::Eval());
 
     std::cout << "Comp. time (warm): " << duration_us / 1e3 << " (" << duration2_us / 1e3 << ") ms, tf = "
               << T_opt(T_opt.size() - 1) << " s, obj = " << obj_eval << "\n";

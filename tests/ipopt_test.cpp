@@ -273,10 +273,10 @@ TEST(IpoptTest, Prob71)
 
     // Check the solution
     Eigen::Vector<scalar_t, 4> sol_primal{1, 4.743, 3.82115, 1.37941};
-    EXPECT_TRUE(solver.sol_primal().isApprox(sol_primal, 1e-4));
+    EXPECT_TRUE(solver.primal().isApprox(sol_primal, 1e-4));
 
     Eigen::Vector<scalar_t, 2> sol_dual{-0.552294, 0.161469};
-    EXPECT_TRUE(solver.sol_dual().isApprox(sol_dual, 1e-4));
+    EXPECT_TRUE(solver.dual().isApprox(sol_dual, 1e-4));
 
     // Compute the value and jacobian of the constraints at the optimal point
     laopt::ProblemMemory<scalar_t> mem(prob);
@@ -287,22 +287,23 @@ TEST(IpoptTest, Prob71)
     EXPECT_TRUE(mem.variable_bounds.ub.isApprox(Eigen::Vector<scalar_t, 4>{5, 5, 5, 5}, 1e-4));
 
     // Check the computation of the constraints
-    Eigen::VectorX<scalar_t> var = solver.sol_primal();
-    Eigen::VectorX<scalar_t> dual = solver.sol_dual();
+    Eigen::VectorX<scalar_t> var = solver.primal();
+    Eigen::VectorX<scalar_t> dual = solver.dual();
+    prob.set_decision_variable(var);
 
-    prob.eval_constraints(laopt::Jacobian(), var, mem.constraints);
+    prob.eval_constraints(laopt::Jacobian{}, mem.constraints);
     EXPECT_TRUE(mem.constraints.lb.isApprox(Eigen::Vector<scalar_t, 2>{25, 40}, 1e-4));
     EXPECT_TRUE(mem.constraints.ub.isApprox(Eigen::Vector<scalar_t, 2>{2e9, 40}, 1e-4));
     EXPECT_TRUE(mem.constraints.value.isApprox(g(prob71.x_var), 1e-4));
     EXPECT_TRUE(Eigen::MatrixX<scalar_t>(mem.constraints.jacobian).isApprox(jac_g(prob71.x_var), 1e-4));
 
     // Check the computation of the objective
-    scalar_t obj = prob.eval_objective(laopt::Hessian(), var, mem.objective);
+    scalar_t obj = prob.eval_objective(laopt::Gradient{}, mem.objective);
     EXPECT_NEAR(obj, f(var), 1e-4);
     EXPECT_TRUE(mem.objective.gradient.isApprox(grad_f(var), 1e-4));
 
     // Check the computation of the lagrangian
-    prob.eval_lagrangian(laopt::Hessian(), var, 1.0, dual, mem.lagrangian);
+    prob.eval_lagrangian(laopt::Hessian{}, 1.0, dual, mem.lagrangian);
     EXPECT_TRUE(Eigen::MatrixX<scalar_t>(mem.lagrangian.hessian).isApprox(hessian_l(var, dual, 1.0), 1e-4));
 }
 
