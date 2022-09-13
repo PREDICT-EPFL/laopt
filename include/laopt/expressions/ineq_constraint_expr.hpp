@@ -63,10 +63,10 @@ template<typename DerivedLhs, typename DerivedRhs>
 struct is_variable_constraint_expr<IneqConstraintExpr<DerivedLhs, IndexedVector<DerivedRhs>>> : std::integral_constant<bool, is_constant_non_expr<DerivedLhs>::value> {};
 
 template<typename DerivedLhs, typename DerivedRhs>
-IneqConstraintExpr<DerivedLhs, BaseExpr<DerivedRhs>>
+IneqConstraintExpr<DerivedLhs, DerivedRhs>
 operator<=(const BaseExpr<DerivedLhs>& lhs, const BaseExpr<DerivedRhs>& rhs)
 {
-    return IneqConstraintExpr<DerivedLhs, BaseExpr<DerivedRhs>>(lhs.derived(), rhs.derived());
+    return IneqConstraintExpr<DerivedLhs, DerivedRhs>(lhs.derived(), rhs.derived());
 }
 
 template<typename DerivedLhs, typename DerivedRhs>
@@ -84,10 +84,10 @@ operator<=(const DerivedLhs& lhs, const BaseExpr<DerivedRhs>& rhs)
 }
 
 template<typename DerivedLhs, typename DerivedRhs>
-IneqConstraintExpr<DerivedRhs, BaseExpr<DerivedLhs>>
+IneqConstraintExpr<DerivedRhs, DerivedLhs>
 operator>=(const BaseExpr<DerivedLhs>& lhs, const BaseExpr<DerivedRhs>& rhs)
 {
-    return IneqConstraintExpr<DerivedRhs, BaseExpr<DerivedLhs>>(rhs.derived(), lhs.derived());
+    return IneqConstraintExpr<DerivedRhs, DerivedLhs>(rhs.derived(), lhs.derived());
 }
 
 template<typename DerivedLhs, typename DerivedRhs>
