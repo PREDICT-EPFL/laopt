@@ -31,9 +31,9 @@ class BSSliceTape : public BSSliceBase<T, Base>
         if (Eigen::DenseBase<Derived>::IsRowMajor)
         {
             Eigen::Index s_i = 0;
-            for (Eigen::Index i = 0; i < m_row_indices.size(); i++)
+            for (Eigen::Index i = 0; i < (Eigen::Index) m_row_indices.size(); i++)
             {
-                for (Eigen::Index j = 0; j < m_col_indices.size(); j++)
+                for (Eigen::Index j = 0; j < (Eigen::Index) m_col_indices.size(); j++)
                 {
                     int csc_index = this->base.sparsity_structure.coeff(m_row_indices[i], m_col_indices[j]);
                     assert(csc_index != 0 && "Sparsity structure does not match!");
@@ -44,9 +44,9 @@ class BSSliceTape : public BSSliceBase<T, Base>
         else
         {
             Eigen::Index s_i = 0;
-            for (Eigen::Index j = 0; j < m_col_indices.size(); j++)
+            for (Eigen::Index j = 0; j < (Eigen::Index) m_col_indices.size(); j++)
             {
-                for (Eigen::Index i = 0; i < m_row_indices.size(); i++)
+                for (Eigen::Index i = 0; i < (Eigen::Index) m_row_indices.size(); i++)
                 {
                     int csc_index = this->base.sparsity_structure.coeff(m_row_indices[i], m_col_indices[j]);
                     assert(csc_index != 0 && "Sparsity structure does not match!");
@@ -67,17 +67,40 @@ public:
      * All operators just record the operation
      */
     template<typename Derived>
-    BSSliceTape& operator=(const Eigen::MatrixBase<Derived>& mat)
+    BSSliceTape& operator=(const Eigen::MatrixBase<Derived>& mat) { record_op(mat); return *this; }
+
+    template<typename Derived>
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceTape&>::type
+    operator=(const Derived& scalar)
     {
-        record_op(mat);
+        assert(this->M.rows() == 1 && this->M.cols() == 1 && "You tried to assign a scalar to a matrix");
+        record_op(Eigen::Matrix<Derived, 1, 1>(scalar));
         return *this;
     }
 
     template<typename Derived>
-    void operator+=(const Eigen::MatrixBase<Derived>& mat) { record_op(mat); }
+    BSSliceTape& operator+=(const Eigen::MatrixBase<Derived>& mat) { record_op(mat); return *this; }
 
     template<typename Derived>
-    void operator-=(const Eigen::MatrixBase<Derived>& mat) { record_op(mat); }
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceTape&>::type
+    operator+=(const Derived& scalar)
+    {
+        assert(this->M.rows() == 1 && this->M.cols() == 1 && "You tried to assign a scalar to a matrix");
+        record_op(Eigen::Matrix<Derived, 1, 1>(scalar));
+        return *this;
+    }
+
+    template<typename Derived>
+    BSSliceTape& operator-=(const Eigen::MatrixBase<Derived>& mat) { record_op(mat); return *this; }
+
+    template<typename Derived>
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceTape&>::type
+    operator-=(const Derived& scalar)
+    {
+        assert(this->M.rows() == 1 && this->M.cols() == 1 && "You tried to assign a scalar to a matrix");
+        record_op(Eigen::Matrix<Derived, 1, 1>(scalar));
+        return *this;
+    }
 };
 
 /**

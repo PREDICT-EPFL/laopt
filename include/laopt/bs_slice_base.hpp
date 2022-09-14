@@ -66,10 +66,24 @@ protected:
         return mat.rowIndices();
     }
 
+    template<typename RowIndicesT, std::size_t RowIndicesN, typename ColIndices>
+    Eigen::Map<const Eigen::Vector<RowIndicesT, RowIndicesN>>
+    row_indices(const Eigen::IndexedView<Eigen::Map<Eigen::MatrixX<int>>, const RowIndicesT(&)[RowIndicesN], ColIndices>& mat)
+    {
+        return Eigen::Map<const Eigen::Vector<RowIndicesT, RowIndicesN>>(mat.rowIndices());
+    }
+
     template<typename RowIndices, typename ColIndices>
     ColIndices col_indices(const Eigen::IndexedView<Eigen::Map<Eigen::MatrixX<int>>, RowIndices, ColIndices>& mat)
     {
         return mat.colIndices();
+    }
+
+    template<typename RowIndices, typename ColIndicesT, std::size_t ColIndicesN>
+    Eigen::Map<const Eigen::Vector<ColIndicesT, ColIndicesN>>
+    col_indices(const Eigen::IndexedView<Eigen::Map<Eigen::MatrixX<int>>, RowIndices, const ColIndicesT(&)[ColIndicesN]>& mat)
+    {
+        return Eigen::Map<const Eigen::Vector<ColIndicesT, ColIndicesN>>(mat.colIndices());
     }
 
     template<typename Derived, typename RowIndices, typename ColIndices>
@@ -103,18 +117,53 @@ protected:
 public:
     BSSliceBase(Base& base, T M) : base(base), M(std::move(M)) {}
 
-    template<typename RowSlice, typename ColSlice>
-    auto operator()(RowSlice rows, ColSlice cols)
+    // Matrix slicing (2D)
+    template<typename RowSlice, typename ColSlice, typename std::enable_if<Eigen::internal::valid_indexed_view_overload<RowSlice, ColSlice>::value>::type* dummy = nullptr>
+    auto operator()(const RowSlice& row_slice, const ColSlice& col_slice)
     {
-        return base.makeSlice(M(rows, cols));
+        return base.makeSlice(M(row_slice, col_slice));
+    }
+    // Scalar
+    auto operator()(Eigen::Index i_row, Eigen::Index j_col)
+    {
+        return base.makeSlice(Eigen::Block<decltype(M), 1, 1>(M, i_row, j_col));
+    }
+    // The following three overloads are needed to handle raw Index[N] arrays.
+    template<typename RowIndicesT, std::size_t RowIndicesN, typename ColIndices>
+    auto operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndices& col_indices)
+    {
+        return base.makeSlice(M(row_indices, col_indices));
+    }
+    template<typename RowIndices, typename ColIndicesT, std::size_t ColIndicesN>
+    auto operator()(const RowIndices& row_indices, const ColIndicesT (&col_indices)[ColIndicesN])
+    {
+        return base.makeSlice(M(row_indices, col_indices));
+    }
+    template<typename RowIndicesT, std::size_t RowIndicesN, typename ColIndicesT, std::size_t ColIndicesN>
+    auto operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndicesT (&colIndices)[ColIndicesN])
+    {
+        return base.makeSlice(M(row_indices, colIndices));
     }
 
-    // Vector format
-    template<typename RowSlice>
-    auto operator()(RowSlice rows)
+    // Vector slicing (1D)
+    template<typename RowSlice, typename std::enable_if<!Eigen::internal::is_valid_index_type<RowSlice>::value>::type* dummy = nullptr>
+    auto operator()(const RowSlice& row_slice)
     {
         assert(M.cols() == 1 && "YOU APPLIED A VECTOR METHOD TO A MATRIX");
-        return base.makeSlice(M(rows, 0));
+        return base.makeSlice(M(row_slice, 0));
+    }
+    // Scalar
+    auto operator()(Eigen::Index i_row)
+    {
+        assert(M.cols() == 1 && "YOU APPLIED A VECTOR METHOD TO A MATRIX");
+        return base.makeSlice(Eigen::Block<decltype(M), 1, 1>(M, i_row, 0));
+    }
+    // Raw Index[N] arrays
+    template<typename RowIndicesT, std::size_t RowIndicesN>
+    auto operator()(const RowIndicesT (&row_indices)[RowIndicesN])
+    {
+        assert(M.cols() == 1 && "YOU APPLIED A VECTOR METHOD TO A MATRIX");
+        return base.makeSlice(M(row_indices, 0));
     }
 
     auto row(size_t i)

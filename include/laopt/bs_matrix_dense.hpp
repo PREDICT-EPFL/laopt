@@ -32,7 +32,7 @@ public:
     inline Eigen::Index buffer_cols() { return static_cast<Derived*>(this)->m_mat.cols(); }
 
     // Set buffer to zero
-    inline void zero_buffer()
+    inline void set_zero()
     {
         static_cast<Derived*>(this)->m_mat.setZero();
     }
@@ -52,19 +52,42 @@ public:
     // Grow by this number of elements
     void extend(Eigen::Index rows, Eigen::Index cols)
     {
-        static_cast<Derived*>(this)->resize(BSMatrixDenseBase::rows() + rows, BSMatrixDenseBase::cols() + cols);
+        static_cast<Derived*>(this)->resize(this->rows() + rows, this->cols() + cols);
     }
 
     template<typename RowSlice, typename ColSlice>
-    inline auto operator()(const RowSlice rows, const ColSlice cols)
+    inline decltype(auto) operator()(const RowSlice& row_slice, const ColSlice& col_slice)
     {
-        return value()(rows, cols);
+        return value()(row_slice, col_slice);
+    }
+
+    // The following three overloads are needed to handle raw Index[N] arrays.
+    template<typename RowIndicesT, std::size_t RowIndicesN, typename ColIndices>
+    decltype(auto) operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndices& col_indices)
+    {
+        return value()(row_indices, col_indices);
+    }
+    template<typename RowIndices, typename ColIndicesT, std::size_t ColIndicesN>
+    decltype(auto) operator()(const RowIndices& row_indices, const ColIndicesT (&col_indices)[ColIndicesN])
+    {
+        return value()(row_indices, col_indices);
+    }
+    template<typename RowIndicesT, std::size_t RowIndicesN, typename ColIndicesT, std::size_t ColIndicesN>
+    decltype(auto) operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndicesT (&col_indices)[ColIndicesN])
+    {
+        return value()(row_indices, col_indices);
     }
 
     template<typename RowSlice>
-    inline auto operator()(const RowSlice rows)
+    inline decltype(auto) operator()(const RowSlice& row_indices)
     {
-        return value()(rows, 0);
+        return value()(row_indices, 0);
+    }
+
+    template<typename RowIndicesT, std::size_t RowIndicesN>
+    inline decltype(auto) operator()(const RowIndicesT (&row_indices)[RowIndicesN])
+    {
+        return value()(row_indices, 0);
     }
 
     /**
@@ -112,14 +135,6 @@ public:
         this->m_rows = rows;
         this->m_cols = cols;
     }
-
-    /**
-     * Clear the matrix to all zeros
-     */
-    void set_zero()
-    {
-        m_mat.setZero();
-    }
 };
 
 template<typename scalar_t_>
@@ -137,34 +152,19 @@ private:
 public:
     BSMatrixDenseDeployment() : m_mat(nullptr, 0, 0) {}
 
-    explicit BSMatrixDenseDeployment(const typename BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>::Info& info) : m_mat(NULL, 0, 0) {}
-
-    explicit BSMatrixDenseDeployment(Eigen::Ref<Eigen::MatrixX<scalar_t>> mat) : m_mat(mat.data(), mat.rows(), mat.cols())
-    {
-        set_buffer(mat);
-    }
+    explicit BSMatrixDenseDeployment(const typename BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>::Info& info) : m_mat(nullptr, 0, 0) {}
+    explicit BSMatrixDenseDeployment(Eigen::Ref<Eigen::MatrixX<scalar_t>> mat) : m_mat(mat.data(), mat.rows(), mat.cols()) {}
 
     void set_buffer(Eigen::Ref<Eigen::MatrixX<scalar_t>> mat)
     {
-        // assert(this->rows() == mat.rows() && this->cols() == mat.cols() && "Buffer is the wrong size in set_buffer");
         new(&m_mat) Eigen::Map<Eigen::MatrixX<scalar_t>>(mat.data(), mat.rows(), mat.cols());
     }
 
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
-        // assert((rows * cols == 0 || rows <= this->buffer_rows() && cols <= this->buffer_cols()) && "You're resizing during deployment to a size larger than the buffer!");
         this->m_rows = rows;
         this->m_cols = cols;
     }
-
-    /**
-     * Clear the matrix to all zeros
-     */
-    void set_zero()
-    {
-        m_mat.setZero();
-    }
-
 };
 
 } // namespace laopt

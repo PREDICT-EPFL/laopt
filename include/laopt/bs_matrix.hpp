@@ -86,8 +86,8 @@ class BSMatrix
         {
             size_t length = segments[segment_index + i].length;
             size_t index = segments[segment_index + i].index;
-            auto tgt = Eigen::Map<Eigen::VectorX<scalar_t>>(target + index, length);
-            const auto src = Eigen::Map<const Eigen::VectorX<scalar_t>>(source, length);
+            Eigen::Map<Eigen::VectorX<scalar_t>> tgt(target + index, length);
+            const Eigen::Map<const Eigen::VectorX<scalar_t>> src(source, length);
             op(tgt, src);
             source += length;
         }
@@ -167,31 +167,62 @@ public:
         return *this;
     }
 
-    // Assumption: The input matrix is contiguous. Don't change this to a Ref.
-    template<typename Derived>
-    void inline operator+=(const Derived& block)
+    inline BSMatrix& operator=(const scalar_t& scalar)
     {
-        execute_operation([](auto& a, auto& b) { a += b; }, block.eval().data());
+        execute_operation([](auto& a, auto& b) { a = b; }, &scalar);
+        return *this;
     }
 
     // Assumption: The input matrix is contiguous. Don't change this to a Ref.
     template<typename Derived>
-    void operator-=(const Derived& block)
+    inline BSMatrix& operator+=(const Eigen::MatrixBase<Derived>& block)
+    {
+        execute_operation([](auto& a, auto& b) { a += b; }, block.eval().data());
+        return *this;
+    }
+
+    inline BSMatrix& operator+=(const scalar_t& scalar)
+    {
+        execute_operation([](auto& a, auto& b) { a += b; }, &scalar);
+        return *this;
+    }
+
+    // Assumption: The input matrix is contiguous. Don't change this to a Ref.
+    template<typename Derived>
+    inline BSMatrix& operator-=(const Eigen::MatrixBase<Derived>& block)
     {
         execute_operation([](auto& a, auto& b) { a -= b; }, block.eval().data());
+        return *this;
+    }
+
+    inline BSMatrix& operator-=(const scalar_t& scalar)
+    {
+        execute_operation([](auto& a, auto& b) { a -= b; }, &scalar);
+        return *this;
     }
 
     // These all compile out. Not used in deployment.
     template<typename RowSlice, typename ColSlice>
-    BSMatrix<scalar_t>& operator()(RowSlice rows, ColSlice cols) { return *this; }
+    BSMatrix<scalar_t>& operator()(const RowSlice& row_slice, const ColSlice& col_slice) { return *this; }
+
+    // The following three overloads are needed to handle raw Index[N] arrays.
+    template<typename RowIndicesT, std::size_t RowIndicesN, typename ColIndices>
+    BSMatrix<scalar_t>& operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndices& col_indices) { return *this; }
+    template<typename RowIndices, typename ColIndicesT, std::size_t ColIndicesN>
+    BSMatrix<scalar_t>& operator()(const RowIndices& row_indices, const ColIndicesT (&col_indices)[ColIndicesN]) { return *this; }
+    template<typename RowIndicesT, std::size_t RowIndicesN, typename ColIndicesT, std::size_t ColIndicesN>
+    BSMatrix<scalar_t>& operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndicesT (&col_indices)[ColIndicesN]) { return *this; }
 
     // Vector format
     template<typename RowSlice>
-    BSMatrix<scalar_t>& operator()(RowSlice rows) { return *this; }
+    BSMatrix<scalar_t>& operator()(const RowSlice& row_slice) { return *this; }
 
-    auto row(size_t i) { return *this; }
+    template<typename RowIndicesT, std::size_t RowIndicesN>
+    BSMatrix<scalar_t>& operator()(const RowIndicesT (&row_indices)[RowIndicesN]) { return *this; }
 
-    auto col(size_t i) { return *this; }
+    BSMatrix<scalar_t>& row(size_t i) { return *this; }
+
+    BSMatrix<scalar_t>& col(size_t i) { return *this; }
 
     void resize(int rows, int cols) {}
 
