@@ -62,7 +62,6 @@ public:
     template<typename OtherDerived>
     IndexedVector& operator=(const Eigen::MatrixBase<OtherDerived> &other) {
         this->Base::operator=(other);
-        m_indices.array() = -1;
         return *this;
     }
 
@@ -111,20 +110,40 @@ public:
     }
 
     /**
-     * Forwards vector access operator
+     * Forwards row slice access operator
      */
-    template<typename ...Args>
-    EIGEN_STRONG_INLINE auto operator()(Args&& ...args) {
-        using RetType = decltype(Base::operator()(std::forward<Args>(args)...));
-        IndexedVector<RetType> ret(Base::operator()(std::forward<Args>(args)...));
-        ret.set_indices(m_indices(std::forward<Args>(args)...));
+    template<typename RowSlice, typename std::enable_if<!Eigen::internal::is_valid_index_type<RowSlice>::value>::type* dummy = nullptr>
+    auto operator()(const RowSlice& row_slice)
+    {
+        using RetType = decltype(Base::operator()(row_slice));
+        IndexedVector<RetType> ret(Base::operator()(row_slice));
+        ret.set_indices(m_indices(row_slice));
         return ret;
     }
-    template<typename ...Args>
-    EIGEN_STRONG_INLINE auto operator()(Args&& ...args) const {
-        using RetType = decltype(Base::operator()(std::forward<Args>(args)...));
-        IndexedVector<RetType> ret(Base::operator()(std::forward<Args>(args)...));
-        ret.set_indices(m_indices(std::forward<Args>(args)...));
+    template<typename RowSlice, typename std::enable_if<!Eigen::internal::is_valid_index_type<RowSlice>::value>::type* dummy = nullptr>
+    auto operator()(const RowSlice& row_slice) const
+    {
+        using RetType = decltype(Base::operator()(row_slice));
+        IndexedVector<RetType> ret(Base::operator()(row_slice));
+        ret.set_indices(m_indices(row_slice));
+        return ret;
+    }
+
+    /**
+     * Package the base matrix into an 1x1 block if a single coefficient is requested to not loose the indices
+     */
+    auto operator()(Eigen::Index i_row)
+    {
+        using RetType = Eigen::Block<Base, 1, 1>;
+        IndexedVector<RetType> ret(RetType(*this, i_row, 0));
+        ret.set_indices(m_indices(Eigen::seqN(i_row, Eigen::fix<1>)));
+        return ret;
+    }
+    auto operator()(Eigen::Index i_row) const
+    {
+        using RetType = Eigen::Block<Base, 1, 1>;
+        IndexedVector<RetType> ret(RetType(*this, i_row, 0));
+        ret.set_indices(m_indices(Eigen::seqN(i_row, Eigen::fix<1>)));
         return ret;
     }
 

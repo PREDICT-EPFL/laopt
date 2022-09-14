@@ -5,8 +5,6 @@
 #include "laopt/indexed_vector.hpp"
 #include "gtest/gtest.h"
 
-#include "laopt/utility.hpp"
-
 /**
  * Given an array of N Eigen vectors, return a vector from first of size number
  * 
@@ -45,23 +43,20 @@ TEST(VariableTest, StackTest) {
     std::array<laopt::Variable<double, n>, N> var_array;
 
     // Register the variables to the master_var
-    Eigen::Vector<double, N*n> master_var;
+    Eigen::Vector<double, N * n> master_var;
     for (int i = 0; i < N * n; i++) master_var[i] = i;
     for (int i = 0; i < N; i++) var_array[i].set_memory(i * n, master_var.data());
 
     // Create a stack of 4 variables starting at element 3
     auto stack = stack_variables<4>(var_array, 3);
     std::cout << "stack = " << stack.transpose() << std::endl;
-    std::cout << "stack.indices = " << stack.indices().transpose() << std::endl;    
+    std::cout << "stack.indices = " << stack.indices().transpose() << std::endl;
 };
-
-
 
 
 // Given a Variable of length N*n, return an array
 // of length N of Variables of length n partitioning
 // X.
-
 template<int n, int N, typename T, int... ints>
 auto make_variable_array_helper(T& X, std::integer_sequence<int, ints...>)
 {
@@ -72,7 +67,7 @@ auto make_variable_array_helper(T& X, std::integer_sequence<int, ints...>)
 template<int n, int N, typename T>
 auto make_variable_array(T& X)
 {
-    return make_variable_array_helper<n,N>(X, std::make_integer_sequence<int, N>{});
+    return make_variable_array_helper<n, N>(X, std::make_integer_sequence<int, N>{});
 };
 
 
@@ -126,6 +121,13 @@ TEST(IndexedVectorTest, Map) {
     testing::internal::CaptureStdout();
     std::cout << "map.indices() = " << map.indices().transpose();
     EXPECT_EQ(testing::internal::GetCapturedStdout(), "map.indices() =  5  6  7  8  9 10 11 12");
+
+    testing::internal::CaptureStdout();
+    std::cout << "map(2) = " << map(2).transpose();
+    EXPECT_EQ(testing::internal::GetCapturedStdout(), "map(2) = 5");
+    testing::internal::CaptureStdout();
+    std::cout << "map(2).indices() = " << map(2).indices().transpose();
+    EXPECT_EQ(testing::internal::GetCapturedStdout(), "map(2).indices() = 7");
 
     testing::internal::CaptureStdout();
     std::cout << "map({3,2,1}) = " << map(std::array<int, 3>({3, 2, 1})).transpose();
@@ -187,10 +189,11 @@ TEST(IndexedVectorTest, Assignment) {
     x << 0, 1, 2, 3, 4, 5, 6, 7, 8, 9;
 
     x({9, 8, 4, 2}).array() = -4;
+    x({6, 7}) = Eigen::Vector<double, 2>::Constant(-9);
 
     testing::internal::CaptureStdout();
     std::cout << "x = " << x.transpose();
-    EXPECT_EQ(testing::internal::GetCapturedStdout(), "x =  0  1 -4  3 -4  5  6  7 -4 -4");
+    EXPECT_EQ(testing::internal::GetCapturedStdout(), "x =  0  1 -4  3 -4  5 -9 -9 -4 -4");
     testing::internal::CaptureStdout();
     std::cout << "x.indices() = " << x.indices().transpose();
     EXPECT_EQ(testing::internal::GetCapturedStdout(), "x.indices() = 10 11 12 13 14 15 16 17 18 19");
