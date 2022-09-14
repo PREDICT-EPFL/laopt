@@ -37,7 +37,7 @@ struct is_variable_constraint_expr<BoundedExpr<DerivedLb, IndexedVector<Derived>
 
 template<typename DerivedLb, typename Derived, typename DerivedUb>
 typename std::enable_if<is_constant_non_expr<DerivedLb>::value &&
-                        std::is_base_of<BaseExpr<Derived>, Derived>::value &&
+                        std::is_base_of<ExprBase<Derived>, Derived>::value &&
                         is_constant_non_expr<DerivedUb>::value,
                         BoundedExpr<DerivedLb, Derived, DerivedUb>>::type
 operator<=(const IneqConstraintExpr<DerivedLb, Derived>& ineq, const DerivedUb& ub)
@@ -47,7 +47,7 @@ operator<=(const IneqConstraintExpr<DerivedLb, Derived>& ineq, const DerivedUb& 
 
 template<typename DerivedLb, typename Derived, typename DerivedUb>
 typename std::enable_if<is_constant_non_expr<DerivedLb>::value &&
-                        std::is_base_of<BaseExpr<Derived>, Derived>::value &&
+                        std::is_base_of<ExprBase<Derived>, Derived>::value &&
                         is_constant_non_expr<DerivedUb>::value,
                         BoundedExpr<DerivedLb, Derived, DerivedUb>>::type
 operator<=(const DerivedLb& lb, const IneqConstraintExpr<Derived, DerivedUb>& ineq)
@@ -57,7 +57,7 @@ operator<=(const DerivedLb& lb, const IneqConstraintExpr<Derived, DerivedUb>& in
 
 template<typename DerivedLb, typename Derived, typename DerivedUb>
 typename std::enable_if<is_constant_non_expr<DerivedLb>::value &&
-                        std::is_base_of<BaseExpr<Derived>, Derived>::value &&
+                        std::is_base_of<ExprBase<Derived>, Derived>::value &&
                         is_constant_non_expr<DerivedUb>::value,
                         BoundedExpr<DerivedLb, Derived, DerivedUb>>::type
 operator>=(const IneqConstraintExpr<Derived, DerivedUb>& ineq, const DerivedLb& lb)
@@ -67,7 +67,7 @@ operator>=(const IneqConstraintExpr<Derived, DerivedUb>& ineq, const DerivedLb& 
 
 template<typename DerivedLb, typename Derived, typename DerivedUb>
 typename std::enable_if<is_constant_non_expr<DerivedLb>::value &&
-                        std::is_base_of<BaseExpr<Derived>, Derived>::value &&
+                        std::is_base_of<ExprBase<Derived>, Derived>::value &&
                         is_constant_non_expr<DerivedUb>::value,
                         BoundedExpr<DerivedLb, Derived, DerivedUb>>::type
 operator>=(const DerivedUb& ub, const IneqConstraintExpr<DerivedLb, Derived>& ineq)
@@ -77,14 +77,14 @@ operator>=(const DerivedUb& ub, const IneqConstraintExpr<DerivedLb, Derived>& in
 
 template<typename DerivedLhs, typename DerivedRhs>
 typename std::enable_if<is_constant_non_expr<DerivedRhs>::value, BoundedExpr<DerivedRhs, DerivedLhs, DerivedRhs>>::type
-operator==(const BaseExpr<DerivedLhs>& lhs, const DerivedRhs& rhs)
+operator==(const ExprBase<DerivedLhs>& lhs, const DerivedRhs& rhs)
 {
     return BoundedExpr<DerivedRhs, DerivedLhs, DerivedRhs>(rhs, lhs.derived(), rhs);
 }
 
 template<typename DerivedLhs, typename DerivedRhs>
 typename std::enable_if<is_constant_non_expr<DerivedLhs>::value, BoundedExpr<DerivedLhs, DerivedRhs, DerivedLhs>>::type
-operator==(const DerivedLhs& lhs, const BaseExpr<DerivedRhs>& rhs)
+operator==(const DerivedLhs& lhs, const ExprBase<DerivedRhs>& rhs)
 {
     return BoundedExpr<DerivedLhs, DerivedRhs, DerivedLhs>(lhs, rhs.derived(), lhs);
 }

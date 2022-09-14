@@ -18,9 +18,9 @@ public:
     const DerivedLhs& lhs;
     const DerivedRhs& rhs;
 
-    using ExprType = typename std::conditional<std::is_base_of<BaseExpr<DerivedLhs>, DerivedLhs>::value && std::is_base_of<BaseExpr<DerivedRhs>, DerivedRhs>::value,
+    using ExprType = typename std::conditional<std::is_base_of<ExprBase<DerivedLhs>, DerivedLhs>::value && std::is_base_of<ExprBase<DerivedRhs>, DerivedRhs>::value,
                                                SubExpr<DerivedLhs, DerivedRhs>,
-                                               typename std::conditional<std::is_base_of<BaseExpr<DerivedLhs>, DerivedLhs>::value,
+                                               typename std::conditional<std::is_base_of<ExprBase<DerivedLhs>, DerivedLhs>::value,
                                                                          DerivedLhs,
                                                                          DerivedRhs>::type>::type;
     static constexpr int n_inputs = ExprType::n_inputs;
@@ -31,21 +31,21 @@ public:
 
     template<typename DerivedLhs_, typename DerivedRhs_>
     EIGEN_STRONG_INLINE const typename std::enable_if<is_constant_non_expr<DerivedRhs_>::value, Eigen::Vector<int, n_inputs>>::type
-    indices_impl(const BaseExpr<DerivedLhs_>& lhs_, const DerivedRhs_& rhs_) const
+    indices_impl(const ExprBase<DerivedLhs_>& lhs_, const DerivedRhs_& rhs_) const
     {
         return lhs_.derived().indices();
     }
 
     template<typename DerivedLhs_, typename DerivedRhs_>
     EIGEN_STRONG_INLINE const typename std::enable_if<is_constant_non_expr<DerivedLhs_>::value, Eigen::Vector<int, n_inputs>>::type
-    indices_impl(const DerivedLhs_& lhs_, const BaseExpr<DerivedRhs_>& rhs_) const
+    indices_impl(const DerivedLhs_& lhs_, const ExprBase<DerivedRhs_>& rhs_) const
     {
         return rhs_.derived().indices();
     }
 
     template<typename DerivedLhs_, typename DerivedRhs_>
     EIGEN_STRONG_INLINE const Eigen::Vector<int, n_inputs>
-    indices_impl(const BaseExpr<DerivedLhs_>& lhs_, const BaseExpr<DerivedRhs_>& rhs_) const
+    indices_impl(const ExprBase<DerivedLhs_>& lhs_, const ExprBase<DerivedRhs_>& rhs_) const
     {
         return SubExpr<DerivedLhs_, DerivedRhs_>(lhs_.derived(), rhs_.derived()).indices();
     }
@@ -64,49 +64,49 @@ struct is_variable_constraint_expr<IneqConstraintExpr<DerivedLhs, IndexedVector<
 
 template<typename DerivedLhs, typename DerivedRhs>
 IneqConstraintExpr<DerivedLhs, DerivedRhs>
-operator<=(const BaseExpr<DerivedLhs>& lhs, const BaseExpr<DerivedRhs>& rhs)
+operator<=(const ExprBase<DerivedLhs>& lhs, const ExprBase<DerivedRhs>& rhs)
 {
     return IneqConstraintExpr<DerivedLhs, DerivedRhs>(lhs.derived(), rhs.derived());
 }
 
 template<typename DerivedLhs, typename DerivedRhs>
 typename std::enable_if<is_constant_non_expr<DerivedRhs>::value, IneqConstraintExpr<DerivedLhs, DerivedRhs>>::type
-operator<=(const BaseExpr<DerivedLhs>& lhs, const DerivedRhs& rhs)
+operator<=(const ExprBase<DerivedLhs>& lhs, const DerivedRhs& rhs)
 {
     return IneqConstraintExpr<DerivedLhs, DerivedRhs>(lhs.derived(), rhs);
 }
 
 template<typename DerivedLhs, typename DerivedRhs>
 typename std::enable_if<is_constant_non_expr<DerivedLhs>::value, IneqConstraintExpr<DerivedLhs, DerivedRhs>>::type
-operator<=(const DerivedLhs& lhs, const BaseExpr<DerivedRhs>& rhs)
+operator<=(const DerivedLhs& lhs, const ExprBase<DerivedRhs>& rhs)
 {
     return IneqConstraintExpr<DerivedLhs, DerivedRhs>(lhs, rhs.derived());
 }
 
 template<typename DerivedLhs, typename DerivedRhs>
 IneqConstraintExpr<DerivedRhs, DerivedLhs>
-operator>=(const BaseExpr<DerivedLhs>& lhs, const BaseExpr<DerivedRhs>& rhs)
+operator>=(const ExprBase<DerivedLhs>& lhs, const ExprBase<DerivedRhs>& rhs)
 {
     return IneqConstraintExpr<DerivedRhs, DerivedLhs>(rhs.derived(), lhs.derived());
 }
 
 template<typename DerivedLhs, typename DerivedRhs>
 typename std::enable_if<is_constant_non_expr<DerivedRhs>::value, IneqConstraintExpr<DerivedRhs, DerivedLhs>>::type
-operator>=(const BaseExpr<DerivedLhs>& lhs, const DerivedRhs& rhs)
+operator>=(const ExprBase<DerivedLhs>& lhs, const DerivedRhs& rhs)
 {
     return IneqConstraintExpr<DerivedRhs, DerivedLhs>(rhs, lhs.derived());
 }
 
 template<typename DerivedLhs, typename DerivedRhs>
 typename std::enable_if<is_constant_non_expr<DerivedLhs>::value, IneqConstraintExpr<DerivedRhs, DerivedLhs>>::type
-operator>=(const DerivedLhs& lhs, const BaseExpr<DerivedRhs>& rhs)
+operator>=(const DerivedLhs& lhs, const ExprBase<DerivedRhs>& rhs)
 {
     return IneqConstraintExpr<DerivedRhs, DerivedLhs>(rhs.derived(), lhs);
 }
 
 template<typename DerivedLhs, typename DerivedRhs>
 struct ExprEvaluator<IneqConstraintExpr<DerivedLhs, DerivedRhs>,
-                     typename std::enable_if<std::is_base_of<BaseExpr<DerivedLhs>, DerivedLhs>::value &&
+                     typename std::enable_if<std::is_base_of<ExprBase<DerivedLhs>, DerivedLhs>::value &&
                                              is_constant_non_expr<DerivedRhs>::value>::type>
 {
     static EIGEN_STRONG_INLINE auto
@@ -158,7 +158,7 @@ struct ExprEvaluator<IneqConstraintExpr<DerivedLhs, DerivedRhs>,
 
 template<typename DerivedLhs, typename DerivedRhs>
 struct ExprEvaluator<IneqConstraintExpr<DerivedLhs, DerivedRhs>,
-                     typename std::enable_if<std::is_base_of<BaseExpr<DerivedRhs>, DerivedRhs>::value &&
+                     typename std::enable_if<std::is_base_of<ExprBase<DerivedRhs>, DerivedRhs>::value &&
                                              is_constant_non_expr<DerivedLhs>::value>::type>
 {
     static EIGEN_STRONG_INLINE auto
@@ -210,8 +210,8 @@ struct ExprEvaluator<IneqConstraintExpr<DerivedLhs, DerivedRhs>,
 
 template<typename DerivedLhs, typename DerivedRhs>
 struct ExprEvaluator<IneqConstraintExpr<DerivedLhs, DerivedRhs>,
-                     typename std::enable_if<std::is_base_of<BaseExpr<DerivedLhs>, DerivedLhs>::value &&
-                                             std::is_base_of<BaseExpr<DerivedRhs>, DerivedRhs>::value>::type>
+                     typename std::enable_if<std::is_base_of<ExprBase<DerivedLhs>, DerivedLhs>::value &&
+                                             std::is_base_of<ExprBase<DerivedRhs>, DerivedRhs>::value>::type>
 {
     static EIGEN_STRONG_INLINE auto
     function(const IneqConstraintExpr<DerivedLhs, DerivedRhs>& ineq)

@@ -1,10 +1,10 @@
-#ifndef LAOPT_BASE_EXPR_HPP
-#define LAOPT_BASE_EXPR_HPP
+#ifndef LAOPT_EXPR_BASE_HPP
+#define LAOPT_EXPR_BASE_HPP
 
 namespace laopt {
 
 template<typename Derived>
-class BaseExpr
+class ExprBase
 {
 public:
     Derived& derived()
@@ -20,4 +20,4 @@ public:
 
 } // namespace laopt
 
-#endif // LAOPT_BASE_EXPR_HPP
+#endif // LAOPT_EXPR_BASE_HPP

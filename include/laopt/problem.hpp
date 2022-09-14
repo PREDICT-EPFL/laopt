@@ -716,7 +716,7 @@ public:
 
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value>::type
-    add_obj(const BaseExpr<Derived>& expr)
+    add_obj(const ExprBase<Derived>& expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
@@ -728,7 +728,7 @@ public:
 
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Gradient>::value>::type
-    add_obj(const BaseExpr<Derived>& expr)
+    add_obj(const ExprBase<Derived>& expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
@@ -740,7 +740,7 @@ public:
 
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Hessian>::value>::type
-    add_obj(const BaseExpr<Derived>& expr)
+    add_obj(const ExprBase<Derived>& expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 

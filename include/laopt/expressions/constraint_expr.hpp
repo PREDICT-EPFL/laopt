@@ -2,18 +2,18 @@
 #define LAOPT_CONSTRAINT_EXPR_HPP
 
 #include "Eigen/Dense"
-#include "base_expr.hpp"
+#include "expr_base.hpp"
 
 namespace laopt {
 
 /**
- * This helper struct has a member constant value equal to true if T is arithmetic, a Eigen matrix and not an BaseExpr.
+ * This helper struct has a member constant value equal to true if T is arithmetic, a Eigen matrix and not an ExprBase.
  */
 template<typename T>
 struct is_constant_non_expr : std::integral_constant<bool,
                                                      (std::is_arithmetic<T>::value ||
                                                       std::is_base_of<Eigen::MatrixBase<T>, T>::value) &&
-                                                     !std::is_base_of<BaseExpr<T>, T>::value> {};
+                                                     !std::is_base_of<ExprBase<T>, T>::value> {};
 
 /**
  * This helper struct has a member constant value equal to true if T is an constraint expression

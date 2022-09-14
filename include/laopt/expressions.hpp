@@ -1,7 +1,7 @@
 #ifndef LAOPT_EXPRESSIONS_HPP
 #define LAOPT_EXPRESSIONS_HPP
 
-#include "expressions/base_expr.hpp"
+#include "expressions/expr_base.hpp"
 #include "expressions/add_expr.hpp"
 #include "expressions/sub_expr.hpp"
 

@@ -2,12 +2,12 @@
 #define LAOPT_INDEXED_VECTOR_HPP
 
 #include "Eigen/Dense"
-#include "expressions/base_expr.hpp"
+#include "expressions/expr_base.hpp"
 
 namespace laopt {
 
 template<typename Derived>
-class VariableBase : public BaseExpr<Derived> {};
+class VariableBase : public ExprBase<Derived> {};
 
 /**
  * A class derived from any Eigen Vector type that records an internal index 

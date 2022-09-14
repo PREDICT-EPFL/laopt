@@ -6,7 +6,7 @@
 #include "eigen_autodiff_fix.hpp"
 
 #include "utility.hpp"
-#include "expressions/base_expr.hpp"
+#include "expressions/expr_base.hpp"
 #include "indexed_vector.hpp"
 
 namespace laopt
@@ -19,7 +19,7 @@ struct DefaultTag {};
  * Capture is a lambda which takes another lambda as input which is then called with the original parameters.
  */
 template<typename Derived, typename Tag, typename Info, typename Capture>
-class FunctionCapture : public BaseExpr<FunctionCapture<Derived, Tag, Info, Capture>>
+class FunctionCapture : public ExprBase<FunctionCapture<Derived, Tag, Info, Capture>>
 {
 public:
     Derived& func;

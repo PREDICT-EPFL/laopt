@@ -3,14 +3,14 @@
 
 #include <Eigen/Dense>
 
-#include "base_expr.hpp"
+#include "expr_base.hpp"
 #include "expr_evaluator.hpp"
 #include "../indexed_vector.hpp"
 
 namespace laopt {
 
 template<typename DerivedLhs, typename DerivedRhs>
-class AddExpr : public BaseExpr<AddExpr<DerivedLhs, DerivedRhs>>
+class AddExpr : public ExprBase<AddExpr<DerivedLhs, DerivedRhs>>
 {
 public:
     const DerivedLhs& lhs;
@@ -30,7 +30,7 @@ public:
 };
 
 template<typename DerivedLhs, typename DerivedRhs>
-AddExpr<DerivedLhs, DerivedRhs> operator+(const BaseExpr<DerivedLhs>& lhs, const BaseExpr<DerivedRhs>& rhs)
+AddExpr<DerivedLhs, DerivedRhs> operator+(const ExprBase<DerivedLhs>& lhs, const ExprBase<DerivedRhs>& rhs)
 {
     return AddExpr<DerivedLhs, DerivedRhs>(lhs.derived(), rhs.derived());
 }
