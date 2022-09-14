@@ -24,11 +24,11 @@ target_link_libraries(
 )
 
 add_executable(
-  bs_test
-  bs_test.cpp
+  bs_matrix_test
+  bs_matrix_test.cpp
 )
 target_link_libraries(
-  bs_test
+  bs_matrix_test
   gtest_main
   gtest
 )
@@ -62,4 +62,4 @@ add_executable(
 
 include(GoogleTest)
 gtest_discover_tests(func_test)
-gtest_discover_tests(bs_test)
+gtest_discover_tests(bs_matrix_test)
