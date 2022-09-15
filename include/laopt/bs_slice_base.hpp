@@ -133,12 +133,29 @@ protected:
 public:
     BSSliceBase(Child& child, NullMat nullMat) : child(child), null_mat(std::move(nullMat)) {}
 
+    // Only used in BSMatrix
+    inline void reset_copy_index() {}
+
+    // Getters for dimensions
+    Eigen::Index rows() const { return null_mat.rows(); }
+    Eigen::Index cols() const { return null_mat.cols(); }
+
     /**
      * These overloads allow to use any BS... object to be indexed and sliced by common Eigen methods.
      * They forward the resulting BS... sub matrix to the makeSlice method implemented in the child class,
      * which will once again create a BS... object for the sub matrix and handle the arithmetic operation it
      * was called with.
      */
+
+    // Using the row() or col() operator
+    auto row(size_t i)
+    {
+        return child.makeSlice(null_mat.row(i));
+    }
+    auto col(size_t i)
+    {
+        return child.makeSlice(null_mat.col(i));
+    }
 
     // Block out of a matrix
     template<typename RowSlice, typename ColSlice, typename std::enable_if<Eigen::internal::valid_indexed_view_overload<RowSlice, ColSlice>::value>::type* dummy = nullptr>
@@ -188,22 +205,6 @@ public:
         assert(null_mat.cols() == 1 && "YOU APPLIED A VECTOR METHOD TO A MATRIX");
         return child.makeSlice(null_mat(row_indices, 0));
     }
-
-    // Using the row() or col() operator
-    auto row(size_t i)
-    {
-        return child.makeSlice(null_mat.row(i));
-    }
-    auto col(size_t i)
-    {
-        return child.makeSlice(null_mat.col(i));
-    }
-
-    Eigen::Index rows() const { return null_mat.rows(); }
-    Eigen::Index cols() const { return null_mat.cols(); }
-
-    // Only used in BSMatrix
-    inline void reset_copy_index() {}
 };
 
 } // namespace laopt

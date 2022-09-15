@@ -10,7 +10,7 @@
 namespace laopt {
 
 /**
- * A slice class where all operators just set the sparsity structure
+ * A slice class where all operators just set the sparsity pattern
  */
 template<typename NullMat, typename Child>
 class BSSliceSparsity : public BSSliceBase<NullMat, Child>
@@ -125,7 +125,7 @@ public:
     }
 
     /**
-     * Create a BSMatrixTape from this sparsity structure
+     * Create a BSMatrixTape from this sparsity pattern
      */
     BSMatrixTape makeBSTape(Eigen::Index rows, Eigen::Index cols)
     {
@@ -133,7 +133,7 @@ public:
     }
 
     /**
-     * Return a structure that can be passed to a BSMatrixTape to initialize it
+     * Return a pattern that can be passed to a BSMatrixTape to initialize it
      */
     using Info = Eigen::SparseMatrix<bool>;
 
