@@ -12,29 +12,29 @@ namespace laopt {
 /**
  * A slice class where all operators just set the sparsity structure
  */
-template<typename T, typename Base>
-class BSSliceSparsity : public BSSliceBase<T, Base>
+template<typename NullMat, typename Child>
+class BSSliceSparsity : public BSSliceBase<NullMat, Child>
 {
 private:
     template<typename Derived>
     void create_sparsity_pattern(const Eigen::DenseBase<Derived>& mat)
     {
-        assert(mat.rows() == this->M.rows() && mat.cols() == this->M.cols() && "You assigned a matrix of the wrong size!");
+        assert(mat.rows() == this->null_mat.rows() && mat.cols() == this->null_mat.cols() && "You assigned a matrix of the wrong size!");
 
-        auto m_row_indices = this->row_indices(this->M);
-        auto m_col_indices = this->col_indices(this->M);
+        auto m_row_indices = this->row_indices(this->null_mat);
+        auto m_col_indices = this->col_indices(this->null_mat);
 
         for (Eigen::Index i = 0; i < (Eigen::Index) m_row_indices.size(); i++)
         {
             for (Eigen::Index j = 0; j < (Eigen::Index) m_col_indices.size(); j++)
             {
-                this->base.sparsity_pattern.coeffRef(m_row_indices[i], m_col_indices[j]) = 1;
+                this->child.sparsity_pattern.coeffRef(m_row_indices[i], m_col_indices[j]) = 1;
             }
         }
     }
 
 public:
-    BSSliceSparsity(Base& base, T M) : BSSliceBase<T, Base>(base, M) {}
+    BSSliceSparsity(Child& child, NullMat nullMat) : BSSliceBase<NullMat, Child>(child, nullMat) {}
 
     template<typename Derived>
     BSSliceSparsity& operator=(const Eigen::MatrixBase<Derived>& mat) { create_sparsity_pattern(mat); return *this; }
@@ -43,7 +43,7 @@ public:
     typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceSparsity&>::type
     operator=(const Derived& scalar)
     {
-        assert(this->M.rows() == 1 && this->M.cols() == 1 && "You tried to assign a scalar to a matrix");
+        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
         create_sparsity_pattern(Eigen::Matrix<Derived, 1, 1>(scalar));
         return *this;
     }
@@ -55,7 +55,7 @@ public:
     typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceSparsity&>::type
     operator+=(const Derived& scalar)
     {
-        assert(this->M.rows() == 1 && this->M.cols() == 1 && "You tried to assign a scalar to a matrix");
+        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
         create_sparsity_pattern(Eigen::Matrix<Derived, 1, 1>(scalar));
         return *this;
     }
@@ -67,7 +67,7 @@ public:
     typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceSparsity&>::type
     operator-=(const Derived& scalar)
     {
-        assert(this->M.rows() == 1 && this->M.cols() == 1 && "You tried to assign a scalar to a matrix");
+        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
         create_sparsity_pattern(Eigen::Matrix<Derived, 1, 1>(scalar));
         return *this;
     }
@@ -96,13 +96,13 @@ public:
     void set_zero() {}
 
     /**
-     * Resize the matrix M.
+     * Resize the matrix null_mat.
      *
      * Note: Invalidates all slices!
      */
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
-        new(&M) Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols);
+        new(&null_mat) Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols);
         sparsity_pattern.conservativeResize(rows, cols);
     }
 
@@ -111,7 +111,7 @@ public:
      */
     void extend(Eigen::Index rows, Eigen::Index cols)
     {
-        resize(M.rows() + rows, M.cols() + cols);
+        resize(null_mat.rows() + rows, null_mat.cols() + cols);
     }
 
 

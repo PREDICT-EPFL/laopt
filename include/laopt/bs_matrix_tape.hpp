@@ -13,8 +13,8 @@ namespace laopt {
 /**
  * A slice class where the action of each operator is captured
  */
-template<typename T, typename Base>
-class BSSliceTape : public BSSliceBase<T, Base>
+template<typename NullMat, typename Child>
+class BSSliceTape : public BSSliceBase<NullMat, Child>
 {
     /**
      * Record the sequence of memory copies to copy mat to this slice
@@ -22,10 +22,10 @@ class BSSliceTape : public BSSliceBase<T, Base>
     template<typename Derived>
     inline void record_op(const Eigen::DenseBase<Derived>& mat)
     {
-        assert(mat.rows() == this->M.rows() && mat.cols() == this->M.cols() && "You assigned a matrix of the wrong size!");
+        assert(mat.rows() == this->null_mat.rows() && mat.cols() == this->null_mat.cols() && "You assigned a matrix of the wrong size!");
 
-        auto m_row_indices = this->row_indices(this->M);
-        auto m_col_indices = this->col_indices(this->M);
+        auto m_row_indices = this->row_indices(this->null_mat);
+        auto m_col_indices = this->col_indices(this->null_mat);
 
         Eigen::VectorX<int> sequence(mat.rows() * mat.cols());
         if (Eigen::DenseBase<Derived>::IsRowMajor)
@@ -35,7 +35,7 @@ class BSSliceTape : public BSSliceBase<T, Base>
             {
                 for (Eigen::Index j = 0; j < (Eigen::Index) m_col_indices.size(); j++)
                 {
-                    int csc_index = this->base.sparsity_structure.coeff(m_row_indices[i], m_col_indices[j]);
+                    int csc_index = this->child.sparsity_structure.coeff(m_row_indices[i], m_col_indices[j]);
                     assert(csc_index != 0 && "Sparsity structure does not match!");
                     sequence(s_i++) = csc_index - 1;
                 }
@@ -48,7 +48,7 @@ class BSSliceTape : public BSSliceBase<T, Base>
             {
                 for (Eigen::Index i = 0; i < (Eigen::Index) m_row_indices.size(); i++)
                 {
-                    int csc_index = this->base.sparsity_structure.coeff(m_row_indices[i], m_col_indices[j]);
+                    int csc_index = this->child.sparsity_structure.coeff(m_row_indices[i], m_col_indices[j]);
                     assert(csc_index != 0 && "Sparsity structure does not match!");
                     sequence(s_i++) = csc_index - 1;
                 }
@@ -57,11 +57,11 @@ class BSSliceTape : public BSSliceBase<T, Base>
 
         // sequence is the set of indices into the sparse matrix that we'll be copying this block into
         // Compress the index sequence into contiguous blocks
-        this->base.record_copy_sequence(sequence);
+        this->child.record_copy_sequence(sequence);
     }
 
 public:
-    BSSliceTape(Base& base, T M) : BSSliceBase<T, Base>(base, M) {}
+    BSSliceTape(Child& child, NullMat nullMat) : BSSliceBase<NullMat, Child>(child, nullMat) {}
 
     /**
      * All operators just record the operation
@@ -73,7 +73,7 @@ public:
     typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceTape&>::type
     operator=(const Derived& scalar)
     {
-        assert(this->M.rows() == 1 && this->M.cols() == 1 && "You tried to assign a scalar to a matrix");
+        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
         record_op(Eigen::Matrix<Derived, 1, 1>(scalar));
         return *this;
     }
@@ -85,7 +85,7 @@ public:
     typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceTape&>::type
     operator+=(const Derived& scalar)
     {
-        assert(this->M.rows() == 1 && this->M.cols() == 1 && "You tried to assign a scalar to a matrix");
+        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
         record_op(Eigen::Matrix<Derived, 1, 1>(scalar));
         return *this;
     }
@@ -97,7 +97,7 @@ public:
     typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceTape&>::type
     operator-=(const Derived& scalar)
     {
-        assert(this->M.rows() == 1 && this->M.cols() == 1 && "You tried to assign a scalar to a matrix");
+        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
         record_op(Eigen::Matrix<Derived, 1, 1>(scalar));
         return *this;
     }
@@ -139,7 +139,7 @@ public:
     void set_zero() {}
 
     /**
-     * Resize the matrix M.
+     * Resize the matrix null_mat.
      *
      * Note: Invalidates all slices!
      *
@@ -147,7 +147,7 @@ public:
      */
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
-        new(&M) Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols);
+        new(&null_mat) Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols);
     }
 
     /**
@@ -155,7 +155,7 @@ public:
      */
     void extend(Eigen::Index rows, Eigen::Index cols)
     {
-        resize(M.rows() + rows, M.cols() + cols);
+        resize(null_mat.rows() + rows, null_mat.cols() + cols);
     }
 
     /**
