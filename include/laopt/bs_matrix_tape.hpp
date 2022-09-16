@@ -16,18 +16,19 @@ namespace laopt {
 template<typename NullMat, typename Child>
 class BSSliceTape : public BSSliceBase<NullMat, Child>
 {
+private:
     /**
      * Record the sequence of memory copies to copy mat to this slice
      */
     template<typename Derived>
-    inline void record_op(const Eigen::DenseBase<Derived>& mat)
+    inline void capture_sparsity(const Eigen::DenseBase<Derived>& rhs_mat)
     {
-        assert(mat.rows() == this->null_mat.rows() && mat.cols() == this->null_mat.cols() && "You assigned a matrix of the wrong size!");
+        assert(rhs_mat.rows() == this->null_mat.rows() && rhs_mat.cols() == this->null_mat.cols() && "You assigned a matrix of the wrong size!");
 
         auto m_row_indices = this->row_indices(this->null_mat);
         auto m_col_indices = this->col_indices(this->null_mat);
 
-        Eigen::VectorX<int> sequence(mat.rows() * mat.cols());
+        Eigen::VectorX<int> sequence(rhs_mat.rows() * rhs_mat.cols());
         if (Eigen::DenseBase<Derived>::IsRowMajor)
         {
             Eigen::Index s_i = 0;
@@ -62,43 +63,55 @@ class BSSliceTape : public BSSliceBase<NullMat, Child>
 
 public:
     BSSliceTape(Child& child, NullMat nullMat) : BSSliceBase<NullMat, Child>(child, nullMat) {}
+    using BSSliceType = BSSliceTape;
 
     /**
-     * All operators just record the operation
+     * These overloads handle the operation / right hand side and are identical to the ones of the
+     * sister class BSSliceSparsity. They call the class-specific sparsity capture function capture_sparsity().
      */
     template<typename Derived>
-    BSSliceTape& operator=(const Eigen::MatrixBase<Derived>& mat) { record_op(mat); return *this; }
-
+    BSSliceType& operator=(const Eigen::MatrixBase<Derived>& mat)
+    {
+        capture_sparsity(mat);
+        return *this;
+    }
     template<typename Derived>
-    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceTape&>::type
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceType&>::type
     operator=(const Derived& scalar)
     {
         assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-        record_op(Eigen::Matrix<Derived, 1, 1>(scalar));
+        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
         return *this;
     }
 
     template<typename Derived>
-    BSSliceTape& operator+=(const Eigen::MatrixBase<Derived>& mat) { record_op(mat); return *this; }
+    BSSliceType&operator+=(const Eigen::MatrixBase<Derived>& mat)
+    {
+        capture_sparsity(mat);
+        return *this;
+    }
 
     template<typename Derived>
-    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceTape&>::type
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceType&>::type
     operator+=(const Derived& scalar)
     {
         assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-        record_op(Eigen::Matrix<Derived, 1, 1>(scalar));
+        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
         return *this;
     }
 
     template<typename Derived>
-    BSSliceTape& operator-=(const Eigen::MatrixBase<Derived>& mat) { record_op(mat); return *this; }
-
+    BSSliceType& operator-=(const Eigen::MatrixBase<Derived>& mat)
+    {
+        capture_sparsity(mat);
+        return *this;
+    }
     template<typename Derived>
-    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceTape&>::type
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceType&>::type
     operator-=(const Derived& scalar)
     {
         assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-        record_op(Eigen::Matrix<Derived, 1, 1>(scalar));
+        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
         return *this;
     }
 };

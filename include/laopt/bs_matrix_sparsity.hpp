@@ -16,10 +16,13 @@ template<typename NullMat, typename Child>
 class BSSliceSparsity : public BSSliceBase<NullMat, Child>
 {
 private:
+    /**
+     * Record the position of nonzeros to assemble the sparsity pattern
+     */
     template<typename Derived>
-    void create_sparsity_pattern(const Eigen::DenseBase<Derived>& mat)
+    void capture_sparsity(const Eigen::DenseBase<Derived>& rhs_mat)
     {
-        assert(mat.rows() == this->null_mat.rows() && mat.cols() == this->null_mat.cols() && "You assigned a matrix of the wrong size!");
+        assert(rhs_mat.rows() == this->null_mat.rows() && rhs_mat.cols() == this->null_mat.cols() && "You assigned a matrix of the wrong size!");
 
         auto m_row_indices = this->row_indices(this->null_mat);
         auto m_col_indices = this->col_indices(this->null_mat);
@@ -35,40 +38,55 @@ private:
 
 public:
     BSSliceSparsity(Child& child, NullMat nullMat) : BSSliceBase<NullMat, Child>(child, nullMat) {}
+    using BSSliceType = BSSliceSparsity;
 
+    /**
+     * These overloads handle the operation / right hand side and are identical to the ones of the
+     * sister class BSSliceTape. They call the class-specific sparsity capture function capture_sparsity().
+     */
     template<typename Derived>
-    BSSliceSparsity& operator=(const Eigen::MatrixBase<Derived>& mat) { create_sparsity_pattern(mat); return *this; }
-
+    BSSliceType& operator=(const Eigen::MatrixBase<Derived>& mat)
+    {
+        capture_sparsity(mat);
+        return *this;
+    }
     template<typename Derived>
-    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceSparsity&>::type
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceType&>::type
     operator=(const Derived& scalar)
     {
         assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-        create_sparsity_pattern(Eigen::Matrix<Derived, 1, 1>(scalar));
+        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
         return *this;
     }
 
     template<typename Derived>
-    BSSliceSparsity& operator+=(const Eigen::MatrixBase<Derived>& mat) { create_sparsity_pattern(mat); return *this; }
+    BSSliceType&operator+=(const Eigen::MatrixBase<Derived>& mat)
+    {
+        capture_sparsity(mat);
+        return *this;
+    }
 
     template<typename Derived>
-    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceSparsity&>::type
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceType&>::type
     operator+=(const Derived& scalar)
     {
         assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-        create_sparsity_pattern(Eigen::Matrix<Derived, 1, 1>(scalar));
+        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
         return *this;
     }
 
     template<typename Derived>
-    BSSliceSparsity& operator-=(const Eigen::MatrixBase<Derived>& mat) { create_sparsity_pattern(mat); return *this; }
-
+    BSSliceType& operator-=(const Eigen::MatrixBase<Derived>& mat)
+    {
+        capture_sparsity(mat);
+        return *this;
+    }
     template<typename Derived>
-    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceSparsity&>::type
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceType&>::type
     operator-=(const Derived& scalar)
     {
         assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-        create_sparsity_pattern(Eigen::Matrix<Derived, 1, 1>(scalar));
+        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
         return *this;
     }
 };

@@ -205,6 +205,54 @@ public:
         assert(null_mat.cols() == 1 && "YOU APPLIED A VECTOR METHOD TO A MATRIX");
         return child.makeSlice(null_mat(row_indices, 0));
     }
+
+//    using BSSliceT = typename Child::template BSSliceType<NullMat, Child>;
+//
+//    template<typename Derived>
+//    BSSliceT& operator=(const Eigen::MatrixBase<Derived>& mat)
+//    {
+//        child.capture_sparsity(mat);
+//        return static_cast<BSSliceT>(child);
+//    }
+//    template<typename Derived>
+//    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceT&>::type
+//    operator=(const Derived& scalar)
+//    {
+//        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
+//        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
+//        return *this;
+//    }
+//
+//    template<typename Derived>
+//    BSSliceT&operator+=(const Eigen::MatrixBase<Derived>& mat)
+//    {
+//        capture_sparsity(mat);
+//        return *this;
+//    }
+//
+//    template<typename Derived>
+//    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceT&>::type
+//    operator+=(const Derived& scalar)
+//    {
+//        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
+//        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
+//        return *this;
+//    }
+//
+//    template<typename Derived>
+//    BSSliceT& operator-=(const Eigen::MatrixBase<Derived>& mat)
+//    {
+//        capture_sparsity(mat);
+//        return *this;
+//    }
+//    template<typename Derived>
+//    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceT&>::type
+//    operator-=(const Derived& scalar)
+//    {
+//        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
+//        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
+//        return *this;
+//    }
 };
 
 } // namespace laopt
