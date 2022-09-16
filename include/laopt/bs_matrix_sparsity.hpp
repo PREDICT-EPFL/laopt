@@ -12,10 +12,21 @@ namespace laopt {
 /**
  * A slice class where all operators just set the sparsity pattern
  */
-template<typename NullMat, typename Child>
-class BSSliceSparsity : public BSSliceBase<NullMat, Child>
+template<typename Child, typename NullMat>
+class BSSliceSparsity : public BSSliceBase<BSSliceSparsity<Child, NullMat>, NullMat>
 {
 private:
+    Child& child; // Pointer to the child class BSSparsity object
+
+    template<typename, typename>
+    friend class laopt::BSSliceBase;
+
+    template<typename Derived>
+    auto make_slice(Derived sub_matrix)
+    {
+        return BSSliceSparsity<Child, Derived>(child, sub_matrix);
+    }
+
     /**
      * Record the position of nonzeros to assemble the sparsity pattern
      */
@@ -37,68 +48,17 @@ private:
     }
 
 public:
-    BSSliceSparsity(Child& child, NullMat nullMat) : BSSliceBase<NullMat, Child>(child, nullMat) {}
-    using BSSliceType = BSSliceSparsity;
+    explicit BSSliceSparsity(Child& child, NullMat nullMat) : BSSliceBase<BSSliceSparsity<Child, NullMat>, NullMat>(nullMat), child(child) {}
 
-    /**
-     * These overloads handle the operation / right hand side and are identical to the ones of the
-     * sister class BSSliceTape. They call the class-specific sparsity capture function capture_sparsity().
-     */
-    template<typename Derived>
-    BSSliceType& operator=(const Eigen::MatrixBase<Derived>& mat)
-    {
-        capture_sparsity(mat);
-        return *this;
-    }
-    template<typename Derived>
-    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceType&>::type
-    operator=(const Derived& scalar)
-    {
-        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
-        return *this;
-    }
-
-    template<typename Derived>
-    BSSliceType&operator+=(const Eigen::MatrixBase<Derived>& mat)
-    {
-        capture_sparsity(mat);
-        return *this;
-    }
-
-    template<typename Derived>
-    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceType&>::type
-    operator+=(const Derived& scalar)
-    {
-        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
-        return *this;
-    }
-
-    template<typename Derived>
-    BSSliceType& operator-=(const Eigen::MatrixBase<Derived>& mat)
-    {
-        capture_sparsity(mat);
-        return *this;
-    }
-    template<typename Derived>
-    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceType&>::type
-    operator-=(const Derived& scalar)
-    {
-        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
-        return *this;
-    }
+    using BSSliceBase<BSSliceSparsity<Child, NullMat>, NullMat>::operator=;
 };
 
 /**
  * A tape class to capture the sparsity pattern
  */
-class BSMatrixSparsity : public BSSliceSparsity<Eigen::Map<Eigen::MatrixX<int>>, BSMatrixSparsity>
+class BSMatrixSparsity : public BSSliceSparsity<BSMatrixSparsity, Eigen::Map<Eigen::MatrixX<int>>>
 {
 private:
-    template<typename, typename>
-    friend class laopt::BSSliceBase;
     template<typename, typename>
     friend class laopt::BSSliceSparsity;
 
@@ -106,7 +66,7 @@ private:
 
 public:
     explicit BSMatrixSparsity(Eigen::Index rows = 0, Eigen::Index cols = 0)
-            : BSSliceSparsity<Eigen::Map<Eigen::MatrixX<int>>, BSMatrixSparsity>(*this, Eigen::Map<Eigen::MatrixX<int>>(nullptr, 0, 0))
+            : BSSliceSparsity<BSMatrixSparsity, Eigen::Map<Eigen::MatrixX<int>>>(*this, Eigen::Map<Eigen::MatrixX<int>>(nullptr, 0, 0))
     {
         resize(rows, cols);
     };
@@ -158,13 +118,6 @@ public:
     Info generate()
     {
         return get_sparsity_pattern();
-    }
-
-private:
-    template<typename Derived>
-    auto makeSlice(Derived sub_matrix)
-    {
-        return BSSliceSparsity<Derived, BSMatrixSparsity>(*this, sub_matrix);
     }
 };
 

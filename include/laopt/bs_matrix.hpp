@@ -68,6 +68,7 @@ struct BSMatrixInfo
 template<typename scalar_t>
 class BSMatrix
 {
+private:
     Eigen::SparseMatrix<bool> sparsity_structure;
     const std::vector<Segment> segments;
     const std::vector<CopyInfo> copies;

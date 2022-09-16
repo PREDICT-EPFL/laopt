@@ -13,10 +13,21 @@ namespace laopt {
 /**
  * A slice class where the action of each operator is captured
  */
-template<typename NullMat, typename Child>
-class BSSliceTape : public BSSliceBase<NullMat, Child>
+template<typename Child, typename NullMat>
+class BSSliceTape : public BSSliceBase<BSSliceTape<Child, NullMat>, NullMat>
 {
 private:
+    Child& child; // Pointer to the child class BSSparsity object
+
+    template<typename, typename>
+    friend class laopt::BSSliceBase;
+
+    template<typename Derived>
+    auto make_slice(Derived sub_matrix)
+    {
+        return BSSliceTape<Child, Derived>(child, sub_matrix);
+    }
+
     /**
      * Record the sequence of memory copies to copy mat to this slice
      */
@@ -58,80 +69,60 @@ private:
 
         // sequence is the set of indices into the sparse matrix that we'll be copying this block into
         // Compress the index sequence into contiguous blocks
-        this->child.record_copy_sequence(sequence);
+        record_copy_sequence(sequence);
+    }
+
+    /**
+     * Takes a sequence of integers and converts them into a sequence of segments.
+     *
+     * e.g., [1,2,3,5,6,7,2,4] will compress into
+     *  {Segment(1,3), Segment(5,3), Segment(2,1), Segment(4,1)}
+     *
+     * Store this as a single "copy" operation in the tape.
+     */
+    inline void record_copy_sequence(const Eigen::VectorX<int>& sequence)
+    {
+        std::vector<Segment> segments;
+
+        int next_contiguous = -2; // The next value if we're in a contiguous segment
+        for (const int& i: sequence) {
+            if (i == next_contiguous) {
+                next_contiguous++;
+                segments.back().length++;
+            } else {
+                segments.push_back(Segment{.index=static_cast<size_t>(i), .length=1});
+                next_contiguous = i + 1;
+            }
+        }
+
+        child.copy_info.push_back(CopyInfo{.segment_index=child.copy_segments.size(), .num_segments_to_copy=segments.size()});
+        child.copy_segments.insert(child.copy_segments.end(), segments.begin(), segments.end());
     }
 
 public:
-    BSSliceTape(Child& child, NullMat nullMat) : BSSliceBase<NullMat, Child>(child, nullMat) {}
-    using BSSliceType = BSSliceTape;
+    BSSliceTape(Child& child, NullMat nullMat) : BSSliceBase<BSSliceTape<Child, NullMat>, NullMat>(nullMat), child(child) {}
 
-    /**
-     * These overloads handle the operation / right hand side and are identical to the ones of the
-     * sister class BSSliceSparsity. They call the class-specific sparsity capture function capture_sparsity().
-     */
-    template<typename Derived>
-    BSSliceType& operator=(const Eigen::MatrixBase<Derived>& mat)
-    {
-        capture_sparsity(mat);
-        return *this;
-    }
-    template<typename Derived>
-    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceType&>::type
-    operator=(const Derived& scalar)
-    {
-        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
-        return *this;
-    }
-
-    template<typename Derived>
-    BSSliceType&operator+=(const Eigen::MatrixBase<Derived>& mat)
-    {
-        capture_sparsity(mat);
-        return *this;
-    }
-
-    template<typename Derived>
-    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceType&>::type
-    operator+=(const Derived& scalar)
-    {
-        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
-        return *this;
-    }
-
-    template<typename Derived>
-    BSSliceType& operator-=(const Eigen::MatrixBase<Derived>& mat)
-    {
-        capture_sparsity(mat);
-        return *this;
-    }
-    template<typename Derived>
-    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceType&>::type
-    operator-=(const Derived& scalar)
-    {
-        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
-        return *this;
-    }
+    using BSSliceBase<BSSliceTape<Child, NullMat>, NullMat>::operator=;
 };
 
 /**
 * A tape class to capture the copy pattern.
 */
-class BSMatrixTape : public BSSliceTape<Eigen::Map<Eigen::MatrixX<int>>, BSMatrixTape>
+class BSMatrixTape : public BSSliceTape<BSMatrixTape, Eigen::Map<Eigen::MatrixX<int>>>
 {
 private:
-    template<typename, typename>
-    friend class laopt::BSSliceBase;
     template<typename, typename>
     friend class laopt::BSSliceTape;
 
     Eigen::SparseMatrix<int> sparsity_structure; // Must have been created a-priori
 
+    // Sequence of copy operations
+    std::vector<Segment> copy_segments;
+    std::vector<CopyInfo> copy_info;
+
 public:
     explicit BSMatrixTape(const Eigen::SparseMatrix<bool>& structure, Eigen::Index rows = 0, Eigen::Index cols = 0)
-    : BSSliceTape<Eigen::Map<Eigen::MatrixX<int>>, BSMatrixTape>(*this, Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols))
+    : BSSliceTape<BSMatrixTape, Eigen::Map<Eigen::MatrixX<int>>>(*this, Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols))
     {
         initialize(structure, rows, cols);
     };
@@ -160,7 +151,7 @@ public:
      */
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
-        new(&null_mat) Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols);
+        new (&null_mat) Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols);
     }
 
     /**
@@ -197,44 +188,6 @@ public:
         info.copy_info = copy_info;
 
         return info;
-    }
-
-private:
-    // Sequence of copy operations
-    std::vector<Segment> copy_segments;
-    std::vector<CopyInfo> copy_info;
-
-    template<typename Derived>
-    auto makeSlice(Derived sub_matrix)
-    {
-        return BSSliceTape<Derived, BSMatrixTape>(*this, sub_matrix);
-    }
-
-    /**
-     * Takes a sequence of integers and converts them into a sequence of segments.
-     *
-     * e.g., [1,2,3,5,6,7,2,4] will compress into
-     *  {Segment(1,3), Segment(5,3), Segment(2,1), Segment(4,1)}
-     *
-     * Store this as a single "copy" operation in the tape.
-     */
-    void record_copy_sequence(const Eigen::VectorX<int>& sequence)
-    {
-        std::vector<Segment> segments;
-
-        int next_contiguous = -2; // The next value if we're in a contiguous segment
-        for (const int& i: sequence) {
-            if (i == next_contiguous) {
-                next_contiguous++;
-                segments.back().length++;
-            } else {
-                segments.push_back(Segment{.index=static_cast<size_t>(i), .length=1});
-                next_contiguous = i + 1;
-            }
-        }
-
-        copy_info.push_back(CopyInfo{.segment_index=copy_segments.size(), .num_segments_to_copy=segments.size()});
-        copy_segments.insert(copy_segments.end(), segments.begin(), segments.end());
     }
 };
 

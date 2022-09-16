@@ -5,11 +5,10 @@
 
 namespace laopt {
 
-template<typename NullMat, typename Child>
+template<typename Child, typename NullMat>
 class BSSliceBase
 {
 protected:
-    Child& child;     // Pointer to the child class BS... object
     NullMat null_mat; // Memory-less Eigen matrix that the BS... object imitates. Will use its dimensions and methods
 
     /**
@@ -131,10 +130,7 @@ protected:
     }
 
 public:
-    BSSliceBase(Child& child, NullMat nullMat) : child(child), null_mat(std::move(nullMat)) {}
-
-    // Only used in BSMatrix
-    inline void reset_copy_index() {}
+    explicit BSSliceBase(NullMat nullMat) : null_mat(std::move(nullMat)) {}
 
     // Getters for dimensions
     Eigen::Index rows() const { return null_mat.rows(); }
@@ -142,7 +138,7 @@ public:
 
     /**
      * These overloads allow to use any BS... object to be indexed and sliced by common Eigen methods.
-     * They forward the resulting BS... sub matrix to the makeSlice method implemented in the child class,
+     * They forward the resulting BS... sub matrix to the make_slice method implemented in the child class,
      * which will once again create a BS... object for the sub matrix and handle the arithmetic operation it
      * was called with.
      */
@@ -150,39 +146,39 @@ public:
     // Using the row() or col() operator
     auto row(size_t i)
     {
-        return child.makeSlice(null_mat.row(i));
+        return static_cast<Child*>(this)->make_slice(null_mat.row(i));
     }
     auto col(size_t i)
     {
-        return child.makeSlice(null_mat.col(i));
+        return static_cast<Child*>(this)->make_slice(null_mat.col(i));
     }
 
     // Block out of a matrix
     template<typename RowSlice, typename ColSlice, typename std::enable_if<Eigen::internal::valid_indexed_view_overload<RowSlice, ColSlice>::value>::type* dummy = nullptr>
     auto operator()(const RowSlice& row_slice, const ColSlice& col_slice)
     {
-        return child.makeSlice(null_mat(row_slice, col_slice));
+        return static_cast<Child*>(this)->make_slice(null_mat(row_slice, col_slice));
     }
     // Scalar out of a matrix
     auto operator()(Eigen::Index i_row, Eigen::Index j_col)
     {
-        return child.makeSlice(Eigen::Block<decltype(null_mat), 1, 1>(null_mat, i_row, j_col));
+        return static_cast<Child*>(this)->make_slice(Eigen::Block<decltype(null_mat), 1, 1>(null_mat, i_row, j_col));
     }
     // The following three overloads are needed to handle raw Index[N] arrays.
     template<typename RowIndicesT, std::size_t RowIndicesN, typename ColIndices>
     auto operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndices& col_indices)
     {
-        return child.makeSlice(null_mat(row_indices, col_indices));
+        return static_cast<Child*>(this)->make_slice(null_mat(row_indices, col_indices));
     }
     template<typename RowIndices, typename ColIndicesT, std::size_t ColIndicesN>
     auto operator()(const RowIndices& row_indices, const ColIndicesT (&col_indices)[ColIndicesN])
     {
-        return child.makeSlice(null_mat(row_indices, col_indices));
+        return static_cast<Child*>(this)->make_slice(null_mat(row_indices, col_indices));
     }
     template<typename RowIndicesT, std::size_t RowIndicesN, typename ColIndicesT, std::size_t ColIndicesN>
     auto operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndicesT (&colIndices)[ColIndicesN])
     {
-        return child.makeSlice(null_mat(row_indices, colIndices));
+        return static_cast<Child*>(this)->make_slice(null_mat(row_indices, colIndices));
     }
 
     // Segment out of a vector
@@ -190,69 +186,71 @@ public:
     auto operator()(const RowSlice& row_slice)
     {
         assert(null_mat.cols() == 1 && "YOU APPLIED A VECTOR METHOD TO A MATRIX");
-        return child.makeSlice(null_mat(row_slice, 0));
+        return static_cast<Child*>(this)->make_slice(null_mat(row_slice, 0));
     }
     // Scalar out of a vector
     auto operator()(Eigen::Index i_row)
     {
         assert(null_mat.cols() == 1 && "YOU APPLIED A VECTOR METHOD TO A MATRIX");
-        return child.makeSlice(Eigen::Block<decltype(null_mat), 1, 1>(null_mat, i_row, 0));
+        return static_cast<Child*>(this)->make_slice(Eigen::Block<decltype(null_mat), 1, 1>(null_mat, i_row, 0));
     }
     // Raw Index[N] arrays
     template<typename RowIndicesT, std::size_t RowIndicesN>
     auto operator()(const RowIndicesT (&row_indices)[RowIndicesN])
     {
         assert(null_mat.cols() == 1 && "YOU APPLIED A VECTOR METHOD TO A MATRIX");
-        return child.makeSlice(null_mat(row_indices, 0));
+        return static_cast<Child*>(this)->make_slice(null_mat(row_indices, 0));
     }
 
-//    using BSSliceT = typename Child::template BSSliceType<NullMat, Child>;
-//
-//    template<typename Derived>
-//    BSSliceT& operator=(const Eigen::MatrixBase<Derived>& mat)
-//    {
-//        child.capture_sparsity(mat);
-//        return static_cast<BSSliceT>(child);
-//    }
-//    template<typename Derived>
-//    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceT&>::type
-//    operator=(const Derived& scalar)
-//    {
-//        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-//        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
-//        return *this;
-//    }
-//
-//    template<typename Derived>
-//    BSSliceT&operator+=(const Eigen::MatrixBase<Derived>& mat)
-//    {
-//        capture_sparsity(mat);
-//        return *this;
-//    }
-//
-//    template<typename Derived>
-//    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceT&>::type
-//    operator+=(const Derived& scalar)
-//    {
-//        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-//        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
-//        return *this;
-//    }
-//
-//    template<typename Derived>
-//    BSSliceT& operator-=(const Eigen::MatrixBase<Derived>& mat)
-//    {
-//        capture_sparsity(mat);
-//        return *this;
-//    }
-//    template<typename Derived>
-//    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, BSSliceT&>::type
-//    operator-=(const Derived& scalar)
-//    {
-//        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
-//        capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
-//        return *this;
-//    }
+    /**
+     * These overloads handle the operation / right hand side.
+     * They call the class-specific sparsity capture function capture_sparsity().
+     */
+    template<typename Derived>
+    Child& operator=(const Eigen::MatrixBase<Derived>& mat)
+    {
+        static_cast<Child*>(this)->capture_sparsity(mat);
+        return *static_cast<Child*>(this);
+    }
+    template<typename Derived>
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, Child&>::type
+    operator=(const Derived& scalar)
+    {
+        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
+        static_cast<Child*>(this)->capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
+        return *static_cast<Child*>(this);;
+    }
+
+    template<typename Derived>
+    Child&operator+=(const Eigen::MatrixBase<Derived>& mat)
+    {
+        static_cast<Child*>(this)->capture_sparsity(mat);
+        return *static_cast<Child*>(this);;
+    }
+
+    template<typename Derived>
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, Child&>::type
+    operator+=(const Derived& scalar)
+    {
+        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
+        static_cast<Child*>(this)->capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
+        return *static_cast<Child*>(this);;
+    }
+
+    template<typename Derived>
+    Child& operator-=(const Eigen::MatrixBase<Derived>& mat)
+    {
+        static_cast<Child*>(this)->capture_sparsity(mat);
+        return *static_cast<Child*>(this);;
+    }
+    template<typename Derived>
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value, Child&>::type
+    operator-=(const Derived& scalar)
+    {
+        assert(this->null_mat.rows() == 1 && this->null_mat.cols() == 1 && "You tried to assign a scalar to a matrix");
+        static_cast<Child*>(this)->capture_sparsity(Eigen::Matrix<Derived, 1, 1>(scalar));
+        return *static_cast<Child*>(this);;
+    }
 };
 
 } // namespace laopt
