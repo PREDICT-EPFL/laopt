@@ -164,35 +164,35 @@ struct ExprEvaluator<IneqConstraintExpr<DerivedLhs, DerivedRhs>,
     static EIGEN_STRONG_INLINE auto
     function(const IneqConstraintExpr<DerivedLhs, DerivedRhs>& ineq)
     {
-        return ExprEvaluator<DerivedLhs>::function(ineq.rhs);
+        return ExprEvaluator<DerivedRhs>::function(ineq.rhs);
     }
 
     template<typename OutValue, typename OutJacobian>
     static EIGEN_STRONG_INLINE void
     jacobian(const IneqConstraintExpr<DerivedLhs, DerivedRhs>& ineq, OutValue&& out_value, OutJacobian&& out_jacobian)
     {
-        ExprEvaluator<DerivedLhs>::jacobian(ineq.rhs, std::forward<OutValue>(out_value), std::forward<OutJacobian>(out_jacobian));
+        ExprEvaluator<DerivedRhs>::jacobian(ineq.rhs, std::forward<OutValue>(out_value), std::forward<OutJacobian>(out_jacobian));
     }
 
     template<typename Weight>
     static EIGEN_STRONG_INLINE auto
     wsum(const IneqConstraintExpr<DerivedLhs, DerivedRhs>& ineq, const Weight& weight)
     {
-        return ExprEvaluator<DerivedLhs>::wsum(ineq.rhs, weight);
+        return ExprEvaluator<DerivedRhs>::wsum(ineq.rhs, weight);
     }
 
     template<typename OutGradient, typename Weight>
     static EIGEN_STRONG_INLINE auto
     gradient(const IneqConstraintExpr<DerivedLhs, DerivedRhs>& ineq, OutGradient&& out_gradient, const Weight& weight)
     {
-        return ExprEvaluator<DerivedLhs>::gradient(ineq.rhs, std::forward<OutGradient>(out_gradient), weight);
+        return ExprEvaluator<DerivedRhs>::gradient(ineq.rhs, std::forward<OutGradient>(out_gradient), weight);
     }
 
     template<typename OutGradient, typename OutHessian, typename Weight>
     static EIGEN_STRONG_INLINE auto
     hessian(const IneqConstraintExpr<DerivedLhs, DerivedRhs>& ineq, OutGradient&& out_gradient, OutHessian&& out_hessian, const Weight& weight)
     {
-        return ExprEvaluator<DerivedLhs>::hessian(ineq.rhs, std::forward<OutGradient>(out_gradient), std::forward<OutHessian>(out_hessian), weight);
+        return ExprEvaluator<DerivedRhs>::hessian(ineq.rhs, std::forward<OutGradient>(out_gradient), std::forward<OutHessian>(out_hessian), weight);
     }
 
     static EIGEN_STRONG_INLINE auto
