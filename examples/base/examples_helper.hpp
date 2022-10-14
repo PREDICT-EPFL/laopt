@@ -31,10 +31,10 @@ template<typename Transcription, typename Scalar>
 void print_sampled_solution(const Transcription &transcription,
                             const Scalar &Ts_max = 0.01, const Scalar &t_test = 0.166)
 {
-    const auto TXn = transcription.get_TX_resampled(Ts_max);
-    const auto TUn = transcription.get_TU_resampled(Ts_max);
-    const auto x_test = transcription.get_x_at(t_test);
-    const auto u_test = transcription.get_u_at(t_test);
+    const Eigen::MatrixXd TXn = transcription.get_TX_resampled(Ts_max);
+    const Eigen::MatrixXd TUn = transcription.get_TU_resampled(Ts_max);
+    const Eigen::VectorXd x_test = transcription.get_x_at(t_test);
+    const Eigen::VectorXd u_test = transcription.get_u_at(t_test);
 
     std::cout << "Resampling at " << TXn(0, 1) - TXn(0, 0) << " s  (" << Ts_max << " max)\n";
     std::cout << "MATLAB-copyable output:\n";

@@ -204,7 +204,7 @@ public:
 
     /**
      * These overloads handle the operation / right hand side.
-     * They call the class-specific sparsity capture function capture_sparsity().
+     * They call the capture_sparsity() function which is specific to the child class.
      */
     template<typename Derived>
     Child& operator=(const Eigen::MatrixBase<Derived>& mat)

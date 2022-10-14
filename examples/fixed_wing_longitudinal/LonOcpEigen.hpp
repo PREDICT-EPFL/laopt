@@ -94,7 +94,7 @@ public:
     template<typename T>
     T mayer_term_impl(const Eigen::Ref<const state_t<T>> &x)
     {
-        T mayer = mayer_multiplier * get_non_control_cost(x);;
+        T mayer = mayer_multiplier * get_non_control_cost(x);
 //        mayer = mayer_multiplier * non_control_cost + p(0); // Time-optimal ocp
 
         // LQR terminal weight
