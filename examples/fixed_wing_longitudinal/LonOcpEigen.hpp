@@ -83,18 +83,20 @@ public:
         return control_cost;
     }
 
-
-    template<typename T>
+    template<typename T> // T is scalar type
     T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
-                         const Eigen::Ref<const input_t<T>> &u)
+                         const Eigen::Ref<const input_t<T>> &u,
+                         const Eigen::Ref<const param_t<T>> &p)
     {
         return get_non_control_cost(x) + get_control_cost(u);
     }
 
-    template<typename T>
-    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &x)
+    template<typename T> // T is scalar type
+    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &xf,
+                      const Eigen::Ref<const param_t<T>> &p,
+                      const T &tf)
     {
-        T mayer = mayer_multiplier * get_non_control_cost(x);
+        T mayer = mayer_multiplier * get_non_control_cost(xf);
 //        mayer = mayer_multiplier * non_control_cost + p(0); // Time-optimal ocp
 
         // LQR terminal weight
@@ -107,21 +109,21 @@ public:
         return mayer;
     }
 
-    template<typename T>
+    template<typename T> // T is scalar type
     state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
-                             const Eigen::Ref<const input_t<T>> &u)
+                             const Eigen::Ref<const input_t<T>> &u,
+                             const Eigen::Ref<const param_t<T>> &p)
     {
 //         Linear(ized) dynamics
 //        xdot = A.template cast<T>() * (x - x_trim.template cast<T>()) +
 //               B.template cast<T>() * (u - u_trim.template cast<T>());
 
         // Nonlinear dynamics
-        Model::param_t <T> p;
+        Model::param_t <T> p_plant;
         Model::output_t <T> y;
         state_t<T> xdot;
-        model.dynamics<T>(xdot, x, u, p, y);
-//        xdot *= p(0); // Time-optimal ocp
-        return tf * xdot;
+        model.dynamics<T>(xdot, x, u, p_plant, y);
+        return xdot;
     }
 };
 

@@ -24,25 +24,29 @@ public:
     Eigen::Matrix<Scalar, NU, NU> R{{0.01}};
 
     /* Override function implementations from base class ------------------------------ */
-    template<typename T>
+    template<typename T> // T is scalar type
     T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
-                         const Eigen::Ref<const input_t<T>> &u)
+                         const Eigen::Ref<const input_t<T>> &u,
+                         const Eigen::Ref<const param_t<T>> &p)
     {
         return (x_ref - x).dot(Q * (x_ref - x)) + u.dot(R * u);
     }
 
-    template<typename T>
-    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &x)
+    template<typename T> // T is scalar type
+    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &xf,
+                      const Eigen::Ref<const param_t<T>> &p,
+                      const T &tf)
     {
-        return (x_ref - x).dot(Q * (x_ref - x));
+        return (x_ref - xf).dot(Q * (x_ref - xf));
     }
 
-    template<typename T>
+    template<typename T> // T is scalar type
     state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
-                             const Eigen::Ref<const input_t<T>> &u)
+                             const Eigen::Ref<const input_t<T>> &u,
+                             const Eigen::Ref<const param_t<T>> &p)
     {
         state_t<T> x_dot = A * x + B * u;
-        return tf * x_dot;
+        return x_dot;
     }
 
 };

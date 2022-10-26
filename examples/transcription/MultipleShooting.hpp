@@ -36,40 +36,54 @@ protected: // TODO ino1
     Eigen::Vector<Scalar, N + 1> T; // Normalized time grid (0 ... 1)
     std::array<variable_t<ControlProblem::NX>, N + 1> X_var;
     std::array<variable_t<ControlProblem::NU>, N + 1> U_var;
+    variable_t<ControlProblem::NP> p_var;
+    variable_t<1> tf_var;
 
 public: //protected: // TODO ino1 (would like to make this protected)
     /* Dynamic constraints */
+
+
     struct DiscreteDynamics {};
-    template<typename x_t, typename u_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename u_t, typename p_t, typename tf_t,
+            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NX>
     function_impl(DiscreteDynamics,
-                  const Eigen::MatrixBase<x_t> &x, const Eigen::MatrixBase<u_t> &u)
+                  const Eigen::MatrixBase<x_t> &x,
+                  const Eigen::MatrixBase<u_t> &u,
+                  const Eigen::MatrixBase<p_t> &p,
+                  const Eigen::MatrixBase<tf_t> &tf)
     {
         using state_t = typename x_t::PlainObject;
-        state_t k1 = controlProblem.template dynamics_impl<scalar_t>(x, u);
-        state_t k2 = controlProblem.template dynamics_impl<scalar_t>(x + h * 0.5 * k1, u);
-        state_t k3 = controlProblem.template dynamics_impl<scalar_t>(x + h * 0.5 * k2, u);
-        state_t k4 = controlProblem.template dynamics_impl<scalar_t>(x + h * k3, u);
+        state_t k1 = tf(0) * controlProblem.template dynamics_impl<scalar_t>(x, u, p);
+        state_t k2 = tf(0) * controlProblem.template dynamics_impl<scalar_t>(x + h * 0.5 * k1, u, p);
+        state_t k3 = tf(0) * controlProblem.template dynamics_impl<scalar_t>(x + h * 0.5 * k2, u, p);
+        state_t k4 = tf(0) * controlProblem.template dynamics_impl<scalar_t>(x + h * k3, u, p);
         return x + h / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
     }
 
     /* Objective */
     struct StageCost {};
-    template<typename x_t, typename u_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename u_t, typename p_t,
+            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
     function_impl(StageCost,
-                  const Eigen::MatrixBase<x_t> &x, const Eigen::MatrixBase<u_t> &u)
+                  const Eigen::MatrixBase<x_t> &x,
+                  const Eigen::MatrixBase<u_t> &u,
+                  const Eigen::MatrixBase<p_t> &p)
     {
-        return h * controlProblem.template lagrange_term_impl<scalar_t>(x, u);
+        return h * controlProblem.template lagrange_term_impl<scalar_t>(x, u, p);
     }
 
     struct MayerCost {};
-    template<typename x_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename p_t, typename tf_t,
+            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
     function_impl(MayerCost,
-                  const Eigen::MatrixBase<x_t> &x)
+                  const Eigen::MatrixBase<x_t> &xf,
+                  const Eigen::MatrixBase<p_t> &p,
+                  const Eigen::MatrixBase<tf_t> &tf)
     {
-        return controlProblem.template mayer_term_impl<scalar_t>(x);
+        return controlProblem.template mayer_term_impl<scalar_t>(xf, p, tf(0));
     }
 
     template<typename OptProblem>
@@ -80,17 +94,19 @@ public: //protected: // TODO ino1 (would like to make this protected)
         {
             optProblem.add_variable(X_var[i]); // TODO eno1: Loop through array in add_variable() -> Do not want that
             optProblem.add_variable(U_var[i]);
+            optProblem.add_variable(tf_var);
+            optProblem.add_variable(p_var);
         }
 
         /* Loop through grid points */
         for (unsigned i = 0; i < N; i++)
         {
-            optProblem.add_obj(this->function(StageCost{}, X_var[i], U_var[i])); // TODO eno4: Allow expressions here
-            optProblem.add_constr(X_var[i + 1] == this->function(DiscreteDynamics{}, X_var[i], U_var[i]));
+            optProblem.add_obj(this->function(StageCost{}, X_var[i], U_var[i], p_var)); // TODO eno4: Allow expressions here
+            optProblem.add_constr(X_var[i + 1] == this->function(DiscreteDynamics{}, X_var[i], U_var[i], p_var, tf_var));
         }
 
         /* Last grid point */
-        optProblem.add_obj(this->function(MayerCost{}, X_var[N]));
+        optProblem.add_obj(this->function(MayerCost{}, X_var[N], p_var, tf_var));
 
         /* Box constraints */
         for (unsigned i = 0; i <= N; i++)
@@ -102,6 +118,7 @@ public: //protected: // TODO ino1 (would like to make this protected)
         /* Boundary constraints */
         optProblem.add_constr(controlProblem.x0_lb <= X_var[0] <= controlProblem.x0_ub);
         optProblem.add_constr(controlProblem.xf_lb <= X_var[N] <= controlProblem.xf_ub);
+        optProblem.add_constr(controlProblem.tf_lb <= tf_var <= controlProblem.tf_ub); // TODO: Here I can use tf_var as scalar!?
 
         /* Set last control equal second last */
         optProblem.add_constr(U_var[N] == U_var[N - 1]);
@@ -133,9 +150,14 @@ public:
     }
 
     /* Get functions */
+    double get_tf_opt() const
+    {
+        const Eigen::Matrix<Scalar, 1, 1> mat = tf_var;
+        return mat(0);
+    }
     TimeTrajectory get_T_opt() const
     {
-        return TimeTrajectory::Constant(controlProblem.t0) + (controlProblem.tf - controlProblem.t0) * T;
+        return TimeTrajectory::Constant(controlProblem.t0) + (get_tf_opt() - controlProblem.t0) * T;
     }
     StateTrajectory get_X_opt() const
     {
@@ -154,11 +176,12 @@ public:
 
     Eigen::Vector<Scalar, ControlProblem::NX> get_x_at(const Scalar &t) const
     {
-        if (t == controlProblem.tf) { return X_var[N]; }
+        const double tf = get_tf_opt();
+        if (t == tf) { return X_var[N]; }
         else
         {
             /* Interpolate between discrete states */
-            const Scalar T_eval = (t - controlProblem.t0) / (controlProblem.tf - controlProblem.t0);
+            const Scalar T_eval = (t - controlProblem.t0) / (tf - controlProblem.t0);
             // on [0 ... 1]|traj;
 
             /* Find segment to sample from */
@@ -173,10 +196,11 @@ public:
     }
     Eigen::Vector<Scalar, ControlProblem::NU> get_u_at(const Scalar &t) const
     {
-        if (t == controlProblem.tf) { return U_var[N]; }
+        const double tf = get_tf_opt();
+        if (t == tf) { return U_var[N]; }
         else
         {
-            const Scalar T_eval = (t - controlProblem.t0) / (controlProblem.tf - controlProblem.t0);
+            const Scalar T_eval = (t - controlProblem.t0) / (tf - controlProblem.t0);
             return U_var[std::floor(T_eval / h)];
         }
     }
@@ -229,14 +253,14 @@ protected: /* Helpers for resampling */
             /* In last segment, write last point */
             if (iL == N_segs - 1)
             {
-                TXn(0, n) = controlProblem.tf;
+                TXn(0, n) = get_tf_opt();
                 TXn(seqN(1, DerivedNX), n) << X_opt.col(N);
             }
 
             /* Transform time by absolute horizon range (except  */
             TXn(0, seqN(k_seg_start, n_per_seg)) =
                     Eigen::MatrixX<Scalar>::Constant(1, n_per_seg, controlProblem.t0) +
-                    (controlProblem.tf - controlProblem.t0) * TXn(0, seqN(k_seg_start, n_per_seg));
+                    (get_tf_opt() - controlProblem.t0) * TXn(0, seqN(k_seg_start, n_per_seg));
         }
         return TXn;
     }
@@ -275,14 +299,14 @@ protected: /* Helpers for resampling */
             /* In last segment, write last point */
             if (i == N_segs - 1)
             {
-                TXn(0, n) = controlProblem.tf;
+                TXn(0, n) = get_tf_opt();
                 TXn(seqN(1, DerivedNX), n) << X_opt.col(N);
             }
 
             /* Transform time by absolute horizon range (except  */
             TXn(0, seqN(k_seg_start, n_per_seg)) =
                     Eigen::MatrixX<Scalar>::Constant(1, n_per_seg, controlProblem.t0) +
-                    (controlProblem.tf - controlProblem.t0) * TXn(0, seqN(k_seg_start, n_per_seg));
+                    (get_tf_opt() - controlProblem.t0) * TXn(0, seqN(k_seg_start, n_per_seg));
         }
         return TXn;
     }

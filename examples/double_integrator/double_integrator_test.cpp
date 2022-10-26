@@ -19,6 +19,11 @@ int main()
     /* Construct OCP and set OCP-specific properties */
     Ocp ocp;
 
+    ocp.set_tf(1.2);
+//    ocp.tf_lb = 1.2;
+//    ocp.tf_ub = 1.4;
+//    ocp.w_tf = 1000;
+
     ocp.ubu << 10;
     ocp.lbu << -3;
 

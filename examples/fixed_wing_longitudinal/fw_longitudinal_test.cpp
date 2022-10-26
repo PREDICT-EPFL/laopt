@@ -25,7 +25,7 @@ int main()
 //    ocp.objectives[lon_ocp::TrackVa] = true;
     ocp.objectives[lon_ocp::MinimizeControl] = true;
 
-    ocp.tf = 1.5;
+    ocp.set_tf(1.5);
 
     ocp.pitch_ref = -20.0 * M_PI / 180.0;
     ocp.Va_ref = 11.0;

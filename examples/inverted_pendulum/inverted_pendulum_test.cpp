@@ -19,10 +19,12 @@ int main()
     /* Construct OCP and set OCP-specific properties */
     Ocp ocp;
 
+    ocp.tf_lb = 1.5;
+    ocp.tf_ub = 2;
+    ocp.w_tf = 5;
+
     ocp.ubu << 3;
     ocp.lbu << -3;
-
-    ocp.tf = 1.5;
 
 //    ocp.angle_ref = 20.0 * M_PI / 180.0;
 //    ocp.mayer_multiplier = 0;
@@ -53,7 +55,7 @@ int main()
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
-        Solver solver(opt_problem, /* print_level (default = 0) */ 0);
+        Solver solver(opt_problem, /* print_level (default = 0) */ 5);
 
         const steady_clock::time_point t_start = steady_clock::now();
         solver.solve();

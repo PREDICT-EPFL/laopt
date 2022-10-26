@@ -8,7 +8,7 @@ void print_solution(const Transcription &transcription, OptProblem &opt_problem,
                     const Duration &duration_us, const Duration &duration2_us)
 {
     /* Print out the solution */
-    std::cout << "\n\n";
+    std::cout << "\n";
     std::cout << std::setprecision(4) << std::defaultfloat;
 
     const Eigen::VectorXd T_opt = transcription.get_T_opt();
