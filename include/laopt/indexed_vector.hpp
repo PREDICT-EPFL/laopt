@@ -36,7 +36,7 @@ public:
     static constexpr int n_inputs = Base::RowsAtCompileTime;
     static constexpr int n_outputs = Base::RowsAtCompileTime;
 
-    static_assert(Base::RowsAtCompileTime > 0, "Variables must have a compile time size. Please use Eigen::seqN with Eigen::fix<> for the size parameter.");
+    static_assert(Base::RowsAtCompileTime >= 0, "Variables must have a compile time size. Please use Eigen::seqN with Eigen::fix<> for the size parameter.");
     static_assert(Base::ColsAtCompileTime == 1, "You tired using a matrix on an indexed vector");
 
     IndexedVector() : IndexedVector(constructor_selector<Base>{}) {

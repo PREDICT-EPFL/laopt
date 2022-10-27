@@ -4,7 +4,7 @@
 #include <Eigen/Dense>
 #include "laopt/laopt.hpp"
 
-template<typename cScalar, int cNX, int cNU, int cNP = 1>
+template<typename cScalar, int cNX, int cNU, int cNP = 0>
 class ControlProblemBase
 {
 public:

@@ -9,7 +9,7 @@
 #include "ControlProblemBase.hpp"
 #include "laopt/laopt.hpp"
 
-class InvertedPendulumOcp : public ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 1>
+class InvertedPendulumOcp : public ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1>
 {
 public:
     Scalar angle_ref{0};
