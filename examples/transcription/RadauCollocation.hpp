@@ -366,14 +366,15 @@ public: //protected: // TODO ino1 (would like to make this protected)
         /* Box constraints */
         for (unsigned k = 0; k <= N; k++)
         {
-            optProblem.add_constr(controlProblem.lbx <= get_x(XU_var, k) <= controlProblem.ubx);
-            optProblem.add_constr(controlProblem.lbu <= get_u(XU_var, k) <= controlProblem.ubu);
+            optProblem.add_constr(controlProblem.x_lb <= get_x(XU_var, k) <= controlProblem.x_ub);
+            optProblem.add_constr(controlProblem.u_lb <= get_u(XU_var, k) <= controlProblem.u_ub);
         }
 
         /* Boundary constraints */
         optProblem.add_constr(controlProblem.x0_lb <= get_x(XU_var, 0) <= controlProblem.x0_ub);
         optProblem.add_constr(controlProblem.xf_lb <= get_x(XU_var, N) <= controlProblem.xf_ub);
         optProblem.add_constr(controlProblem.tf_lb <= tf_var <= controlProblem.tf_ub); // TODO: Here I can use tf_var as scalar!?
+        optProblem.add_constr(controlProblem.opt_params_lb <= p_var <= controlProblem.opt_params_ub);
 
         /* Set last control equal second last for easier data handling */
         optProblem.add_constr(get_u(XU_var, N) == get_u(XU_var, N - 1));
@@ -404,6 +405,7 @@ public:
     using TimeTrajectory = Eigen::Vector<Scalar, N + 1>;
     using StateTrajectory = Eigen::Matrix<Scalar, NX, N + 1>;
     using InputTrajectory = Eigen::Matrix<Scalar, NU, N + 1>;
+    using OptParams = Eigen::Matrix<Scalar, ControlProblem::NP, 1>;
 
     /* Set functions */
     void set_X_guess(const typename ControlProblem::State &x_guess)
@@ -438,6 +440,11 @@ public:
         U_opt.setZero();
         for (unsigned i = 0; i <= N; i++) { U_opt.col(i) << get_u(XU_var, i); }
         return U_opt;
+    }
+    OptParams get_p_opt() const
+    {
+        const OptParams p = p_var;
+        return p;
     }
 
     Eigen::Vector<Scalar, NX> get_x_at(const Scalar &t) const

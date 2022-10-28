@@ -24,8 +24,8 @@ int main()
 //    ocp.tf_ub = 1.4;
 //    ocp.w_tf = 1000;
 
-    ocp.ubu << 10;
-    ocp.lbu << -3;
+    ocp.u_ub << 10;
+    ocp.u_lb << -3;
 
     ocp.x_ref << 1, 0;
 
@@ -68,7 +68,7 @@ int main()
         const long duration2_us = duration_cast<microseconds>(t_end2 - t_end).count();
 
         /* Print out the solution */
-        print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
+        print_solution(transcription, opt_problem, duration_us, duration2_us);
         print_sampled_solution(transcription, Ts_max, t_test);
     }
 
@@ -103,7 +103,7 @@ int main()
         const long duration2_us = duration_cast<microseconds>(t_end2 - t_end).count();
 
         /* Print out the solution */
-        print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
+        print_solution(transcription, opt_problem, duration_us, duration2_us);
         print_sampled_solution(transcription, Ts_max, t_test);
     }
 

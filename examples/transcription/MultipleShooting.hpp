@@ -111,14 +111,15 @@ public: //protected: // TODO ino1 (would like to make this protected)
         /* Box constraints */
         for (unsigned i = 0; i <= N; i++)
         {
-            optProblem.add_constr(controlProblem.lbx <= X_var[i] <= controlProblem.ubx);
-            optProblem.add_constr(controlProblem.lbu <= U_var[i] <= controlProblem.ubu);
+            optProblem.add_constr(controlProblem.x_lb <= X_var[i] <= controlProblem.x_ub);
+            optProblem.add_constr(controlProblem.u_lb <= U_var[i] <= controlProblem.u_ub);
         }
 
         /* Boundary constraints */
         optProblem.add_constr(controlProblem.x0_lb <= X_var[0] <= controlProblem.x0_ub);
         optProblem.add_constr(controlProblem.xf_lb <= X_var[N] <= controlProblem.xf_ub);
         optProblem.add_constr(controlProblem.tf_lb <= tf_var <= controlProblem.tf_ub); // TODO: Here I can use tf_var as scalar!?
+        optProblem.add_constr(controlProblem.opt_params_lb <= p_var <= controlProblem.opt_params_ub);
 
         /* Set last control equal second last */
         optProblem.add_constr(U_var[N] == U_var[N - 1]);
@@ -136,6 +137,7 @@ public:
     using TimeTrajectory = Eigen::Vector<Scalar, N + 1>;
     using StateTrajectory = Eigen::Matrix<Scalar, ControlProblem::NX, N + 1>;
     using InputTrajectory = Eigen::Matrix<Scalar, ControlProblem::NU, N + 1>;
+    using OptParams = Eigen::Matrix<Scalar, ControlProblem::NP, 1>;
 
     /* Set functions */
     template<int rows, typename Scalar = double>
@@ -172,6 +174,11 @@ public:
         U_opt.setZero();
         for (unsigned i = 0; i < U_var.size(); i++) { U_opt.col(i) << U_var.at(i); }
         return U_opt;
+    }
+    OptParams get_p_opt() const
+    {
+        const OptParams p = p_var;
+        return p;
     }
 
     Eigen::Vector<Scalar, ControlProblem::NX> get_x_at(const Scalar &t) const

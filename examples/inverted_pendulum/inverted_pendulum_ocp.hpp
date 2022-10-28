@@ -9,7 +9,7 @@
 #include "ControlProblemBase.hpp"
 #include "laopt/laopt.hpp"
 
-class InvertedPendulumOcp : public ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1>
+class InvertedPendulumOcp : public ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 2>
 {
 public:
     Scalar angle_ref{0};
@@ -20,21 +20,39 @@ public:
 
     Eigen::Matrix<Scalar, NU, NU> R{{1}};
 
-    Scalar w_tf{10};
+    Scalar w_tf{0};
+
+    InvertedPendulumOcp()
+    {
+        // ref_offset
+        opt_params_lb(0) = 0;
+        opt_params_ub(0) = 0;
+
+        // us
+        opt_params_lb(1) = 0;
+        opt_params_ub(1) = 0;
+    }
 
     template<typename T>
-    T get_non_control_cost(const Eigen::Ref<const state_t<T>> &x)
+    T get_non_control_cost(const Eigen::Ref<const state_t<T>> &x,
+                           const Eigen::Ref<const param_t<T>> &p)
     {
         T non_control_cost = static_cast<T>(0);
-        T angle_err = angle_ref - x(0);
+
+        T ref_offset = p(0);
+        T angle_ref_ = angle_ref + ref_offset;
+        T angle_err = angle_ref_ - x(0);
         non_control_cost += W_angle_err * angle_err * angle_err;
         return non_control_cost;
     }
     template<typename T>
-    T get_control_cost(const Eigen::Ref<const input_t<T>> &u)
+    T get_control_cost(const Eigen::Ref<const input_t<T>> &u,
+                       const Eigen::Ref<const param_t<T>> &p)
     {
         T control_cost = static_cast<T>(0);
-        control_cost += u.dot(R * u);
+
+        input_t<T> us = p.template segment<1>(1);
+        control_cost += (u + us).dot(R * (u + us));
         return control_cost;
     }
 
@@ -44,7 +62,7 @@ public:
                          const Eigen::Ref<const input_t<T>> &u,
                          const Eigen::Ref<const param_t<T>> &p)
     {
-        return get_non_control_cost(x) + get_control_cost(u);
+        return get_non_control_cost(x, p) + get_control_cost(u, p);
     }
 
     template<typename T> // T is scalar type
@@ -52,7 +70,7 @@ public:
                       const Eigen::Ref<const param_t<T>> &p,
                       const T &tf)
     {
-        return mayer_multiplier * get_non_control_cost(xf) +
+        return mayer_multiplier * get_non_control_cost(xf, p) +
                w_tf * tf;
     }
 

@@ -19,17 +19,22 @@ int main()
     /* Construct OCP and set OCP-specific properties */
     Ocp ocp;
 
-    ocp.tf_lb = 1.5;
     ocp.tf_ub = 2;
-    ocp.w_tf = 5;
+    ocp.tf_lb = 1.5;
+    ocp.w_tf = 3;
 
-    ocp.ubu << 3;
-    ocp.lbu << -3;
+    ocp.angle_ref = 0.0 * M_PI / 180.0;
+    // ref_offset
+    ocp.opt_params_ub(0) = 1;
+    ocp.opt_params_lb(0) = 0;
+    // us
+    ocp.opt_params_ub(1) = 1;
+    ocp.opt_params_lb(1) = -1;
 
-//    ocp.angle_ref = 20.0 * M_PI / 180.0;
-//    ocp.mayer_multiplier = 0;
+    ocp.u_ub << 3;
+    ocp.u_lb << -3;
 
-    ocp.set_x0({3.14, 0});
+    ocp.set_x0({M_PI, 0});
 
     /* Resampling test parameters */
     const double Ts_max = 0.02;
@@ -55,7 +60,7 @@ int main()
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
-        Solver solver(opt_problem, /* print_level (default = 0) */ 5);
+        Solver solver(opt_problem, /* print_level (default = 0) */ 0);
 
         const steady_clock::time_point t_start = steady_clock::now();
         solver.solve();
@@ -67,7 +72,7 @@ int main()
         const long duration2_us = duration_cast<microseconds>(t_end2 - t_end).count();
 
         /* Print out the solution */
-        print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
+        print_solution(transcription, opt_problem, duration_us, duration2_us);
         print_sampled_solution(transcription, Ts_max, t_test);
     }
 
@@ -104,7 +109,7 @@ int main()
         const long duration2_us = duration_cast<microseconds>(t_end2 - t_end).count();
 
         /* Print out the solution */
-        print_solution(transcription, opt_problem, solver, duration_us, duration2_us);
+        print_solution(transcription, opt_problem, duration_us, duration2_us);
         print_sampled_solution(transcription, Ts_max, t_test);
     }
 

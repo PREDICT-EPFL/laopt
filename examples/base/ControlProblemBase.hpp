@@ -22,25 +22,35 @@ public:
     using Input = input_t<Scalar>;
     using Param = param_t<Scalar>;
 
-    /* Member variables */
+    /* Static parameters */
     Scalar t0 = 0;
-    Scalar tf_lb{1}, tf_ub{1};
-    void set_tf(const Scalar &tf) { tf_lb = tf_ub = tf;}
 
-    Input ubu = Input::Constant(std::numeric_limits<Scalar>::infinity());
-    Input lbu = -ubu;
-    State ubx = State::Constant(std::numeric_limits<Scalar>::infinity());
-    State lbx = -ubx;
+    /* Bounds on state and input */
+    Input u_ub = Input::Constant(std::numeric_limits<Scalar>::infinity());
+    Input u_lb = -u_ub;
+    State x_ub = State::Constant(std::numeric_limits<Scalar>::infinity());
+    State x_lb = -x_ub;
 
     State x0_ub = State::Constant(std::numeric_limits<Scalar>::infinity());
     State x0_lb = -x0_ub;
-    void set_x0(const State &x0) { x0_lb = x0_ub = x0; }
-
     State xf_ub = State::Constant(std::numeric_limits<Scalar>::infinity());
     State xf_lb = -xf_ub;
-    void set_xf(const State &xf) { xf_lb = xf_ub = xf; }
 
-    /* Templates for problem formulation */
+    /* Final time bounds */
+    Scalar tf_lb{1}, tf_ub{1};
+
+    /* Additional decision variables (optimized parameters) */
+    Param opt_params_ub = Param::Constant(std::numeric_limits<Scalar>::infinity());
+    Param opt_params_lb = -opt_params_ub;
+
+    /* Convenience setters for zero-range bounds */
+    void set_x0(const State &x0) { x0_lb = x0_ub = x0; }
+    void set_xf(const State &xf) { xf_lb = xf_ub = xf; }
+    void set_tf(const Scalar &tf) { tf_lb = tf_ub = tf;}
+
+    /*
+     * Templates for problem formulation
+     */
     template<typename T> // T is scalar type
     T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
                          const Eigen::Ref<const input_t<T>> &u,
