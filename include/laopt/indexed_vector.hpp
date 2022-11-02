@@ -26,10 +26,10 @@ class IndexedVector : public Base, public VariableBase<IndexedVector<Base>> {
     struct constructor_selector {};
 
     template<typename PlainObjectType, int MapOptions, typename StrideType>
-    explicit IndexedVector(constructor_selector<Eigen::Map<PlainObjectType, MapOptions, StrideType>>) : Base(nullptr) {};
+    explicit IndexedVector(constructor_selector<Eigen::Map<PlainObjectType, MapOptions, StrideType>>) : Base(nullptr) {}
 
     template<typename Derived>
-    explicit IndexedVector(constructor_selector<Derived>) : Base() {};
+    explicit IndexedVector(constructor_selector<Derived>) : Base() {}
 
 public:
 

@@ -138,7 +138,7 @@ BSMatrix<scalar_t> makeBSMatrix(F f, Eigen::Index rows = 0, Eigen::Index cols = 
     f(tape); // Extract operation sequence
 
     return tape.template makeBSMatrix<scalar_t>();
-};
+}
 
 } // namespace laopt
 
