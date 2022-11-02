@@ -49,9 +49,23 @@ public:
         if (ipopt_status != Ipopt::Solve_Succeeded)
         {
             std::cout << "\n*** IpoptWrapper: Error during solution!\n"
-                         "Error code " << ipopt_status << '\n';
+                         "Error " << ipopt_status << ": " << ipopt_status_text(ipopt_status) << '\n';
         }
         return ipopt_status;
+    }
+    static std::string ipopt_status_text(Ipopt::ApplicationReturnStatus ipopt_status)
+    {
+        using namespace Ipopt;
+        switch(ipopt_status)
+        {
+            case Solve_Succeeded: return "Solve_Succeed";
+            case Infeasible_Problem_Detected: return "Infeasible_Problem_Detected";
+            case Maximum_Iterations_Exceeded: return "Maximum_Iterations_Exceeded";
+            case Restoration_Failed: return "Restoration_Failed";
+            case Invalid_Problem_Definition: return "Invalid_Problem_Definition";
+            case Invalid_Number_Detected: return "Invalid_Number_Detected";
+            default: return "[Non-typical Ipopt Error]";
+        }
     }
 
     using Scalar = typename OptProblem::scalar_t;
