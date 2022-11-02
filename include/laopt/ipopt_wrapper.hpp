@@ -29,11 +29,13 @@ public:
         ApplicationReturnStatus ipopt_status = ipopt_application->Initialize();
         if (ipopt_status != Solve_Succeeded) { std::cout << "\n*** IpoptWrapper: Error during initialization!\n\n"; }
     }
-    IpoptWrapper(OptProblem &opt_problem, const Ipopt::OptionsList& options) : IpoptWrapper(opt_problem)
+    IpoptWrapper(OptProblem &opt_problem, const Ipopt::OptionsList &options) : IpoptWrapper(opt_problem)
     {
         ipopt_application->Options() = Ipopt::SmartPtr<Ipopt::OptionsList>(new Ipopt::OptionsList(options));
     }
 
+    /* Offer access to IPOPT options */
+    Ipopt::SmartPtr<Ipopt::OptionsList> Options() { return ipopt_application->Options(); }
     void set_tol(double tol) { ipopt_application->Options()->SetNumericValue("tol", tol); }
     void set_max_iter(int max_iter) { ipopt_application->Options()->SetIntegerValue("max_iter", max_iter); }
     void set_banner_message(bool active) { ipopt_application->Options()->SetBoolValue("sb", active); }
@@ -44,8 +46,11 @@ public:
         using namespace Ipopt;
 
         ApplicationReturnStatus ipopt_status = ipopt_application->OptimizeTNLP(ipopt_problem);
-        if (ipopt_status != Ipopt::Solve_Succeeded) { std::cout << "\n*** IpoptWrapper: Error during solution!\n"
-                                                                   "Error code "<< ipopt_status << '\n'; }
+        if (ipopt_status != Ipopt::Solve_Succeeded)
+        {
+            std::cout << "\n*** IpoptWrapper: Error during solution!\n"
+                         "Error code " << ipopt_status << '\n';
+        }
         return ipopt_status;
     }
 
