@@ -21,19 +21,31 @@ public:
 
         /* Create IPOPT application, setup, and initialize */
         ipopt_application = IpoptApplicationFactory();
-        // ipoptApp->Options()->SetStringValue("hessian_approximation", "limited-memory");
-        ipopt_application->Options()->SetIntegerValue("print_level", print_level);
-        ipopt_application->Options()->SetNumericValue("tol", 1e-3);
+
+        set_banner_message(true);
+        set_print_level(print_level);
+        set_tol(1e-3);
+
         ApplicationReturnStatus ipopt_status = ipopt_application->Initialize();
         if (ipopt_status != Solve_Succeeded) { std::cout << "\n*** IpoptWrapper: Error during initialization!\n\n"; }
     }
+    IpoptWrapper(OptProblem &opt_problem, const Ipopt::OptionsList& options) : IpoptWrapper(opt_problem)
+    {
+        ipopt_application->Options() = Ipopt::SmartPtr<Ipopt::OptionsList>(new Ipopt::OptionsList(options));
+    }
+
+    void set_tol(double tol) { ipopt_application->Options()->SetNumericValue("tol", tol); }
+    void set_max_iter(int max_iter) { ipopt_application->Options()->SetIntegerValue("max_iter", max_iter); }
+    void set_banner_message(bool active) { ipopt_application->Options()->SetBoolValue("sb", active); }
+    void set_print_level(int print_level) { ipopt_application->Options()->SetIntegerValue("print_level", print_level); }
 
     Ipopt::ApplicationReturnStatus solve() const
     {
         using namespace Ipopt;
 
         ApplicationReturnStatus ipopt_status = ipopt_application->OptimizeTNLP(ipopt_problem);
-        if (ipopt_status != Ipopt::Solve_Succeeded) { std::cout << "\n*** IpoptWrapper: Error during solution!\n\n"; }
+        if (ipopt_status != Ipopt::Solve_Succeeded) { std::cout << "\n*** IpoptWrapper: Error during solution!\n"
+                                                                   "Error code "<< ipopt_status << '\n'; }
         return ipopt_status;
     }
 
