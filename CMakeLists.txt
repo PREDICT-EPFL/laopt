@@ -11,21 +11,17 @@ option(BUILD_TESTS "Build tests" ON)
 option(BUILD_RELEASE "Build release version w/o debugging symbols" ON)
 option(ENABLE_SANITIZERS "Build with sanitizers enabled" OFF)
 
-if ("$<COMPILE_LANG_AND_ID:CXX,ARMClang,AppleClang,Clang,GNU,LCC>")
+# Set compiler flags according to compiler ID
+set(gcc_like_cxx CXX ARMClang AppleClang Clang GNU LCC)
+set(msvc_like CXX MSVC)
+if (${CMAKE_CXX_COMPILER_ID} IN_LIST gcc_like_cxx)
     list(APPEND compiler_flags -Wall -Wextra "-Wno-unused-parameter")
-elseif ("$<COMPILE_LANG_AND_ID:CXX,MSVC>")
+elseif ((${CMAKE_CXX_COMPILER_ID} IN_LIST msvc_like))
     list(APPEND compiler_flags -W3)
 endif ()
+message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID}")
 
-#### Build laOPT library with selected options ####
-## Set up configuration
-if (BUILD_RELEASE)
-    set(CMAKE_BUILD_TYPE "Release")
-    message(STATUS "Building RELEASE")
-else ()
-    set(CMAKE_BUILD_TYPE "Debug")
-    message(STATUS "Building DEBUG")
-endif ()
+# Set sanitizer flags
 if (ENABLE_SANITIZERS)
     list(APPEND sanitizer_flags "-fsanitize=address" "-fno-omit-frame-pointer")
     list(APPEND compiler_flags ${sanitizer_flags})
@@ -33,9 +29,19 @@ if (ENABLE_SANITIZERS)
     unset(sanitizer_flags)
 endif ()
 
+# Set build configuration
+if (BUILD_RELEASE)
+    set(CMAKE_BUILD_TYPE RELEASE)
+else ()
+    set(CMAKE_BUILD_TYPE DEBUG)
+endif ()
+message(STATUS "Building ${CMAKE_BUILD_TYPE}")
+
+#### Build laOPT library with selected options ####
 ## Find packages
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
+# Find Eigen3.4+
 if (DEFINED EIGEN3_INCLUDE_DIRS)
     # Create target for user-defined Eigen 3.4+ path to be used for laopt
     add_library(Eigen3.4 INTERFACE IMPORTED)
@@ -50,6 +56,7 @@ else ()
 endif ()
 
 ## Find solvers, append to laOPT interface library
+# Find IPOPT
 if (WITH_IPOPT)
     find_package(Ipopt REQUIRED)
     list(APPEND SOLVER_INCLUDE_DIRS ${Ipopt_INCLUDE_DIRS})
@@ -68,8 +75,6 @@ target_compile_features(laopt INTERFACE cxx_std_14)
 target_compile_options(laopt INTERFACE ${compiler_flags})
 target_link_options(laopt INTERFACE ${compiler_flags})
 message(STATUS "Compiler flags: ${compiler_flags}")
-
-unset(compiler_flags)
 
 ## Build optional components depending on laOPT library
 if (BUILD_TESTS)
