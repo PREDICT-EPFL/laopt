@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.5)
 
 find_package(benchmark REQUIRED)
+find_package(Casadi REQUIRED)
 
 add_executable(simple_function_benchmark simple_function_benchmark.cpp simple_function_benchmark_casadi_codegen.cpp)
-target_link_libraries(simple_function_benchmark benchmark::benchmark casadi)
+target_link_libraries(simple_function_benchmark PRIVATE laopt benchmark::benchmark casadi)
 
 add_executable(chain_mass_benchmark chain_mass_benchmark.cpp chain_mass_benchmark_casadi_codegen.cpp)
-target_link_libraries(chain_mass_benchmark benchmark::benchmark casadi)
+target_link_libraries(chain_mass_benchmark PRIVATE laopt benchmark::benchmark casadi)

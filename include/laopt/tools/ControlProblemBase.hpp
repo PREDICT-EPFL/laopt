@@ -4,6 +4,8 @@
 #include <Eigen/Dense>
 #include "laopt/laopt.hpp"
 
+namespace laopt_tools {
+
 template<typename cScalar, int cNX, int cNU, int cNP = 0>
 class ControlProblemBase
 {
@@ -72,5 +74,7 @@ public:
 
     // TODO: Add template for box constraints / nonlinear constraints?
 };
+
+} // namespace laopt_tools
 
 #endif //LAOPT_CTRLPROBLEMBASE_HPP

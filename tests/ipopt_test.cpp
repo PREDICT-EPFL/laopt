@@ -4,7 +4,7 @@
 
 #include <iostream>
 #include "laopt/laopt.hpp"
-#include "laopt/ipopt_wrapper.hpp"
+#include "laopt/ipopt_interface/ipopt_wrapper.hpp"
 
 #include "test_utils.hpp"
 #include "gtest/gtest.h"

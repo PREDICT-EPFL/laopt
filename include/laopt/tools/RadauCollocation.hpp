@@ -7,10 +7,10 @@
 #include "unsupported/Eigen/Polynomials"
 #include "laopt/laopt.hpp"
 
+namespace laopt_tools {
+
 #define PRINT(x) \
 //std::cout << __FUNCTION__ << ": " << x << std::endl // Comment this line in to activate PRINT function in the code
-
-namespace transcription {
 
 /*
  * Radau Collocation
@@ -546,6 +546,6 @@ protected: /* Helpers for resampling */
     }
 };
 
-} // namespace transcription
+} // namespace laopt_tools
 
 #endif //LAOPT_RADAUCOLLOCATION_HPP
