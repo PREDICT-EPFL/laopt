@@ -35,7 +35,7 @@ endif ()
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 if (DEFINED EIGEN3_INCLUDE_DIRS)
-    # Create target for Eigen 3.4+ to be used for laopt
+    # Create target for user-defined Eigen 3.4+ path to be used for laopt
     add_library(Eigen3.4 INTERFACE IMPORTED)
     target_include_directories(Eigen3.4 INTERFACE ${EIGEN3_INCLUDE_DIRS})
     message(STATUS "Using Eigen3 from: ${EIGEN3_INCLUDE_DIRS}") # Use custom Eigen path instead of package
