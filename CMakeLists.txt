@@ -35,9 +35,16 @@ endif ()
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 if (DEFINED EIGEN3_INCLUDE_DIRS)
+    # Create target for Eigen 3.4+ to be used for laopt
+    add_library(Eigen3.4 INTERFACE IMPORTED)
+    target_include_directories(Eigen3.4 INTERFACE ${EIGEN3_INCLUDE_DIRS})
     message(STATUS "Using Eigen3 from: ${EIGEN3_INCLUDE_DIRS}") # Use custom Eigen path instead of package
 else ()
+    # Wrap Eigen3 3.4+ from system package into imported target for consistent use afterwards
     find_package(Eigen3 3.4 REQUIRED NO_MODULE)
+    add_library(Eigen3.4 INTERFACE IMPORTED)
+    target_link_libraries(Eigen3.4 INTERFACE Eigen3::Eigen)
+    message(STATUS "Using Eigen3 from: ${EIGEN3_INCLUDE_DIRS}")
 endif ()
 
 ## Find solvers, append to laOPT interface library
@@ -50,7 +57,7 @@ endif ()
 ## Define laOPT interface library (to be linked into user code)
 add_library(laopt INTERFACE)
 target_include_directories(laopt INTERFACE include/ ${SOLVER_INCLUDE_DIRS})
-target_link_libraries(laopt INTERFACE Eigen3::Eigen ${SOLVER_LIBRARIES})
+target_link_libraries(laopt INTERFACE Eigen3.4 ${SOLVER_LIBRARIES})
 
 target_compile_definitions(laopt INTERFACE -DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB - For both Windows and UNIX)
 
