@@ -11,10 +11,11 @@ option(BUILD_TESTS "Build tests" ON)
 option(BUILD_RELEASE "Build release version w/o debugging symbols" ON)
 option(ENABLE_SANITIZERS "Build with sanitizers enabled" OFF)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
-#set(CMAKE_VERBOSE_MAKEFILE OFF) # Needed?
-list(APPEND compiler_flags -Wall -Wextra "-Wno-unused-parameter")
+if ("$<COMPILE_LANG_AND_ID:CXX,ARMClang,AppleClang,Clang,GNU,LCC>")
+    list(APPEND compiler_flags -Wall -Wextra "-Wno-unused-parameter")
+elseif ("$<COMPILE_LANG_AND_ID:CXX,MSVC>")
+    list(APPEND compiler_flags -W3)
+endif ()
 
 #### Build laOPT library with selected options ####
 ## Set up configuration
@@ -29,6 +30,7 @@ if (ENABLE_SANITIZERS)
     list(APPEND sanitizer_flags "-fsanitize=address" "-fno-omit-frame-pointer")
     list(APPEND compiler_flags ${sanitizer_flags})
     message(STATUS "Building with sanitizers: ${sanitizer_flags}")
+    unset(sanitizer_flags)
 endif ()
 
 ## Find packages
@@ -61,8 +63,13 @@ target_link_libraries(laopt INTERFACE Eigen3.4 ${SOLVER_LIBRARIES})
 
 target_compile_definitions(laopt INTERFACE -DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB - For both Windows and UNIX)
 
-message(STATUS "Compiler flags: ${compiler_flags}")
+target_compile_features(laopt INTERFACE cxx_std_14)
+
 target_compile_options(laopt INTERFACE ${compiler_flags})
+target_link_options(laopt INTERFACE ${compiler_flags})
+message(STATUS "Compiler flags: ${compiler_flags}")
+
+unset(compiler_flags)
 
 ## Build optional components depending on laOPT library
 if (BUILD_TESTS)
