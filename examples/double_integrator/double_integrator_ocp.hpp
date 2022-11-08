@@ -6,10 +6,10 @@
 #include <limits>
 #include <Eigen/Dense>
 
-#include "ControlProblemBase.hpp"
 #include "laopt/laopt.hpp"
+#include "laopt/tools/ControlProblemBase.hpp"
 
-class DoubleIntegratorOcp : public ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1>
+class DoubleIntegratorOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1>
 {
 public:
     /* Static parameters */

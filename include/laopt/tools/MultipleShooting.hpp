@@ -6,10 +6,10 @@
 #include <Eigen/Dense>
 #include "laopt/laopt.hpp"
 
+namespace laopt_tools {
+
 #define PRINT(x) \
 //std::cout << __FUNCTION__ << ": " << x << std::endl // Comment this line in to activate PRINT function in the code
-
-namespace transcription {
 
 /*
  * Multiple Shooting
@@ -325,6 +325,6 @@ protected: /* Helpers for resampling */
     }
 };
 
-} // namespace transcription
+} // namespace laopt_tools
 
 #endif //LAOPT_MULTIPLESHOOTING_HPP

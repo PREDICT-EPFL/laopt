@@ -5,11 +5,11 @@
 #include "laopt/laopt.hpp"
 
 #include "double_integrator_ocp.hpp"
-#include "MultipleShooting.hpp"
-#include "RadauCollocation.hpp"
-#include "laopt/ipopt_wrapper.hpp"
+#include "laopt/tools/MultipleShooting.hpp"
+#include "laopt/tools/RadauCollocation.hpp"
+#include "laopt/ipopt_interface/ipopt_wrapper.hpp"
 
-#include "examples_helper.hpp"
+#include "base/examples_helper.hpp"
 
 int main()
 {
@@ -45,7 +45,7 @@ int main()
     {
         std::cout << "Multiple Shooting\n";
         const int N = 20;
-        using Transcription = transcription::MultipleShooting<Ocp, N>;
+        using Transcription = laopt_tools::MultipleShooting<Ocp, N>;
 
         /* Define specific Tape, laOPT, and IPOPT problem types for the resulting NLP */
         using Tape = laopt::TapeInfo<Transcription>;
@@ -80,7 +80,7 @@ int main()
         std::cout << "Radau Collocation\n";
         const int D_poly = 4;
         const int N_segs = 3;
-        using Transcription = transcription::RadauCollocation<Ocp, N_segs, D_poly>;
+        using Transcription = laopt_tools::RadauCollocation<Ocp, N_segs, D_poly>;
 
         /* Define specific Tape, laOPT, and IPOPT problem types for the resulting NLP */
         using Tape = laopt::TapeInfo<Transcription>;

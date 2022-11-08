@@ -3,15 +3,16 @@
 
 // End user (level 1)
 
-#include "ControlProblemBase.hpp"
+#include "laopt/tools/ControlProblemBase.hpp"
 #include "LonOcpSettings.hpp"
-#include "kite.hpp"
+#include "FixedWing.hpp"
 
 namespace lon_ocp {
 
 using LonKite = kite_model::eigen_model::LonKiteDynamics;
 
-class LonFlightOCP : public ControlProblemBase</*Scalar*/ double, /*NX*/ LonKite::nx + 0, /*NU*/LonKite::nu + 0>
+class LonFlightOCP :
+        public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ LonKite::nx + 0, /*NU*/LonKite::nu + 0>
 {
 public:
     ~LonFlightOCP() = default;

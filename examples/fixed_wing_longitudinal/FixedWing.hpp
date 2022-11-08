@@ -1,5 +1,5 @@
-#ifndef KITE_HPP
-#define KITE_HPP
+#ifndef FIXEDWING_HPP
+#define FIXEDWING_HPP
 
 #include "casadi/casadi.hpp"
 #include <Eigen/Core>
@@ -30,45 +30,6 @@ Eigen::Quaternion<scalar_t> T3quat(const Derived &rotAng)
     q = Eigen::AngleAxis<scalar_t>(-rotAng, Eigen::Matrix<scalar_t, 3, 1>(0, 0, 1));
     return q;
 }
-
-namespace casadi_quat {
-/** quaternion arithmetics */
-template<typename sym_t>
-sym_t T1quat(const sym_t &rotAng) { return sym_t::vertcat({cos(-rotAng / 2.0), sin(-rotAng / 2.0), 0, 0}); }
-template<typename sym_t>
-sym_t T2quat(const sym_t &rotAng) { return sym_t::vertcat({cos(-rotAng / 2.0), 0, sin(-rotAng / 2.0), 0}); }
-template<typename sym_t>
-sym_t T3quat(const sym_t &rotAng) { return sym_t::vertcat({cos(-rotAng / 2.0), 0, 0, sin(-rotAng / 2.0)}); }
-
-template<typename sym_t>
-sym_t quat_multiply(const sym_t &q1, const sym_t &q2)
-{
-    sym_t s1 = q1(0);
-    sym_t v1 = q1(casadi::Slice(1, 4), 0);
-
-    sym_t s2 = q2(0);
-    sym_t v2 = q2(casadi::Slice(1, 4), 0);
-
-    sym_t s = (s1 * s2) - sym_t::dot(v1, v2);
-    sym_t v = sym_t::cross(v1, v2) + (s1 * v2) + (s2 * v1);
-
-    return sym_t::vertcat({s, v});
-}
-
-template<typename sym_t>
-sym_t quat_inverse(const sym_t &q)
-{
-    std::vector<sym_t> tmp{q(0), -q(1), -q(2), -q(3)};
-    return sym_t::vertcat(tmp);
-}
-
-template<typename sym_t>
-sym_t quat_transform(const sym_t &q_ba, const sym_t &a_vect)
-{
-    sym_t tmp = quat_multiply(q_ba, quat_multiply(sym_t::vertcat({0, a_vect}), quat_inverse(q_ba)));
-    return tmp(casadi::Slice(1, 4), 0);
-}
-}
 }
 namespace kite_model {
 
@@ -77,35 +38,6 @@ Eigen::Matrix<DerivedType, new_rows, new_cols>
 reshape(const Eigen::Matrix<DerivedType, DerivedRows, DerivedCols> &mat_in)
 {
     return Eigen::Map<const Eigen::Matrix<DerivedType, new_rows, new_cols>>(mat_in.data(), new_rows, new_cols);
-}
-
-template<typename DerivedType, int DerivedRows, int DerivedCols>
-void toEigen(const casadi::DM &casadi_matrix, Eigen::Matrix<DerivedType, DerivedRows, DerivedCols> &eigen_matrix)
-{
-    eigen_matrix = Eigen::Matrix<DerivedType, DerivedRows, DerivedCols>::Map(
-            casadi::DM::densify(casadi_matrix).nonzeros().data(), casadi_matrix.size1(), casadi_matrix.size2());
-}
-Eigen::MatrixXd toEigenX(const casadi::DM &casadi_matrix)
-{
-    const long rows = casadi_matrix.size1();
-    const long cols = casadi_matrix.size2();
-    Eigen::MatrixXd eigen_matrix(rows, cols);
-    eigen_matrix.setZero();
-    std::memcpy(eigen_matrix.data(), casadi_matrix.ptr(), sizeof(double) * rows * cols);
-    return eigen_matrix;
-}
-std::vector<double> toVec(const casadi::DM &casadi_matrix)
-{
-    return casadi_matrix.nonzeros();
-}
-std::vector<double> toVec(const Eigen::MatrixXd &eigenXd)
-{
-    return std::vector<double>(eigenXd.data(), eigenXd.size() + eigenXd.data());
-}
-casadi::DM toDM(const Eigen::MatrixXd &eigenXd)
-{
-    const casadi::DM dm_vec{toVec(eigenXd)};
-    return reshape(dm_vec, eigenXd.rows(), eigenXd.cols());
 }
 
 enum StateRepresentation
@@ -1133,4 +1065,4 @@ private:
 
 }
 
-#endif // KITE_HPP
+#endif // FIXEDWING_HPP

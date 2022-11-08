@@ -13,52 +13,27 @@ FetchContent_MakeAvailable(googletest)
 
 enable_testing()
 
-add_executable(
-  func_test
-  func_test.cpp
-)
-target_link_libraries(
-  func_test
-  gtest_main
-  gtest
-)
+add_executable(func_test func_test.cpp)
+target_link_libraries(func_test
+        PRIVATE laopt gtest_main gtest)
 
-add_executable(
-  bs_matrix_test
-  bs_matrix_test.cpp
-)
-target_link_libraries(
-  bs_matrix_test
-  gtest_main
-  gtest
-)
+add_executable(bs_matrix_test bs_matrix_test.cpp)
+target_link_libraries(bs_matrix_test
+        PRIVATE laopt gtest_main gtest)
 
-add_executable(
-  indexed_vector_test
-  indexed_vector_test.cpp
-)
-target_link_libraries(
-  indexed_vector_test
-  gtest_main
-  gtest
-)
+add_executable(indexed_vector_test indexed_vector_test.cpp)
+target_link_libraries(indexed_vector_test
+        PRIVATE laopt gtest_main gtest)
 
-add_executable(
-  ipopt_test
-  ipopt_test.cpp
-)
-target_link_libraries(
-  ipopt_test
-  ${Ipopt_LIBRARIES}
-  gtest_main
-  gtest
-)
+add_executable(tag_test tag_test.cpp)
+target_link_libraries(tag_test
+        PRIVATE laopt)
 
-add_executable(
-  tag_test
-  tag_test.cpp
-)
-
+if(WITH_IPOPT)
+    add_executable(ipopt_test ipopt_test.cpp)
+    target_link_libraries(ipopt_test
+            PRIVATE laopt ${Ipopt_LIBRARIES} gtest_main gtest)
+endif()
 
 include(GoogleTest)
 gtest_discover_tests(func_test)

@@ -6,11 +6,10 @@
 #include <limits>
 #include <Eigen/Dense>
 
-#include "ControlProblemBase.hpp"
 #include "laopt/laopt.hpp"
+#include "laopt/tools/ControlProblemBase.hpp"
 
-
-class InvertedPendulumOcp : public ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 2>
+class InvertedPendulumOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 2>
 {
 public:
     struct OptParam : ControlProblemBase<Scalar, NX, NU, NP>::OptParam

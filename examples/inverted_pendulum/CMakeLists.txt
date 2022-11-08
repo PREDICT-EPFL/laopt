@@ -4,6 +4,5 @@ add_executable(test_inverted_pendulum
         inverted_pendulum_test.cpp
 )
 target_link_libraries(test_inverted_pendulum
-        ${CASADI_LIBRARIES}
-        ${Ipopt_LIBRARIES}
+        PRIVATE laopt
 )
