@@ -2,6 +2,8 @@
 #include <iomanip>
 #include <chrono>
 
+#include "laopt/laopt.hpp"
+
 #include "double_integrator_ocp.hpp"
 #include "MultipleShooting.hpp"
 #include "RadauCollocation.hpp"
@@ -56,7 +58,7 @@ int main()
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
-        Solver solver(opt_problem, /* print_level */ 3);
+        Solver solver(opt_problem);
 
         const steady_clock::time_point t_start = steady_clock::now();
         solver.solve();
@@ -91,7 +93,7 @@ int main()
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
-        Solver solver(opt_problem, /* print_level */ 3);
+        Solver solver(opt_problem);
 
         const steady_clock::time_point t_start = steady_clock::now();
         solver.solve();

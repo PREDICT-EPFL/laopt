@@ -2,6 +2,8 @@
 #include <iomanip>
 #include <chrono>
 
+#include "laopt/laopt.hpp"
+
 #include "inverted_pendulum_ocp.hpp"
 #include "MultipleShooting.hpp"
 #include "RadauCollocation.hpp"
@@ -25,11 +27,11 @@ int main()
 
     ocp.angle_ref = 0.0 * M_PI / 180.0;
     // ref_offset
-    ocp.opt_params_ub(0) = 1;
-    ocp.opt_params_lb(0) = 0;
+    ocp.opt_params_ub.ref_offset << 1;
+    ocp.opt_params_lb.ref_offset << 0;
     // us
-    ocp.opt_params_ub(1) = 1;
-    ocp.opt_params_lb(1) = -1;
+    ocp.opt_params_ub.us << 1;
+    ocp.opt_params_lb.us << -1;
 
     ocp.u_ub << 3;
     ocp.u_lb << -3;
@@ -60,7 +62,7 @@ int main()
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
-        Solver solver(opt_problem, /* print_level (default = 0) */ 0);
+        Solver solver(opt_problem);
 
         const steady_clock::time_point t_start = steady_clock::now();
         solver.solve();
@@ -74,12 +76,16 @@ int main()
         /* Print out the solution */
         print_solution(transcription, opt_problem, duration_us, duration2_us);
         print_sampled_solution(transcription, Ts_max, t_test);
+
+        /// Access optimization parameters by struct
+        Ocp::OptParam opt_params = transcription.get_opt_params();
+        std::cout << "opt_params: ref_offset: " << opt_params.ref_offset << ", us: " << opt_params.us << "\n\n";
     }
 
     /* Solve with Radau Collocation transcription */
     if (true)
     {
-        std::cout << "Radau Collocation\n";
+        std::cout << "\nRadau Collocation\n";
         const int D_poly = 4;
         const int N_segs = 3;
         using Transcription = transcription::RadauCollocation<Ocp, N_segs, D_poly>;
@@ -97,7 +103,7 @@ int main()
 
         /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
-        Solver solver(opt_problem, /* print_level (default = 0) */ 0);
+        Solver solver(opt_problem);
 
         const steady_clock::time_point t_start = steady_clock::now();
         solver.solve();
@@ -111,6 +117,10 @@ int main()
         /* Print out the solution */
         print_solution(transcription, opt_problem, duration_us, duration2_us);
         print_sampled_solution(transcription, Ts_max, t_test);
+
+        /// Access optimization parameters by struct
+        Ocp::OptParam opt_params = transcription.get_opt_params();
+        std::cout << "opt_params: ref_offset: " << opt_params.ref_offset << ", us: " << opt_params.us << "\n\n";
     }
 
     return 0;

@@ -9,9 +9,17 @@
 #include "ControlProblemBase.hpp"
 #include "laopt/laopt.hpp"
 
+
 class InvertedPendulumOcp : public ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 2>
 {
 public:
+    struct OptParam : ControlProblemBase<Scalar, NX, NU, NP>::OptParam
+    {
+        VecRef<1> ref_offset = get_parameter<1>(0);
+        VecRef<1> us = get_parameter<1>(1);
+    };
+    OptParam opt_params_lb, opt_params_ub;
+
     Scalar angle_ref{0};
 
     Scalar mayer_multiplier{10};
@@ -25,12 +33,12 @@ public:
     InvertedPendulumOcp()
     {
         // ref_offset
-        opt_params_lb(0) = 0;
-        opt_params_ub(0) = 0;
+        opt_params_lb.ref_offset << 0;
+        opt_params_ub.ref_offset << 0;
 
         // us
-        opt_params_lb(1) = 0;
-        opt_params_ub(1) = 0;
+        opt_params_lb.us << 0;
+        opt_params_ub.us << 0;
     }
 
     template<typename T>

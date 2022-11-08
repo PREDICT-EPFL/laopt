@@ -40,28 +40,47 @@ public:
     Scalar tf_lb{1}, tf_ub{1};
 
     /* Additional decision variables (optimized parameters) */
-    Param opt_params_ub = Param::Constant(std::numeric_limits<Scalar>::infinity());
-    Param opt_params_lb = -opt_params_ub;
+    class OptParam
+    {
+    public:
+        /* Method allows to extract a reference to a (writeable) segment of the parameter vector */
+        template<unsigned LEN>
+        Eigen::Ref<Eigen::Vector<Scalar, LEN>>
+        get_parameter(unsigned index) { return m_param_vector.template segment<LEN>(index); }
+
+        /* Methods to write and read parameter vector */
+        Param &vector() { return m_param_vector; }
+        const Param &vector() const { return m_param_vector; }
+
+        template<unsigned LEN>
+        using VecRef = Eigen::Ref<Eigen::Vector<Scalar, LEN>>;
+    private:
+        Param m_param_vector;
+    };
+    OptParam opt_params_lb, opt_params_ub; // Serve as placeholder in case child class does not define them
 
     /* Convenience setters for zero-range bounds */
     void set_x0(const State &x0) { x0_lb = x0_ub = x0; }
     void set_xf(const State &xf) { xf_lb = xf_ub = xf; }
-    void set_tf(const Scalar &tf) { tf_lb = tf_ub = tf;}
+    void set_tf(const Scalar &tf) { tf_lb = tf_ub = tf; }
 
     /*
      * Templates for problem formulation
      */
-    template<typename T> // T is scalar type
+    template<typename T>
+    // T is scalar type
     T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
                          const Eigen::Ref<const input_t<T>> &u,
                          const Eigen::Ref<const param_t<T>> &p) { return static_cast<T>(0); }
 
-    template<typename T> // T is scalar type
+    template<typename T>
+    // T is scalar type
     T mayer_term_impl(const Eigen::Ref<const state_t<T>> &x,
                       const Eigen::Ref<const param_t<T>> &p,
                       const Eigen::Ref<const T> &tf) { return static_cast<T>(0); }
 
-    template<typename T> // T is scalar type
+    template<typename T>
+    // T is scalar type
     state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
                              const Eigen::Ref<const input_t<T>> &u,
                              const Eigen::Ref<const param_t<T>> &p)

@@ -119,7 +119,7 @@ public: //protected: // TODO ino1 (would like to make this protected)
         optProblem.add_constr(controlProblem.x0_lb <= X_var[0] <= controlProblem.x0_ub);
         optProblem.add_constr(controlProblem.xf_lb <= X_var[N] <= controlProblem.xf_ub);
         optProblem.add_constr(controlProblem.tf_lb <= tf_var <= controlProblem.tf_ub); // TODO: Here I can use tf_var as scalar!?
-        optProblem.add_constr(controlProblem.opt_params_lb <= p_var <= controlProblem.opt_params_ub);
+        optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
 
         /* Set last control equal second last */
         optProblem.add_constr(U_var[N] == U_var[N - 1]);
@@ -137,7 +137,7 @@ public:
     using TimeTrajectory = Eigen::Vector<Scalar, N + 1>;
     using StateTrajectory = Eigen::Matrix<Scalar, ControlProblem::NX, N + 1>;
     using InputTrajectory = Eigen::Matrix<Scalar, ControlProblem::NU, N + 1>;
-    using OptParams = Eigen::Matrix<Scalar, ControlProblem::NP, 1>;
+    using Param = Eigen::Vector<Scalar, ControlProblem::NP>;
 
     /* Set functions */
     template<int rows, typename Scalar = double>
@@ -175,10 +175,16 @@ public:
         for (unsigned i = 0; i < U_var.size(); i++) { U_opt.col(i) << U_var.at(i); }
         return U_opt;
     }
-    OptParams get_p_opt() const
+    Param get_p_opt() const
     {
-        const OptParams p = p_var;
+        const Param p = p_var;
         return p;
+    }
+    typename ControlProblem::OptParam get_opt_params() const
+    {
+        typename ControlProblem::OptParam opt_param;
+        opt_param.vector() = get_p_opt();
+        return opt_param;
     }
 
     Eigen::Vector<Scalar, ControlProblem::NX> get_x_at(const Scalar &t) const

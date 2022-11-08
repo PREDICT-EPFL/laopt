@@ -2,6 +2,8 @@
 #include <iomanip>
 #include <chrono>
 
+#include "laopt/laopt.hpp"
+
 #include "LonOcpEigen.hpp"
 #include "MultipleShooting.hpp"
 #include "RadauCollocation.hpp"

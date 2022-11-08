@@ -12,7 +12,7 @@ class IpoptWrapper
 public:
     using IpoptProblem = laopt::Solver_IPOpt<OptProblem>;
 
-    explicit IpoptWrapper(OptProblem &opt_problem, int print_level = 0)
+    explicit IpoptWrapper(OptProblem &opt_problem)
     {
         using namespace Ipopt;
 
@@ -22,9 +22,10 @@ public:
         /* Create IPOPT application, setup, and initialize */
         ipopt_application = IpoptApplicationFactory();
 
-        set_banner_message(true);
-        set_print_level(print_level);
-        set_tol(1e-3);
+        set_banner_message(true); // IPOPT default
+        set_print_level(0);
+        set_tol(1e-8);      // IPOPT default
+        set_max_iter(3000); // IPOPT default
 
         ApplicationReturnStatus ipopt_status = ipopt_application->Initialize();
         if (ipopt_status != Solve_Succeeded) { std::cout << "\n*** IpoptWrapper: Error during initialization!\n\n"; }
