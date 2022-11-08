@@ -12,7 +12,7 @@
 class InvertedPendulumOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 2>
 {
 public:
-    struct OptParam : ControlProblemBase<Scalar, NX, NU, NP>::OptParam
+    struct OptParam : OptParamBase
     {
         VecRef<1> ref_offset = get_parameter<1>(0);
         VecRef<1> us = get_parameter<1>(1);

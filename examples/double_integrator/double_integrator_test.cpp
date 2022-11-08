@@ -9,7 +9,7 @@
 #include "laopt/tools/RadauCollocation.hpp"
 #include "laopt/ipopt_interface/ipopt_wrapper.hpp"
 
-#include "base/examples_helper.hpp"
+#include "examples_helper.hpp"
 
 int main()
 {

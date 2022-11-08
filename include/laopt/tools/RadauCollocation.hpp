@@ -449,7 +449,7 @@ public:
     typename ControlProblem::OptParam get_opt_params() const
     {
         typename ControlProblem::OptParam opt_param;
-        opt_param.vector() = get_p_opt();
+        opt_param.set_vector(get_p_opt());
         return opt_param;
     }
 

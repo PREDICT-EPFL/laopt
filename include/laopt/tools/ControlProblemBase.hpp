@@ -42,24 +42,30 @@ public:
     Scalar tf_lb{1}, tf_ub{1};
 
     /* Additional decision variables (optimized parameters) */
-    class OptParam
+    class OptParamBase
     {
     public:
-        /* Method allows to extract a reference to a (writeable) segment of the parameter vector */
+        explicit OptParamBase(const Param &param) : m_param_vector(param) {}
+        OptParamBase() = default;
+
+        /* Method allows to extract a reference to a (writeable) length LEN segment of the parameter vector.
+         * This way, the user can create a struct for convenient handling of parameter bounds and evaluation */
         template<unsigned LEN>
         Eigen::Ref<Eigen::Vector<Scalar, LEN>>
         get_parameter(unsigned index) { return m_param_vector.template segment<LEN>(index); }
 
         /* Methods to write and read parameter vector */
-        Param &vector() { return m_param_vector; }
+        void set_vector(const Param &param) { m_param_vector = param; }
         const Param &vector() const { return m_param_vector; }
 
+        /* Eigen Reference type to (sub) vector that the user can use in the child class */
         template<unsigned LEN>
         using VecRef = Eigen::Ref<Eigen::Vector<Scalar, LEN>>;
     private:
         Param m_param_vector;
     };
-    OptParam opt_params_lb, opt_params_ub; // Serve as placeholder in case child class does not define them
+    struct OptParam : OptParamBase {};     // Placeholder in case child class
+    OptParam opt_params_lb, opt_params_ub; // does not define them
 
     /* Convenience setters for zero-range bounds */
     void set_x0(const State &x0) { x0_lb = x0_ub = x0; }

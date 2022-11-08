@@ -182,8 +182,9 @@ public:
     }
     typename ControlProblem::OptParam get_opt_params() const
     {
+//        return typename ControlProblem::OptParam(get_p_opt()); // TODO: Why does this not work?
         typename ControlProblem::OptParam opt_param;
-        opt_param.vector() = get_p_opt();
+        opt_param.set_vector(get_p_opt());
         return opt_param;
     }
 
