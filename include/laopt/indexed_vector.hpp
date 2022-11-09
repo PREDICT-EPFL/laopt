@@ -65,6 +65,22 @@ public:
         return *this;
     }
 
+    // Allow assignment of a scalar to a 1x1 matrix
+    template<typename RetType = IndexedVector&>
+    typename std::enable_if<Base::RowsAtCompileTime == 1 && Base::ColsAtCompileTime == 1, RetType&>::type
+    operator=(const typename Base::Scalar &scalar)
+    {
+        this->Base::operator()(0) = scalar;
+        return *this;
+    }
+
+    // Casts a 1x1 matrix to its scalar value
+    template<typename DummyRet = void, typename std::enable_if<Base::RowsAtCompileTime == 1 && Base::ColsAtCompileTime == 1, DummyRet>::type* dummy = nullptr>
+    operator typename Base::CoeffReturnType()
+    {
+        return this->Base::operator()(0);
+    }
+
     const index_t& indices() const
     {
         return m_indices;
@@ -134,15 +150,15 @@ public:
      */
     auto operator()(Eigen::Index i_row)
     {
-        using RetType = Eigen::Block<Base, 1, 1>;
-        IndexedVector<RetType> ret(RetType(*this, i_row, 0));
+        using RetType = decltype(Base::operator()(Eigen::seqN(i_row, Eigen::fix<1>)));
+        IndexedVector<RetType> ret(Base::operator()(Eigen::seqN(i_row, Eigen::fix<1>)));
         ret.set_indices(m_indices(Eigen::seqN(i_row, Eigen::fix<1>)));
         return ret;
     }
     auto operator()(Eigen::Index i_row) const
     {
-        using RetType = Eigen::Block<Base, 1, 1>;
-        IndexedVector<RetType> ret(RetType(*this, i_row, 0));
+        using RetType = decltype(Base::operator()(Eigen::seqN(i_row, Eigen::fix<1>)));
+        IndexedVector<RetType> ret(Base::operator()(Eigen::seqN(i_row, Eigen::fix<1>)));
         ret.set_indices(m_indices(Eigen::seqN(i_row, Eigen::fix<1>)));
         return ret;
     }
