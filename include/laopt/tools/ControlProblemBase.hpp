@@ -72,6 +72,33 @@ public:
     void set_xf(const State &xf) { xf_lb = xf_ub = xf; }
     void set_tf(const Scalar &tf) { tf_lb = tf_ub = tf; }
 
+    /* Diagnosis */
+    void print_diagnosis() const
+    {
+        std::cout << std::setprecision(4) << std::defaultfloat;
+        std::cout << "ControlProblem with NX = "
+                  << NX << ", NU = " << NU << ", NP = " << NP << "\n";
+        std::cout << "ubu: " << u_ub.transpose() << "\n"
+                  << "lbu: " << u_lb.transpose() << "\n"
+                  << "ubx: " << x_ub.transpose() << "\n"
+                  << "lbx: " << x_lb.transpose() << "\n";
+
+        if (x0_lb == x0_ub) { std::cout << "x0: " << x0_lb.transpose() << "\n"; }
+        else
+        {
+            std::cout << "x0_ub: " << x0_ub.transpose() << "\n"
+                      << "x0_lb: " << x0_lb.transpose() << "\n";
+        }
+        if (xf_lb == xf_ub) { std::cout << "xf: " << xf_lb.transpose() << "\n"; }
+        else
+        {
+            std::cout << "xf_ub: " << xf_ub.transpose() << "\n"
+                      << "xf_lb: " << xf_lb.transpose() << "\n";
+        }
+        if (tf_lb == tf_ub) { std::cout << "tf: " << tf_lb << "\n"; }
+        else { std::cout << "tf: [" << tf_lb << ", " << tf_ub << "]\n"; }
+    }
+
     /*
      * Templates for problem formulation
      */

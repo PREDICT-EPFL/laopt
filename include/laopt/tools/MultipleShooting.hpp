@@ -41,8 +41,6 @@ protected: // TODO ino1
 
 public: //protected: // TODO ino1 (would like to make this protected)
     /* Dynamic constraints */
-
-
     struct DiscreteDynamics {};
     template<typename x_t, typename u_t, typename p_t, typename tf_t,
             typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
@@ -226,6 +224,22 @@ public:
     Eigen::MatrixX<Scalar> get_TU_resampled(const Scalar &Ts_max) const
     {
         return resample_trajectory_hold(get_T_opt(), get_U_opt(), Ts_max);
+    }
+
+    /* Diagnosis */
+    void print_diagnosis() const
+    {
+        std::cout << std::setprecision(4) << std::defaultfloat;
+        std::cout << "Multiple Shooting with N_segs = " << N_segs << "\n";
+        controlProblem.print_diagnose();
+        const Eigen::VectorXd T_opt = get_T_opt();
+        const Eigen::MatrixXd X_opt = get_X_opt();
+        const Eigen::MatrixXd U_opt = get_U_opt();
+        const Eigen::MatrixXd p_opt = get_p_opt();
+        std::cout << "T_opt = [\n" << T_opt.transpose() << "];\n";
+        std::cout << "X_opt = [\n" << X_opt << "];\n";
+        std::cout << "U_opt = [\n" << U_opt << "];\n";
+        std::cout << "p_opt = [" << p_opt.transpose() << "];\n";
     }
 
 protected: /* Helpers for resampling */

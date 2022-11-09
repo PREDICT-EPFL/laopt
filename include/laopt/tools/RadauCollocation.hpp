@@ -494,6 +494,22 @@ public:
         return resample_trajectory(get_T_opt(), get_U_opt(), Ts_max);
     }
 
+    /* Diagnosis */
+    void print_diagnosis() const
+    {
+        std::cout << std::setprecision(4) << std::defaultfloat;
+        std::cout << "Multiple Shooting with N_segs = " << N_segs << "\n";
+        controlProblem.print_diagnose();
+        const Eigen::VectorXd T_opt = get_T_opt();
+        const Eigen::MatrixXd X_opt = get_X_opt();
+        const Eigen::MatrixXd U_opt = get_U_opt();
+        const Eigen::MatrixXd p_opt = get_p_opt();
+        std::cout << "T_opt = [\n" << T_opt.transpose() << "];\n";
+        std::cout << "X_opt = [\n" << X_opt << "];\n";
+        std::cout << "U_opt = [\n" << U_opt << "];\n";
+        std::cout << "p_opt = [" << p_opt.transpose() << "];\n";
+    }
+
 protected: /* Helpers for resampling */
     template<int DerivedNT1, int DerivedNT2, int DerivedNX>
     Eigen::Matrix<Scalar, DerivedNX + 1, -1> resample_trajectory(const Eigen::Vector<Scalar, DerivedNT1> &T_opt,
