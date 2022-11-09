@@ -76,7 +76,7 @@ public:
 
     // Casts a 1x1 matrix to its scalar value
     template<typename DummyRet = void, typename std::enable_if<Base::RowsAtCompileTime == 1 && Base::ColsAtCompileTime == 1, DummyRet>::type* dummy = nullptr>
-    operator typename Base::CoeffReturnType()
+    operator typename Base::CoeffReturnType() const
     {
         return this->Base::operator()(0);
     }
