@@ -45,9 +45,6 @@ public:
     class OptParamBase
     {
     public:
-        explicit OptParamBase(const Param &param) : m_param_vector(param) {}
-        OptParamBase() = default;
-
         /* Method allows to extract a reference to a (writeable) length LEN segment of the parameter vector.
          * This way, the user can create a struct for convenient handling of parameter bounds and evaluation */
         template<unsigned LEN>
@@ -62,7 +59,7 @@ public:
         template<unsigned LEN>
         using VecRef = Eigen::Ref<Eigen::Vector<Scalar, LEN>>;
     private:
-        Param m_param_vector;
+        Param m_param_vector = Param::Zero();
     };
     struct OptParam : OptParamBase {};     // Placeholder in case child class
     OptParam opt_params_lb, opt_params_ub; // does not define them

@@ -150,11 +150,7 @@ public:
     }
 
     /* Get functions */
-    double get_tf_opt() const
-    {
-        const Eigen::Matrix<Scalar, 1, 1> mat = tf_var;
-        return mat(0);
-    }
+    double get_tf_opt() const { return tf_var; }
     TimeTrajectory get_T_opt() const
     {
         return TimeTrajectory::Constant(controlProblem.t0) + (get_tf_opt() - controlProblem.t0) * T;
@@ -173,14 +169,9 @@ public:
         for (unsigned i = 0; i < U_var.size(); i++) { U_opt.col(i) << U_var.at(i); }
         return U_opt;
     }
-    Param get_p_opt() const
-    {
-        const Param p = p_var;
-        return p;
-    }
+    Param get_p_opt() const { return Param(p_var); }
     typename ControlProblem::OptParam get_opt_params() const
     {
-//        return typename ControlProblem::OptParam(get_p_opt()); // TODO: Why does this not work?
         typename ControlProblem::OptParam opt_param;
         opt_param.set_vector(get_p_opt());
         return opt_param;
