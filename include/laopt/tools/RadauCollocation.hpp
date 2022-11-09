@@ -402,13 +402,15 @@ public:
     }
 
     using scalar_t = typename ControlProblem::Scalar; // TODO: Change in laOPT to accept Scalar
+    using State = typename ControlProblem::State;
+    using Input = typename ControlProblem::Input;
+    using Param = typename ControlProblem::Param;
     using TimeTrajectory = Eigen::Vector<Scalar, N + 1>;
-    using StateTrajectory = Eigen::Matrix<Scalar, NX, N + 1>;
-    using InputTrajectory = Eigen::Matrix<Scalar, NU, N + 1>;
-    using Param = Eigen::Vector<Scalar, ControlProblem::NP>;
+    using StateTrajectory = Eigen::Matrix<Scalar, ControlProblem::NX, N + 1>;
+    using InputTrajectory = Eigen::Matrix<Scalar, ControlProblem::NU, N + 1>;
 
     /* Set functions */
-    void set_X_guess(const typename ControlProblem::State &x_guess)
+    void set_X_guess(const State &x_guess)
     {
         for (unsigned k = 0; k <= N; k++) { get_x(XU_var, k) << x_guess; }
     }
@@ -416,6 +418,15 @@ public:
     {
         for (unsigned k = 0; k <= N; k++) { get_x(XU_var, k) << X_guess.col(k); }
     }
+    void set_U_guess(const Input &u_guess)
+    {
+        for (unsigned k = 0; k <= N; k++) { get_u(XU_var, k) << u_guess; }
+    }
+    void set_U_guess(const InputTrajectory &U_guess)
+    {
+        for (unsigned k = 0; k <= N; k++) { get_u(XU_var, k) << U_guess.col(k); }
+    }
+    void set_p_guess(const Param &p_guess) { p_var = p_guess; }
 
     /* Get functions */
     double get_tf_opt() const { return tf_var; }
