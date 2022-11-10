@@ -175,22 +175,28 @@ protected:
 
         // Second order derivative
         using AD_scalar = Eigen::AutoDiffScalar<Eigen::Vector<scalar_t, Info::n_inputs>>;
-        using outerDerivatives = Eigen::Vector<AD_scalar, Info::n_inputs>;
+        // only calculate one row of the hessian at once to reduce memory requirements
+        using outerDerivatives = Eigen::Vector<AD_scalar, 1>;
         using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
         using outerAD_t = Eigen::Vector<outerADScalar, Info::n_outputs>;
 
-        // Convert to AD variables for the inputs and call our function
-        outerAD_t out = seed_and_call2(std::forward<Tag>(tag), make_ad2<outerADScalar>(args)...);
-
+        // Convert to AD variables for the inputs and call our function for first row of hessian
+        outerAD_t out = seed_and_call2(0, std::forward<Tag>(tag), make_ad2<outerADScalar>(args)...);
         scalar_t value = 0;
-
         // Copy into buffers
         for(size_t i = 0; i < Info::n_outputs; i++) {
+            // We only use value and gradient once
             value += weight(i) * out[i].value().value();
             out_gradient += weight(i) * out[i].value().derivatives();
+            // We have only calculated the first row of the hessian
+            out_hessian(0, Eigen::all) += weight(i) * out[i].derivatives()(0).derivatives().transpose();
+        }
 
-            for (size_t j = 0; j < Info::n_inputs; j++) {
-                out_hessian(j, Eigen::all) += weight(i) * out[i].derivatives()(j).derivatives().transpose();
+        // calculate the remaining rows of hessian
+        for (size_t j = 1; j < Info::n_inputs; j++) {
+            out = seed_and_call2(j, std::forward<Tag>(tag), make_ad2<outerADScalar>(args)...);
+            for(size_t i = 0; i < Info::n_outputs; i++) {
+                out_hessian(j, Eigen::all) += weight(i) * out[i].derivatives()(0).derivatives().transpose();
             }
         }
 
@@ -210,9 +216,7 @@ protected:
             y(i).value().value() = x.cast_base()(i);
             y(i).value().derivatives().setZero();
             y(i).derivatives().setZero();
-            for (size_t j = 0; j < n; j++) {
-                y(i).derivatives()(j).derivatives().setZero();
-            }
+            y(i).derivatives()(0).derivatives().setZero();
         }
         return y;
     }
@@ -225,13 +229,13 @@ protected:
     }
 
     template<typename Tag, typename... Args>
-    EIGEN_STRONG_INLINE auto seed_and_call2(Tag&& tag, Args&&... args) noexcept
+    EIGEN_STRONG_INLINE auto seed_and_call2(int outer_index, Tag&& tag, Args&&... args) noexcept
     {
         // Set derivative equal to identity
-        int offset = 0;
+        int inner_offset = 0;
         (void) std::initializer_list<int>{
             (
-                offset = ad_seed2(args, offset), // Set to unit vectors
+                inner_offset = ad_seed2(args, outer_index, inner_offset), // Set to unit vectors
                 0
             )...
         };
@@ -244,22 +248,25 @@ protected:
     // Assumes that the derivative matrix is initially zero
     template <typename X, int n>
     EIGEN_STRONG_INLINE int
-    ad_seed2(Eigen::Vector<Eigen::AutoDiffScalar<X>, n>& x, int offset) noexcept
+    ad_seed2(Eigen::Vector<Eigen::AutoDiffScalar<X>, n>& x, int outer_index, int inner_offset) noexcept
     {
         for (int i = 0; i < x.rows(); i++)
         {
-            x(i).value().derivatives().coeffRef(i + offset) = 1;
-            x(i).derivatives().coeffRef(i + offset) = 1;
+            x(i).value().derivatives().coeffRef(i + inner_offset) = 1;
+            // Seed only the relevant value for the current row of the hessian
+            if (i + inner_offset == outer_index) {
+                x(i).derivatives().coeffRef(0) = 1;
+            }
         }
 
-        return offset + x.rows();
+        return inner_offset + x.rows();
     }
 
     template<typename T>
     static EIGEN_STRONG_INLINE int
-    ad_seed2(const T, int offset) noexcept
+    ad_seed2(const T, int outer_index, int inner_offset) noexcept
     {
-        return offset;
+        return inner_offset;
     }
 
     /**
