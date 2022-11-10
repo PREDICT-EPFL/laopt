@@ -498,11 +498,11 @@ public:
     }
 
     /* Diagnosis */
-    void print_diagnosis() const
+    void print_diagnostics() const
     {
         std::cout << std::setprecision(4) << std::defaultfloat;
-        std::cout << "Multiple Shooting with N_segs = " << N_segs << "\n";
-        controlProblem.print_diagnose();
+        std::cout << "Diagnostics: Radau Collocation with N_segs = " << N_segs << ", D_poly = " << D_poly << "\n";
+        controlProblem.print_diagnostics();
         const Eigen::VectorXd T_opt = get_T_opt();
         const Eigen::MatrixXd X_opt = get_X_opt();
         const Eigen::MatrixXd U_opt = get_U_opt();

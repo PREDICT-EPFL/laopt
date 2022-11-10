@@ -21,6 +21,8 @@ elseif ((${CMAKE_CXX_COMPILER_ID} IN_LIST msvc_like))
 endif ()
 message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID}")
 
+list(APPEND compiler_flags "-fno-omit-frame-pointer")
+
 # Set sanitizer flags
 if (ENABLE_SANITIZERS)
     list(APPEND sanitizer_flags "-fsanitize=address" "-fno-omit-frame-pointer")

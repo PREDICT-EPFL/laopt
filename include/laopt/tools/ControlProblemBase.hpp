@@ -70,10 +70,10 @@ public:
     void set_tf(const Scalar &tf) { tf_lb = tf_ub = tf; }
 
     /* Diagnosis */
-    void print_diagnosis() const
+    void print_diagnostics() const
     {
         std::cout << std::setprecision(4) << std::defaultfloat;
-        std::cout << "ControlProblem with NX = "
+        std::cout << "Diagnostics: ControlProblem with NX = "
                   << NX << ", NU = " << NU << ", NP = " << NP << "\n";
         std::cout << "ubu: " << u_ub.transpose() << "\n"
                   << "lbu: " << u_lb.transpose() << "\n"
