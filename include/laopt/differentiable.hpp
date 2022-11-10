@@ -314,7 +314,7 @@ protected:
         value.setZero();
         jacobian.setZero();
         static_cast<Derived*>(this)->jacobian(std::forward<Tag>(tag), value, jacobian, args...);
-        out_gradient += weight.transpose() * jacobian;
+        out_gradient += jacobian.transpose() * weight;
         return weight.dot(value);
     }
 };

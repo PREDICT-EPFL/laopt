@@ -6,7 +6,7 @@ add_executable(test_fixed_wing_longitudinal
         fw_longitudinal_test.cpp
         )
 target_link_libraries(test_fixed_wing_longitudinal
-        PRIVATE laopt casadi yaml-cpp
+        PRIVATE laopt yaml-cpp
         )
 add_custom_command(
         TARGET test_fixed_wing_longitudinal POST_BUILD

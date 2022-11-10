@@ -55,7 +55,7 @@ public:
     hessian_impl(OutGradient& out_gradient, OutHessian&, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
     {
         // Hessian is zero, i.e., we don't set any values
-        return gradient(std::forward<OutGradient>(out_gradient), weight, x);
+        return gradient(out_gradient, weight, x);
     }
 };
 
