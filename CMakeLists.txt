@@ -10,6 +10,7 @@ option(BUILD_TESTS "Build tests" ON)
 #### Developer options ####
 option(BUILD_RELEASE "Build release version w/o debugging symbols" ON)
 option(ENABLE_SANITIZERS "Build with sanitizers enabled" OFF)
+#list(APPEND compiler_flags "-fno-omit-frame-pointer") # For profiling
 
 # Set compiler flags according to compiler ID
 set(gcc_like_cxx CXX ARMClang AppleClang Clang GNU LCC)
@@ -20,8 +21,6 @@ elseif ((${CMAKE_CXX_COMPILER_ID} IN_LIST msvc_like))
     list(APPEND compiler_flags -W3)
 endif ()
 message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID}")
-
-list(APPEND compiler_flags "-fno-omit-frame-pointer")
 
 # Set sanitizer flags
 if (ENABLE_SANITIZERS)
