@@ -296,14 +296,11 @@ public: //protected: // TODO ino1 (would like to make this protected)
         return 2.0 / h_seg * dx_apr;
     }
 
-    template<typename OutValue, typename OutJacobian,
-             typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
+    template<typename OutJacobian, typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE void
-    jacobian_impl(DifferentialApproximation,
-                  OutValue& out_value, OutJacobian& out_jacobian,
+    jacobian_impl(DifferentialApproximation, OutJacobian& out_jacobian,
                   const Eigen::MatrixBase<X_t> &X_vec, unsigned j_node)
     {
-        out_value += this->function(DifferentialApproximation{}, X_vec, j_node);
         for (unsigned l = 0; l <= D_poly; l++)
         {
             out_jacobian(Eigen::all, Eigen::seqN(l * NX, Eigen::fix<NX>)) +=
@@ -313,9 +310,8 @@ public: //protected: // TODO ino1 (would like to make this protected)
 
     template <typename Weight, typename OutGradient,
               typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
-    EIGEN_STRONG_INLINE scalar_t
-    gradient_impl(DifferentialApproximation,
-                  OutGradient& out_gradient, const Eigen::MatrixBase<Weight>& weight,
+    EIGEN_STRONG_INLINE void
+    gradient_impl(DifferentialApproximation, OutGradient& out_gradient, const Eigen::MatrixBase<Weight>& weight,
                   const Eigen::MatrixBase<X_t> &X_vec, unsigned j_node)
     {
         for (unsigned l = 0; l <= D_poly; l++)
@@ -325,16 +321,13 @@ public: //protected: // TODO ino1 (would like to make this protected)
         return this->wsum(DifferentialApproximation{}, weight, X_vec, j_node);
     }
 
-    template<typename Weight, typename OutGradient, typename OutHessian,
+    template<typename Weight, typename OutHessian,
              typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
-    EIGEN_STRONG_INLINE scalar_t
-    hessian_impl(DifferentialApproximation,
-                 OutGradient& out_gradient, OutHessian&,
-                 const Eigen::MatrixBase<Weight>& weight,
+    EIGEN_STRONG_INLINE void
+    hessian_impl(DifferentialApproximation, OutHessian&, const Eigen::MatrixBase<Weight>& weight,
                  const Eigen::MatrixBase<X_t> &X_vec, unsigned j_node)
     {
         // Hessian is zero, i.e., we don't set any values
-        return this->gradient(DifferentialApproximation{}, out_gradient, weight, X_vec, j_node);
     }
 
     /* Objective */

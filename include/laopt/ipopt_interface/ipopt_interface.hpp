@@ -25,22 +25,16 @@ private:
 public:
 	// internal storage for primal and dual variables
 	Eigen::VectorX<scalar_t> primal;
-    Eigen::VectorX<scalar_t> dual_lb;
-    Eigen::VectorX<scalar_t> dual_ub;
     Eigen::VectorX<scalar_t> dual;
 
     /* Constructor. */
 	explicit Solver_IPOpt(UserProblem& prob) :
         prob(prob),
-        primal(prob.num_variables()),
-        dual_lb(prob.num_variables()),
-        dual_ub(prob.num_variables()),
+        primal(prob.variables()),
         dual(prob.constraints.rows())
 	{
         // Default to zero if user doesn't set
         primal.setZero();
-        dual_lb.setZero();
-        dual_ub.setZero();
         dual.setZero();
 
 		prob.lagrangian.hessian.allocate_memory(lag_hessian);
@@ -57,7 +51,7 @@ public:
        IndexStyleEnum& index_style
 	) override
 	{
-		n = prob.num_variables();
+		n = prob.variables();
 		m = prob.constraints.rows();
 
 		// nonzeros in the jacobian of the constraints
@@ -103,7 +97,7 @@ public:
 		Eigen::Map<Eigen::VectorX<scalar_t>> lb(g_l, m);
 		Eigen::Map<Eigen::VectorX<scalar_t>> ub(g_u, m);
 
-		prob.eval_constraints(laopt::Eval(), con, lb, ub);
+		prob.eval_constraints(con, lb, ub);
 
 		return true;
 	}
@@ -143,7 +137,7 @@ public:
 		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Ipopt::Number*>(x), n);
 
         prob.set_decision_variable(var);
-		obj_value = prob.eval_objective(laopt::Eval());
+		obj_value = prob.eval_objective();
         prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
 
         return true;
@@ -160,7 +154,7 @@ public:
 		Eigen::Map<Eigen::VectorX<scalar_t>> grad(grad_f, n);
 
         prob.set_decision_variable(var);
-		prob.eval_objective(laopt::Gradient(), grad);
+		prob.eval_objective_gradient(grad);
         prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
 
         return true;
@@ -180,7 +174,7 @@ public:
 		Eigen::VectorX<scalar_t> ub(m);
 
         prob.set_decision_variable(var);
-		prob.eval_constraints(laopt::Eval(), constraints, lb, ub);
+		prob.eval_constraints(constraints, lb, ub);
         prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
 
         return true;
@@ -220,14 +214,10 @@ public:
 		{
 			// return the values of the jacobian of the constraints in the same order as the sparsity was defined
 			Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Ipopt::Number*>(x), n);
-			Eigen::VectorX<scalar_t> constraints(m); // Value of the constraints (ignored)
 			Eigen::Map<Eigen::VectorX<scalar_t>> jacobian_buffer(values, nele_jac); // Jacobian non-zeros
-			// Eigen::VectorX<scalar_t> jacobian_buffer(nele_jac);
 
-			Eigen::VectorX<scalar_t> lb(m); // Upper/lower bounds (ignored)
-			Eigen::VectorX<scalar_t> ub(m);
             prob.set_decision_variable(var);
-			prob.eval_constraints(laopt::Jacobian(), constraints, lb, ub, jacobian_buffer);
+			prob.eval_constraints_jacobian(jacobian_buffer);
             prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
 	   }
 
@@ -278,11 +268,10 @@ public:
 			// return the values of the hessian of the lagrangian in the same order as the sparsity was defined
 			Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Ipopt::Number*>(x), n);
             Eigen::Map<Eigen::VectorX<scalar_t>> dual_var(const_cast<Ipopt::Number*>(lambda), prob.constraints.rows());
-			Eigen::VectorX<scalar_t> gradient(n); // Ignored
-
 
             prob.set_decision_variable(var);
-            prob.eval_lagrangian(laopt::Hessian(), obj_factor, dual_var, gradient, lag_hessian);
+            Eigen::Map<Eigen::VectorX<scalar_t>> hessian_buffer(lag_hessian.valuePtr(), lag_hessian.nonZeros());
+            prob.eval_lagrangian_hessian(obj_factor, dual_var, hessian_buffer);
             prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
 
 			// Copy the lower triangular part into the ipopt buffer

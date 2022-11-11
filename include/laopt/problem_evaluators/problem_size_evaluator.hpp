@@ -1,0 +1,57 @@
+#ifndef LAOPT_PROBLEM_SIZE_EVALUATOR_HPP
+#define LAOPT_PROBLEM_SIZE_EVALUATOR_HPP
+
+#include "../problem_vector_function.hpp"
+#include "../problem_weighted_sum_function.hpp"
+
+namespace laopt
+{
+
+template<typename Matrix, typename Vector>
+class ProblemSizeEvaluator
+{
+    VectorFunction<Matrix, Vector>& variable_bounds;
+    WeightedSumFunction<Matrix, Vector>& objective;
+    VectorFunction<Matrix, Vector>& constraints;
+    WeightedSumFunction<Matrix, Vector>& lagrangian;
+
+public:
+    explicit ProblemSizeEvaluator(VectorFunction<Matrix, Vector>& variable_bounds,
+                                  WeightedSumFunction<Matrix, Vector>& objective,
+                                  VectorFunction<Matrix, Vector>& constraints,
+                                  WeightedSumFunction<Matrix, Vector>& lagrangian) :
+          variable_bounds(variable_bounds),
+          objective(objective),
+          constraints(constraints),
+          lagrangian(lagrangian) {}
+
+    template<typename Scalar, int n>
+    EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>& var)
+    {
+        variable_bounds.extend_variables(n);
+        variable_bounds.extend_rows(n);
+
+        objective.extend_variables(n);
+        constraints.extend_variables(n);
+        lagrangian.extend_variables(n);
+    }
+
+    template<typename Derived>
+    EIGEN_STRONG_INLINE void add_obj(const ExprBase<Derived>& expr) {}
+
+    template<typename Derived>
+    EIGEN_STRONG_INLINE typename std::enable_if<!is_variable_constraint_expr<Derived>::value>::type
+    add_constr(const ConstraintExpr<Derived>& const_expr)
+    {
+        constraints.extend_rows(Derived::n_outputs);
+        lagrangian.extend_rows(Derived::n_outputs);
+    }
+
+    template<typename Derived>
+    EIGEN_STRONG_INLINE typename std::enable_if<is_variable_constraint_expr<Derived>::value>::type
+    add_constr(ConstraintExpr<Derived>) {}
+};
+
+} // namespace laopt
+
+#endif // LAOPT_PROBLEM_SIZE_EVALUATOR_HPP

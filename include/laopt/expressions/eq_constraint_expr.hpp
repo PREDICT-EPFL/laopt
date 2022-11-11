@@ -82,11 +82,11 @@ struct ExprEvaluator<EqConstraintExpr<DerivedLhs, DerivedRhs>,
         return ExprEvaluator<DerivedLhs>::function(eq.lhs);
     }
 
-    template<typename OutValue, typename OutJacobian>
+    template<typename OutJacobian>
     static EIGEN_STRONG_INLINE void
-    jacobian(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutValue&& out_value, OutJacobian&& out_jacobian)
+    jacobian(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutJacobian&& out_jacobian)
     {
-        ExprEvaluator<DerivedLhs>::jacobian(eq.lhs, std::forward<OutValue>(out_value), std::forward<OutJacobian>(out_jacobian));
+        ExprEvaluator<DerivedLhs>::jacobian(eq.lhs, std::forward<OutJacobian>(out_jacobian));
     }
 
     template<typename Weight>
@@ -97,17 +97,17 @@ struct ExprEvaluator<EqConstraintExpr<DerivedLhs, DerivedRhs>,
     }
 
     template<typename OutGradient, typename Weight>
-    static EIGEN_STRONG_INLINE auto
+    static EIGEN_STRONG_INLINE void
     gradient(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutGradient&& out_gradient, const Weight& weight)
     {
-        return ExprEvaluator<DerivedLhs>::gradient(eq.lhs, std::forward<OutGradient>(out_gradient), weight);
+        ExprEvaluator<DerivedLhs>::gradient(eq.lhs, std::forward<OutGradient>(out_gradient), weight);
     }
 
-    template<typename OutGradient, typename OutHessian, typename Weight>
-    static EIGEN_STRONG_INLINE auto
-    hessian(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutGradient&& out_gradient, OutHessian&& out_hessian, const Weight& weight)
+    template<typename OutHessian, typename Weight>
+    static EIGEN_STRONG_INLINE void
+    hessian(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutHessian&& out_hessian, const Weight& weight)
     {
-        return ExprEvaluator<DerivedLhs>::hessian(eq.lhs, std::forward<OutGradient>(out_gradient), std::forward<OutHessian>(out_hessian), weight);
+        ExprEvaluator<DerivedLhs>::hessian(eq.lhs, std::forward<OutHessian>(out_hessian), weight);
     }
 
     static EIGEN_STRONG_INLINE auto
@@ -134,11 +134,11 @@ struct ExprEvaluator<EqConstraintExpr<DerivedLhs, DerivedRhs>,
         return ExprEvaluator<DerivedLhs>::function(eq.rhs);
     }
 
-    template<typename OutValue, typename OutJacobian>
+    template<typename OutJacobian>
     static EIGEN_STRONG_INLINE void
-    jacobian(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutValue&& out_value, OutJacobian&& out_jacobian)
+    jacobian(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutJacobian&& out_jacobian)
     {
-        ExprEvaluator<DerivedLhs>::jacobian(eq.rhs, std::forward<OutValue>(out_value), std::forward<OutJacobian>(out_jacobian));
+        ExprEvaluator<DerivedLhs>::jacobian(eq.rhs, std::forward<OutJacobian>(out_jacobian));
     }
 
     template<typename Weight>
@@ -149,17 +149,17 @@ struct ExprEvaluator<EqConstraintExpr<DerivedLhs, DerivedRhs>,
     }
 
     template<typename OutGradient, typename Weight>
-    static EIGEN_STRONG_INLINE auto
+    static EIGEN_STRONG_INLINE void
     gradient(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutGradient&& out_gradient, const Weight& weight)
     {
-        return ExprEvaluator<DerivedLhs>::gradient(eq.rhs, std::forward<OutGradient>(out_gradient), weight);
+        ExprEvaluator<DerivedLhs>::gradient(eq.rhs, std::forward<OutGradient>(out_gradient), weight);
     }
 
-    template<typename OutGradient, typename OutHessian, typename Weight>
-    static EIGEN_STRONG_INLINE auto
-    hessian(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutGradient&& out_gradient, OutHessian&& out_hessian, const Weight& weight)
+    template<typename OutHessian, typename Weight>
+    static EIGEN_STRONG_INLINE void
+    hessian(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutHessian&& out_hessian, const Weight& weight)
     {
-        return ExprEvaluator<DerivedLhs>::hessian(eq.rhs, std::forward<OutGradient>(out_gradient), std::forward<OutHessian>(out_hessian), weight);
+        ExprEvaluator<DerivedLhs>::hessian(eq.rhs, std::forward<OutHessian>(out_hessian), weight);
     }
 
     static EIGEN_STRONG_INLINE auto
@@ -187,12 +187,12 @@ struct ExprEvaluator<EqConstraintExpr<DerivedLhs, DerivedRhs>,
         return ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>::function(sub_expr);
     }
 
-    template<typename OutValue, typename OutJacobian>
+    template<typename OutJacobian>
     static EIGEN_STRONG_INLINE void
-    jacobian(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutValue&& out_value, OutJacobian&& out_jacobian)
+    jacobian(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutJacobian&& out_jacobian)
     {
         SubExpr<DerivedLhs, DerivedRhs> sub_expr(eq.lhs, eq.rhs);
-        ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>::jacobian(sub_expr, std::forward<OutValue>(out_value), std::forward<OutJacobian>(out_jacobian));
+        ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>::jacobian(sub_expr, std::forward<OutJacobian>(out_jacobian));
     }
 
     template<typename Weight>
@@ -204,19 +204,19 @@ struct ExprEvaluator<EqConstraintExpr<DerivedLhs, DerivedRhs>,
     }
 
     template<typename OutGradient, typename Weight>
-    static EIGEN_STRONG_INLINE auto
+    static EIGEN_STRONG_INLINE void
     gradient(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutGradient&& out_gradient, const Weight& weight)
     {
         SubExpr<DerivedLhs, DerivedRhs> sub_expr(eq.lhs, eq.rhs);
-        return ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>::gradient(sub_expr, std::forward<OutGradient>(out_gradient), weight);
+        ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>::gradient(sub_expr, std::forward<OutGradient>(out_gradient), weight);
     }
 
-    template<typename OutGradient, typename OutHessian, typename Weight>
-    static EIGEN_STRONG_INLINE auto
-    hessian(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutGradient&& out_gradient, OutHessian&& out_hessian, const Weight& weight)
+    template<typename OutHessian, typename Weight>
+    static EIGEN_STRONG_INLINE void
+    hessian(const EqConstraintExpr<DerivedLhs, DerivedRhs>& eq, OutHessian&& out_hessian, const Weight& weight)
     {
         SubExpr<DerivedLhs, DerivedRhs> sub_expr(eq.lhs, eq.rhs);
-        return ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>::hessian(sub_expr, std::forward<OutGradient>(out_gradient), std::forward<OutHessian>(out_hessian), weight);
+        ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>::hessian(sub_expr, std::forward<OutHessian>(out_hessian), weight);
     }
 
     static EIGEN_STRONG_INLINE auto

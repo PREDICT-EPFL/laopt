@@ -27,7 +27,7 @@ void test_BSMatrix_problem(Problem& problem)
     EXPECT_TRUE(problem.expected_sparsity().sparseView().isApprox(sparsity.get_sparsity_pattern(), 0));
 
     // Get the copy sequence
-    laopt::BSMatrixTape tape(sparsity.get_sparsity_pattern(), sparsity.rows(), sparsity.cols());
+    laopt::BSMatrixTape tape(sparsity.get_sparsity_pattern());
     problem.eval(tape);
 
 //    std::cout << "copy sequence = " << tape.generate().copy_segments << std::endl;

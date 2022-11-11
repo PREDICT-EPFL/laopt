@@ -244,9 +244,9 @@ hessian_l(const Eigen::MatrixBase<Derived>& x, const Eigen::MatrixBase<L>& dual,
 
     Eigen::Matrix<scalar_t, 4, 4> L2;
     L2 << 2, 0, 0, 0,
-            0, 2, 0, 0,
-            0, 0, 2, 0,
-            0, 0, 0, 2;
+          0, 2, 0, 0,
+          0, 0, 2, 0,
+          0, 0, 0, 2;
 
     Eigen::Matrix<scalar_t, 4, 4> H;
     H = obj_factor * O + l1 * L1 + l2 * L2;
@@ -282,7 +282,7 @@ TEST(IpoptTest, Prob71)
     laopt::ProblemMemory<scalar_t> mem(prob);
 
     // Check the computation of variable bounds
-    prob.eval_variable_bounds(mem.variable_bounds);
+    prob.eval_variable_bounds(mem.variable_bounds.lb, mem.variable_bounds.ub);
     EXPECT_TRUE(mem.variable_bounds.lb.isApprox(Eigen::Vector<scalar_t, 4>{1, 1, 1, 1}, 1e-4));
     EXPECT_TRUE(mem.variable_bounds.ub.isApprox(Eigen::Vector<scalar_t, 4>{5, 5, 5, 5}, 1e-4));
 
@@ -291,20 +291,22 @@ TEST(IpoptTest, Prob71)
     Eigen::VectorX<scalar_t> dual = solver.dual();
     prob.set_decision_variable(var);
 
-    prob.eval_constraints(laopt::Jacobian{}, mem.constraints);
+    prob.eval_constraints(mem.constraints.value, mem.constraints.lb, mem.constraints.ub);
+    prob.eval_constraints_jacobian(mem.constraints.jacobian_buffer);
+    EXPECT_TRUE(mem.constraints.value.isApprox(g(prob71.x_var), 1e-4));
     EXPECT_TRUE(mem.constraints.lb.isApprox(Eigen::Vector<scalar_t, 2>{25, 40}, 1e-4));
     EXPECT_TRUE(mem.constraints.ub.isApprox(Eigen::Vector<scalar_t, 2>{2e9, 40}, 1e-4));
-    EXPECT_TRUE(mem.constraints.value.isApprox(g(prob71.x_var), 1e-4));
     EXPECT_TRUE(Eigen::MatrixX<scalar_t>(mem.constraints.jacobian).isApprox(jac_g(prob71.x_var), 1e-4));
 
     // Check the computation of the objective
-    scalar_t obj = prob.eval_objective(laopt::Gradient{}, mem.objective);
+    scalar_t obj = prob.eval_objective();
+    prob.eval_objective_gradient(mem.objective.gradient);
     EXPECT_NEAR(obj, f(var), 1e-4);
     EXPECT_TRUE(mem.objective.gradient.isApprox(grad_f(var), 1e-4));
 
     // Check the computation of the lagrangian
-    prob.eval_lagrangian(laopt::Hessian{}, 1.0, dual, mem.lagrangian);
-    EXPECT_TRUE(Eigen::MatrixX<scalar_t>(mem.lagrangian.hessian).isApprox(hessian_l(var, dual, 1.0), 1e-4));
+    prob.eval_lagrangian_hessian(1.5, dual, mem.lagrangian.hessian_buffer);
+    EXPECT_TRUE(Eigen::MatrixX<scalar_t>(mem.lagrangian.hessian).isApprox(hessian_l(var, dual, 1.5), 1e-4));
 }
 
 } // end namespace

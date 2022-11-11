@@ -121,13 +121,8 @@ private:
     std::vector<CopyInfo> copy_info;
 
 public:
-    explicit BSMatrixTape(const Eigen::SparseMatrix<bool>& structure, Eigen::Index rows = 0, Eigen::Index cols = 0)
-    : BSSliceTape<BSMatrixTape, Eigen::Map<Eigen::MatrixX<int>>>(*this, Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols))
-    {
-        initialize(structure, rows, cols);
-    };
-
-    void initialize(const Eigen::SparseMatrix<bool>& structure, Eigen::Index rows, Eigen::Index cols)
+    explicit BSMatrixTape(const Eigen::SparseMatrix<bool>& structure)
+    : BSSliceTape<BSMatrixTape, Eigen::Map<Eigen::MatrixX<int>>>(*this, Eigen::Map<Eigen::MatrixX<int>>(nullptr, structure.rows(), structure.cols()))
     {
         sparsity_structure = structure.cast<int>();
         sparsity_structure.makeCompressed();

@@ -32,12 +32,10 @@ struct User : public laopt::Differentiable<User<scalar_t>>
         return A * x + B * u;
     }
 
-    template<typename OutValue, typename OutJacobian, typename X, typename U>
-    inline void jacobian_impl(SysX, OutValue &out, OutJacobian &jac, const Eigen::MatrixBase<X> &x, const Eigen::MatrixBase<U> &u) noexcept
+    template<typename OutJacobian, typename X, typename U>
+    inline void jacobian_impl(SysX, OutJacobian &jac, const Eigen::MatrixBase<X> &x, const Eigen::MatrixBase<U> &u) noexcept
     {
         std::cout << "jacobian_impl called" << std::endl;
-
-        out = this->function(SysX{}, x, u);
 
         jac(Eigen::all, Eigen::seqN(0, Eigen::fix<nx>)) = A;
         jac(Eigen::all, Eigen::seqN(Eigen::fix<nx>, Eigen::fix<nu>)) = B;
@@ -88,26 +86,23 @@ int main()
     std::cout << "user(Sys, x,u) = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING Jacobian FOR SYS ===" << std::endl;
-    user.jacobian(User::Sys{}, val, J, x, u);
+    user.jacobian(User::Sys{}, J, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
-    std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING Function for SYS FUNCTOR ===" << std::endl;
     val = user.sys.function(x.cast_base(), u.cast_base());
     std::cout << "user(Sys, x,u) = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING Jacobian FOR SYS FUNCTOR ===" << std::endl;
-    user.sys.jacobian(val, J, x, u);
+    user.sys.jacobian(J, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
-    std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING Function on SYSX ===" << std::endl;
     val = user.function(User::SysX{}, x.cast_base(), u.cast_base());
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING custom Jacobian on SYSX ===" << std::endl;
-    user.jacobian(User::SysX{}, val, J, x, u);
-    std::cout << "val = " << val.transpose() << std::endl;
+    user.jacobian(User::SysX{}, J, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
 
     std::cout << "\n=== CALLING Function for SYSRK4 ===" << std::endl;
@@ -115,9 +110,8 @@ int main()
     std::cout << "user(SysRK4, x,u) = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING Jacobian FOR SYSRK4 ===" << std::endl;
-    user.jacobian(User::SysRK4{}, val, J, x, u);
+    user.jacobian(User::SysRK4{}, J, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
-    std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "\n=== TESTING RK4 ===" << std::endl;
     laopt::common_functions::RK4<User, double, User::Sys> rk4_sys(user, 0.2);
@@ -127,9 +121,8 @@ int main()
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "--- Jacobian" << std::endl;
-    rk4_sys.jacobian(val, J, x, u);
+    rk4_sys.jacobian(J, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
-    std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "\n=== TESTING RK4 + RK4 + RK4 ===" << std::endl;
     laopt::common_functions::RK4<laopt::common_functions::RK4<User, double, User::Sys>, double> rk4_rk4_sys(rk4_sys, 0.3);
@@ -140,7 +133,7 @@ int main()
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "--- Jacobian" << std::endl;
-    rk4_rk4_rk4_sys.jacobian(val, J, x, u);
+    rk4_rk4_rk4_sys.jacobian(J, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
 
     std::cout << "\n=== TESTING Weighted sum ===" << std::endl;
@@ -150,14 +143,12 @@ int main()
 
     Eigen::Vector<double, 3> grad;
     grad.array() = 0;
-    std::cout << "wsum = " << user.gradient(User::NLSys{}, grad, w, x, u) << std::endl;
+    user.gradient(User::NLSys{}, grad, w, x, u);
     std::cout << "grad = " << grad.transpose() << std::endl;
 
     Eigen::Matrix<double, 3, 3> H;
     H.array() = 0;
-    grad.array() = 0;
-    std::cout << "wsum = " << user.hessian(User::NLSys{}, grad, H, w, x, u) << std::endl;
-    std::cout << "grad = " << grad.transpose() << std::endl;
+    user.hessian(User::NLSys{}, H, w, x, u);
     std::cout << "hessian = \n" << H << std::endl;
 
     return 0;

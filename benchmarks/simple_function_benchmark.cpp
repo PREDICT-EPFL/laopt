@@ -39,13 +39,11 @@ static void BM_LAOPT_JACOBIAN(benchmark::State& state)
     LAOptTestFunction test_function;
     laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
     laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
-    Eigen::Vector<double, 2> value;
     Eigen::Matrix<double, 2, 3> jacobian;
 
     for (auto _: state)
     {
-        test_function.jacobian(value, jacobian, x, u);
-        benchmark::DoNotOptimize(value);
+        test_function.jacobian(jacobian, x, u);
         benchmark::DoNotOptimize(jacobian);
     }
 }
@@ -71,13 +69,11 @@ static void BM_LAOPT_GRADIENT(benchmark::State& state)
     laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
     laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
     Eigen::Vector<double, 2> weight{1, 1};
-    double value;
     Eigen::Vector<double, 3> gradient;
 
     for (auto _: state)
     {
-        value = test_function.gradient(gradient, weight, x, u);
-        benchmark::DoNotOptimize(value);
+        test_function.gradient(gradient, weight, x, u);
         benchmark::DoNotOptimize(gradient);
     }
 }
@@ -88,15 +84,11 @@ static void BM_LAOPT_HESSIAN(benchmark::State& state)
     laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
     laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
     Eigen::Vector<double, 2> weight{1, 1};
-    double value;
-    Eigen::Vector<double, 3> gradient;
     Eigen::Matrix<double, 3, 3> hessian;
 
     for (auto _: state)
     {
-        value = test_function.hessian(gradient, hessian, weight, x, u);
-        benchmark::DoNotOptimize(value);
-        benchmark::DoNotOptimize(gradient);
+        test_function.hessian(hessian, weight, x, u);
         benchmark::DoNotOptimize(hessian);
     }
 }

@@ -98,11 +98,11 @@ struct ExprEvaluator<BoundedExpr<DerivedLb, Derived, DerivedUb>>
         return ExprEvaluator<Derived>::function(bounded_expr.expr);
     }
 
-    template<typename OutValue, typename OutJacobian>
+    template<typename OutJacobian>
     static EIGEN_STRONG_INLINE void
-    jacobian(const BoundedExpr<DerivedLb, Derived, DerivedUb>& bounded_expr, OutValue&& out_value, OutJacobian&& out_jacobian)
+    jacobian(const BoundedExpr<DerivedLb, Derived, DerivedUb>& bounded_expr, OutJacobian&& out_jacobian)
     {
-        ExprEvaluator<Derived>::jacobian(bounded_expr.expr, std::forward<OutValue>(out_value), std::forward<OutJacobian>(out_jacobian));
+        ExprEvaluator<Derived>::jacobian(bounded_expr.expr, std::forward<OutJacobian>(out_jacobian));
     }
 
     template<typename Weight>
@@ -113,17 +113,17 @@ struct ExprEvaluator<BoundedExpr<DerivedLb, Derived, DerivedUb>>
     }
 
     template<typename OutGradient, typename Weight>
-    static EIGEN_STRONG_INLINE auto
+    static EIGEN_STRONG_INLINE void
     gradient(const BoundedExpr<DerivedLb, Derived, DerivedUb>& bounded_expr, OutGradient&& out_gradient, const Weight& weight)
     {
-        return ExprEvaluator<Derived>::gradient(bounded_expr.expr, std::forward<OutGradient>(out_gradient), weight);
+        ExprEvaluator<Derived>::gradient(bounded_expr.expr, std::forward<OutGradient>(out_gradient), weight);
     }
 
-    template<typename OutGradient, typename OutHessian, typename Weight>
-    static EIGEN_STRONG_INLINE auto
-    hessian(const BoundedExpr<DerivedLb, Derived, DerivedUb>& bounded_expr, OutGradient&& out_gradient, OutHessian&& out_hessian, const Weight& weight)
+    template<typename OutHessian, typename Weight>
+    static EIGEN_STRONG_INLINE void
+    hessian(const BoundedExpr<DerivedLb, Derived, DerivedUb>& bounded_expr, OutHessian&& out_hessian, const Weight& weight)
     {
-        return ExprEvaluator<Derived>::hessian(bounded_expr.expr, std::forward<OutGradient>(out_gradient), std::forward<OutHessian>(out_hessian), weight);
+        ExprEvaluator<Derived>::hessian(bounded_expr.expr, std::forward<OutHessian>(out_hessian), weight);
     }
 
     static EIGEN_STRONG_INLINE auto

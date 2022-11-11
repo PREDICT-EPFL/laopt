@@ -22,14 +22,12 @@ public:
         return multiplier * x;
     }
 
-    template<typename OutValue, typename OutJacobian, typename X>
+    template<typename OutJacobian, typename X>
     EIGEN_STRONG_INLINE void
-    jacobian_impl(OutValue& value, OutJacobian& jac, const Eigen::MatrixBase<X>& x) noexcept
+    jacobian_impl(OutJacobian& jac, const Eigen::MatrixBase<X>& x) noexcept
     {
-        value = multiplier * x;
-
         using scalar_t = typename Eigen::MatrixBase<X>::Scalar;
-        for(int i = 0; i < value.rows(); i++)
+        for(int i = 0; i < x.rows(); i++)
         {
             jac(Eigen::seqN(i, Eigen::fix<1>), Eigen::seqN(i, Eigen::fix<1>)) = Eigen::Matrix<scalar_t, 1, 1>::Constant(multiplier);
         }
@@ -43,19 +41,17 @@ public:
     }
 
     template <typename Weight, typename OutGradient, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-    EIGEN_STRONG_INLINE scalar_t
+    EIGEN_STRONG_INLINE void
     gradient_impl(OutGradient& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
     {
         out_gradient += multiplier * weight;
-        return wsum(weight, x);
     }
 
-    template <typename Weight, typename OutGradient, typename OutHessian, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
-    EIGEN_STRONG_INLINE scalar_t
-    hessian_impl(OutGradient& out_gradient, OutHessian&, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
+    template <typename Weight, typename OutHessian, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    EIGEN_STRONG_INLINE void
+    hessian_impl(OutHessian&, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
     {
         // Hessian is zero, i.e., we don't set any values
-        return gradient(out_gradient, weight, x);
     }
 };
 

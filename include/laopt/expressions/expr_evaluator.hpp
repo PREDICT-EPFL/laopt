@@ -20,13 +20,12 @@ struct ExprEvaluator<IndexedVector<Derived>>
         return id.function(indexed_vector.cast_base());
     }
 
-    template<typename OutValue, typename OutJacobian>
+    template<typename OutJacobian>
     static EIGEN_STRONG_INLINE void
-    jacobian(const IndexedVector<Derived>& indexed_vector, OutValue&& out_value, OutJacobian&& out_jacobian)
+    jacobian(const IndexedVector<Derived>& indexed_vector, OutJacobian&& out_jacobian)
     {
         common_functions::IDENTITY id;
-        id.jacobian(out_value,
-                    out_jacobian,
+        id.jacobian(out_jacobian,
                     indexed_vector);
     }
 
@@ -40,24 +39,23 @@ struct ExprEvaluator<IndexedVector<Derived>>
     }
 
     template<typename OutGradient, typename Weight>
-    static EIGEN_STRONG_INLINE auto
+    static EIGEN_STRONG_INLINE void
     gradient(const IndexedVector<Derived>& indexed_vector, OutGradient&& out_gradient, const Weight& weight)
     {
         common_functions::IDENTITY id;
-        return id.gradient(out_gradient,
-                           weight,
-                           indexed_vector);
+        id.gradient(out_gradient,
+                    weight,
+                    indexed_vector);
     }
 
-    template<typename OutGradient, typename OutHessian, typename Weight>
-    static EIGEN_STRONG_INLINE auto
-    hessian(const IndexedVector<Derived>& indexed_vector, OutGradient&& out_gradient, OutHessian&& out_hessian, const Weight& weight)
+    template<typename OutHessian, typename Weight>
+    static EIGEN_STRONG_INLINE void
+    hessian(const IndexedVector<Derived>& indexed_vector, OutHessian&& out_hessian, const Weight& weight)
     {
         common_functions::IDENTITY id;
-        return id.hessian(out_gradient,
-                          out_hessian,
-                          weight,
-                          indexed_vector);
+        id.hessian(out_hessian,
+                   weight,
+                   indexed_vector);
     }
 };
 
@@ -87,13 +85,12 @@ public:
         });
     }
 
-    template<typename OutValue, typename OutJacobian>
+    template<typename OutJacobian>
     static EIGEN_STRONG_INLINE void
-    jacobian(const FunctionCapture<Function, Tag, Info, Capture>& function_capture, OutValue&& out_value, OutJacobian&& out_jacobian)
+    jacobian(const FunctionCapture<Function, Tag, Info, Capture>& function_capture, OutJacobian&& out_jacobian)
     {
         function_capture.capture([&](auto&&... vars) {
             function_capture.func.jacobian(Tag{},
-                                           out_value,
                                            out_jacobian,
                                            vars...);
         });
@@ -111,27 +108,26 @@ public:
     }
 
     template<typename OutGradient, typename Weight>
-    static EIGEN_STRONG_INLINE auto
+    static EIGEN_STRONG_INLINE void
     gradient(const FunctionCapture<Function, Tag, Info, Capture>& function_capture, OutGradient&& out_gradient, const Weight& weight)
     {
         return function_capture.capture([&](auto&&... vars) {
-            return function_capture.func.gradient(Tag{},
-                                                  out_gradient,
-                                                  weight,
-                                                  vars...);
+            function_capture.func.gradient(Tag{},
+                                           out_gradient,
+                                           weight,
+                                           vars...);
         });
     }
 
-    template<typename OutGradient, typename OutHessian, typename Weight>
-    static EIGEN_STRONG_INLINE auto
-    hessian(const FunctionCapture<Function, Tag, Info, Capture> function_capture, OutGradient&& out_gradient, OutHessian&& out_hessian, const Weight& weight)
+    template<typename OutHessian, typename Weight>
+    static EIGEN_STRONG_INLINE void
+    hessian(const FunctionCapture<Function, Tag, Info, Capture> function_capture, OutHessian&& out_hessian, const Weight& weight)
     {
         return function_capture.capture([&](auto&&... vars) {
-            return function_capture.func.hessian(Tag{},
-                                                 out_gradient,
-                                                 out_hessian,
-                                                 weight,
-                                                 vars...);
+            function_capture.func.hessian(Tag{},
+                                          out_hessian,
+                                          weight,
+                                          vars...);
         });
     }
 };

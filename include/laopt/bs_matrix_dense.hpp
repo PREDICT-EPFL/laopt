@@ -17,7 +17,7 @@ protected:
     Eigen::Index m_cols;
 
 public:
-    BSMatrixDenseBase() : m_rows(0), m_cols(0) {}
+    BSMatrixDenseBase(Eigen::Index rows, Eigen::Index cols) : m_rows(rows), m_cols(cols) {}
 
     // Current size of the m_matrix
     inline Eigen::Index rows() { return m_rows; }
@@ -121,9 +121,10 @@ private:
     Eigen::MatrixX<scalar_t> m_mat;
 
 public:
-    BSMatrixDenseConstruction() : m_mat(0, 0) {}
+    BSMatrixDenseConstruction() : BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>(0, 0), m_mat(0, 0) {}
 
-    explicit BSMatrixDenseConstruction(const typename BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>::Info& info) : m_mat(0, 0) {}
+    explicit BSMatrixDenseConstruction(const typename BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>::Info& info) :
+        BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>(info.rows, info.cols), m_mat(info.rows, info.cols) {}
 
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
@@ -150,10 +151,12 @@ private:
     Eigen::Map<Eigen::MatrixX<scalar_t>> m_mat;
 
 public:
-    BSMatrixDenseDeployment() : m_mat(nullptr, 0, 0) {}
+    BSMatrixDenseDeployment() : BSMatrixDenseBase<BSMatrixDenseDeployment<scalar_t_>>(0, 0), m_mat(nullptr, 0, 0) {}
 
-    explicit BSMatrixDenseDeployment(const typename BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>::Info& info) : m_mat(nullptr, 0, 0) {}
-    explicit BSMatrixDenseDeployment(Eigen::Ref<Eigen::MatrixX<scalar_t>> mat) : m_mat(mat.data(), mat.rows(), mat.cols()) {}
+    explicit BSMatrixDenseDeployment(const typename BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>::Info& info) :
+        BSMatrixDenseBase<BSMatrixDenseDeployment<scalar_t_>>(info.rows, info.cols), m_mat(nullptr, info.rows, info.cols) {}
+    explicit BSMatrixDenseDeployment(Eigen::Ref<Eigen::MatrixX<scalar_t>> mat) :
+        BSMatrixDenseBase<BSMatrixDenseDeployment<scalar_t_>>(mat.rows(), mat.cols()), m_mat(mat.data(), mat.rows(), mat.cols()) {}
 
     void set_buffer(Eigen::Ref<Eigen::MatrixX<scalar_t>> mat)
     {

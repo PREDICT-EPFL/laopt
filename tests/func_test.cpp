@@ -106,9 +106,8 @@ TEST(FunctionTest, VectorFunction)
     val << 38, 56;
     EXPECT_EQ(value, val);
 
-    value.setZero();
     jacobian.setZero();
-    test.jacobian(value, jacobian, x, u);
+    test.jacobian(jacobian, x, u);
 
     Eigen::Matrix<scalar_t, 2, 3> jac;
     jac << 21, 4, 10, 34, 8, 12;
@@ -136,9 +135,8 @@ TEST(FunctionTest, VectorFunctionParameter)
     val << 95, 140;
     EXPECT_EQ(value, val);
 
-    value.setZero();
     jacobian.setZero();
-    test.jacobian(value, jacobian, p, x, u);
+    test.jacobian(jacobian, p, x, u);
 
     Eigen::Matrix<scalar_t, 2, 3> jac;
     jac << 5, 10, 25, 15, 20, 30;
@@ -169,17 +167,13 @@ TEST(FunctionTest, ScalarFunction)
     EXPECT_EQ(value, 23);
 
     gradient.setZero();
-    value = f.gradient(gradient, weight, x, u);
+    f.gradient(gradient, weight, x, u);
     Eigen::Vector<scalar_t, 3> gradient_g;
     gradient_g << 2, 4, 12;
-    EXPECT_EQ(value, 23);
     EXPECT_EQ(gradient, gradient_g);
 
-    gradient.setZero();
     hessian.setZero();
-    value = f.hessian(gradient, hessian, weight, x, u);
-    EXPECT_EQ(value, 23);
-    EXPECT_EQ(gradient, gradient_g);
+    f.hessian(hessian, weight, x, u);
     Eigen::Matrix<scalar_t, 3, 3> hessian_g;
     hessian_g << 2, 0, 0, 0, 2, 0, 0, 0, 4;
     EXPECT_EQ(hessian, hessian_g);
@@ -226,17 +220,14 @@ TEST(FunctionTest, RK4) {
 
     Eigen::Vector<scalar_t, 2> val;
     val << 1.215, 2.3;
-
     EXPECT_TRUE(val.isApprox(value, 1e-4));
 
     // Compute jacobian and evaluation
-    value.setZero();
     jacobian.setZero();
-    dsys.jacobian(value, jacobian, x, u);
+    dsys.jacobian(jacobian, x, u);
 
     Eigen::Matrix<scalar_t, 2, 3> jac;
     jac << 1, 0.1, 0.005, 0, 1, 0.1;
-    EXPECT_TRUE(val.isApprox(value, 1e-4));
     EXPECT_TRUE(jac.isApprox(jacobian, 1e-4));
 }
 
@@ -261,7 +252,8 @@ TEST(FunctionTest, BSMatrixJacobain) {
         {
             x << i, 2 * i;
             u << 3 * i;
-            test.jacobian(value(Eigen::seqN(i*2, Eigen::fix<2>)), jacobian(Eigen::seqN(i*2, Eigen::fix<2>), laopt::multiSeq_to_index(Eigen::seqN(i*2, Eigen::fix<2>),Eigen::seqN(10+i, Eigen::fix<1>))), x, u);
+            value(Eigen::seqN(i*2, Eigen::fix<2>)) = test(x.cast_base(), u.cast_base());
+            test.jacobian(jacobian(Eigen::seqN(i*2, Eigen::fix<2>), laopt::multiSeq_to_index(Eigen::seqN(i*2, Eigen::fix<2>), Eigen::seqN(10+i, Eigen::fix<1>))), x, u);
         }
     };
 
@@ -273,7 +265,7 @@ TEST(FunctionTest, BSMatrixJacobain) {
     Eigen::VectorX<scalar_t> value_buffer(construct_value.rows());
     laopt::BSMatrixDenseDeployment<scalar_t> value(value_buffer);
 
-    auto jacobian_tape = sparsity_jacobian.makeBSTape(10, 15);
+    auto jacobian_tape = sparsity_jacobian.makeBSTape();
     value.resize(10,1);
     f(value, jacobian_tape); // Extract operation sequence
 
@@ -306,8 +298,10 @@ TEST(FunctionTest, Identity) {
     laopt::IndexedVector<Eigen::Vector<scalar_t, 2>> x;
     x << 1, 2;
 
+    value = id.function(x.cast_base());
+
     jacobian.setZero();
-    id.jacobian(value, jacobian, x);
+    id.jacobian(jacobian, x);
 
     Eigen::MatrixX<scalar_t> value_g(2,1);
     value_g << 1, 2;
@@ -366,15 +360,11 @@ TEST(FunctionTest, WeightedSum)
     EXPECT_EQ(value, 39);
 
     gradient.setZero();
-    value = func.gradient(gradient, weight, x, z);
-    EXPECT_EQ(value, 39);
+    func.gradient(gradient, weight, x, z);
     EXPECT_TRUE(gradient.isApprox(gradient_g, 1e-4));
 
     hessian.setZero();
-    gradient.setZero();
-    value = func.hessian(gradient, hessian, weight, x, z);
-    EXPECT_EQ(value, 39);
-    EXPECT_TRUE(gradient.isApprox(gradient_g, 1e-4));
+    func.hessian(hessian, weight, x, z);
     EXPECT_TRUE(hessian.isApprox(hessian_g, 1e-4));
 }
 

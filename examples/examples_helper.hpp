@@ -15,7 +15,7 @@ void print_solution(const Transcription &transcription, OptProblem &opt_problem,
     const Eigen::MatrixXd X_opt = transcription.get_X_opt();
     const Eigen::MatrixXd U_opt = transcription.get_U_opt();
     const Eigen::MatrixXd p_opt = transcription.get_p_opt();
-    double obj_eval = opt_problem.eval_objective(laopt::Eval());
+    double obj_eval = opt_problem.eval_objective();
 
     std::cout << "Comp. time (warm): " << duration_us / 1e3 << " (" << duration2_us / 1e3 << ") ms, tf = "
               << T_opt(T_opt.size() - 1) << " s, obj = " << obj_eval << "\n";

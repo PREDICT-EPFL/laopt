@@ -90,13 +90,11 @@ static void BM_LAOPT_JACOBIAN(benchmark::State& state)
     x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
     laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NU>> u;
     u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
-    Eigen::Vector<double, LAOptChainMass<n_mass>::NX> value;
     Eigen::Matrix<double, LAOptChainMass<n_mass>::NX, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> jacobian;
 
     for (auto _: state)
     {
-        chain_mass_d.jacobian(value, jacobian, x, u);
-        benchmark::DoNotOptimize(value);
+        chain_mass_d.jacobian(jacobian, x, u);
         benchmark::DoNotOptimize(jacobian);
     }
 }
@@ -132,13 +130,11 @@ static void BM_LAOPT_GRADIENT(benchmark::State& state)
     laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NU>> u;
     u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> weight = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
-    double value;
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> gradient;
 
     for (auto _: state)
     {
-        value = chain_mass_d.gradient(gradient, weight, x, u);
-        benchmark::DoNotOptimize(value);
+        chain_mass_d.gradient(gradient, weight, x, u);
         benchmark::DoNotOptimize(gradient);
     }
 }
@@ -154,15 +150,11 @@ static void BM_LAOPT_HESSIAN(benchmark::State& state)
     laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NU>> u;
     u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> weight = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
-    double value;
-    Eigen::Vector<double, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> gradient;
     Eigen::Matrix<double, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> hessian;
 
     for (auto _: state)
     {
-        value = chain_mass_d.hessian(gradient, hessian, weight, x, u);
-        benchmark::DoNotOptimize(value);
-        benchmark::DoNotOptimize(gradient);
+        chain_mass_d.hessian(hessian, weight, x, u);
         benchmark::DoNotOptimize(hessian);
     }
 }

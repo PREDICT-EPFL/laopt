@@ -51,12 +51,12 @@ struct ExprEvaluator<AddExpr<DerivedLhs, DerivedRhs>>
         return ExprEvaluator<DerivedLhs>::function(expr.lhs) + ExprEvaluator<DerivedRhs>::function(expr.rhs);
     }
 
-    template<typename OutValue, typename OutJacobian>
+    template<typename OutJacobian>
     static EIGEN_STRONG_INLINE void
-    jacobian(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutValue&& out_value, OutJacobian&& out_jacobian)
+    jacobian(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutJacobian&& out_jacobian)
     {
-        ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_value, out_jacobian(Eigen::all, Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)));
-        ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_value, out_jacobian(Eigen::all, Eigen::lastN(Eigen::fix<DerivedRhs::n_inputs>)));
+        ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_jacobian(Eigen::all, Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)));
+        ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_jacobian(Eigen::all, Eigen::lastN(Eigen::fix<DerivedRhs::n_inputs>)));
     }
 
     template<typename Weight>
@@ -67,19 +67,19 @@ struct ExprEvaluator<AddExpr<DerivedLhs, DerivedRhs>>
     }
 
     template<typename OutGradient, typename Weight>
-    static EIGEN_STRONG_INLINE auto
+    static EIGEN_STRONG_INLINE void
     gradient(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutGradient&& out_gradient, const Weight& weight)
     {
-        return ExprEvaluator<DerivedLhs>::gradient(expr.lhs, out_gradient(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight)
-               + ExprEvaluator<DerivedRhs>::gradient(expr.rhs, out_gradient(Eigen::lastN(Eigen::fix<DerivedRhs::n_inputs>)), weight);
+        ExprEvaluator<DerivedLhs>::gradient(expr.lhs, out_gradient(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight);
+        ExprEvaluator<DerivedRhs>::gradient(expr.rhs, out_gradient(Eigen::lastN(Eigen::fix<DerivedRhs::n_inputs>)), weight);
     }
 
-    template<typename OutGradient, typename OutHessian, typename Weight>
-    static EIGEN_STRONG_INLINE auto
-    hessian(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutGradient&& out_gradient, OutHessian&& out_hessian, const Weight& weight)
+    template<typename OutHessian, typename Weight>
+    static EIGEN_STRONG_INLINE void
+    hessian(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutHessian&& out_hessian, const Weight& weight)
     {
-        return ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_gradient(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), out_hessian(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight)
-               + ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_gradient(Eigen::seqN(0, Eigen::fix<DerivedRhs::n_inputs>)), out_hessian(Eigen::seqN(0, Eigen::fix<DerivedRhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedRhs::n_inputs>)), weight);
+        ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_hessian(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight);
+        ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_hessian(Eigen::seqN(0, Eigen::fix<DerivedRhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedRhs::n_inputs>)), weight);
     }
 };
 

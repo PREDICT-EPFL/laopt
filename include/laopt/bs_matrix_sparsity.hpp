@@ -105,9 +105,9 @@ public:
     /**
      * Create a BSMatrixTape from this sparsity pattern
      */
-    BSMatrixTape makeBSTape(Eigen::Index rows, Eigen::Index cols)
+    BSMatrixTape makeBSTape()
     {
-        return BSMatrixTape(get_sparsity_pattern(), rows, cols);
+        return BSMatrixTape(get_sparsity_pattern());
     }
 
     /**
@@ -134,7 +134,7 @@ BSMatrix<scalar_t> makeBSMatrix(F f, Eigen::Index rows = 0, Eigen::Index cols = 
     BSMatrixSparsity sparsity(rows, cols);
     f(sparsity); // Extract sparsity pattern
 
-    auto tape = sparsity.makeBSTape(rows, cols);
+    auto tape = sparsity.makeBSTape();
     f(tape); // Extract operation sequence
 
     return tape.template makeBSMatrix<scalar_t>();
