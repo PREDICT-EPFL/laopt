@@ -62,31 +62,31 @@ public:
     }
 
     template <typename... Args>
-    EIGEN_STRONG_INLINE auto
+    EIGEN_STRONG_INLINE void
     gradient(DefaultTag, Args&&... args) noexcept
     {
-        return derived.gradient(Tag{}, std::forward<Args>(args)...);
+        derived.gradient(Tag{}, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
-    EIGEN_STRONG_INLINE auto
+    EIGEN_STRONG_INLINE void
     gradient(Args&&... args) noexcept
     {
-        return derived.gradient(Tag{}, std::forward<Args>(args)...);
+        derived.gradient(Tag{}, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
-    EIGEN_STRONG_INLINE auto
+    EIGEN_STRONG_INLINE void
     hessian(DefaultTag, Args&&... args) noexcept
     {
-        return derived.hessian(Tag{}, std::forward<Args>(args)...);
+        derived.hessian(Tag{}, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     EIGEN_STRONG_INLINE auto
     hessian(Args&&... args) noexcept
     {
-        return derived.hessian(Tag{}, std::forward<Args>(args)...);
+        derived.hessian(Tag{}, std::forward<Args>(args)...);
     }
 };
 
