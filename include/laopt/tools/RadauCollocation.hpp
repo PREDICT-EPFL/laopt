@@ -318,7 +318,6 @@ public: //protected: // TODO ino1 (would like to make this protected)
         {
             out_gradient(Eigen::seqN(l * NX, Eigen::fix<NX>)) += 2.0 / h_seg * diff_mat(j_node, l) * weight;
         }
-        return this->wsum(DifferentialApproximation{}, weight, X_vec, j_node);
     }
 
     template<typename Weight, typename OutHessian,
