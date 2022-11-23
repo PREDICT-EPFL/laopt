@@ -335,20 +335,13 @@ public: //protected: // TODO ino1 (would like to make this protected)
             typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
     function_impl(SegmentCost,
-                  const Eigen::MatrixBase<X_t> &X_vec,
-                  const Eigen::MatrixBase<U_t> &U_vec,
-                  const Eigen::MatrixBase<p_t> &p)
+                  const Eigen::MatrixBase<X_t> &x,
+                  const Eigen::MatrixBase<U_t> &u,
+                  const Eigen::MatrixBase<p_t> &p,
+                  const unsigned j_node)
     {
-        /* Loop through nodes in segment and add contribution to integral approximation at node j_node */
-        scalar_t cost{0};
-        for (unsigned l = 0; l < D_poly; l++)
-        {
-            cost += int_mat(int_mat.rows() - 1, l) *
-                    controlProblem.template lagrange_term_impl<scalar_t>(get_col<NX>(X_vec, l),
-                                                                         get_col<NU>(U_vec, l),
-                                                                         p);
-        }
-        return h_seg / 2.0 * cost;
+        return h_seg / 2.0 * int_mat(int_mat.rows() - 1, j_node) *
+            controlProblem.template lagrange_term_impl<scalar_t>(x, u, p);
     }
 
     struct MayerCost {};
@@ -376,16 +369,14 @@ public: //protected: // TODO ino1 (would like to make this protected)
         {
             const unsigned id_seg_start = i_seg * D_poly;
             const auto X_seg_diff = get_x<D_poly + 1>(XU_var, id_seg_start); // Diff. approx depends on all points
-            const auto X_seg_int = get_x<D_poly>(XU_var, id_seg_start); // Int. approx is independent of last point
-            const auto U_seg_int = get_u<D_poly>(XU_var, id_seg_start); // Int. approx is independent of last point
-
-            /* Add segment cost from integral approximation */
-            optProblem.add_obj(this->function(SegmentCost{}, X_seg_int, U_seg_int, p_var));
 
             /* Loop through nodes in segment and add differential constraint */
             for (unsigned j_node = 0; j_node < D_poly; j_node++)
             {
                 const unsigned k = id_seg_start + j_node; // Index of this node in the trajectory
+
+                /* Add segment cost from integral approximation */
+                optProblem.add_obj(this->function(SegmentCost{}, get_x(XU_var, k), get_u(XU_var, k), p_var, j_node));
 
                 optProblem.add_constr(this->function(DifferentialApproximation{}, X_seg_diff, j_node) ==
                                       this->function(ContinuousDynamics{},
