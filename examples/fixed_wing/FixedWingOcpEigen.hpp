@@ -19,6 +19,8 @@ public:
 
     using Model = FixedWing;
     Model model;
+    Model::DynamicParams dyn_params = Model::DynamicParams::Zero();
+
     Model::SystemMat A;     // Linearized dynamics
     Model::ControlMat B;    // Linearized dynamics
     Model::State x_trim;    // Linearized dynamics
@@ -111,10 +113,9 @@ public:
 //               B.template cast<T>() * (u - u_trim.template cast<T>());
 
         // Nonlinear dynamics
-        Model::DynamicParams p_plant;
         Model::output_t <T> y;
         state_t<T> xdot;
-        model.dynamics<T>(xdot, x, u, p_plant, y);
+        model.dynamics<T>(xdot, x, u, dyn_params, y);
         return xdot;
     }
 };
