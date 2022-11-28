@@ -21,6 +21,7 @@ constexpr int NUM_SEGMENTS = 2;
 constexpr int N_TRAJ_POINTS = NUM_SEGMENTS * POLY_ORDER + 1;
 
 constexpr double SEGM_TIMESPAN = TIME_HORIZON / NUM_SEGMENTS;
-}
+
+} // namespace lon_ocp
 
 #endif //SRC_LONOCPSETTINGS_HPP

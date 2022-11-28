@@ -4,7 +4,7 @@
 
 #include "laopt/laopt.hpp"
 
-#include "LonOcpEigen.hpp"
+#include "FixedWingOcpEigen.hpp"
 #include "laopt/tools/MultipleShooting.hpp"
 #include "laopt/tools/RadauCollocation.hpp"
 #include "laopt/ipopt_interface/ipopt_wrapper.hpp"
@@ -16,24 +16,20 @@ int main()
     using namespace std::chrono;
 
     /* Choose OCP and Transcription */
-    using Ocp = lon_ocp::LonFlightOCP;
+    using Ocp = fixed_wing_ocp::FixedWingFlightOCP;
 
     /* Construct and setup OCP */
     Ocp ocp;
-    ocp.model.set_state_representation(kite_model::LongitudinalFlightPath);
     ocp.model.load_params_from_yaml("eg4_xflr-Pvw-YR.yaml");
 
-    ocp.objectives[lon_ocp::TrackAngle] = true;
-//    ocp.objectives[lon_ocp::TrackVa] = true;
-    ocp.objectives[lon_ocp::MinimizeControl] = true;
+    ocp.objectives[fixed_wing_ocp::TrackVa] = true;
+    ocp.objectives[fixed_wing_ocp::MinimizeControl] = true;
 
     ocp.set_tf(1.5);
 
-    ocp.pitch_ref = -20.0 * M_PI / 180.0;
     ocp.Va_ref = 11.0;
 
     ocp.mayer_multiplier = 10;
-    ocp.W_pitch_err = 10;
     ocp.W_Va_err = 1;
     ocp.R.diagonal() << 1, 0.1;
 

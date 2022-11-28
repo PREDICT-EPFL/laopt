@@ -1,23 +1,23 @@
-#ifndef SRC_LONOCPEIGEN_HPP
-#define SRC_LONOCPEIGEN_HPP
+#ifndef SRC_FIXEDWINGOCPEIGEN_HPP
+#define SRC_FIXEDWINGOCPEIGEN_HPP
 
 // End user (level 1)
 
 #include "laopt/tools/ControlProblemBase.hpp"
-#include "LonOcpSettings.hpp"
-#include "FixedWing.hpp"
+#include "FixedWingOcpSettings.hpp"
+#include "fixed_wing_model/FixedWingDynamicsEigen.hpp"
 
-namespace lon_ocp {
+namespace fixed_wing_ocp {
 
-using LonKite = kite_model::eigen_model::LonKiteDynamics;
+using FixedWing = flight_model::eigen_model::fixed_wing::FixedWingDynamics;
 
-class LonFlightOCP :
-        public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ LonKite::nx + 0, /*NU*/LonKite::nu + 0>
+class FixedWingFlightOCP :
+        public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ FixedWing::nx + 0, /*NU*/FixedWing::nu + 0>
 {
 public:
-    ~LonFlightOCP() = default;
+    ~FixedWingFlightOCP() = default;
 
-    using Model = LonKite;
+    using Model = FixedWing;
     Model model;
     Model::SystemMat A;     // Linearized dynamics
     Model::ControlMat B;    // Linearized dynamics
@@ -28,15 +28,13 @@ public:
 
     double mayer_multiplier{10};
 
-    double pitch_ref{-5.0 * M_PI / 180.0};
     double Va_ref{11};
 
-    double W_pitch_err{2};
     double W_Va_err{4};
 
     Eigen::Matrix<double, Model::nu, Model::nu> R;
 
-    LonFlightOCP()
+    FixedWingFlightOCP()
     {
         x_trim = model.get_default_initial_state();
         u_trim.setZero();
@@ -49,9 +47,7 @@ public:
     {
         std::cout << "\nOCP parameters set:\n"
                   << "Ref_Va: " << Va_ref << "\n"
-                  << "Ref_pitch: " << pitch_ref * 180.0 / M_PI << " deg\n"
                   << "mayer_mulitplier: " << mayer_multiplier << "\n"
-                  << "W_pitch_err: " << W_pitch_err << "\n"
                   << "W_Va_err: " << W_Va_err << "\n"
                   << "R diag: " << R.diagonal().transpose() << "\n"
                   << "\n";
@@ -61,11 +57,6 @@ public:
     T get_non_control_cost(const Eigen::Ref<const state_t<T>> &x)
     {
         T non_control_cost(0);
-        if (objectives[TrackAngle])
-        {
-            T pitch_err = pitch_ref - x(3);
-            non_control_cost += W_pitch_err * pitch_err * pitch_err;
-        }
         if (objectives[TrackVa])
         {
             T Va_err = Va_ref - x(0);
@@ -120,7 +111,7 @@ public:
 //               B.template cast<T>() * (u - u_trim.template cast<T>());
 
         // Nonlinear dynamics
-        Model::param_t <T> p_plant;
+        Model::DynamicParams p_plant;
         Model::output_t <T> y;
         state_t<T> xdot;
         model.dynamics<T>(xdot, x, u, p_plant, y);
@@ -128,6 +119,6 @@ public:
     }
 };
 
-}
+} // namespace fixed_wing_ocp
 
-#endif //SRC_LONOCPEIGEN_HPP
+#endif //SRC_FIXEDWINGOCPEIGEN_HPP
