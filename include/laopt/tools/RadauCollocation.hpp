@@ -330,16 +330,17 @@ public: //protected: // TODO ino1 (would like to make this protected)
     }
 
     /* Objective */
-    struct SegmentCost {};
+    struct NodeCost {};
     template<typename X_t, typename U_t, typename p_t,
             typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
-    function_impl(SegmentCost,
+    function_impl(NodeCost,
                   const Eigen::MatrixBase<X_t> &x,
                   const Eigen::MatrixBase<U_t> &u,
                   const Eigen::MatrixBase<p_t> &p,
                   const unsigned j_node)
     {
+        /* Contribution of this node to integral approximation of the segment the node is in */
         return h_seg / 2.0 * int_mat(int_mat.rows() - 1, j_node) *
             controlProblem.template lagrange_term_impl<scalar_t>(x, u, p);
     }
@@ -370,14 +371,15 @@ public: //protected: // TODO ino1 (would like to make this protected)
             const unsigned id_seg_start = i_seg * D_poly;
             const auto X_seg_diff = get_x<D_poly + 1>(XU_var, id_seg_start); // Diff. approx depends on all points
 
-            /* Loop through nodes in segment and add differential constraint */
+            /* Loop through nodes in segment */
             for (unsigned j_node = 0; j_node < D_poly; j_node++)
             {
                 const unsigned k = id_seg_start + j_node; // Index of this node in the trajectory
 
-                /* Add segment cost from integral approximation */
-                optProblem.add_obj(this->function(SegmentCost{}, get_x(XU_var, k), get_u(XU_var, k), p_var, j_node));
+                /* Add contribution of this node to integral approximation of this segment */
+                optProblem.add_obj(this->function(NodeCost{}, get_x(XU_var, k), get_u(XU_var, k), p_var, j_node));
 
+                /* Add differential constraint at each node */
                 optProblem.add_constr(this->function(DifferentialApproximation{}, X_seg_diff, j_node) ==
                                       this->function(ContinuousDynamics{},
                                                      get_x(XU_var, k), get_u(XU_var, k), p_var, tf_var));

@@ -43,8 +43,8 @@ void print_sampled_solution(const Transcription &transcription,
     std::cout << "TXn = [\n" << TXn << "];\n";
     std::cout << "TUn = [\n" << TUn << "];\n";
     std::cout << "t_test = " << t_test << ";\n";
-    std::cout << "x_test = [" << x_test << "];\n";
-    std::cout << "u_test = [" << u_test << "];\n";
+    std::cout << "x_test = [" << x_test.transpose() << "];\n";
+    std::cout << "u_test = [" << u_test.transpose() << "];\n";
     std::cout << "\n";
 }
 

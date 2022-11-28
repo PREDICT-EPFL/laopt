@@ -37,8 +37,8 @@ int main()
     ocp.W_Va_err = 1;
     ocp.R.diagonal() << 1, 0.1;
 
-//    ocp.u_ub << 0.8 * ocp.model.u_physical_ubound(0), 0.001;
-//    ocp.u_lb << 0.8 * ocp.model.u_physical_lbound(0), 0;
+    ocp.u_ub << 0.8 * ocp.model.u_physical_ubound(0), 0.001;
+    ocp.u_lb << 0.8 * ocp.model.u_physical_lbound(0), 0;
 
     /* Set initial state */
     ocp.set_x0(ocp.model.get_default_initial_state());

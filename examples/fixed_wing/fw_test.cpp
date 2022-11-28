@@ -33,8 +33,8 @@ int main()
     ocp.W_Va_err = 1;
     ocp.R.diagonal() << 0.1, 1, 1, 1;
 
-//    ocp.u_ub << 0.8 * ocp.model.u_physical_ubound(0), 0.001;
-//    ocp.u_lb << 0.8 * ocp.model.u_physical_lbound(0), 0;
+    ocp.u_ub << 0.8 * ocp.model.u_physical_ubound(0), 0.001;
+    ocp.u_lb << 0.8 * ocp.model.u_physical_lbound(0), 0;
 
     /* Set initial state */
     ocp.set_x0(ocp.model.get_default_initial_state());
@@ -64,7 +64,14 @@ int main()
         Solver solver(opt_problem);
 
         /* Set initial guess for state trajectory */
-        transcription.set_X_guess(ocp.model.get_default_initial_state());
+        Transcription::StateTrajectory X_guess;
+        for (int i = 0; i < Transcription::StateTrajectory::ColsAtCompileTime; i++)
+        {
+            X_guess.col(i) = ocp.model.get_default_initial_state();
+            X_guess(6, i) = i * 0.5 * (ocp.tf_lb + ocp.tf_ub) / Transcription::StateTrajectory::ColsAtCompileTime *
+                            ocp.model.get_default_initial_state()(0);
+        }
+        transcription.set_X_guess(X_guess);
         std::cout << "X_guess = \n" << transcription.get_X_opt() << "\n";
 
         const steady_clock::time_point t_start = steady_clock::now();
@@ -103,7 +110,14 @@ int main()
         Solver solver(opt_problem);
 
         /* Set initial guess for state trajectory */
-        transcription.set_X_guess(ocp.model.get_default_initial_state());
+        Transcription::StateTrajectory X_guess;
+        for (int i = 0; i < Transcription::StateTrajectory::ColsAtCompileTime; i++)
+        {
+            X_guess.col(i) = ocp.model.get_default_initial_state();
+            X_guess(6, i) = i * 0.5 * (ocp.tf_lb + ocp.tf_ub) / Transcription::StateTrajectory::ColsAtCompileTime *
+                            ocp.model.get_default_initial_state()(0);
+        }
+        transcription.set_X_guess(X_guess);
         std::cout << "X_guess = \n" << transcription.get_X_opt() << "\n";
 
         const steady_clock::time_point t_start = steady_clock::now();
