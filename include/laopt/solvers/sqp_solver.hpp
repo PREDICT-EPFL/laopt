@@ -412,7 +412,7 @@ protected:
 
         scalar_t constr_l1 = l1_constraints_violation(m_x);
 
-        // scalar_t mu = (abs(m_h.dot(p)) ) / ((1 - m_settings.rho) * constr_l1);
+//         scalar_t mu = abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1);
         scalar_t mu = m_lam_qp.template lpNorm<Eigen::Infinity>();
 
         prob.set_decision_variable(m_x);
