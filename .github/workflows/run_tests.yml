@@ -12,6 +12,7 @@ env:
   IPOPT_VERSION: 3.14.6
   CASADI_VERSION: 3.3.5
   EIGEN_VERSION: 3.4.0
+  OSQP_EIGEN_VERSION: v0.8.0
   BUILD_RELEASE: ON
   ENABLE_SANITIZERS: ON
 
@@ -79,6 +80,10 @@ jobs:
       - name: Install Eigen
         working-directory: build_external
         run: bash  ../ci/shared/install_eigen.sh
+
+      - name: Install osqp-eigen
+        working-directory: build_external
+        run: bash  ../ci/shared/install_osqp_eigen.sh
 
       - name: Build laopt
         working-directory: build
