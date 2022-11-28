@@ -15,6 +15,7 @@ inertia:
     Ixz: -0.00215
 
 aero:
+    turb_ref_length: 1.8
     e_oswald: 0.9
     CD0: 0.035221
 

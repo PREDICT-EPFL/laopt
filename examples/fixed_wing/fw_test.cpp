@@ -27,11 +27,11 @@ int main()
 
     ocp.set_tf(1.5);
 
-    ocp.Va_ref = 11.0;
+    ocp.Va_ref = 12.0;
 
     ocp.mayer_multiplier = 10;
     ocp.W_Va_err = 1;
-    ocp.R.diagonal() << 1, 0.1;
+    ocp.R.diagonal() << 0.1, 1, 1, 1;
 
 //    ocp.u_ub << 0.8 * ocp.model.u_physical_ubound(0), 0.001;
 //    ocp.u_lb << 0.8 * ocp.model.u_physical_lbound(0), 0;
