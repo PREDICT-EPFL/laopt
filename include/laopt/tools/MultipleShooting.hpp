@@ -92,9 +92,9 @@ public: //protected: // TODO ino1 (would like to make this protected)
         {
             optProblem.add_variable(X_var[i]); // TODO eno1: Loop through array in add_variable() -> Do not want that
             optProblem.add_variable(U_var[i]);
-            optProblem.add_variable(tf_var);
-            optProblem.add_variable(p_var);
         }
+        optProblem.add_variable(tf_var);
+        optProblem.add_variable(p_var);
 
         /* Loop through grid points */
         for (unsigned i = 0; i < N; i++)
