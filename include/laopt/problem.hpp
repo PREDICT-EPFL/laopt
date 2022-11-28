@@ -165,38 +165,9 @@ public:
     }
 
     /**
-     * Compute the lagrangian function.
-     *
-     * Note that we actually compute the lagrangian of
-     *   L(prim, dual) = weights'*obj(prim) + dual'*g(prim)
+     * Compute the hessian of the lagrangian:
+     * ∇^2 L(prim, dual) = obj_factor * ∇^2 obj(prim) + sum_i dual_i * ∇^2 g_i(prim)
      */
-    void eval_lagrangian(const scalar_t obj_factor, Eigen::Ref<Eigen::VectorX<scalar_t>> dual)
-    {
-        assert(dual.rows() == constraints.rows() &&
-               dual.rows() == lagrangian.rows() && "Dual vector is the wrong length!");
-
-        lagrangian.weights.set_buffer(dual);
-
-        lagrangian.value = 0;
-
-        eval_lagrangian_no_memory(Eval{}, obj_factor);
-    }
-
-    void eval_lagrangian_gradient(const scalar_t obj_factor,
-                                  Eigen::Ref<Eigen::VectorX<scalar_t>> dual,
-                                  Eigen::Ref<Eigen::VectorX<scalar_t>> gradient)
-    {
-        assert(dual.rows() == constraints.rows() &&
-               dual.rows() == lagrangian.rows() && "Dual vector is the wrong length!");
-
-        lagrangian.weights.set_buffer(dual);
-        lagrangian.gradient.set_buffer(gradient);
-
-        lagrangian.gradient.set_zero();
-
-        eval_lagrangian_no_memory(Gradient{}, obj_factor);
-    }
-
     void eval_lagrangian_hessian(const scalar_t obj_factor,
                                  Eigen::Ref<Eigen::VectorX<scalar_t>> dual,
                                  Eigen::Ref<Eigen::VectorX<scalar_t>> hessian_buffer)
