@@ -149,6 +149,51 @@ namespace laopt
         return true;
     }
 
+    template<typename InputIt, typename Size, typename Scalar>
+    EIGEN_STRONG_INLINE void
+    copy_n_into_sparse_matrix(InputIt first, Size count, Eigen::SparseMatrix<Scalar>& dst, const Eigen::Index &col, const Eigen::Index &offset)
+    {
+        // assert col exists
+        eigen_assert(col < dst.outerSize());
+        // uncompressed
+        if (dst.innerNonZeroPtr() != 0)
+        {
+            // assert not writing outside column
+            eigen_assert(offset + count <= dst.innerNonZeroPtr()[col]);
+        }
+        // compressed
+        else
+        {
+            // assert not writing outside column
+            eigen_assert(dst.outerIndexPtr()[col] + offset + count <= dst.outerIndexPtr()[col + 1]);
+        }
+        std::copy_n(first, count, dst.valuePtr() + dst.outerIndexPtr()[col] + offset);
+    }
+
+    template<typename InputIt, typename Size, typename Scalar>
+    EIGEN_STRONG_INLINE void
+    add_n_into_sparse_matrix(InputIt first, Size count, Eigen::SparseMatrix<Scalar>& dst, const Eigen::Index &col, const Eigen::Index &offset)
+    {
+        // assert col exists
+        eigen_assert(col < dst.outerSize());
+        // uncompressed
+        if (dst.innerNonZeroPtr() != 0)
+        {
+            // assert not writing outside column
+            eigen_assert(offset + count <= dst.innerNonZeroPtr()[col]);
+        }
+        // compressed
+        else
+        {
+            // assert not writing outside column
+            eigen_assert(dst.outerIndexPtr()[col] + offset + count <= dst.outerIndexPtr()[col + 1]);
+        }
+        std::transform(dst.valuePtr() + dst.outerIndexPtr()[col] + offset,
+                       dst.valuePtr() + dst.outerIndexPtr()[col] + offset + count,
+                       first, dst.valuePtr() + dst.outerIndexPtr()[col] + offset,
+                       std::plus<Scalar>());
+    }
+
     template<typename... T, int n = meta::sum_template<T::SizeAtCompileTime...>()>
     inline Eigen::Vector<int, n> multiSeq_to_index(T... segments)
     {

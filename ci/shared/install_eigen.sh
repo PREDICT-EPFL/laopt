@@ -7,3 +7,9 @@ echo "Installing EIGEN..."
 git clone https://gitlab.com/libeigen/eigen.git eigen
 cd eigen
 git checkout "$EIGEN_VERSION"
+
+mkdir build
+cd build
+cmake ..
+make -j4
+sudo make install
