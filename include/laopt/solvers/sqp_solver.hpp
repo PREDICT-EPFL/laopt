@@ -537,6 +537,11 @@ protected:
                 m_x_merit_decrease = m_x;
                 m_lam_merit_decrease = m_lam;
                 m_lam_bounds_merit_decrease = m_lam_bounds;
+
+                // increase watchdog step
+                m_watchdog_step++;
+                // we are taking full steps during watchdog search
+                return 1.0;
             }
             else if (phi_step < 1e3 * m_phi_begin)
             {
