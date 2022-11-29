@@ -185,6 +185,7 @@ public:
 
         if (termination_criteria()) {
             m_info.status = sqp_status_t::SOLVED;
+            if (m_settings.verbose) print_solve_info();
             return m_info;
         }
 
@@ -252,15 +253,51 @@ public:
 
             if (termination_criteria()) {
                 m_info.status = sqp_status_t::SOLVED;
+                if (m_settings.verbose) print_solve_info();
                 return m_info;
             }
         }
 
         m_info.status = sqp_status_t::MAX_ITER_REACHED;
+        if (m_settings.verbose) print_solve_info();
         return m_info;
     }
 
 protected:
+    EIGEN_STRONG_INLINE void print_solve_info() noexcept
+    {
+        std::cout << "status: ";
+        switch (m_info.status)
+        {
+            case sqp_status_t::SOLVED:
+                std::cout << "SOLVED" << std::endl;
+                break;
+            case sqp_status_t::MAX_ITER_REACHED:
+                std::cout << "MAX_ITER_REACHED" << std::endl;
+                break;
+            case sqp_status_t::INFEASIBLE:
+                std::cout << "INFEASIBLE" << std::endl;
+                break;
+            case sqp_status_t::NON_CONVEX_QP:
+                std::cout << "NON_CONVEX_QP" << std::endl;
+                break;
+            case sqp_status_t::QP_SOLVER_ERROR:
+                std::cout << "QP_SOLVER_ERROR" << std::endl;
+                break;
+            case sqp_status_t::UNSOLVED:
+                std::cout << "UNSOLVED" << std::endl;
+                break;
+            case sqp_status_t::INVALID_SETTINGS:
+                std::cout << "INVALID_SETTINGS" << std::endl;
+                break;
+            default:
+                std::cout << "UNKNOWN STATUS" << std::endl;
+                break;
+        }
+        std::cout << "sqp iterations: " << m_info.iter << std::endl;
+        std::cout << "qp iterations: " << m_info.qp_iter << std::endl;
+    }
+
     EIGEN_STRONG_INLINE void linearize_problem() noexcept
     {
         prob.set_decision_variable(m_x);
