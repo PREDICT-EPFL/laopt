@@ -15,11 +15,13 @@ enum struct hessian_approximation_t {
 
 template <typename Scalar>
 struct sqp_settings_t {
-    Scalar tau                                    = 0.5;                            // line search iteration decrease, 0 < tau < 1
+    Scalar tau                                    = 0.7;                            // line search iteration decrease, 0 < tau < 1
     Scalar eta                                    = 0.25;                           // line search parameter, 0 < eta < 1
     Scalar rho                                    = 0.5;                            // line search parameter, 0 < rho < 1
     Scalar eps_prim                               = 1e-6;                           // primal step termination threshold, eps_prim > 0
     Scalar eps_dual                               = 1e-4;                           // dual step termination threshold, eps_dual > 0
+    Scalar min_alpha                              = 1e-4;                           // minimum step size
+    int max_watchdog_steps                        = 5;                              // minimum full size steps for non-monotone watchdog strategy (0 for normal line search)
     hessian_approximation_t hessian_approximation = hessian_approximation_t::EXACT; // hessian approximation
     int max_iter                                  = 1000;
     int line_search_max_iter                      = 100;
@@ -32,6 +34,8 @@ struct sqp_settings_t {
                0.0 < rho && rho < 1.0 &&
                eps_prim > 0.0 &&
                eps_dual > 0.0 &&
+               0.0 < min_alpha && min_alpha <= 1.0 &&
+               max_watchdog_steps >= 0 &&
                max_iter > 0 &&
                line_search_max_iter > 0;
     }
@@ -86,7 +90,17 @@ private:
     scalar_t m_stationarity_inf;
 
     // internal variables for line search
-    Eigen::VectorX<scalar_t> m_x_step_line_search; // primal search step for line search
+    Eigen::VectorX<scalar_t> m_x_step_line_search;           // primal search step for line search
+    int                      m_watchdog_step;                // tracks how many steps we are in for the watchdog strategy
+    scalar_t                 m_mu_search_begin;              // mu from where we start the non-monotone watchdog strategy
+    scalar_t                 m_phi_begin;                    // merit function evaluated at watch dog beginning
+    scalar_t                 m_Dp_phi_begin;                 // directional derivative of merit function evaluated at watch dog beginning
+    Eigen::VectorX<scalar_t> m_x_merit_decrease;             // last primal iterate with merit function decrease
+    Eigen::VectorX<scalar_t> m_lam_merit_decrease;           // last dual iterate with merit function decrease
+    Eigen::VectorX<scalar_t> m_lam_bounds_merit_decrease;    // last dual for bounds iterate with merit function decrease
+    Eigen::VectorX<scalar_t> m_p_merit_decrease;             // last primal search iterate with merit function decrease
+    Eigen::VectorX<scalar_t> m_lam_qp_merit_decrease;        // last dual variable solution of qp iterate with merit function decrease
+    Eigen::VectorX<scalar_t> m_lam_bounds_qp_merit_decrease; // last dual variable solution of qp for bounds iterate with merit function decrease
 
 public:
 
@@ -104,7 +118,14 @@ public:
         m_p(prob.variables()),
         m_lam_qp(prob.constraints.rows()),
         m_lam_bounds_qp(prob.variables()),
-        m_x_step_line_search(prob.variables())
+        m_x_step_line_search(prob.variables()),
+        m_watchdog_step(0),
+        m_x_merit_decrease(prob.variables()),
+        m_lam_merit_decrease(prob.constraints.rows()),
+        m_lam_bounds_merit_decrease(prob.variables()),
+        m_p_merit_decrease(prob.variables()),
+        m_lam_qp_merit_decrease(prob.constraints.rows()),
+        m_lam_bounds_qp_merit_decrease(prob.variables())
     {
         m_x.setZero();
         m_lam.setZero();
@@ -156,6 +177,7 @@ public:
         if (!m_settings.validate())
         {
             m_info.status = sqp_status_t::INVALID_SETTINGS;
+            if (m_settings.verbose) print_solve_info();
             return m_info;
         }
 
@@ -171,15 +193,16 @@ public:
 
         if (m_settings.verbose)
         {
-            std::cout << "iter   objective     primal_inf    comp_inf      stat_inf     alpha     qp_iter" << std::endl;
+            std::cout << "iter   objective     primal_inf    comp_inf      stat_inf      alpha       watchdog   qp_iter" << std::endl;
             prob.set_decision_variable(m_x);
-            printf("%4d   %.5e   %.5e   %.5e   %.5e  %.3e %7d\n",
+            printf("%4d   %.5e   %.5e   %.5e   %.5e   %.3e       %4d   %7d\n",
                    m_info.iter,
                    prob.eval_objective(),
                    m_primal_feasibility_inf,
                    m_complementarity_inf,
                    m_stationarity_inf,
                    alpha,
+                   m_watchdog_step,
                    0);
         }
 
@@ -222,11 +245,12 @@ public:
                         m_info.status = sqp_status_t::QP_SOLVER_ERROR;
                         break;
                 }
+                if (m_settings.verbose) print_solve_info();
                 return m_info;
             }
 
             // calculate step size
-            alpha = step_size_selection(m_p);
+            alpha = fmax(m_settings.min_alpha, step_size_selection(m_p));
 
             // take step
             m_x          += alpha * m_p;
@@ -241,13 +265,14 @@ public:
             if (m_settings.verbose)
             {
                 prob.set_decision_variable(m_x);
-                printf("%4d   %.5e   %.5e   %.5e   %.5e  %.3e %7d\n",
+                printf("%4d   %.5e   %.5e   %.5e   %.5e   %.3e       %4d   %7d\n",
                        m_info.iter,
                        prob.eval_objective(),
                        m_primal_feasibility_inf,
                        m_complementarity_inf,
                        m_stationarity_inf,
                        alpha,
+                       m_watchdog_step,
                        m_qp_solver.info().iter);
             }
 
@@ -441,43 +466,168 @@ protected:
     * default implementations
     */
 
-    /** default algorithm: l1-norm line search */
+    /** default algorithm: watchdog l1-norm line search */
     EIGEN_STRONG_INLINE scalar_t
     step_size_selection_impl(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& p) noexcept
     {
-        const scalar_t tau = m_settings.tau; // line search step decrease, 0 < tau < settings.tau
+        // we are at watchdog search beginning
+        if (m_watchdog_step == 0)
+        {
+            scalar_t constr_l1 = l1_constraints_violation(m_x);
+            // for a full step m_lam_qp is lam_{k+1} and a good estimate for mu
+            m_mu_search_begin = m_lam_qp.template lpNorm<Eigen::Infinity>();
 
+            prob.set_decision_variable(m_x);
+            scalar_t cost = prob.eval_objective();
+            m_phi_begin = cost + m_mu_search_begin * constr_l1;
+            m_Dp_phi_begin = m_cost_grad.dot(p) - m_mu_search_begin * constr_l1;
+
+            // take full step
+            m_x_step_line_search = m_x + p;
+
+            prob.set_decision_variable(m_x_step_line_search);
+            scalar_t cost_step = prob.eval_objective();
+            scalar_t phi_step = cost_step + m_mu_search_begin * l1_constraints_violation(m_x_step_line_search);
+
+            if (phi_step > (m_phi_begin + m_settings.eta * m_Dp_phi_begin))
+            {
+                // full step is not accepted; hence, we start watchdog search
+                // otherwise m_watchdog_step stays at 0, i.e., reset search
+                m_watchdog_step++;
+
+                // fallback is the beginning of the search
+                m_x_merit_decrease = m_x;
+                m_lam_merit_decrease = m_lam;
+                m_lam_bounds_merit_decrease = m_lam_bounds;
+                m_p_merit_decrease = m_p;
+                m_lam_qp_merit_decrease = m_lam_qp;
+                m_lam_bounds_qp_merit_decrease = m_lam_bounds_qp;
+            }
+
+            if (phi_step < 1e3 * m_phi_begin)
+            {
+                // small check that we did not completely diverge
+
+                // we are taking full steps during watchdog search
+                return 1.0;
+            }
+            // sometimes it happens that a full steps diverges and then the QP solver fails
+            // in this case we do a proper line search using the fallback strategy
+        }
+        else if (m_watchdog_step < m_settings.max_watchdog_steps)
+        {
+            // take full step
+            m_x_step_line_search = m_x + p;
+
+            prob.set_decision_variable(m_x_step_line_search);
+            scalar_t cost_step = prob.eval_objective();
+            scalar_t phi_step = cost_step + m_mu_search_begin * l1_constraints_violation(m_x_step_line_search);
+
+            if (phi_step <= (m_phi_begin + m_settings.eta * m_Dp_phi_begin))
+            {
+                // step is accepted because it fulfills the decrease condition for the watchdog beginning
+                // reset watchdog
+                m_watchdog_step = 0;
+                // we are taking full steps during watchdog search
+                return 1.0;
+            }
+            else if (phi_step <= m_phi_begin)
+            {
+                // keep track of merit decrease iterates for fall back strategy
+                m_x_merit_decrease = m_x;
+                m_lam_merit_decrease = m_lam;
+                m_lam_bounds_merit_decrease = m_lam_bounds;
+            }
+            else if (phi_step < 1e3 * m_phi_begin)
+            {
+                // small check that we did not completely diverge
+
+                // increase watchdog step
+                m_watchdog_step++;
+                // we are taking full steps during watchdog search
+                return 1.0;
+            }
+            // sometimes it happens that a full steps diverges and then the QP solver fails
+            // in this case we do a proper line search using the fallback strategy
+        }
+
+        // watchdog strategy failed, we have to backtrack now...
+
+        // first we start with a line search from current iterate
         scalar_t constr_l1 = l1_constraints_violation(m_x);
-
-//         scalar_t mu = abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1);
-        scalar_t mu = m_lam_qp.template lpNorm<Eigen::Infinity>();
+        scalar_t mu = abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1);
 
         prob.set_decision_variable(m_x);
-        scalar_t cost_1 = prob.eval_objective();
-
-        scalar_t phi_l1 = cost_1 + mu * constr_l1;
-        scalar_t Dp_phi_l1 = m_cost_grad.dot(p) - mu * constr_l1;
+        scalar_t cost_current = prob.eval_objective();
+        scalar_t phi_current = cost_current + mu * constr_l1;
+        scalar_t Dp_phi_current = m_cost_grad.dot(p) - mu * constr_l1;
 
         scalar_t alpha = scalar_t(1.0);
-        scalar_t cost_step;
+        scalar_t phi_step;
         for (int i = 1; i < m_settings.line_search_max_iter; i++)
         {
             m_x_step_line_search = m_x + alpha * p;
+
             prob.set_decision_variable(m_x_step_line_search);
-            cost_step = prob.eval_objective();
+            scalar_t cost_step = prob.eval_objective();
+            phi_step = cost_step + mu * l1_constraints_violation(m_x_step_line_search);
 
-            scalar_t phi_l1_step = cost_step + mu * l1_constraints_violation(m_x_step_line_search);
-
-            if (phi_l1_step <= (phi_l1 + alpha * m_settings.eta * Dp_phi_l1))
+            if (phi_step <= (phi_current + alpha * m_settings.eta * Dp_phi_current))
             {
-                return alpha;
+                break;
             }
             else
             {
-                alpha = tau * alpha;
+                alpha = m_settings.tau * alpha;
             }
         }
 
+        if (phi_current <= m_phi_begin || phi_step <= m_phi_begin + m_settings.eta * m_Dp_phi_begin)
+        {
+            // we accept step and reset watchdog
+            m_watchdog_step = 0;
+            return alpha;
+        }
+
+        // as a last resort we perform a line search on the last primal merit decrease iterate
+        // in the worst case this is just the beginning of the watchdog search
+        constr_l1 = l1_constraints_violation(m_x_merit_decrease);
+        mu = abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1);
+
+        prob.set_decision_variable(m_x_merit_decrease);
+        cost_current = prob.eval_objective();
+        phi_current = cost_current + mu * constr_l1;
+        Dp_phi_current = m_cost_grad.dot(p) - mu * constr_l1;
+
+        alpha = scalar_t(1.0);
+        for (int i = 1; i < m_settings.line_search_max_iter; i++)
+        {
+            m_x_step_line_search = m_x_merit_decrease + alpha * p;
+
+            prob.set_decision_variable(m_x_step_line_search);
+            scalar_t cost_step = prob.eval_objective();
+            phi_step = cost_step + mu * l1_constraints_violation(m_x_step_line_search);
+
+            if (phi_step <= (phi_current + alpha * m_settings.eta * Dp_phi_current))
+            {
+                break;
+            }
+            else
+            {
+                alpha = m_settings.tau * alpha;
+            }
+        }
+
+        // migrate back current primal and dual variables to last merit decrease
+        m_x = m_x_merit_decrease;
+        m_lam = m_lam_merit_decrease;
+        m_lam_bounds = m_lam_bounds_merit_decrease;
+        m_p = m_p_merit_decrease;
+        m_lam_qp = m_lam_qp_merit_decrease;
+        m_lam_bounds_qp = m_lam_bounds_qp_merit_decrease;
+
+        // reset watchdog
+        m_watchdog_step = 0;
         return alpha;
     }
 
