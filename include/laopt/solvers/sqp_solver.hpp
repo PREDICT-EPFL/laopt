@@ -144,7 +144,7 @@ public:
                 std::cout << "----------------------------------------------------------" << std::endl;
                 std::cout << "                        laOPT SQP                         " << std::endl;
                 std::cout << "            (c) Roland Schwan, Johannes Waibel            " << std::endl;
-                std::cout << "   École polytechnique fédérale de Lausanne (EPFL) 2022   " << std::endl;
+                std::cout << "   École Polytechnique Fédérale de Lausanne (EPFL) 2022   " << std::endl;
                 std::cout << "----------------------------------------------------------" << std::endl;
                 std::cout << "variables n = " << prob.variables() << std::endl;
                 std::cout << "constraints m = " << prob.constraints.rows() << std::endl;
