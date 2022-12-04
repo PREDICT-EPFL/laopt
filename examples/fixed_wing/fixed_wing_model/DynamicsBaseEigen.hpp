@@ -5,7 +5,7 @@
 #include <vector>
 
 #include <Eigen/Core>
-#include <unsupported/Eigen/AutoDiff>
+#include "laopt/autodiff_scalar.hpp"
 
 namespace flight_model {
 namespace eigen_model {
@@ -43,7 +43,7 @@ public:
 
     /* AD (nx+nu) types */
     using Derivates = Eigen::Matrix<Scalar, nx + nu, 1>;
-    using AdScalar = Eigen::AutoDiffScalar<Derivates>;
+    using AdScalar = laopt::AutoDiffScalar<Derivates>;
     using AdState = state_t<AdScalar>;
     using AdControl = control_t<AdScalar>;
     using AdDynParams = dynamic_params_t<AdScalar>;

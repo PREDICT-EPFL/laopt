@@ -2,8 +2,7 @@
 #define LAOPT_DIFFERENTIABLE_HPP
 
 #include <Eigen/Dense>
-#include <unsupported/Eigen/AutoDiff>
-#include "eigen_autodiff_fix.hpp"
+#include "autodiff_scalar.hpp"
 
 #include "utility.hpp"
 #include "expressions/expr_base.hpp"
@@ -76,7 +75,7 @@ protected:
      * using the Eigen AutoDiff tool
      */
 
-    // Compute the jacobian with eigen autodiff
+    // Compute the jacobian using eigen autodiff
     template<typename Tag, typename OutJacobian, typename... Args>
     EIGEN_STRONG_INLINE void
     jacobian_impl_autodiff(
@@ -85,13 +84,14 @@ protected:
             const Args&... args) noexcept // Function arguments
     {
         using Info = typename Derived::template FuncInfo<Tag, Args...>;
+        using Scalar = typename Info::scalar_t;
 
         // First order derivative
-        using AD_scalar = Eigen::AutoDiffScalar<Eigen::Vector<typename Info::scalar_t, Info::n_inputs>>;
-        using AD_Output = Eigen::Vector<AD_scalar, Info::n_outputs>;
+        using ADScalar = laopt::AutoDiffScalar<Eigen::Vector<Scalar, Info::n_inputs>>;
+        using ADOutput = Eigen::Vector<ADScalar, Info::n_outputs>;
 
         // Convert the arguments to AD variables, and call the function
-        AD_Output out = seed_and_call(std::forward<Tag>(tag), make_ad<AD_scalar>(args)...);
+        ADOutput out = seed_and_call(std::forward<Tag>(tag), make_ad<ADScalar>(args)...);
 
         // Copy out into output variables
         for(int i = 0; i < out.rows(); i++)
@@ -100,13 +100,57 @@ protected:
         }
     }
 
+    template<typename Tag, typename... Args>
+    EIGEN_STRONG_INLINE void
+    jacobian_impl_autodiff(Tag&& tag, BSMatrixSparsity& out_jacobian, const Args&... args) noexcept
+    {
+        jacobian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_jacobian, args...);
+    }
+    template<typename Tag, typename... OutJacobianArgs, typename... Args>
+    EIGEN_STRONG_INLINE void
+    jacobian_impl_autodiff(Tag&& tag, BSSliceSparsity<OutJacobianArgs...>& out_jacobian, const Args&... args) noexcept
+    {
+        jacobian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_jacobian, args...);
+    }
+
+    // Compute sparsity pattern of the jacobian using eigen autodiff
+    template<typename Tag, typename... OutJacobianArgs, typename... Args>
+    EIGEN_STRONG_INLINE void
+    jacobian_impl_autodiff_sparsity(
+            Tag&& tag, // Function to call
+            BSSliceSparsity<OutJacobianArgs...>& out_jacobian, // Outputs
+            const Args&... args) noexcept // Function arguments
+    {
+        using Info = typename Derived::template FuncInfo<Tag, Args...>;
+        using Scalar = typename Info::scalar_t;
+
+        // First order derivative
+        using ADScalar = laopt::AutoDiffScalar<Eigen::Vector<TouchableDerivative<Scalar>, Info::n_inputs>>;
+        using ADOutput = Eigen::Vector<ADScalar, Info::n_outputs>;
+
+        // Convert the arguments to AD variables, and call the function
+        ADOutput out = seed_and_call(std::forward<Tag>(tag), make_ad_touchable<ADScalar>(args)...);
+
+        // Since we used NaNs in the derivative propagation, all non-zeros are the actual sparsity pattern
+        for(int i = 0; i < out.rows(); i++)
+        {
+            for (int j = 0; j < out[i].derivatives().rows(); j++)
+            {
+                if (out[i].derivatives()(j).value() != 0)
+                {
+                    out_jacobian(i, j) += 1;
+                }
+            }
+        }
+    }
+
     // Take a vector input and return an AD version of the vector
-    template<typename AD_scalar, typename Base>
+    template<typename ADScalar, typename Base>
     static EIGEN_STRONG_INLINE auto
     make_ad(const IndexedVector<Base>& x) noexcept
     {
         constexpr size_t n = Base::RowsAtCompileTime;
-        Eigen::Vector<AD_scalar, n> y;
+        Eigen::Vector<ADScalar, n> y;
         y = x;
         for (int i = 0; i < y.rows(); i++) {
             y[i].derivatives().setZero();
@@ -114,9 +158,29 @@ protected:
         return y;
     }
 
-    template<typename AD_scalar, typename T>
+    template<typename ADScalar, typename T>
     static EIGEN_STRONG_INLINE const T&
     make_ad(const T& x) noexcept
+    {
+        return x;
+    }
+
+    // Take a vector input and return an AD version of the vector
+    template<typename ADScalar, typename Base>
+    static EIGEN_STRONG_INLINE auto
+    make_ad_touchable(const IndexedVector<Base>& x) noexcept
+    {
+        constexpr size_t n = Base::RowsAtCompileTime;
+        Eigen::Vector<ADScalar, n> y;
+        for (int i = 0; i < y.rows(); i++) {
+            y[i].value() = 1;
+        }
+        return y;
+    }
+
+    template<typename ADScalar, typename T>
+    static EIGEN_STRONG_INLINE const T&
+    make_ad_touchable(const T& x) noexcept
     {
         return x;
     }
@@ -141,7 +205,7 @@ protected:
     // Assumes that the derivative matrix is initially zero
     template<typename X, int n>
     static EIGEN_STRONG_INLINE int
-    ad_seed(Eigen::Vector<Eigen::AutoDiffScalar<X>, n>& x, int offset) noexcept
+    ad_seed(Eigen::Vector<laopt::AutoDiffScalar<X>, n>& x, int offset) noexcept
     {
         for (int i = 0; i < x.rows(); i++)
         {
@@ -157,11 +221,7 @@ protected:
         return offset;
     }
 
-    /**
-     * Returns the value w'*f(x).
-     * out_gradient += gradient(w'*f(x))
-     * out_hessian += hessian(w'*f(x))
-     */
+    // Compute the jacobian using eigen autodiff
     template<typename Tag, typename Weight, typename OutHessian, typename... Args,
             typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
     EIGEN_STRONG_INLINE void
@@ -171,20 +231,80 @@ protected:
                           const Args&... args) noexcept
     {
         using Info = typename Derived::template FuncInfo<Tag, Args...>;
+        using Scalar = typename Info::scalar_t;
 
-        // Second order derivative
-        using AD_scalar = Eigen::AutoDiffScalar<Eigen::Vector<scalar_t, Info::n_inputs>>;
+        // First order derivative
+        using ADScalar = laopt::AutoDiffScalar<Eigen::Vector<Scalar, Info::n_inputs>>;
         // only calculate one row of the hessian at once to reduce memory requirements
-        using outerDerivatives = Eigen::Vector<AD_scalar, 1>;
-        using outerADScalar = Eigen::AutoDiffScalar<outerDerivatives>;
-        using outerAD_t = Eigen::Vector<outerADScalar, Info::n_outputs>;
+        using outerDerivatives = Eigen::Vector<ADScalar, 1>;
+        // Second order derivative
+        using outerADScalar = laopt::AutoDiffScalar<outerDerivatives>;
+        using ADOutput = Eigen::Vector<outerADScalar, Info::n_outputs>;
 
-        outerAD_t out;
+        ADOutput out;
         for (size_t i = 0; i < Info::n_inputs; i++) {
             // Convert to AD variables for the inputs and call our function for ith row of hessian
             out = seed_and_call2(i, std::forward<Tag>(tag), make_ad2<outerADScalar>(args)...);
             for(size_t j = 0; j < Info::n_outputs; j++) {
                 out_hessian(i, Eigen::all) += weight(j) * out[j].derivatives()(0).derivatives().transpose();
+            }
+        }
+    }
+
+    template<typename Tag, typename Weight, typename... Args,
+        typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    EIGEN_STRONG_INLINE void
+    hessian_impl_autodiff(Tag&& tag,
+                          BSMatrixSparsity& out_hessian,
+                          const Eigen::MatrixBase<Weight>& weight,
+                          const Args&... args) noexcept
+    {
+        hessian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_hessian, weight, args...);
+    }
+
+    template<typename Tag, typename Weight, typename... OutJacobianArgs, typename... Args,
+        typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    EIGEN_STRONG_INLINE void
+    hessian_impl_autodiff(Tag&& tag,
+                          BSSliceSparsity<OutJacobianArgs...>& out_hessian,
+                          const Eigen::MatrixBase<Weight>& weight,
+                          const Args&... args) noexcept
+    {
+        hessian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_hessian, weight, args...);
+    }
+
+    // Compute sparsity pattern of the hessian using eigen autodiff
+    template<typename Tag, typename Weight, typename... OutJacobianArgs, typename... Args,
+            typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    EIGEN_STRONG_INLINE void
+    hessian_impl_autodiff_sparsity(Tag&& tag,
+                                   BSSliceSparsity<OutJacobianArgs...>& out_hessian,
+                                   const Eigen::MatrixBase<Weight>& weight,
+                                   const Args&... args) noexcept
+    {
+        using Info = typename Derived::template FuncInfo<Tag, Args...>;
+        using Scalar = typename Info::scalar_t;
+
+        // First order derivative
+        using ADScalar = laopt::AutoDiffScalar<Eigen::Vector<TouchableDerivative<Scalar>, Info::n_inputs>>;
+        // only calculate one row of the hessian at once to reduce memory requirements
+        using outerDerivatives = Eigen::Vector<ADScalar, 1>;
+        // Second order derivative
+        using outerADScalar = laopt::AutoDiffScalar<outerDerivatives>;
+        using ADOutput = Eigen::Vector<outerADScalar, Info::n_outputs>;
+
+        // Since we used NaNs in the derivative propagation, all non-zeros are the actual sparsity pattern
+        ADOutput out;
+        for (size_t i = 0; i < Info::n_inputs; i++) {
+            // Convert to AD variables for the inputs and call our function for ith row of hessian
+            out = seed_and_call2(i, std::forward<Tag>(tag), make_ad2_touchable<outerADScalar>(args)...);
+            for(size_t j = 0; j < Info::n_outputs; j++) {
+                for (int k = 0; k < out[j].derivatives()(0).derivatives().rows(); k++) {
+                    if (out[j].derivatives()(0).derivatives()(k).value() != 0)
+                    {
+                        out_hessian(i, k) += 1;
+                    }
+                }
             }
         }
     }
@@ -213,6 +333,27 @@ protected:
         return x;
     }
 
+    // Take a vector input and return an AD version of the vector
+    template<typename outerADScalar, typename Base>
+    EIGEN_STRONG_INLINE auto
+    make_ad2_touchable(const IndexedVector<Base>& x) noexcept
+    {
+        constexpr size_t n = Base::RowsAtCompileTime;
+        Eigen::Vector<outerADScalar, n> y;
+        // y = x;
+        for (size_t i = 0; i < n; i++) {
+            y(i).value().value() = 1;
+        }
+        return y;
+    }
+
+    template<typename outerADScalar, typename T>
+    EIGEN_STRONG_INLINE const T&
+    make_ad2_touchable(const T& x) noexcept
+    {
+        return x;
+    }
+
     template<typename Tag, typename... Args>
     EIGEN_STRONG_INLINE auto seed_and_call2(int outer_index, Tag&& tag, Args&&... args) noexcept
     {
@@ -233,14 +374,14 @@ protected:
     // Assumes that the derivative matrix is initially zero
     template <typename X, int n>
     EIGEN_STRONG_INLINE int
-    ad_seed2(Eigen::Vector<Eigen::AutoDiffScalar<X>, n>& x, int outer_index, int inner_offset) noexcept
+    ad_seed2(Eigen::Vector<laopt::AutoDiffScalar<X>, n>& x, int outer_index, int inner_offset) noexcept
     {
         for (int i = 0; i < x.rows(); i++)
         {
             x(i).value().derivatives().coeffRef(i + inner_offset) = 1;
             // Seed only the relevant value for the current row of the hessian
             if (i + inner_offset == outer_index) {
-                x(i).derivatives().coeffRef(0) = 1;
+                x(i).derivatives().coeffRef(0).value() = 1;
             }
         }
 
