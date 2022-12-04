@@ -568,7 +568,7 @@ protected:
         scalar_t Dp_phi_current = m_cost_grad.dot(p) - mu * constr_l1;
 
         scalar_t alpha = scalar_t(1.0);
-        scalar_t phi_step;
+        scalar_t phi_step = scalar_t(0);
         for (int i = 1; i < m_settings.line_search_max_iter; i++)
         {
             m_x_step_line_search = m_x + alpha * p;

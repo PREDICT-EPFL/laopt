@@ -141,18 +141,8 @@ public:
         return s << a.value();
     }
 
-    AutoDiffScalarBase(const AutoDiffScalarBase& other)
-        : m_value(other.value()), m_derivatives(other.derivatives()) {}
-
     template<typename OtherDerType>
     inline AutoDiffScalarBase& operator=(const AutoDiffScalar<OtherDerType>& other)
-    {
-        m_value = other.value();
-        m_derivatives = other.derivatives();
-        return *this;
-    }
-
-    inline AutoDiffScalarBase& operator=(const AutoDiffScalarBase& other)
     {
         m_value = other.value();
         m_derivatives = other.derivatives();
@@ -355,8 +345,16 @@ protected:
 // used to add additional functions to AutoDiffScalar to make it compatible for second order derivatives
 template<typename T, typename = void>
 struct has_scalar_der_type : std::false_type {};
+// suppress GCC warning: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90881
+#if defined(__GNUC__) && (__GNUC__ >= 7)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-value"
+#endif
 template<typename T>
 struct has_scalar_der_type<T, decltype(sizeof(typename T::Scalar::DerType), void())> : std::true_type {};
+#if defined(__GNUC__) && (__GNUC__ >= 7)
+#pragma GCC diagnostic pop
+#endif
 
 template<typename DerivativeType>
 class AutoDiffScalar<DerivativeType, typename std::enable_if<!has_scalar_der_type<AutoDiffScalarBase<DerivativeType>>::value>::type>

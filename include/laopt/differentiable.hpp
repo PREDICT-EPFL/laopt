@@ -106,19 +106,19 @@ protected:
     {
         jacobian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_jacobian, args...);
     }
-    template<typename Tag, typename... OutJacobianArgs, typename... Args>
+    template<typename Tag, typename SparsityNullMat, typename... Args>
     EIGEN_STRONG_INLINE void
-    jacobian_impl_autodiff(Tag&& tag, BSSliceSparsity<OutJacobianArgs...>& out_jacobian, const Args&... args) noexcept
+    jacobian_impl_autodiff(Tag&& tag, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_jacobian, const Args&... args) noexcept
     {
         jacobian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_jacobian, args...);
     }
 
     // Compute sparsity pattern of the jacobian using eigen autodiff
-    template<typename Tag, typename... OutJacobianArgs, typename... Args>
+    template<typename Tag, typename SparsityNullMat, typename... Args>
     EIGEN_STRONG_INLINE void
     jacobian_impl_autodiff_sparsity(
             Tag&& tag, // Function to call
-            BSSliceSparsity<OutJacobianArgs...>& out_jacobian, // Outputs
+            BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_jacobian, // Outputs
             const Args&... args) noexcept // Function arguments
     {
         using Info = typename Derived::template FuncInfo<Tag, Args...>;
@@ -222,8 +222,7 @@ protected:
     }
 
     // Compute the jacobian using eigen autodiff
-    template<typename Tag, typename Weight, typename OutHessian, typename... Args,
-            typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    template<typename Tag, typename Weight, typename OutHessian, typename... Args>
     EIGEN_STRONG_INLINE void
     hessian_impl_autodiff(Tag&& tag,
                           OutHessian& out_hessian,
@@ -251,8 +250,7 @@ protected:
         }
     }
 
-    template<typename Tag, typename Weight, typename... Args,
-        typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    template<typename Tag, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE void
     hessian_impl_autodiff(Tag&& tag,
                           BSMatrixSparsity& out_hessian,
@@ -262,11 +260,10 @@ protected:
         hessian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_hessian, weight, args...);
     }
 
-    template<typename Tag, typename Weight, typename... OutJacobianArgs, typename... Args,
-        typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    template<typename Tag, typename Weight, typename SparsityNullMat, typename... Args>
     EIGEN_STRONG_INLINE void
     hessian_impl_autodiff(Tag&& tag,
-                          BSSliceSparsity<OutJacobianArgs...>& out_hessian,
+                          BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_hessian,
                           const Eigen::MatrixBase<Weight>& weight,
                           const Args&... args) noexcept
     {
@@ -274,11 +271,10 @@ protected:
     }
 
     // Compute sparsity pattern of the hessian using eigen autodiff
-    template<typename Tag, typename Weight, typename... OutJacobianArgs, typename... Args,
-            typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    template<typename Tag, typename Weight, typename SparsityNullMat, typename... Args>
     EIGEN_STRONG_INLINE void
     hessian_impl_autodiff_sparsity(Tag&& tag,
-                                   BSSliceSparsity<OutJacobianArgs...>& out_hessian,
+                                   BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_hessian,
                                    const Eigen::MatrixBase<Weight>& weight,
                                    const Args&... args) noexcept
     {
@@ -424,8 +420,7 @@ protected:
     /**
      * Returns the value w'*f(x) and *adds* the gradient to gradient
      */
-    template<typename Tag, typename Weight, typename Gradient, typename... Args,
-            typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
+    template<typename Tag, typename Weight, typename Gradient, typename... Args>
     inline void
     gradient_impl_autodiff(Tag&& tag,
                            Gradient& out_gradient,
@@ -433,9 +428,10 @@ protected:
                            const Args&... args) noexcept
     {
         using Info = typename Derived::template FuncInfo<Tag, Args...>;
+        using Scalar = typename Info::scalar_t;
 
         // Call the (possibly overloaded) jacobian
-        Eigen::Matrix<scalar_t, Info::n_outputs, Info::n_inputs> jacobian;
+        Eigen::Matrix<Scalar, Info::n_outputs, Info::n_inputs> jacobian;
         jacobian.setZero();
         static_cast<Derived*>(this)->jacobian(std::forward<Tag>(tag), jacobian, args...);
         out_gradient += jacobian.transpose() * weight;
