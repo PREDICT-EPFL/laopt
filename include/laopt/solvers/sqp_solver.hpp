@@ -560,7 +560,7 @@ protected:
 
         // first we start with a line search from current iterate
         scalar_t constr_l1 = l1_constraints_violation(m_x);
-        scalar_t mu = abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1);
+        scalar_t mu = std::abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1);
 
         prob.set_decision_variable(m_x);
         scalar_t cost_current = prob.eval_objective();
@@ -597,7 +597,7 @@ protected:
         // as a last resort we perform a line search on the last primal merit decrease iterate
         // in the worst case this is just the beginning of the watchdog search
         constr_l1 = l1_constraints_violation(m_x_merit_decrease);
-        mu = abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1);
+        mu = std::abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1);
 
         prob.set_decision_variable(m_x_merit_decrease);
         cost_current = prob.eval_objective();
