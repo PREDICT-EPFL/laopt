@@ -384,6 +384,12 @@ public:
 
     using Base::Base;
     using Base::operator=;
+    using Base::operator<;
+    using Base::operator<=;
+    using Base::operator>;
+    using Base::operator>=;
+    using Base::operator==;
+    using Base::operator!=;
     using Base::operator+;
     using Base::operator+=;
     using Base::operator-;
@@ -402,6 +408,20 @@ public:
         *this = Scalar(other);
         return *this;
     }
+
+    inline bool operator< (const InnerScalar& other) const { return this->m_value <  Scalar(other); }
+    inline bool operator<=(const InnerScalar& other) const { return this->m_value <= Scalar(other); }
+    inline bool operator> (const InnerScalar& other) const { return this->m_value >  Scalar(other); }
+    inline bool operator>=(const InnerScalar& other) const { return this->m_value >= Scalar(other); }
+    inline bool operator==(const InnerScalar& other) const { return this->m_value == Scalar(other); }
+    inline bool operator!=(const InnerScalar& other) const { return this->m_value != Scalar(other); }
+
+    friend inline bool operator< (const InnerScalar& a, const AutoDiffScalar& b) { return Scalar(a) <  b.value(); }
+    friend inline bool operator<=(const InnerScalar& a, const AutoDiffScalar& b) { return Scalar(a) <= b.value(); }
+    friend inline bool operator> (const InnerScalar& a, const AutoDiffScalar& b) { return Scalar(a) >  b.value(); }
+    friend inline bool operator>=(const InnerScalar& a, const AutoDiffScalar& b) { return Scalar(a) >= b.value(); }
+    friend inline bool operator==(const InnerScalar& a, const AutoDiffScalar& b) { return Scalar(a) == b.value(); }
+    friend inline bool operator!=(const InnerScalar& a, const AutoDiffScalar& b) { return Scalar(a) != b.value(); }
 
     inline const AutoDiffScalar<DerType&> operator+(const InnerScalar& other) const
     {
