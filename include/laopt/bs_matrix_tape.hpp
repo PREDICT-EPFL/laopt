@@ -48,8 +48,11 @@ private:
                 for (Eigen::Index j = 0; j < (Eigen::Index) m_col_indices.size(); j++)
                 {
                     int csc_index = this->child.sparsity_structure.coeff(m_row_indices[i], m_col_indices[j]);
-                    assert(csc_index != 0 && "Sparsity structure does not match!");
-                    sequence(s_i++) = csc_index - 1;
+                    if (csc_index != 0) {
+                        sequence(s_i++) = csc_index - 1;
+                    } else {
+                        sequence(s_i++) = -1;
+                    }
                 }
             }
         }
@@ -61,8 +64,12 @@ private:
                 for (Eigen::Index i = 0; i < (Eigen::Index) m_row_indices.size(); i++)
                 {
                     int csc_index = this->child.sparsity_structure.coeff(m_row_indices[i], m_col_indices[j]);
-                    assert(csc_index != 0 && "Sparsity structure does not match!");
-                    sequence(s_i++) = csc_index - 1;
+                    if (csc_index != 0) {
+                        sequence(s_i++) = csc_index - 1;
+                    } else {
+                        //
+                        sequence(s_i++) = -1;
+                    }
                 }
             }
         }
@@ -75,8 +82,8 @@ private:
     /**
      * Takes a sequence of integers and converts them into a sequence of segments.
      *
-     * e.g., [1,2,3,5,6,7,2,4] will compress into
-     *  {Segment(1,3), Segment(5,3), Segment(2,1), Segment(4,1)}
+     * e.g., [1,2,3,-1,-1,5,6,7,2,4] will compress into
+     *  {Segment(C,1,3), Segment(S,0,2), Segment(C,5,3), Segment(C,2,1), Segment(C,4,1)}
      *
      * Store this as a single "copy" operation in the tape.
      */
@@ -89,8 +96,12 @@ private:
             if (i == next_contiguous) {
                 next_contiguous++;
                 segments.back().length++;
+            } else if (i == -1) {
+                segments.push_back(Segment{.type = SegmentType::SKIP, .index=0, .length=1});
+                next_contiguous = -1;
             } else {
-                segments.push_back(Segment{.index=static_cast<size_t>(i), .length=1});
+                assert(i >= 0 && "index is negative");
+                segments.push_back(Segment{.type = SegmentType::COPY, .index=static_cast<size_t>(i), .length=1});
                 next_contiguous = i + 1;
             }
         }

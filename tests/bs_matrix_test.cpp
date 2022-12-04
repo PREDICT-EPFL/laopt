@@ -12,6 +12,9 @@
 
 namespace {
 
+const laopt::SegmentType sC = laopt::SegmentType::COPY;
+const laopt::SegmentType sS = laopt::SegmentType::SKIP;
+
 template<typename Problem>
 void test_BSMatrix_problem(Problem& problem)
 {
@@ -47,7 +50,7 @@ void test_BSMatrix_problem(Problem& problem)
 
 //    std::cout << "result = \n" << Eigen::MatrixX<scalar_t>(S) << std::endl;
 
-    EXPECT_TRUE(problem.expected_result().sparseView().isApprox(S, 0));
+    EXPECT_TRUE(problem.expected_result_sparse().sparseView().isApprox(S, 0));
 }
 
 template<typename Problem>
@@ -59,7 +62,7 @@ void test_BSMatrixDense_problem(Problem& problem)
     D.resize(problem.rows, problem.cols);
     D.set_zero();
     problem.eval(D);
-    EXPECT_EQ(D.value(), problem.expected_result());
+    EXPECT_EQ(D.value(), problem.expected_result_dense());
 
     laopt::BSMatrixDenseDeployment<scalar_t> DD;
     DD.resize(problem.rows, problem.cols);
@@ -71,14 +74,14 @@ void test_BSMatrixDense_problem(Problem& problem)
     DD.set_buffer(mat_exact);
     DD.set_zero();
     problem.eval(DD);
-    EXPECT_EQ(DD.value(), problem.expected_result());
+    EXPECT_EQ(DD.value(), problem.expected_result_dense());
 
     // Test with larger buffer size
     Eigen::MatrixX<scalar_t> mat_big(problem.rows + 10, problem.cols + 8);
     DD.set_buffer(mat_big);
     DD.set_zero();
     problem.eval(DD);
-    EXPECT_EQ(DD.value(), problem.expected_result());
+    EXPECT_EQ(DD.value(), problem.expected_result_dense());
 }
 
 /**
@@ -124,7 +127,7 @@ struct SlicingProblem
 
     static std::vector<laopt::Segment> expected_copy_sequence()
     {
-        return {{0,6}, {6,20}};
+        return {{sC,0,6}, {sC,6,20}};
     }
 
     static Eigen::MatrixX<scalar_t> expected_result()
@@ -138,6 +141,16 @@ struct SlicingProblem
                   0, 0, 0, 22, 23, 24, 25, 26;
         return result;
     }
+
+    static Eigen::MatrixX<scalar_t> expected_result_sparse()
+    {
+        return expected_result();
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_dense()
+    {
+        return expected_result();
+    }
 };
 
 TEST(BSMatrix, Construction_Slicing) {
@@ -147,6 +160,89 @@ TEST(BSMatrix, Construction_Slicing) {
 
 TEST(BSMatrixDense, Construction_Slicing) {
     SlicingProblem problem;
+    test_BSMatrixDense_problem(problem);
+}
+
+/**
+ * Assign block to sparser pattern
+ */
+struct BlockAssignProblem
+{
+    using scalar_t = double;
+    Eigen::MatrixX<scalar_t> Q;
+
+    Eigen::Index rows = 6;
+    Eigen::Index cols = 8;
+
+    BlockAssignProblem() : Q(2, 3)
+    {
+        Q << 1, 2, 3,
+             4, 5, 6;
+    }
+
+    void eval(laopt::BSMatrixSparsity& tape)
+    {
+        tape(1, 1) = 1;
+        tape(1, 2) = 1;
+        tape(2, 1) = 1;
+        tape(2, 3) = 1;
+    }
+
+    template<typename Tape>
+    void eval(Tape& tape)
+    {
+        tape(Eigen::seqN(1, Q.rows()), Eigen::seqN(1, Q.cols())) = Q;
+    }
+
+    static Eigen::MatrixX<bool> expected_sparsity()
+    {
+        Eigen::MatrixX<bool> sparsity(6, 8);
+        sparsity << 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 1, 1, 0, 0, 0, 0, 0,
+                    0, 1, 0, 1, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0;
+        return sparsity;
+    }
+
+    static std::vector<laopt::Segment> expected_copy_sequence()
+    {
+        return {{sC,0,3}, {sS,0,2}, {sC,3,1}};
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_sparse()
+    {
+        Eigen::MatrixX<scalar_t> result(6, 8);
+        result << 0, 0, 0, 0, 0, 0, 0, 0,
+                  0, 1, 2, 0, 0, 0, 0, 0,
+                  0, 4, 0, 6, 0, 0, 0, 0,
+                  0, 0, 0, 0, 0, 0, 0, 0,
+                  0, 0, 0, 0, 0, 0, 0, 0,
+                  0, 0, 0, 0, 0, 0, 0, 0;
+        return result;
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_dense()
+    {
+        Eigen::MatrixX<scalar_t> result(6, 8);
+        result << 0, 0, 0, 0, 0, 0, 0, 0,
+                  0, 1, 2, 3, 0, 0, 0, 0,
+                  0, 4, 5, 6, 0, 0, 0, 0,
+                  0, 0, 0, 0, 0, 0, 0, 0,
+                  0, 0, 0, 0, 0, 0, 0, 0,
+                  0, 0, 0, 0, 0, 0, 0, 0;
+        return result;
+    }
+};
+
+TEST(BSMatrix, Construction_BlockAssign) {
+    BlockAssignProblem problem;
+    test_BSMatrix_problem(problem);
+}
+
+TEST(BSMatrixDense, Construction_BlockAssign) {
+    BlockAssignProblem problem;
     test_BSMatrixDense_problem(problem);
 }
 
@@ -182,7 +278,7 @@ struct IndexingProblem
 
     static std::vector<laopt::Segment> expected_copy_sequence()
     {
-        return {{0,1},{3,1},{1,1},{2,1},{4,1}};
+        return {{sC,0,1},{sC,3,1},{sC,1,1},{sC,2,1},{sC,4,1}};
     }
 
     static Eigen::MatrixX<scalar_t> expected_result()
@@ -192,6 +288,16 @@ struct IndexingProblem
                   0, 3, 0,
                   0, 4, 5;
         return result;
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_sparse()
+    {
+        return expected_result();
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_dense()
+    {
+        return expected_result();
     }
 };
 
@@ -250,7 +356,7 @@ struct ArraysProblem
 
     static std::vector<laopt::Segment> expected_copy_sequence()
     {
-        return {{8,1},{7,1},{1,1},{0,1},{3,1},{2,1},{6,1},{4,2},{9,2}};
+        return {{sC,8,1},{sC,7,1},{sC,1,1},{sC,0,1},{sC,3,1},{sC,2,1},{sC,6,1},{sC,4,2},{sC,9,2}};
     }
 
     static Eigen::MatrixX<scalar_t> expected_result()
@@ -262,6 +368,16 @@ struct ArraysProblem
                   2, 3,  8, 1, 0,
                   0, 0,  0, 9, 9;
         return result;
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_sparse()
+    {
+        return expected_result();
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_dense()
+    {
+        return expected_result();
     }
 };
 
@@ -337,7 +453,7 @@ struct ConcatenateProblem
 
     static std::vector<laopt::Segment> expected_copy_sequence()
     {
-        return {{27,4},{20,2},{25,2},{22,3},{18,2},{15,3},{13,2},{10,3},{8,2},{5,3},{3,2},{0,3}};
+        return {{sC,27,4},{sC,20,2},{sC,25,2},{sC,22,3},{sC,18,2},{sC,15,3},{sC,13,2},{sC,10,3},{sC,8,2},{sC,5,3},{sC,3,2},{sC,0,3}};
     }
 
     static Eigen::MatrixX<scalar_t> expected_result()
@@ -364,6 +480,16 @@ struct ConcatenateProblem
                    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
                    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0;
         return result;
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_sparse()
+    {
+        return expected_result();
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_dense()
+    {
+        return expected_result();
     }
 };
 
@@ -424,7 +550,7 @@ struct SumProblem
 
     static std::vector<laopt::Segment> expected_copy_sequence()
     {
-        return {{0,6},{25,4},{34,4},{43,4},{48,8},{5,4},{13,4},{21,4},{29,4},{38,4},{9,4},{17,4},{25,4},{34,4},{43,4},{33,2},{42,2},{47,2}};
+        return {{sC,0,6},{sC,25,4},{sC,34,4},{sC,43,4},{sC,48,8},{sC,5,4},{sC,13,4},{sC,21,4},{sC,29,4},{sC,38,4},{sC,9,4},{sC,17,4},{sC,25,4},{sC,34,4},{sC,43,4},{sC,33,2},{sC,42,2},{sC,47,2}};
     }
 
     static Eigen::MatrixX<scalar_t> expected_result()
@@ -441,6 +567,16 @@ struct SumProblem
                   0, 0, 2, 2, 4, 4, 4, 2, 2,
                   0, 0, 2, 2, 4, 4, 4, 2, 2;
         return result;
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_sparse()
+    {
+        return expected_result();
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_dense()
+    {
+        return expected_result();
     }
 };
 

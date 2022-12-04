@@ -9,16 +9,22 @@
 namespace laopt
 {
 
+enum struct SegmentType {
+    COPY,
+    SKIP
+};
+
 /**
  * Copy information for a sparse block matrix
  */
 struct Segment
 {
-    size_t index;  // Index into the target.valuePtr()
-    size_t length; // Number of element to copy
+    SegmentType type;   // whether this segment should be copied or skipped
+    size_t      index;  // Index into the target.valuePtr() if copy otherwise 0
+    size_t      length; // Number of element to copy or skip
 
     bool operator==(const Segment other) const {
-        return other.index == index && other.length == length;
+        return other.type == type && other.index == index && other.length == length;
     }
 
     /**
@@ -33,7 +39,11 @@ inline std::ostream &operator<<(std::ostream &os, std::vector<Segment> const &se
 {
     for (auto &seg: sequence)
     {
-        os << "(" << seg.index << "," << seg.length << ")";
+        if (seg.type == SegmentType::COPY) {
+            os << "(C," << seg.index << "," << seg.length << ")";
+        } else {
+            os << "(S," << seg.index << "," << seg.length << ")";
+        }
     }
     return os;
 }
@@ -85,11 +95,15 @@ private:
         int segment_index = copies[copy_index].segment_index;
         for (size_t i = 0; i < copies[copy_index].num_segments_to_copy; i++)
         {
+            SegmentType type = segments[segment_index + i].type;
             size_t length = segments[segment_index + i].length;
-            size_t index = segments[segment_index + i].index;
-            Eigen::Map<Eigen::VectorX<scalar_t>> tgt(target + index, length);
-            const Eigen::Map<const Eigen::VectorX<scalar_t>> src(source, length);
-            op(tgt, src);
+            if (type == SegmentType::COPY)
+            {
+                size_t index = segments[segment_index + i].index;
+                Eigen::Map<Eigen::VectorX<scalar_t>> tgt(target + index, length);
+                const Eigen::Map<const Eigen::VectorX<scalar_t>> src(source, length);
+                op(tgt, src);
+            }
             source += length;
         }
         copy_index++;
