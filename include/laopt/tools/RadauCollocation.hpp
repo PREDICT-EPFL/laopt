@@ -303,8 +303,11 @@ public: //protected: // TODO ino1 (would like to make this protected)
     {
         for (unsigned l = 0; l <= D_poly; l++)
         {
-            out_jacobian(Eigen::all, Eigen::seqN(l * NX, Eigen::fix<NX>)) +=
-                2.0 / h_seg * diff_mat(j_node, l) * Eigen::Matrix<scalar_t, NX, NX>::Identity();
+            Scalar diag = 2.0 / h_seg * diff_mat(j_node, l);
+            // assign diagonal values
+            for (unsigned i = 0; i < NX; i++) {
+                out_jacobian(i, l * NX + i) += diag;
+            }
         }
     }
 
