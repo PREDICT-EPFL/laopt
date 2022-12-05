@@ -10,4 +10,4 @@ wget https://raw.githubusercontent.com/coin-or/coinbrew/master/coinbrew
 chmod u+x coinbrew
 
 ./coinbrew fetch Ipopt@"$IPOPT_VERSION"
-sudo ./coinbrew build Ipopt --parallel-jobs 4 --build-dir build-ipopt --tests none --prefix=/usr/local
+sudo ./coinbrew build Ipopt --parallel-jobs 2 --build-dir build-ipopt --tests none --prefix=/usr/local

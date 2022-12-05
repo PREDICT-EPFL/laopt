@@ -11,5 +11,5 @@ git checkout "$EIGEN_VERSION"
 mkdir build
 cd build
 cmake ..
-make -j4
+make -j2
 sudo make install

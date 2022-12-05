@@ -89,7 +89,7 @@ jobs:
         working-directory: build
         run: |
           cmake .. -DBUILD_RELEASE=$BUILD_RELEASE -DENABLE_SANITIZERS=$ENABLE_SANITIZERS
-          make -j4
+          make -j2
 
       - name: Test laopt
         working-directory: build
