@@ -3,7 +3,7 @@
 
 #include "laopt/utility.hpp"
 #include "laopt/solvers/qp_base.hpp"
-#include "OsqpEigen/OsqpEigen.h"
+#include "osqp.h"
 
 namespace laopt
 {
@@ -18,11 +18,14 @@ public:
 private:
     using constraint_t = typename Base::constraint_t;
 
-    OsqpEigen::Solver osqp_solver;
-    OsqpEigen::Settings osqp_settings;
+    OSQPWorkspace* m_osqp_workspace;
+    OSQPSettings* m_osqp_settings;
+    OSQPData* m_osqp_data;
+    bool m_osqp_initialized;
 
-    Eigen::VectorX<scalar_t> m_f_osqp; // internal copy of linear part of cost since memory has to be owned by solver
-    Eigen::SparseMatrix<scalar_t> m_A_osqp;
+    Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, c_int> m_H_osqp;
+    Eigen::VectorX<scalar_t> m_f_osqp;
+    Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, c_int> m_A_osqp;
     Eigen::VectorX<scalar_t> m_Alb_osqp;
     Eigen::VectorX<scalar_t> m_Aub_osqp;
     Eigen::VectorX<scalar_t> m_lam_osqp;
@@ -30,7 +33,37 @@ private:
 public:
     OSQPSolver(int n, int m) : Base(n, m), m_f_osqp(n)
     {
+        m_osqp_workspace = nullptr;
+        m_osqp_settings = (OSQPSettings*) c_malloc(sizeof(OSQPSettings));
+        m_osqp_data = (OSQPData*) c_malloc(sizeof(OSQPData));
+        m_osqp_initialized = false;
+
+        if (m_osqp_data) {
+            m_osqp_data->P = (csc*) c_malloc(sizeof(csc));
+            m_osqp_data->P->nz = -1;
+            m_osqp_data->A = (csc*) c_malloc(sizeof(csc));
+            m_osqp_data->A->nz = -1;
+        }
+        if (m_osqp_settings) {
+            osqp_set_default_settings(m_osqp_settings);
+        }
+
         set_osqp_settings();
+    }
+
+    ~OSQPSolver()
+    {
+        if (m_osqp_initialized) {
+            osqp_cleanup(m_osqp_workspace);
+        }
+        if (m_osqp_data) {
+            if (m_osqp_data->P) c_free(m_osqp_data->P);
+            if (m_osqp_data->A) c_free(m_osqp_data->A);
+            c_free(m_osqp_data);
+        }
+        if (m_osqp_settings) {
+            c_free(m_osqp_settings);
+        }
     }
 
     qp_solver_info_t solve_impl(const Eigen::SparseMatrix<scalar_t>& H,
@@ -43,52 +76,75 @@ public:
     {
         set_osqp_settings();
 
-        construct_osqp_constraints(xlb, xub, A, Alb, Aub);
-        m_f_osqp = f;
+        construct_osqp_data(H, f, xlb, xub, A, Alb, Aub);
+
+        m_osqp_data->n = this->m_n;
+        m_osqp_data->m = m_A_osqp.rows();
+
+        m_osqp_data->P->m = m_H_osqp.rows();
+        m_osqp_data->P->n = m_H_osqp.cols();
+        m_osqp_data->P->nzmax = m_H_osqp.nonZeros();
+        m_osqp_data->P->x = m_H_osqp.valuePtr();
+        m_osqp_data->P->i = m_H_osqp.innerIndexPtr();
+        m_osqp_data->P->p = m_H_osqp.outerIndexPtr();
+
+        m_osqp_data->q = m_f_osqp.data();
+
+        m_osqp_data->A->m = m_A_osqp.rows();
+        m_osqp_data->A->n = m_A_osqp.cols();
+        m_osqp_data->A->nzmax = m_A_osqp.nonZeros();
+        m_osqp_data->A->x = m_A_osqp.valuePtr();
+        m_osqp_data->A->i = m_A_osqp.innerIndexPtr();
+        m_osqp_data->A->p = m_A_osqp.outerIndexPtr();
+
+        m_osqp_data->l = m_Alb_osqp.data();
+        m_osqp_data->u = m_Aub_osqp.data();
 
         if (!this->m_settings.reuse_pattern)
         {
-            osqp_solver.data()->setNumberOfVariables(this->m_n);
-            osqp_solver.data()->setNumberOfConstraints(m_Alb_osqp.rows());
+            if (m_osqp_initialized) {
+                osqp_cleanup(m_osqp_workspace);
+            }
 
-            osqp_solver.data()->setHessianMatrix(H);
-            osqp_solver.data()->setGradient(m_f_osqp);
-            osqp_solver.data()->setLinearConstraintsMatrix(m_A_osqp);
-            osqp_solver.data()->setLowerBound(m_Alb_osqp);
-            osqp_solver.data()->setUpperBound(m_Aub_osqp);
+            osqp_setup(&m_osqp_workspace, m_osqp_data, m_osqp_settings);
+            m_osqp_initialized = true;
 
-            osqp_solver.initSolver();
-            osqp_solver.setWarmStart(this->m_x, m_lam_osqp);
-            osqp_solver.solveProblem();
+            osqp_warm_start(m_osqp_workspace, this->m_x.data(), m_lam_osqp.data());
+            osqp_solve(m_osqp_workspace);
         }
         else
         {
-            osqp_solver.updateHessianMatrix(H);
-            osqp_solver.updateGradient(m_f_osqp);
-            osqp_solver.updateLinearConstraintsMatrix(m_A_osqp);
-            osqp_solver.updateBounds(m_Alb_osqp, m_Aub_osqp);
+            eigen_assert(m_osqp_initialized);
 
-            osqp_solver.setWarmStart(this->m_x, m_lam_osqp);
-            osqp_solver.solveProblem();
+            osqp_update_P_A(m_osqp_workspace, m_osqp_data->P->x, OSQP_NULL, m_osqp_data->P->nzmax,
+                                              m_osqp_data->A->x, OSQP_NULL, m_osqp_data->A->nzmax);
+            osqp_update_lin_cost(m_osqp_workspace, m_osqp_data->q);
+            osqp_update_bounds(m_osqp_workspace, m_osqp_data->l, m_osqp_data->u);
+
+            osqp_warm_start(m_osqp_workspace, this->m_x.data(), m_lam_osqp.data());
+            osqp_solve(m_osqp_workspace);
         }
 
-        this->m_x = osqp_solver.getSolution();
-        this->m_lam = osqp_solver.getDualSolution()(Eigen::seqN(0, this->m_m));
+        Eigen::Map<Eigen::Vector<c_float, -1>> primal_solution(m_osqp_workspace->solution->x, m_osqp_workspace->data->n);
+        Eigen::Map<Eigen::Vector<c_float, -1>> dual_solution(m_osqp_workspace->solution->y, m_osqp_workspace->data->m);
+
+        this->m_x = primal_solution;
+        this->m_lam = dual_solution(Eigen::seqN(0, this->m_m));
         // copy box constraints dual variables
         int bound_i = 0;
         for (int i = 0; i < this->m_n; i++)
         {
             if (this->m_box_constraint_type[i] != constraint_t::UNBOUNDED_CONSTR)
             {
-                this->m_lam_bounds(i) = osqp_solver.getDualSolution()(this->m_m + bound_i);
+                this->m_lam_bounds(i) = dual_solution(this->m_m + bound_i);
                 bound_i++;
             }
         }
 
-        this->m_info.iter = osqp_solver.workspace()->info->iter;
+        this->m_info.iter = m_osqp_workspace->info->iter;
 
         // update status
-        switch (osqp_solver.workspace()->info->status_val)
+        switch (m_osqp_workspace->info->status_val)
         {
             case OSQP_SOLVED:
             case OSQP_SOLVED_INACCURATE:
@@ -118,7 +174,59 @@ public:
     }
 
 private:
-    /** construct the Jacobian matrix accepted by OSQP */
+    /** construct the data matrices accepted by OSQP */
+    EIGEN_STRONG_INLINE void
+    construct_osqp_data(const Eigen::SparseMatrix<scalar_t>& H,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& f,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xlb,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xub,
+                        const Eigen::SparseMatrix<scalar_t>& A,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
+    {
+        construct_osqp_cost(H, f);
+        construct_osqp_constraints(xlb, xub, A, Alb, Aub);
+    }
+
+    EIGEN_STRONG_INLINE void
+    construct_osqp_cost(const Eigen::SparseMatrix<scalar_t>& H,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& f) noexcept
+    {
+        m_f_osqp = f;
+
+        eigen_assert(H.isCompressed());
+
+        if (!this->settings().reuse_pattern)
+        {
+            m_H_osqp.resize(this->m_n, this->m_n);
+
+            // copy upper triangular matrix
+            for (int i = 0; i < H.outerSize(); ++i)
+            {
+                for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(H, i); it; ++it)
+                {
+                    if (it.row() <= it.col())
+                    {
+                        m_H_osqp.coeffRef(it.row(), it.col()) = it.value();
+                    }
+                }
+            }
+            m_H_osqp.makeCompressed();
+        }
+        else
+        {
+            eigen_assert(m_H_osqp.isCompressed());
+
+            for (Eigen::Index col = 0; col < this->m_n; col++)
+            {
+                int inner_nnz_H_tri = m_H_osqp.outerIndexPtr()[col + 1] - m_H_osqp.outerIndexPtr()[col];
+                copy_n_into_sparse_matrix(H.valuePtr() + H.outerIndexPtr()[col], inner_nnz_H_tri, m_H_osqp, col, 0);
+            }
+        }
+
+        eigen_assert(m_H_osqp.isCompressed());
+    }
+
     EIGEN_STRONG_INLINE void
     construct_osqp_constraints(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xlb,
                                const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xub,
@@ -177,21 +285,13 @@ private:
             m_A_osqp.resize(this->m_m + num_box_constraints, this->m_n);
             m_A_osqp.reserve(A_osqp_nnz);
 
-            // assert m_A_osqp is not in compressed mode since we use innerNonZeros() later
-            eigen_assert(m_A_osqp.innerNonZeroPtr() != nullptr);
-
             // copy A to the head of m_A_osqp
-            for (Eigen::Index col = 0; col < this->m_n; col++)
+            for (int i = 0; i < A.outerSize(); ++i)
             {
-                int inner_nnz_A = A.outerIndexPtr()[col + 1] - A.outerIndexPtr()[col];
-                // assert that there is enough memory to copy inner indices
-                eigen_assert(m_A_osqp.outerIndexPtr()[col + 1] - m_A_osqp.outerIndexPtr()[col] >= inner_nnz_A);
-                // copy inner indices
-                std::copy_n(A.innerIndexPtr() + A.outerIndexPtr()[col], inner_nnz_A, m_A_osqp.innerIndexPtr() + m_A_osqp.outerIndexPtr()[col]);
-                // set inner non zeros to appropriate value
-                m_A_osqp.innerNonZeroPtr()[col] = inner_nnz_A;
-                // copy values
-                copy_n_into_sparse_matrix(A.valuePtr() + A.outerIndexPtr()[col], inner_nnz_A, m_A_osqp, col, 0);
+                for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(A, i); it; ++it)
+                {
+                    m_A_osqp.coeffRef(it.row(), it.col()) = it.value();
+                }
             }
 
             // copy entries for the box constraints
@@ -200,19 +300,12 @@ private:
             {
                 if (this->m_box_constraint_type[col] != constraint_t::UNBOUNDED_CONSTR)
                 {
-                    // we assert that we have exactly one more free memory spot
-                    eigen_assert(m_A_osqp.outerIndexPtr()[col + 1] - m_A_osqp.outerIndexPtr()[col] == m_A_osqp.innerNonZeroPtr()[col] + 1);
-                    // set inner index
-                    *(m_A_osqp.innerIndexPtr() + m_A_osqp.outerIndexPtr()[col] + m_A_osqp.innerNonZeroPtr()[col]) = this->m_m + bound_i;
+                    m_A_osqp.coeffRef(this->m_m + bound_i, col) = 1;
                     bound_i++;
-                    // set value
-                    *(m_A_osqp.valuePtr() + m_A_osqp.outerIndexPtr()[col] + m_A_osqp.innerNonZeroPtr()[col]) = 1;
-                    // increase non zeros for column
-                    m_A_osqp.innerNonZeroPtr()[col] += 1;
                 }
             }
 
-//            m_A_osqp.makeCompressed();
+            m_A_osqp.makeCompressed();
         }
         else
         {
@@ -246,15 +339,24 @@ private:
 
             // entries for box constraints of m_A_osqp are unchanged
         }
+
+        eigen_assert(m_A_osqp.isCompressed());
     }
 
     void set_osqp_settings() noexcept
     {
-        osqp_solver.settings()->setRelativeTolerance(this->m_settings.eps_rel);
-        osqp_solver.settings()->setAbsoluteTolerance(this->m_settings.eps_abs);
-        osqp_solver.settings()->setMaxIteration(this->m_settings.max_iter);
-        osqp_solver.settings()->setWarmStart(true);
-        osqp_solver.settings()->setVerbosity(this->m_settings.verbose);
+        m_osqp_settings->eps_rel = this->m_settings.eps_rel;
+        m_osqp_settings->eps_abs = this->m_settings.eps_abs;
+        m_osqp_settings->max_iter = this->m_settings.max_iter;
+        m_osqp_settings->warm_start = true;
+        m_osqp_settings->verbose = this->m_settings.verbose;
+
+        if (m_osqp_initialized) {
+            osqp_update_eps_rel(m_osqp_workspace, this->m_settings.eps_rel);
+            osqp_update_eps_abs(m_osqp_workspace, this->m_settings.eps_abs);
+            osqp_update_max_iter(m_osqp_workspace, this->m_settings.max_iter);
+            osqp_update_verbose(m_osqp_workspace, this->m_settings.verbose);
+        }
     }
 
 };

@@ -3,7 +3,7 @@ project(laopt)
 
 #### User options ####
 option(WITH_IPOPT "Build IPOPT interface" ON)
-option(WITH_OSQP_EIGEN "Build OSQP interface" ON)
+option(WITH_OSQP "Build OSQP interface" ON)
 option(BUILD_BENCHMARKS "Build benchmarks" ON)
 option(BUILD_EXAMPLES "Build examples" ON)
 option(BUILD_TESTS "Build tests" ON)
@@ -66,8 +66,9 @@ if (WITH_IPOPT)
 endif ()
 
 # Find OsqpEigen
-if (WITH_OSQP_EIGEN)
-    find_package(OsqpEigen REQUIRED)
+if (WITH_OSQP)
+    find_package(osqp REQUIRED)
+    list(APPEND SOLVER_LIBRARIES osqp::osqp)
 endif ()
 
 ## Define laOPT interface library (to be linked into user code)

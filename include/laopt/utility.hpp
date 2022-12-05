@@ -149,9 +149,9 @@ namespace laopt
         return true;
     }
 
-    template<typename InputIt, typename Size, typename Scalar>
+    template<typename InputIt, typename Size, typename Scalar, int Options, typename StorageIndex>
     EIGEN_STRONG_INLINE void
-    copy_n_into_sparse_matrix(InputIt first, Size count, Eigen::SparseMatrix<Scalar>& dst, const Eigen::Index &col, const Eigen::Index &offset)
+    copy_n_into_sparse_matrix(InputIt first, Size count, Eigen::SparseMatrix<Scalar, Options, StorageIndex>& dst, const Eigen::Index &col, const Eigen::Index &offset)
     {
         // assert col exists
         eigen_assert(col < dst.outerSize());
