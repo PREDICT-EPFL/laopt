@@ -137,7 +137,9 @@ public:
 
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
-        if (rows > 0 && cols > 0 && (rows > this->m_rows || cols > this->m_cols)) {
+        eigen_assert(rows >= 0 && cols >= 0);
+
+        if (rows > this->m_rows || cols > this->m_cols) {
             // This should never happen during deployment
             m_mat.conservativeResize(rows, cols);
         }
