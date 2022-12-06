@@ -39,7 +39,7 @@ public:
     Ipopt::SmartPtr<Ipopt::OptionsList> Options() { return ipopt_application->Options(); }
     void set_tol(double tol) { ipopt_application->Options()->SetNumericValue("tol", tol); }
     void set_max_iter(int max_iter) { ipopt_application->Options()->SetIntegerValue("max_iter", max_iter); }
-    void set_banner_message(bool active) { ipopt_application->Options()->SetBoolValue("sb", active); }
+    void set_banner_message(bool active) { ipopt_application->Options()->SetBoolValue("sb", !active); }
     void set_print_level(int print_level) { ipopt_application->Options()->SetIntegerValue("print_level", print_level); }
 
     Ipopt::ApplicationReturnStatus solve() const

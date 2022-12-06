@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include "laopt/laopt.hpp"
+#include <iomanip>
 
 namespace laopt_tools {
 
