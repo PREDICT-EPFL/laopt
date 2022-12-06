@@ -15,16 +15,16 @@ namespace internal
 {
 
 template<typename A, typename B>
-struct make_coherent_impl
+struct laopt_make_coherent_impl
 {
     static void run(A&, B&) {}
 };
 
 // resize a to match b is a.size()==0, and conversely.
 template<typename A, typename B>
-void make_coherent(const A& a, const B& b)
+void laopt_make_coherent(const A& a, const B& b)
 {
-    make_coherent_impl<A, B>::run(a.const_cast_derived(), b.const_cast_derived());
+    laopt_make_coherent_impl<A, B>::run(a.const_cast_derived(), b.const_cast_derived());
 }
 
 template<typename DerivativeType, bool Enable>
@@ -61,7 +61,7 @@ template<typename DerivativeType, typename Enable = void>
 class AutoDiffScalar;
 
 template<typename NewDerType>
-inline AutoDiffScalar<NewDerType> MakeAutoDiffScalar(const typename NewDerType::Scalar& value, const NewDerType& der)
+inline AutoDiffScalar<NewDerType> laopt_make_autodiff_scalar(const typename NewDerType::Scalar& value, const NewDerType& der)
 {
     return AutoDiffScalar<NewDerType>(value, der);
 }
@@ -204,7 +204,7 @@ public:
     inline const AutoDiffScalar<Eigen::CwiseBinaryOp<Eigen::internal::scalar_sum_op<Scalar>, const DerType, const typename Eigen::internal::remove_all<OtherDerType>::type>>
     operator+(const AutoDiffScalar<OtherDerType>& other) const
     {
-        internal::make_coherent(m_derivatives, other.derivatives());
+        internal::laopt_make_coherent(m_derivatives, other.derivatives());
         return AutoDiffScalar<Eigen::CwiseBinaryOp<Eigen::internal::scalar_sum_op<Scalar>, const DerType, const typename Eigen::internal::remove_all<OtherDerType>::type>>(
             m_value + other.value(),
             m_derivatives + other.derivatives());
@@ -240,7 +240,7 @@ public:
     inline const AutoDiffScalar<Eigen::CwiseBinaryOp<Eigen::internal::scalar_difference_op<Scalar>, const DerType, const typename Eigen::internal::remove_all<OtherDerType>::type>>
     operator-(const AutoDiffScalar<OtherDerType>& other) const
     {
-        internal::make_coherent(m_derivatives, other.derivatives());
+        internal::laopt_make_coherent(m_derivatives, other.derivatives());
         return AutoDiffScalar<Eigen::CwiseBinaryOp<Eigen::internal::scalar_difference_op<Scalar>, const DerType, const typename Eigen::internal::remove_all<OtherDerType>::type>>(
             m_value - other.value(),
             m_derivatives - other.derivatives());
@@ -265,25 +265,25 @@ public:
     inline const AutoDiffScalar<EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE_NS(DerType, Scalar, product)>
     operator*(const Scalar& other) const
     {
-        return MakeAutoDiffScalar(m_value * other, m_derivatives * other);
+        return laopt_make_autodiff_scalar(m_value * other, m_derivatives * other);
     }
 
     friend inline const AutoDiffScalar<EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE_NS(DerType, Scalar, product)>
     operator*(const Scalar& other, const AutoDiffScalar<DerivativeType>& a)
     {
-        return MakeAutoDiffScalar(a.value() * other, a.derivatives() * other);
+        return laopt_make_autodiff_scalar(a.value() * other, a.derivatives() * other);
     }
 
     inline const AutoDiffScalar<EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE_NS(DerType, Scalar, product)>
     operator/(const Scalar& other) const
     {
-        return MakeAutoDiffScalar(m_value / other, (m_derivatives * (Scalar(1) / other)));
+        return laopt_make_autodiff_scalar(m_value / other, (m_derivatives * (Scalar(1) / other)));
     }
 
     friend inline const AutoDiffScalar<EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE_NS(DerType, Scalar, product)>
     operator/(const Scalar& other, const AutoDiffScalar<DerivativeType>& a)
     {
-        return MakeAutoDiffScalar(other / a.value(), a.derivatives() * (Scalar(-other) / (a.value() * a.value())));
+        return laopt_make_autodiff_scalar(other / a.value(), a.derivatives() * (Scalar(-other) / (a.value() * a.value())));
     }
 
     template<typename OtherDerType>
@@ -293,8 +293,8 @@ public:
         const EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE_NS(typename Eigen::internal::remove_all<OtherDerType>::type, Scalar,product)>, Scalar, product)>
     operator/(const AutoDiffScalar<OtherDerType>& other) const
     {
-        internal::make_coherent(m_derivatives, other.derivatives());
-        return MakeAutoDiffScalar(
+        internal::laopt_make_coherent(m_derivatives, other.derivatives());
+        return laopt_make_autodiff_scalar(
             m_value / other.value(),
             ((m_derivatives * other.value()) - (other.derivatives() * m_value)) * (Scalar(1) / (other.value() * other.value())));
     }
@@ -305,8 +305,8 @@ public:
         const EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE_NS(typename Eigen::internal::remove_all<OtherDerType>::type, Scalar, product)>>
     operator*(const AutoDiffScalar<OtherDerType>& other) const
     {
-        internal::make_coherent(m_derivatives, other.derivatives());
-        return MakeAutoDiffScalar(m_value * other.value(), (m_derivatives * other.value()) + (other.derivatives() * m_value));
+        internal::laopt_make_coherent(m_derivatives, other.derivatives());
+        return laopt_make_autodiff_scalar(m_value * other.value(), (m_derivatives * other.value()) + (other.derivatives() * m_value));
     }
 
     inline AutoDiffScalarBase& operator*=(const Scalar& other)
@@ -457,13 +457,13 @@ public:
     inline const AutoDiffScalar<EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE_NS(DerType,Scalar,product)>
     operator*(const InnerScalar& other) const
     {
-        return MakeAutoDiffScalar(this->m_value * Scalar(other), this->m_derivatives * Scalar(other));
+        return laopt_make_autodiff_scalar(this->m_value * Scalar(other), this->m_derivatives * Scalar(other));
     }
 
     friend inline const AutoDiffScalar<EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE_NS(DerType,Scalar,product)>
     operator*(const InnerScalar& other, const AutoDiffScalar& a)
     {
-        return MakeAutoDiffScalar(a.value() * Scalar(other), a.derivatives() * Scalar(other));
+        return laopt_make_autodiff_scalar(a.value() * Scalar(other), a.derivatives() * Scalar(other));
     }
 
     inline AutoDiffScalar& operator*=(const InnerScalar& other)
@@ -475,13 +475,13 @@ public:
     inline const AutoDiffScalar<EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE_NS(DerType,Scalar,product)>
     operator/(const InnerScalar& other) const
     {
-        return MakeAutoDiffScalar(this->m_value / Scalar(other), (this->m_derivatives * (Scalar(1) / Scalar(other))));
+        return laopt_make_autodiff_scalar(this->m_value / Scalar(other), (this->m_derivatives * (Scalar(1) / Scalar(other))));
     }
 
     friend inline const AutoDiffScalar<EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE_NS(DerType,Scalar,product)>
     operator/(const InnerScalar& other, const AutoDiffScalar& a)
     {
-        return MakeAutoDiffScalar(Scalar(other) / a.value(), a.derivatives() * (Scalar(-other) / (a.value() * a.value())));
+        return laopt_make_autodiff_scalar(Scalar(other) / a.value(), a.derivatives() * (Scalar(-other) / (a.value() * a.value())));
     }
 
     inline AutoDiffScalar& operator/=(const InnerScalar& other)
@@ -556,24 +556,24 @@ struct auto_diff_special_op<DerivativeType, false>
 };
 
 template<typename BinOp, typename A, typename B, typename RefType>
-void make_coherent_expression(Eigen::CwiseBinaryOp<BinOp, A, B> xpr, const RefType& ref)
+void laopt_make_coherent_expression(Eigen::CwiseBinaryOp<BinOp, A, B> xpr, const RefType& ref)
 {
-    make_coherent(xpr.const_cast_derived().lhs(), ref);
-    make_coherent(xpr.const_cast_derived().rhs(), ref);
+    laopt_make_coherent(xpr.const_cast_derived().lhs(), ref);
+    laopt_make_coherent(xpr.const_cast_derived().rhs(), ref);
 }
 
 template<typename UnaryOp, typename A, typename RefType>
-void make_coherent_expression(const Eigen::CwiseUnaryOp<UnaryOp, A>& xpr, const RefType& ref)
+void laopt_make_coherent_expression(const Eigen::CwiseUnaryOp<UnaryOp, A>& xpr, const RefType& ref)
 {
-    make_coherent(xpr.nestedExpression().const_cast_derived(), ref);
+    laopt_make_coherent(xpr.nestedExpression().const_cast_derived(), ref);
 }
 
 // needed for compilation only
 template<typename UnaryOp, typename A, typename RefType>
-void make_coherent_expression(const Eigen::CwiseNullaryOp<UnaryOp, A>&, const RefType&) {}
+void laopt_make_coherent_expression(const Eigen::CwiseNullaryOp<UnaryOp, A>&, const RefType&) {}
 
 template<typename A_Scalar, int A_Rows, int A_Cols, int A_Options, int A_MaxRows, int A_MaxCols, typename B>
-struct make_coherent_impl<Eigen::Matrix<A_Scalar, A_Rows, A_Cols, A_Options, A_MaxRows, A_MaxCols>, B>
+struct laopt_make_coherent_impl<Eigen::Matrix<A_Scalar, A_Rows, A_Cols, A_Options, A_MaxRows, A_MaxCols>, B>
 {
     typedef Eigen::Matrix<A_Scalar, A_Rows, A_Cols, A_Options, A_MaxRows, A_MaxCols> A;
 
@@ -583,13 +583,13 @@ struct make_coherent_impl<Eigen::Matrix<A_Scalar, A_Rows, A_Cols, A_Options, A_M
             a.resize(b.size());
             a.setZero();
         } else if (B::SizeAtCompileTime == Eigen::Dynamic && a.size() != 0 && b.size() == 0) {
-            make_coherent_expression(b, a);
+            laopt_make_coherent_expression(b, a);
         }
     }
 };
 
 template<typename A, typename B_Scalar, int B_Rows, int B_Cols, int B_Options, int B_MaxRows, int B_MaxCols>
-struct make_coherent_impl<A, Eigen::Matrix<B_Scalar, B_Rows, B_Cols, B_Options, B_MaxRows, B_MaxCols>>
+struct laopt_make_coherent_impl<A, Eigen::Matrix<B_Scalar, B_Rows, B_Cols, B_Options, B_MaxRows, B_MaxCols>>
 {
     typedef Eigen::Matrix<B_Scalar, B_Rows, B_Cols, B_Options, B_MaxRows, B_MaxCols> B;
 
@@ -599,14 +599,14 @@ struct make_coherent_impl<A, Eigen::Matrix<B_Scalar, B_Rows, B_Cols, B_Options, 
             b.resize(a.size());
             b.setZero();
         } else if (A::SizeAtCompileTime == Eigen::Dynamic && b.size() != 0 && a.size() == 0) {
-            make_coherent_expression(a, b);
+            laopt_make_coherent_expression(a, b);
         }
     }
 };
 
 template<typename A_Scalar, int A_Rows, int A_Cols, int A_Options, int A_MaxRows, int A_MaxCols,
     typename B_Scalar, int B_Rows, int B_Cols, int B_Options, int B_MaxRows, int B_MaxCols>
-struct make_coherent_impl<Eigen::Matrix<A_Scalar, A_Rows, A_Cols, A_Options, A_MaxRows, A_MaxCols>,
+struct laopt_make_coherent_impl<Eigen::Matrix<A_Scalar, A_Rows, A_Cols, A_Options, A_MaxRows, A_MaxCols>,
     Eigen::Matrix<B_Scalar, B_Rows, B_Cols, B_Options, B_MaxRows, B_MaxCols>>
 {
     typedef Eigen::Matrix<A_Scalar, A_Rows, A_Cols, A_Options, A_MaxRows, A_MaxCols> A;
@@ -696,35 +696,35 @@ inline typename CleanedUpDerType<DerType>::type max(const AutoDiffScalar<DerType
 
 EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(abs,
 using std::abs;
-return laopt::MakeAutoDiffScalar(abs(x.value()), x.derivatives() * (x.value() < Scalar(0) ? Scalar(-1) : Scalar(1)));)
+return laopt::laopt_make_autodiff_scalar(abs(x.value()), x.derivatives() * (x.value() < Scalar(0) ? Scalar(-1) : Scalar(1)));)
 
 EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(abs2,
 using numext::abs2;
-return laopt::MakeAutoDiffScalar(abs2(x.value()), x.derivatives() * (Scalar(2) * x.value()));)
+return laopt::laopt_make_autodiff_scalar(abs2(x.value()), x.derivatives() * (Scalar(2) * x.value()));)
 
 EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(sqrt,
 using std::sqrt;
 Scalar sqrtx = sqrt(x.value());
-return laopt::MakeAutoDiffScalar(sqrtx, x.derivatives() * (Scalar(0.5) / sqrtx));)
+return laopt::laopt_make_autodiff_scalar(sqrtx, x.derivatives() * (Scalar(0.5) / sqrtx));)
 
 EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(cos,
 using std::cos;
 using std::sin;
-return laopt::MakeAutoDiffScalar(cos(x.value()), x.derivatives() * (-sin(x.value())));)
+return laopt::laopt_make_autodiff_scalar(cos(x.value()), x.derivatives() * (-sin(x.value())));)
 
 EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(sin,
 using std::sin;
 using std::cos;
-return laopt::MakeAutoDiffScalar(sin(x.value()), x.derivatives() * cos(x.value()));)
+return laopt::laopt_make_autodiff_scalar(sin(x.value()), x.derivatives() * cos(x.value()));)
 
 EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(exp,
 using std::exp;
 Scalar expx = exp(x.value());
-return laopt::MakeAutoDiffScalar(expx, x.derivatives() * expx);)
+return laopt::laopt_make_autodiff_scalar(expx, x.derivatives() * expx);)
 
 EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(log,
 using std::log;
-return laopt::MakeAutoDiffScalar(log(x.value()), x.derivatives() * (Scalar(1) / x.value()));)
+return laopt::laopt_make_autodiff_scalar(log(x.value()), x.derivatives() * (Scalar(1) / x.value()));)
 
 template<typename DerType>
 inline const laopt::AutoDiffScalar<EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE_NS(typename Eigen::internal::remove_all<DerType>::type, typename Eigen::internal::traits<typename Eigen::internal::remove_all<DerType>::type>::Scalar, product)>
@@ -732,7 +732,7 @@ pow(const laopt::AutoDiffScalar<DerType>& x, const typename Eigen::internal::tra
 {
     using namespace Eigen;
     using std::pow;
-    return laopt::MakeAutoDiffScalar(pow(x.value(), y), x.derivatives() * (y * pow(x.value(), y - 1)));
+    return laopt::laopt_make_autodiff_scalar(pow(x.value(), y), x.derivatives() * (y * pow(x.value(), y - 1)));
 }
 
 
@@ -757,32 +757,32 @@ atan2(const AutoDiffScalar<DerTypeA>& a, const AutoDiffScalar<DerTypeB>& b)
 EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(tan,
 using std::tan;
 using std::cos;
-return laopt::MakeAutoDiffScalar(tan(x.value()), x.derivatives() * (Scalar(1) / numext::abs2(cos(x.value()))));)
+return laopt::laopt_make_autodiff_scalar(tan(x.value()), x.derivatives() * (Scalar(1) / numext::abs2(cos(x.value()))));)
 
 EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(asin,
 using std::sqrt;
 using std::asin;
-return laopt::MakeAutoDiffScalar(asin(x.value()), x.derivatives() * (Scalar(1) / sqrt(1 - numext::abs2(x.value()))));)
+return laopt::laopt_make_autodiff_scalar(asin(x.value()), x.derivatives() * (Scalar(1) / sqrt(1 - numext::abs2(x.value()))));)
 
 EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(acos,
 using std::sqrt;
 using std::acos;
-return laopt::MakeAutoDiffScalar(acos(x.value()), x.derivatives() * (Scalar(-1) / sqrt(1 - numext::abs2(x.value()))));)
+return laopt::laopt_make_autodiff_scalar(acos(x.value()), x.derivatives() * (Scalar(-1) / sqrt(1 - numext::abs2(x.value()))));)
 
 EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(tanh,
 using std::cosh;
 using std::tanh;
-return laopt::MakeAutoDiffScalar(tanh(x.value()), x.derivatives() * (Scalar(1) / numext::abs2(cosh(x.value()))));)
+return laopt::laopt_make_autodiff_scalar(tanh(x.value()), x.derivatives() * (Scalar(1) / numext::abs2(cosh(x.value()))));)
 
 EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(sinh,
 using std::sinh;
 using std::cosh;
-return laopt::MakeAutoDiffScalar(sinh(x.value()), x.derivatives() * cosh(x.value()));)
+return laopt::laopt_make_autodiff_scalar(sinh(x.value()), x.derivatives() * cosh(x.value()));)
 
 EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY(cosh,
 using std::sinh;
 using std::cosh;
-return laopt::MakeAutoDiffScalar(cosh(x.value()), x.derivatives() * sinh(x.value()));)
+return laopt::laopt_make_autodiff_scalar(cosh(x.value()), x.derivatives() * sinh(x.value()));)
 
 #undef EIGEN_AUTODIFF_DECLARE_GLOBAL_UNARY
 
