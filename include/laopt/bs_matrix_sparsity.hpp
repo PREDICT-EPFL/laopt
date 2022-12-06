@@ -71,6 +71,8 @@ public:
         resize(rows, cols);
     };
 
+    using BSSliceSparsity<BSMatrixSparsity, Eigen::Map<Eigen::MatrixX<int>>>::operator=;
+
     void set_zero() {}
 
     /**

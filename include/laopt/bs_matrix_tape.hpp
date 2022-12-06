@@ -146,6 +146,8 @@ public:
         }
     };
 
+    using BSSliceTape<BSMatrixTape, Eigen::Map<Eigen::MatrixX<int>>>::operator=;
+
     void set_zero() {}
 
     /**
