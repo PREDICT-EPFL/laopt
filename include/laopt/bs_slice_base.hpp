@@ -17,6 +17,19 @@ protected:
      * in the original matrix it was sliced from.
      * */
 
+    // For an unsliced matrix
+    static auto
+    row_indices(const Eigen::Map<Eigen::MatrixX<int>>& mat)
+    {
+        return Eigen::seqN(0, mat.rows());
+    }
+
+    static auto
+    col_indices(const Eigen::Map<Eigen::MatrixX<int>>& mat)
+    {
+        return Eigen::seqN(0, mat.cols());
+    }
+
     // For a block
     template<int BlockRows, int BlockCols, bool InnerPanel>
     static Eigen::Vector<int, BlockRows>

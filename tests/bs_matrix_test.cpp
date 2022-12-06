@@ -85,6 +85,71 @@ void test_BSMatrixDense_problem(Problem& problem)
 }
 
 /**
+ * Just assign a matrix
+ */
+struct AssignProblem
+{
+    using scalar_t = double;
+    Eigen::MatrixX<scalar_t> A;
+
+    Eigen::Index rows = 2;
+    Eigen::Index cols = 3;
+
+    AssignProblem() : A(2, 3)
+    {
+        A << 1, 2, 3,
+             4, 5, 6;
+    }
+
+    template<typename Tape>
+    void eval(Tape& tape)
+    {
+        tape = A;
+    }
+
+    static Eigen::MatrixX<bool> expected_sparsity()
+    {
+        Eigen::MatrixX<bool> sparsity(2, 3);
+        sparsity << 1, 1, 1,
+                    1, 1, 1;
+        return sparsity;
+    }
+
+    static std::vector<laopt::Segment> expected_copy_sequence()
+    {
+        return {{sC,0,6}};
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result()
+    {
+        Eigen::MatrixX<scalar_t> result(2, 3);
+        result << 1, 2, 3,
+                  4, 5, 6;
+        return result;
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_sparse()
+    {
+        return expected_result();
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_dense()
+    {
+        return expected_result();
+    }
+};
+
+TEST(BSMatrix, Construction_Assign) {
+    AssignProblem problem;
+    test_BSMatrix_problem(problem);
+}
+
+TEST(BSMatrixDense, Construction_Assign) {
+    AssignProblem problem;
+    test_BSMatrixDense_problem(problem);
+}
+
+/**
  * Form a block-diagonal matrix using Slicing
  */
 struct SlicingProblem

@@ -55,6 +55,13 @@ public:
         static_cast<Derived*>(this)->resize(this->rows() + rows, this->cols() + cols);
     }
 
+    template<typename MDerived>
+    BSMatrixDenseBase& operator=(const Eigen::MatrixBase<MDerived>& mat)
+    {
+        value() = mat;
+        return *this;
+    }
+
     template<typename RowSlice, typename ColSlice>
     inline decltype(auto) operator()(const RowSlice& row_slice, const ColSlice& col_slice)
     {
@@ -126,6 +133,8 @@ public:
     explicit BSMatrixDenseConstruction(const typename BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>::Info& info) :
         BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>(info.rows, info.cols), m_mat(info.rows, info.cols) {}
 
+    using BSMatrixDenseBase<BSMatrixDenseConstruction<scalar_t_>>::operator=;
+
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
         if (rows > 0 && cols > 0 && (rows > this->m_rows || cols > this->m_cols)) {
@@ -157,6 +166,8 @@ public:
         BSMatrixDenseBase<BSMatrixDenseDeployment<scalar_t_>>(info.rows, info.cols), m_mat(nullptr, info.rows, info.cols) {}
     explicit BSMatrixDenseDeployment(Eigen::Ref<Eigen::MatrixX<scalar_t>> mat) :
         BSMatrixDenseBase<BSMatrixDenseDeployment<scalar_t_>>(mat.rows(), mat.cols()), m_mat(mat.data(), mat.rows(), mat.cols()) {}
+
+    using BSMatrixDenseBase<BSMatrixDenseDeployment<scalar_t_>>::operator=;
 
     void set_buffer(Eigen::Ref<Eigen::MatrixX<scalar_t>> mat)
     {
