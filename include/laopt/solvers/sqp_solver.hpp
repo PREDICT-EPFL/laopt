@@ -478,90 +478,94 @@ protected:
     EIGEN_STRONG_INLINE scalar_t
     step_size_selection_impl(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& p) noexcept
     {
-        // we are at watchdog search beginning
-        if (m_watchdog_step == 0 && m_settings.max_watchdog_steps > 0)
+        // we only use watchdog if QP solver succeeded
+        if (m_settings.max_watchdog_steps > 0 && m_qp_solver.info().status == qp_status_t::SOLVED)
         {
-            scalar_t constr_l1 = l1_constraints_violation(m_x);
-            // for a full step m_lam_qp is lam_{k+1} and a good estimate for mu
-            m_mu_search_begin = m_lam_qp.template lpNorm<Eigen::Infinity>() + m_settings.K;
-
-            prob.set_decision_variable(m_x);
-            scalar_t cost = prob.eval_objective();
-            m_phi_begin = cost + m_mu_search_begin * constr_l1;
-            m_Dp_phi_begin = m_cost_grad.dot(p) - m_mu_search_begin * constr_l1;
-
-            // take full step
-            m_x_step_line_search = m_x + p;
-
-            prob.set_decision_variable(m_x_step_line_search);
-            scalar_t cost_step = prob.eval_objective();
-            scalar_t phi_step = cost_step + m_mu_search_begin * l1_constraints_violation(m_x_step_line_search);
-
-            if (phi_step > (m_phi_begin + m_settings.eta * m_Dp_phi_begin))
+            // we are at watchdog search beginning
+            if (m_watchdog_step == 0)
             {
-                // full step is not accepted; hence, we start watchdog search
-                // otherwise m_watchdog_step stays at 0, i.e., reset search
-                m_watchdog_step++;
+                scalar_t constr_l1 = l1_constraints_violation(m_x);
+                // for a full step m_lam_qp is lam_{k+1} and a good estimate for mu
+                m_mu_search_begin = m_lam_qp.template lpNorm<Eigen::Infinity>() + m_settings.K;
 
-                // fallback is the beginning of the search
-                m_x_merit_decrease = m_x;
-                m_lam_merit_decrease = m_lam;
-                m_lam_bounds_merit_decrease = m_lam_bounds;
-                m_p_merit_decrease = m_p;
-                m_lam_qp_merit_decrease = m_lam_qp;
-                m_lam_bounds_qp_merit_decrease = m_lam_bounds_qp;
+                prob.set_decision_variable(m_x);
+                scalar_t cost = prob.eval_objective();
+                m_phi_begin = cost + m_mu_search_begin * constr_l1;
+                m_Dp_phi_begin = m_cost_grad.dot(p) - m_mu_search_begin * constr_l1;
+
+                // take full step
+                m_x_step_line_search = m_x + p;
+
+                prob.set_decision_variable(m_x_step_line_search);
+                scalar_t cost_step = prob.eval_objective();
+                scalar_t phi_step = cost_step + m_mu_search_begin * l1_constraints_violation(m_x_step_line_search);
+
+                if (phi_step > (m_phi_begin + m_settings.eta * m_Dp_phi_begin))
+                {
+                    // full step is not accepted; hence, we start watchdog search
+                    // otherwise m_watchdog_step stays at 0, i.e., reset search
+                    m_watchdog_step++;
+
+                    // fallback is the beginning of the search
+                    m_x_merit_decrease = m_x;
+                    m_lam_merit_decrease = m_lam;
+                    m_lam_bounds_merit_decrease = m_lam_bounds;
+                    m_p_merit_decrease = m_p;
+                    m_lam_qp_merit_decrease = m_lam_qp;
+                    m_lam_bounds_qp_merit_decrease = m_lam_bounds_qp;
+                }
+
+                if (phi_step < 1e3 * m_phi_begin)
+                {
+                    // small check that we did not completely diverge
+
+                    // we are taking full steps during watchdog search
+                    return 1.0;
+                }
+                // sometimes it happens that a full steps diverges and then the QP solver fails
+                // in this case we do a proper line search using the fallback strategy
             }
-
-            if (phi_step < 1e3 * m_phi_begin)
+            else if (m_watchdog_step < m_settings.max_watchdog_steps)
             {
-                // small check that we did not completely diverge
+                // take full step
+                m_x_step_line_search = m_x + p;
 
-                // we are taking full steps during watchdog search
-                return 1.0;
+                prob.set_decision_variable(m_x_step_line_search);
+                scalar_t cost_step = prob.eval_objective();
+                scalar_t phi_step = cost_step + m_mu_search_begin * l1_constraints_violation(m_x_step_line_search);
+
+                if (phi_step <= (m_phi_begin + m_settings.eta * m_Dp_phi_begin))
+                {
+                    // step is accepted because it fulfills the decrease condition for the watchdog beginning
+                    // reset watchdog
+                    m_watchdog_step = 0;
+                    // we are taking full steps during watchdog search
+                    return 1.0;
+                }
+                else if (phi_step <= m_phi_begin)
+                {
+                    // keep track of merit decrease iterates for fall back strategy
+                    m_x_merit_decrease = m_x;
+                    m_lam_merit_decrease = m_lam;
+                    m_lam_bounds_merit_decrease = m_lam_bounds;
+
+                    // increase watchdog step
+                    m_watchdog_step++;
+                    // we are taking full steps during watchdog search
+                    return 1.0;
+                }
+                else if (phi_step < 1e3 * m_phi_begin)
+                {
+                    // small check that we did not completely diverge
+
+                    // increase watchdog step
+                    m_watchdog_step++;
+                    // we are taking full steps during watchdog search
+                    return 1.0;
+                }
+                // sometimes it happens that a full steps diverges and then the QP solver fails
+                // in this case we do a proper line search using the fallback strategy
             }
-            // sometimes it happens that a full steps diverges and then the QP solver fails
-            // in this case we do a proper line search using the fallback strategy
-        }
-        else if (m_watchdog_step < m_settings.max_watchdog_steps)
-        {
-            // take full step
-            m_x_step_line_search = m_x + p;
-
-            prob.set_decision_variable(m_x_step_line_search);
-            scalar_t cost_step = prob.eval_objective();
-            scalar_t phi_step = cost_step + m_mu_search_begin * l1_constraints_violation(m_x_step_line_search);
-
-            if (phi_step <= (m_phi_begin + m_settings.eta * m_Dp_phi_begin))
-            {
-                // step is accepted because it fulfills the decrease condition for the watchdog beginning
-                // reset watchdog
-                m_watchdog_step = 0;
-                // we are taking full steps during watchdog search
-                return 1.0;
-            }
-            else if (phi_step <= m_phi_begin)
-            {
-                // keep track of merit decrease iterates for fall back strategy
-                m_x_merit_decrease = m_x;
-                m_lam_merit_decrease = m_lam;
-                m_lam_bounds_merit_decrease = m_lam_bounds;
-
-                // increase watchdog step
-                m_watchdog_step++;
-                // we are taking full steps during watchdog search
-                return 1.0;
-            }
-            else if (phi_step < 1e3 * m_phi_begin)
-            {
-                // small check that we did not completely diverge
-
-                // increase watchdog step
-                m_watchdog_step++;
-                // we are taking full steps during watchdog search
-                return 1.0;
-            }
-            // sometimes it happens that a full steps diverges and then the QP solver fails
-            // in this case we do a proper line search using the fallback strategy
         }
 
         // watchdog strategy failed, we have to backtrack now...
