@@ -35,7 +35,7 @@ protected: // TODO ino1
     const double h{1.0 / N};
     Eigen::Vector<Scalar, N + 1> T; // Normalized time grid (0 ... 1)
     std::array<variable_t<ControlProblem::NX>, N + 1> X_var;
-    std::array<variable_t<ControlProblem::NU>, N + 1> U_var;
+    std::array<variable_t<ControlProblem::NU>, N> U_var;
     variable_t<ControlProblem::NP> p_var;
     variable_t<1> tf_var;
 
@@ -88,11 +88,12 @@ public: //protected: // TODO ino1 (would like to make this protected)
     void define_problem(OptProblem &optProblem)
     {
         /* Register variables */
-        for (unsigned i = 0; i <= N; i++)
+        for (unsigned i = 0; i < N; i++)
         {
             optProblem.add_variable(X_var[i]); // TODO eno1: Loop through array in add_variable() -> Do not want that
             optProblem.add_variable(U_var[i]);
         }
+        optProblem.add_variable(X_var[N]);
         optProblem.add_variable(tf_var);
         optProblem.add_variable(p_var);
 
@@ -107,20 +108,18 @@ public: //protected: // TODO ino1 (would like to make this protected)
         optProblem.add_obj(this->function(MayerCost{}, X_var[N], p_var, tf_var));
 
         /* Box constraints */
-        for (unsigned i = 0; i <= N; i++)
+        for (unsigned i = 0; i < N; i++)
         {
             optProblem.add_constr(controlProblem.x_lb <= X_var[i] <= controlProblem.x_ub);
             optProblem.add_constr(controlProblem.u_lb <= U_var[i] <= controlProblem.u_ub);
         }
+        optProblem.add_constr(controlProblem.x_lb <= X_var[N] <= controlProblem.x_ub);
 
         /* Boundary constraints */
         optProblem.add_constr(controlProblem.x0_lb <= X_var[0] <= controlProblem.x0_ub);
         optProblem.add_constr(controlProblem.xf_lb <= X_var[N] <= controlProblem.xf_ub);
         optProblem.add_constr(controlProblem.tf_lb <= tf_var <= controlProblem.tf_ub); // TODO: Here I can use tf_var as scalar!?
         optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
-
-        /* Set last control equal second last */
-        optProblem.add_constr(U_var[N] == U_var[N - 1]);
     }
 
 public:
@@ -137,7 +136,7 @@ public:
     using Param = typename ControlProblem::Param;
     using TimeTrajectory = Eigen::Vector<Scalar, N + 1>;
     using StateTrajectory = Eigen::Matrix<Scalar, ControlProblem::NX, N + 1>;
-    using InputTrajectory = Eigen::Matrix<Scalar, ControlProblem::NU, N + 1>;
+    using InputTrajectory = Eigen::Matrix<Scalar, ControlProblem::NU, N>;
 
     /* Set functions */
     void set_X_guess(const State &x_guess)
@@ -223,7 +222,11 @@ public:
     }
     Eigen::MatrixX<Scalar> get_TU_resampled(const Scalar &Ts_max) const
     {
-        return resample_trajectory_hold(get_T_opt(), get_U_opt(), Ts_max);
+        /* Duplicate last input to match time grid, then resample */
+        Eigen::Matrix<Scalar, ControlProblem::NU, N + 1> U_opt;
+        U_opt.template block<ControlProblem::NU, N>(0, 0) = get_U_opt();
+        U_opt.col(N) = U_opt.col(N-1);
+        return resample_trajectory_hold(get_T_opt(), U_opt, Ts_max);
     }
 
     /* Diagnosis */
