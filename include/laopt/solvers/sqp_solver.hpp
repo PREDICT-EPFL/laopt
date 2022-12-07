@@ -229,8 +229,14 @@ public:
             {
                 std::cerr << "[SQPSolver::solve] QP problem has reached maximum iterations. Continue using suboptimal solution." << std::endl;
             }
+            if (m_settings.verbose && m_qp_solver.info().status == qp_status_t::INFEASIBLE)
+            {
+                std::cerr << "[SQPSolver::solve] QP problem was infeasible. Continue using suboptimal solution." << std::endl;
+            }
 
-            if (!(m_qp_solver.info().status == qp_status_t::SOLVED || m_qp_solver.info().status == qp_status_t::MAX_ITER_REACHED))
+            if (!(m_qp_solver.info().status == qp_status_t::SOLVED ||
+                  m_qp_solver.info().status == qp_status_t::MAX_ITER_REACHED ||
+                  m_qp_solver.info().status == qp_status_t::INFEASIBLE))
             {
                 switch (m_qp_solver.info().status)
                 {
