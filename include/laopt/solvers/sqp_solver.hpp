@@ -18,6 +18,7 @@ struct sqp_settings_t {
     Scalar tau                                    = 0.7;                            // line search iteration decrease, 0 < tau < 1
     Scalar eta                                    = 0.25;                           // line search parameter, 0 < eta < 1
     Scalar rho                                    = 0.5;                            // line search parameter, 0 < rho < 1
+    Scalar K                                      = 1e1;                            // constant added to penalty parameter of line search
     Scalar eps_prim                               = 1e-6;                           // primal step termination threshold, eps_prim > 0
     Scalar eps_dual                               = 1e-4;                           // dual step termination threshold, eps_dual > 0
     Scalar min_alpha                              = 1e-4;                           // minimum step size
@@ -32,6 +33,7 @@ struct sqp_settings_t {
         return 0.0 < tau && tau < 1.0 &&
                0.0 < eta && eta < 1.0 &&
                0.0 < rho && rho < 1.0 &&
+               K > 0 &&
                eps_prim > 0.0 &&
                eps_dual > 0.0 &&
                0.0 < min_alpha && min_alpha <= 1.0 &&
@@ -162,15 +164,15 @@ public:
 
             if (m_settings.verbose)
             {
-                std::cout << "----------------------------------------------------------" << std::endl;
-                std::cout << "                        laOPT SQP                         " << std::endl;
-                std::cout << "            (c) Roland Schwan, Johannes Waibel            " << std::endl;
-                std::cout << "   École Polytechnique Fédérale de Lausanne (EPFL) 2022   " << std::endl;
-                std::cout << "----------------------------------------------------------" << std::endl;
-                std::cout << "variables n = " << prob.variables() << std::endl;
-                std::cout << "constraints m = " << prob.constraints.rows() << std::endl;
-                std::cout << "lagrangian hessian nnz = " << m_lag_hess.nonZeros() << std::endl;
-                std::cout << "constraints jacobian nnz = " << m_g_jac.nonZeros() << std::endl;
+                printf("----------------------------------------------------------\n");
+                printf("                        laOPT SQP                         \n");
+                printf("    (c) Roland Schwan, Johannes Waibel, Colin N. Jones    \n");
+                printf("   École Polytechnique Fédérale de Lausanne (EPFL) 2022   \n");
+                printf("----------------------------------------------------------\n");
+                printf("variables n = %d\n", prob.variables());
+                printf("constraints m = %d\n", prob.constraints.rows());
+                printf("lagrangian hessian nnz = %ld\n", m_lag_hess.nonZeros());
+                printf("constraints jacobian nnz = %ld\n", m_g_jac.nonZeros());
             }
         }
 
@@ -193,7 +195,7 @@ public:
 
         if (m_settings.verbose)
         {
-            std::cout << "iter   objective     primal_inf    comp_inf      stat_inf      alpha       watchdog   qp_iter" << std::endl;
+            printf("iter   objective     primal_inf    comp_inf      stat_inf      alpha       watchdog   qp_iter\n");
             prob.set_decision_variable(m_x);
             printf("%4d   %.5e   %.5e   %.5e   %.5e   %.3e       %4d   %7d\n",
                    m_info.iter,
@@ -471,11 +473,11 @@ protected:
     step_size_selection_impl(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& p) noexcept
     {
         // we are at watchdog search beginning
-        if (m_watchdog_step == 0)
+        if (m_watchdog_step == 0 && m_settings.max_watchdog_steps > 0)
         {
             scalar_t constr_l1 = l1_constraints_violation(m_x);
             // for a full step m_lam_qp is lam_{k+1} and a good estimate for mu
-            m_mu_search_begin = m_lam_qp.template lpNorm<Eigen::Infinity>();
+            m_mu_search_begin = m_lam_qp.template lpNorm<Eigen::Infinity>() + m_settings.K;
 
             prob.set_decision_variable(m_x);
             scalar_t cost = prob.eval_objective();
@@ -560,7 +562,7 @@ protected:
 
         // first we start with a line search from current iterate
         scalar_t constr_l1 = l1_constraints_violation(m_x);
-        scalar_t mu = std::abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1);
+        scalar_t mu = std::abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1) + m_settings.K;
 
         prob.set_decision_variable(m_x);
         scalar_t cost_current = prob.eval_objective();
@@ -587,49 +589,52 @@ protected:
             }
         }
 
-        if (phi_current <= m_phi_begin || phi_step <= m_phi_begin + m_settings.eta * m_Dp_phi_begin)
+        if (m_settings.max_watchdog_steps > 0)
         {
-            // we accept step and reset watchdog
-            m_watchdog_step = 0;
-            return alpha;
-        }
-
-        // as a last resort we perform a line search on the last primal merit decrease iterate
-        // in the worst case this is just the beginning of the watchdog search
-        constr_l1 = l1_constraints_violation(m_x_merit_decrease);
-        mu = std::abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1);
-
-        prob.set_decision_variable(m_x_merit_decrease);
-        cost_current = prob.eval_objective();
-        phi_current = cost_current + mu * constr_l1;
-        Dp_phi_current = m_cost_grad.dot(p) - mu * constr_l1;
-
-        alpha = scalar_t(1.0);
-        for (int i = 1; i < m_settings.line_search_max_iter; i++)
-        {
-            m_x_step_line_search = m_x_merit_decrease + alpha * p;
-
-            prob.set_decision_variable(m_x_step_line_search);
-            scalar_t cost_step = prob.eval_objective();
-            phi_step = cost_step + mu * l1_constraints_violation(m_x_step_line_search);
-
-            if (phi_step <= (phi_current + alpha * m_settings.eta * Dp_phi_current))
+            if (phi_current <= m_phi_begin || phi_step <= m_phi_begin + m_settings.eta * m_Dp_phi_begin)
             {
-                break;
+                // we accept step and reset watchdog
+                m_watchdog_step = 0;
+                return alpha;
             }
-            else
-            {
-                alpha = m_settings.tau * alpha;
-            }
-        }
 
-        // migrate back current primal and dual variables to last merit decrease
-        m_x = m_x_merit_decrease;
-        m_lam = m_lam_merit_decrease;
-        m_lam_bounds = m_lam_bounds_merit_decrease;
-        m_p = m_p_merit_decrease;
-        m_lam_qp = m_lam_qp_merit_decrease;
-        m_lam_bounds_qp = m_lam_bounds_qp_merit_decrease;
+            // as a last resort we perform a line search on the last primal merit decrease iterate
+            // in the worst case this is just the beginning of the watchdog search
+            constr_l1 = l1_constraints_violation(m_x_merit_decrease);
+            mu = std::abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1) + m_settings.K;
+
+            prob.set_decision_variable(m_x_merit_decrease);
+            cost_current = prob.eval_objective();
+            phi_current = cost_current + mu * constr_l1;
+            Dp_phi_current = m_cost_grad.dot(p) - mu * constr_l1;
+
+            alpha = scalar_t(1.0);
+            for (int i = 1; i < m_settings.line_search_max_iter; i++)
+            {
+                m_x_step_line_search = m_x_merit_decrease + alpha * p;
+
+                prob.set_decision_variable(m_x_step_line_search);
+                scalar_t cost_step = prob.eval_objective();
+                phi_step = cost_step + mu * l1_constraints_violation(m_x_step_line_search);
+
+                if (phi_step <= (phi_current + alpha * m_settings.eta * Dp_phi_current))
+                {
+                    break;
+                }
+                else
+                {
+                    alpha = m_settings.tau * alpha;
+                }
+            }
+
+            // migrate back current primal and dual variables to last merit decrease
+            m_x = m_x_merit_decrease;
+            m_lam = m_lam_merit_decrease;
+            m_lam_bounds = m_lam_bounds_merit_decrease;
+            m_p = m_p_merit_decrease;
+            m_lam_qp = m_lam_qp_merit_decrease;
+            m_lam_bounds_qp = m_lam_bounds_qp_merit_decrease;
+        }
 
         // reset watchdog
         m_watchdog_step = 0;
