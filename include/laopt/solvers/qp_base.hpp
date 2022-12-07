@@ -10,11 +10,23 @@ namespace laopt
 template <typename Scalar>
 struct qp_solver_settings_t {
     /** Common settings */
-    Scalar eps_rel       = 1e-6;  /** Relative tolerance for termination, 0 < eps_rel */
-    Scalar eps_abs       = 1e-6;  /** Absolute tolerance for termination, 0 < eps_abs */
-    int    max_iter      = 4000;  /** Maximal number of iteration, 0 < max_iter */
-    bool   reuse_pattern = false; /** Assume that problem size and sparsity pattern have not changed since last 'solve call' */
-    bool   verbose       = false;
+    Scalar eps_rel           = 1e-6;  /** Relative tolerance for termination, 0 < eps_rel */
+    Scalar eps_abs           = 1e-6;  /** Absolute tolerance for termination, 0 < eps_abs */
+    int    max_iter          = 4000;  /** Maximal number of iteration, 0 < max_iter */
+    bool   reuse_pattern     = false; /** Assume that problem size and sparsity pattern have not changed since last 'solve call' */
+    bool   elastic_mode      = false; /** Add slack variables to all non-box constraints to make QP always feasible */
+    Scalar elastic_weight_l1 = 1e4;   /** Weight for l1 slacks if elastic mode is activated */
+    Scalar elastic_weight_l2 = 1e3;   /** Weight for l2 slacks if elastic mode is activated */
+    bool   verbose           = false;
+
+    bool validate()
+    {
+        return 0.0 < eps_rel &&
+               0.0 < eps_abs &&
+               0 < max_iter &&
+               0.0 < elastic_weight_l1 &&
+               0.0 < elastic_weight_l2;
+    }
 };
 
 enum struct qp_status_t {
@@ -56,8 +68,12 @@ protected:
         UNBOUNDED_CONSTR
     };
 
-    std::vector<constraint_t> m_box_constraint_type; // box constraint classification
-    std::vector<constraint_t> m_constraint_type;     // general constraint classification
+    std::vector<constraint_t> m_box_constraint_type;           // box constraint classification
+    unsigned int              m_box_lower_bounded_constraints; // number of lower bounded box constraints
+    unsigned int              m_box_upper_bounded_constraints; // number of upper bounded box constraints
+    std::vector<constraint_t> m_constraint_type;               // general constraint classification
+    unsigned int              m_lower_bounded_constraints;     // number of lower bounded general constraints
+    unsigned int              m_upper_bounded_constraints;     // number of upper bounded general constraints
 
 public:
     static constexpr scalar_t UNBOUNDED_THRESHOLD = 1e+10;
@@ -66,7 +82,8 @@ public:
     QPBase(int n, int m) :
         m_n(n), m_m(m),
         m_x(n), m_lam(m), m_lam_bounds(n),
-        m_box_constraint_type(n), m_constraint_type(m)
+        m_box_constraint_type(n), m_box_lower_bounded_constraints(0), m_box_upper_bounded_constraints(0),
+        m_constraint_type(m), m_lower_bounded_constraints(0), m_upper_bounded_constraints(0)
     {
         m_x.setZero();
         m_lam.setZero();
@@ -98,6 +115,12 @@ public:
                            const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
                            const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
     {
+        if (!m_settings.validate())
+        {
+            m_info.status = qp_status_t::INVALID_SETTINGS;
+            return m_info;
+        }
+
         eigen_assert(H.isCompressed() && H.rows() == m_n && H.cols() == m_n);
         eigen_assert(f.rows() == m_n);
         eigen_assert(xlb.rows() == m_n && xub.rows() == m_n);
@@ -118,6 +141,8 @@ protected:
         eigen_assert((Alb.array() <= Aub.array()).any());
 
         // parse box constraints
+        m_box_lower_bounded_constraints = 0;
+        m_box_upper_bounded_constraints = 0;
         for (int i = 0; i < m_n; i++)
         {
             if (xlb(i) < -UNBOUNDED_THRESHOLD && xub(i) > UNBOUNDED_THRESHOLD)
@@ -127,22 +152,30 @@ protected:
             else if (xub(i) - xlb(i) < EQ_TOL)
             {
                 m_box_constraint_type[i] = constraint_t::EQ_CONSTR;
+                m_box_lower_bounded_constraints++;
+                m_box_upper_bounded_constraints++;
             }
             else if (xub(i) > UNBOUNDED_THRESHOLD)
             {
                 m_box_constraint_type[i] = constraint_t::INEQ_LB_ONLY_CONSTR;
+                m_box_lower_bounded_constraints++;
             }
             else if (xlb(i) < -UNBOUNDED_THRESHOLD)
             {
                 m_box_constraint_type[i] = constraint_t::INEQ_UB_ONLY_CONSTR;
+                m_box_upper_bounded_constraints++;
             }
             else
             {
                 m_box_constraint_type[i] = constraint_t::INEQ_CONSTR;
+                m_box_lower_bounded_constraints++;
+                m_box_upper_bounded_constraints++;
             }
         }
 
         // parse general constraints
+        m_lower_bounded_constraints = 0;
+        m_upper_bounded_constraints = 0;
         for (int i = 0; i < m_m; i++)
         {
             if (Alb(i) < -UNBOUNDED_THRESHOLD && Aub(i) > UNBOUNDED_THRESHOLD)
@@ -152,18 +185,24 @@ protected:
             else if (Aub(i) - Alb(i) < EQ_TOL)
             {
                 m_constraint_type[i] = constraint_t::EQ_CONSTR;
+                m_lower_bounded_constraints++;
+                m_upper_bounded_constraints++;
             }
             else if (Aub(i) > UNBOUNDED_THRESHOLD)
             {
                 m_constraint_type[i] = constraint_t::INEQ_LB_ONLY_CONSTR;
+                m_lower_bounded_constraints++;
             }
             else if (Alb(i) < -UNBOUNDED_THRESHOLD)
             {
                 m_constraint_type[i] = constraint_t::INEQ_UB_ONLY_CONSTR;
+                m_upper_bounded_constraints++;
             }
             else
             {
                 m_constraint_type[i] = constraint_t::INEQ_CONSTR;
+                m_lower_bounded_constraints++;
+                m_upper_bounded_constraints++;
             }
         }
     }

@@ -28,10 +28,11 @@ private:
     Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, c_int> m_A_osqp;
     Eigen::VectorX<scalar_t> m_Alb_osqp;
     Eigen::VectorX<scalar_t> m_Aub_osqp;
+    Eigen::VectorX<scalar_t> m_x_osqp;
     Eigen::VectorX<scalar_t> m_lam_osqp;
 
 public:
-    OSQPSolver(int n, int m) : Base(n, m), m_f_osqp(n)
+    OSQPSolver(int n, int m) : Base(n, m)
     {
         m_osqp_workspace = nullptr;
         m_osqp_settings = (OSQPSettings*) c_malloc(sizeof(OSQPSettings));
@@ -78,7 +79,7 @@ public:
 
         construct_osqp_data(H, f, xlb, xub, A, Alb, Aub);
 
-        m_osqp_data->n = this->m_n;
+        m_osqp_data->n = m_H_osqp.rows();
         m_osqp_data->m = m_A_osqp.rows();
 
         m_osqp_data->P->m = m_H_osqp.rows();
@@ -109,7 +110,7 @@ public:
             osqp_setup(&m_osqp_workspace, m_osqp_data, m_osqp_settings);
             m_osqp_initialized = true;
 
-            osqp_warm_start(m_osqp_workspace, this->m_x.data(), m_lam_osqp.data());
+            osqp_warm_start(m_osqp_workspace, this->m_x_osqp.data(), m_lam_osqp.data());
             osqp_solve(m_osqp_workspace);
         }
         else
@@ -121,14 +122,14 @@ public:
             osqp_update_lin_cost(m_osqp_workspace, m_osqp_data->q);
             osqp_update_bounds(m_osqp_workspace, m_osqp_data->l, m_osqp_data->u);
 
-            osqp_warm_start(m_osqp_workspace, this->m_x.data(), m_lam_osqp.data());
+            osqp_warm_start(m_osqp_workspace, this->m_x_osqp.data(), m_lam_osqp.data());
             osqp_solve(m_osqp_workspace);
         }
 
         Eigen::Map<Eigen::Vector<c_float, -1>> primal_solution(m_osqp_workspace->solution->x, m_osqp_workspace->data->n);
         Eigen::Map<Eigen::Vector<c_float, -1>> dual_solution(m_osqp_workspace->solution->y, m_osqp_workspace->data->m);
 
-        this->m_x = primal_solution;
+        this->m_x = primal_solution(Eigen::seqN(0, this->m_n));
         this->m_lam = dual_solution(Eigen::seqN(0, this->m_m));
         // copy box constraints dual variables
         int bound_i = 0;
@@ -184,6 +185,11 @@ private:
                         const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
                         const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
     {
+        if (!this->settings().reuse_pattern)
+        {
+            this->parse_constraints_bounds(xlb, xub, Alb, Aub);
+        }
+
         construct_osqp_cost(H, f);
         construct_osqp_constraints(xlb, xub, A, Alb, Aub);
     }
@@ -192,13 +198,23 @@ private:
     construct_osqp_cost(const Eigen::SparseMatrix<scalar_t>& H,
                         const Eigen::Ref<const Eigen::VectorX<scalar_t>>& f) noexcept
     {
-        m_f_osqp = f;
-
         eigen_assert(H.isCompressed());
 
         if (!this->settings().reuse_pattern)
         {
-            m_H_osqp.resize(this->m_n, this->m_n);
+            int n_vars = this->m_n;
+            if (this->m_settings.elastic_mode)
+            {
+                // we have to add variables for the slacks
+                n_vars += this->m_lower_bounded_constraints + this->m_upper_bounded_constraints;
+            }
+
+            m_x_osqp.resize(n_vars);
+            m_H_osqp.resize(n_vars, n_vars);
+            m_f_osqp.resize(n_vars);
+
+            m_x_osqp.setZero();
+            m_x_osqp(Eigen::seqN(0, this->m_n)) = this->m_x;
 
             // copy upper triangular matrix
             for (int i = 0; i < H.outerSize(); ++i)
@@ -211,18 +227,34 @@ private:
                     }
                 }
             }
+
+            // add l2 penalties to slack
+            for (int i = this->m_n; i < n_vars; ++i)
+            {
+                m_H_osqp.coeffRef(i, i) = this->m_settings.elastic_weight_l2;
+            }
+            // add l1 penalties to slack
+            m_f_osqp(Eigen::lastN(n_vars - this->m_n)).array() = this->m_settings.elastic_weight_l1;
+
             m_H_osqp.makeCompressed();
         }
         else
         {
+            m_x_osqp(Eigen::seqN(0, this->m_n)) = this->m_x;
+
             eigen_assert(m_H_osqp.isCompressed());
 
+            // copy H to the upper left block of m_H_osqp
             for (Eigen::Index col = 0; col < this->m_n; col++)
             {
                 int inner_nnz_H_tri = m_H_osqp.outerIndexPtr()[col + 1] - m_H_osqp.outerIndexPtr()[col];
                 copy_n_into_sparse_matrix(H.valuePtr() + H.outerIndexPtr()[col], inner_nnz_H_tri, m_H_osqp, col, 0);
             }
+
+            // entries for slacks are kept from last iteration
         }
+
+        m_f_osqp(Eigen::seqN(0, this->m_n)) = f;
 
         eigen_assert(m_H_osqp.isCompressed());
     }
@@ -238,16 +270,23 @@ private:
 
         if (!this->settings().reuse_pattern)
         {
-            this->parse_constraints_bounds(xlb, xub, Alb, Aub);
+            int n_vars = this->m_n;
+            if (this->m_settings.elastic_mode)
+            {
+                // we have to add variables for the slacks
+                n_vars += this->m_lower_bounded_constraints + this->m_upper_bounded_constraints;
+            }
 
             // keep track of how many nnz we need per column
             // we start by copying the nnz's of A
-            Eigen::VectorXi A_osqp_nnz(this->m_n);
+            Eigen::VectorXi A_osqp_nnz(n_vars);
+            A_osqp_nnz.setZero();
             for (Eigen::Index col = 0; col < this->m_n; col++)
             {
                 A_osqp_nnz(col) = A.outerIndexPtr()[col + 1] - A.outerIndexPtr()[col];
             }
 
+            // add nnz's for box constraints
             int num_box_constraints = 0;
             for (int i = 0; i < this->m_n; i++)
             {
@@ -256,6 +295,33 @@ private:
                     num_box_constraints++;
                     // add one nnz for the box constraint i
                     A_osqp_nnz(i) += 1;
+                }
+            }
+
+            // add nnz's for slack constraints
+            if (this->m_settings.elastic_mode)
+            {
+                unsigned int slack_i = 0;
+                for (int i = 0; i < this->m_m; i++)
+                {
+                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR ||
+                        this->m_constraint_type[i] == constraint_t::INEQ_CONSTR ||
+                        this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
+                    {
+                        // need box constraint on slack (>= 0)
+                        num_box_constraints++;
+                        // add two nnz's for lb slack variable (for constraint and positivity constraint)
+                        A_osqp_nnz(this->m_n + slack_i++) += 2;
+                    }
+                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR ||
+                        this->m_constraint_type[i] == constraint_t::INEQ_CONSTR ||
+                        this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
+                    {
+                        // need box constraint on slack (>= 0)
+                        num_box_constraints++;
+                        // add two nnz's for ub slack variable (for constraint and positivity constraint)
+                        A_osqp_nnz(this->m_n + slack_i++) += 2;
+                    }
                 }
             }
 
@@ -269,7 +335,7 @@ private:
             // copy A dual variables
             m_lam_osqp(Eigen::seqN(0, this->m_m)) = this->m_lam;
 
-            // copy variable bounds
+            // copy box bounds
             int bound_i = 0;
             for (int i = 0; i < this->m_n; i++)
             {
@@ -281,11 +347,36 @@ private:
                     bound_i++;
                 }
             }
+            // set slack constraints
+            if (this->m_settings.elastic_mode)
+            {
+                for (int i = 0; i < this->m_m; i++)
+                {
+                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR ||
+                        this->m_constraint_type[i] == constraint_t::INEQ_CONSTR ||
+                        this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
+                    {
+                        m_Alb_osqp(this->m_m + bound_i) = scalar_t(0);
+                        m_Aub_osqp(this->m_m + bound_i) = std::numeric_limits<scalar_t>::infinity();
+                        m_lam_osqp(this->m_m + bound_i) = scalar_t(0);
+                        bound_i++;
+                    }
+                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR ||
+                        this->m_constraint_type[i] == constraint_t::INEQ_CONSTR ||
+                        this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
+                    {
+                        m_Alb_osqp(this->m_m + bound_i) = scalar_t(0);
+                        m_Aub_osqp(this->m_m + bound_i) = std::numeric_limits<scalar_t>::infinity();
+                        m_lam_osqp(this->m_m + bound_i) = scalar_t(0);
+                        bound_i++;
+                    }
+                }
+            }
 
-            m_A_osqp.resize(this->m_m + num_box_constraints, this->m_n);
+            m_A_osqp.resize(this->m_m + num_box_constraints, n_vars);
             m_A_osqp.reserve(A_osqp_nnz);
 
-            // copy A to the head of m_A_osqp
+            // copy A to the upper left block of m_A_osqp
             for (int i = 0; i < A.outerSize(); ++i)
             {
                 for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(A, i); it; ++it)
@@ -294,14 +385,40 @@ private:
                 }
             }
 
-            // copy entries for the box constraints
+            // create entries for the box constraints
             bound_i = 0;
             for (Eigen::Index col = 0; col < this->m_n; col++)
             {
                 if (this->m_box_constraint_type[col] != constraint_t::UNBOUNDED_CONSTR)
                 {
-                    m_A_osqp.coeffRef(this->m_m + bound_i, col) = 1;
-                    bound_i++;
+                    m_A_osqp.coeffRef(this->m_m + bound_i++, col) = 1;
+                }
+            }
+
+            // create entries for the slack constraints
+            if (this->m_settings.elastic_mode)
+            {
+                unsigned int slack_i = 0;
+                for (int i = 0; i < this->m_m; i++)
+                {
+                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR ||
+                        this->m_constraint_type[i] == constraint_t::INEQ_CONSTR ||
+                        this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
+                    {
+                        m_A_osqp.coeffRef(i, this->m_n + slack_i) = 1;
+                        m_A_osqp.coeffRef(this->m_m + bound_i, this->m_n + slack_i) = 1;
+                        slack_i++;
+                        bound_i++;
+                    }
+                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR ||
+                        this->m_constraint_type[i] == constraint_t::INEQ_CONSTR ||
+                        this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
+                    {
+                        m_A_osqp.coeffRef(i, this->m_n + slack_i) = -1;
+                        m_A_osqp.coeffRef(this->m_m + bound_i, this->m_n + slack_i) = 1;
+                        slack_i++;
+                        bound_i++;
+                    }
                 }
             }
 
@@ -330,14 +447,14 @@ private:
                 }
             }
 
-            // copy A to the head of m_A_osqp
+            // copy A to the upper left block of m_A_osqp
             for (Eigen::Index col = 0; col < this->m_n; col++)
             {
                 int inner_nnz_A = A.outerIndexPtr()[col + 1] - A.outerIndexPtr()[col];
                 copy_n_into_sparse_matrix(A.valuePtr() + A.outerIndexPtr()[col], inner_nnz_A, m_A_osqp, col, 0);
             }
 
-            // entries for box constraints of m_A_osqp are unchanged
+            // all other entries of m_A_osqp are unchanged
         }
 
         eigen_assert(m_A_osqp.isCompressed());
