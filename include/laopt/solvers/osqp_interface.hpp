@@ -425,8 +425,6 @@ private:
         }
         else
         {
-            // we assume constraint bounds did not change
-
             // copy A bounds
             m_Alb_osqp(Eigen::seqN(0, this->m_m)) = Alb;
             m_Aub_osqp(Eigen::seqN(0, this->m_m)) = Aub;
