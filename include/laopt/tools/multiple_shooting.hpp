@@ -1,10 +1,11 @@
-#ifndef LAOPT_MULTIPLESHOOTING_HPP
-#define LAOPT_MULTIPLESHOOTING_HPP
+#ifndef LAOPT_MULTIPLE_SHOOTING_HPP
+#define LAOPT_MULTIPLE_SHOOTING_HPP
 
 // Advanced user (level 2)
 
 #include <Eigen/Dense>
 #include "laopt/laopt.hpp"
+#include "constants.hpp"
 
 namespace laopt_tools {
 
@@ -17,10 +18,15 @@ namespace laopt_tools {
  * 0     1     2     3    ...    N-1    N     Decision variable indices (initial condition + number of segments)
  * 0     1     2     3         N_segs-1       Segment indices of N_segs segments
  * */
-template<typename ControlProblem, unsigned N_segs>
-class MultipleShooting : public laopt::Differentiable<MultipleShooting<ControlProblem, N_segs>>
+template<typename Derived, typename ControlProblem, unsigned N_segs>
+class MultipleShootingBase : public laopt::Differentiable<MultipleShootingBase<Derived, ControlProblem, N_segs>>
 {
-protected: // TODO ino1
+    friend laopt::Differentiable<MultipleShootingBase<Derived, ControlProblem, N_segs>>;
+
+    template<typename, typename, typename, typename>
+    friend class laopt::ProblemBase;
+
+protected:
     /* Mirror scalar type (from ControlProblem), define variable template with scalar type */
     using Scalar = typename ControlProblem::Scalar;
     template<int n>
@@ -37,9 +43,7 @@ protected: // TODO ino1
     std::array<variable_t<ControlProblem::NX>, N + 1> X_var;
     std::array<variable_t<ControlProblem::NU>, N> U_var;
     variable_t<ControlProblem::NP> p_var;
-    variable_t<1> tf_var;
 
-public: //protected: // TODO ino1 (would like to make this protected)
     /* Dynamic constraints */
     struct DiscreteDynamics {};
     template<typename x_t, typename u_t, typename p_t, typename tf_t,
@@ -94,18 +98,18 @@ public: //protected: // TODO ino1 (would like to make this protected)
             optProblem.add_variable(U_var[i]);
         }
         optProblem.add_variable(X_var[N]);
-        optProblem.add_variable(tf_var);
+        static_cast<Derived*>(this)->register_tf_var(optProblem);
         optProblem.add_variable(p_var);
 
         /* Loop through grid points */
         for (unsigned i = 0; i < N; i++)
         {
             optProblem.add_obj(this->function(StageCost{}, X_var[i], U_var[i], p_var)); // TODO eno4: Allow expressions here
-            optProblem.add_constr(X_var[i + 1] == this->function(DiscreteDynamics{}, X_var[i], U_var[i], p_var, tf_var));
+            optProblem.add_constr(X_var[i + 1] == this->function(DiscreteDynamics{}, X_var[i], U_var[i], p_var, static_cast<Derived*>(this)->get_tf_var()));
         }
 
         /* Last grid point */
-        optProblem.add_obj(this->function(MayerCost{}, X_var[N], p_var, tf_var));
+        optProblem.add_obj(this->function(MayerCost{}, X_var[N], p_var, static_cast<Derived*>(this)->get_tf_var()));
 
         /* Box constraints */
         for (unsigned i = 0; i < N; i++)
@@ -118,12 +122,12 @@ public: //protected: // TODO ino1 (would like to make this protected)
         /* Boundary constraints */
         optProblem.add_constr(controlProblem.x0_lb <= X_var[0] <= controlProblem.x0_ub);
         optProblem.add_constr(controlProblem.xf_lb <= X_var[N] <= controlProblem.xf_ub);
-        optProblem.add_constr(controlProblem.tf_lb <= tf_var <= controlProblem.tf_ub); // TODO: Here I can use tf_var as scalar!?
+        static_cast<Derived*>(this)->add_tf_var_contr(optProblem);
         optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
     }
 
 public:
-    explicit MultipleShooting(ControlProblem &ctrlProblem_) :
+    explicit MultipleShootingBase(ControlProblem &ctrlProblem_) :
             controlProblem(ctrlProblem_)
     {
         /* Construct trajectory time grid on [0, 1] */
@@ -158,7 +162,10 @@ public:
     void set_p_guess(const Param &p_guess) { p_var = p_guess; }
 
     /* Get functions */
-    double get_tf_opt() const { return tf_var; }
+    double get_tf_opt() const
+    {
+        return static_cast<const Derived*>(this)->get_tf_var()(0);
+    }
     TimeTrajectory get_T_opt() const
     {
         return TimeTrajectory::Constant(controlProblem.t0) + (get_tf_opt() - controlProblem.t0) * T;
@@ -343,6 +350,67 @@ protected: /* Helpers for resampling */
     }
 };
 
+template<typename ControlProblem, unsigned N_segs, int Options = FixedEndTime>
+class MultipleShooting;
+
+template<typename ControlProblem, unsigned N_segs>
+class MultipleShooting<ControlProblem, N_segs, FixedEndTime> : public MultipleShootingBase<MultipleShooting<ControlProblem, N_segs, FixedEndTime>, ControlProblem, N_segs>
+{
+protected:
+    using Base = MultipleShootingBase<MultipleShooting<ControlProblem, N_segs, FixedEndTime>, ControlProblem, N_segs>;
+    friend Base;
+
+    using Scalar = typename Base::Scalar;
+
+    Eigen::Vector<Scalar, 1> tf_var;
+
+    inline Eigen::Vector<Scalar, 1>& get_tf_var() { return tf_var; }
+    inline const Eigen::Vector<Scalar, 1>& get_tf_var() const { return tf_var; }
+
+    template<typename OptProblem>
+    inline void register_tf_var(OptProblem &optProblem)
+    {
+        assert(this->controlProblem.tf_lb == this->controlProblem.tf_lb && "tf upper and lower bound have to be the same");
+        tf_var(0) = this->controlProblem.tf_lb;
+    }
+
+    template<typename OptProblem>
+    inline void add_tf_var_contr(OptProblem &optProblem) {}
+public:
+    using Base::Base;
+};
+
+template<typename ControlProblem, unsigned N_segs>
+class MultipleShooting<ControlProblem, N_segs, FreeEndTime> : public MultipleShootingBase<MultipleShooting<ControlProblem, N_segs, FreeEndTime>, ControlProblem, N_segs>
+{
+protected:
+    using Base = MultipleShootingBase<MultipleShooting<ControlProblem, N_segs, FreeEndTime>, ControlProblem, N_segs>;
+    friend Base;
+
+    using Scalar = typename Base::Scalar;
+    template<int n>
+    using variable_t = laopt::Variable<Scalar, n>;
+
+    variable_t<1> tf_var;
+
+    inline variable_t<1>& get_tf_var() { return tf_var; }
+    inline const variable_t<1>& get_tf_var() const { return tf_var; }
+
+    template<typename OptProblem>
+    inline void register_tf_var(OptProblem &optProblem)
+    {
+        optProblem.add_variable(tf_var);
+    }
+
+    template<typename OptProblem>
+    inline void add_tf_var_contr(OptProblem &optProblem)
+    {
+        optProblem.add_constr(this->controlProblem.tf_lb <= tf_var <= this->controlProblem.tf_ub);
+    }
+public:
+    using Base::Base;
+};
+
 } // namespace laopt_tools
 
-#endif //LAOPT_MULTIPLESHOOTING_HPP
+#endif //LAOPT_MULTIPLE_SHOOTING_HPP

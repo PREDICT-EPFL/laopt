@@ -1,11 +1,12 @@
-#ifndef LAOPT_RADAUCOLLOCATION_HPP
-#define LAOPT_RADAUCOLLOCATION_HPP
+#ifndef LAOPT_RADAU_COLLOCATION_HPP
+#define LAOPT_RADAU_COLLOCATION_HPP
 
 // Advanced user (level 2)
 
 #include <Eigen/Dense>
 #include "unsupported/Eigen/Polynomials"
 #include "laopt/laopt.hpp"
+#include "constants.hpp"
 
 namespace laopt_tools {
 
@@ -19,9 +20,14 @@ namespace laopt_tools {
  *  0     1    2   D_poly                                                   Node indices of D_poly+1 nodes within segment
  *  0                1                2         N_segs-1                    Segment indices of N_segs segments
  * */
-template<typename ControlProblem, unsigned N_segs, unsigned D_poly>
-class RadauCollocation : public laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly>>
+template<typename Derived, typename ControlProblem, unsigned N_segs, unsigned D_poly>
+class RadauCollocationBase : public laopt::Differentiable<RadauCollocationBase<Derived, ControlProblem, N_segs, D_poly>>
 {
+    friend laopt::Differentiable<RadauCollocationBase<Derived, ControlProblem, N_segs, D_poly>>;
+
+    template<typename, typename, typename, typename>
+    friend class laopt::ProblemBase;
+
 private: // Static functions
     template<unsigned mat_rows, unsigned row_start, unsigned N_rows, unsigned N_cols, typename Vec_t>
     static auto get_slice(Vec_t &vec, unsigned col_index)
@@ -45,19 +51,19 @@ private: // Static functions
         return get_slice<mat_rows, 0, mat_rows, 1>(vec, col_index_start);
     }
 
-    template<typename Derived, typename DerivedB>
-    static typename Derived::PlainObject
-    poly_mul(const Eigen::MatrixBase<Derived> &p1, const Eigen::MatrixBase<DerivedB> &p2)
+    template<typename DerivedA, typename DerivedB>
+    static typename DerivedA::PlainObject
+    poly_mul(const Eigen::MatrixBase<DerivedA> &p1, const Eigen::MatrixBase<DerivedB> &p2)
     {
         /*
          * This function was copied together from PolyMPC
          */
-        typename Derived::PlainObject product = Derived::PlainObject::Zero();
-        const int p1_size = Derived::RowsAtCompileTime;
-        const int p2_size = Derived::RowsAtCompileTime;
+        typename DerivedA::PlainObject product = DerivedA::PlainObject::Zero();
+        const int p1_size = DerivedA::RowsAtCompileTime;
+        const int p2_size = DerivedA::RowsAtCompileTime;
         static_assert(p1_size == p2_size, "poly_mul: Polynomials must be of the same order!");
 
-        using Scalar_ = typename Derived::Scalar;
+        using Scalar_ = typename DerivedA::Scalar;
         Scalar_ eps = std::numeric_limits<Scalar_>::epsilon();
 
         /* Detect nonzeros */
@@ -98,7 +104,6 @@ protected:
     Eigen::Vector<Scalar, N + 1> T; // Normalized time grid (0 ... 1)
     variable_t<(N + 1) * (NX + NU)> XU_var;
     variable_t<ControlProblem::NP> p_var;
-    variable_t<1> tf_var;
 
     /* Helper functions to extract single states and inputs from long decision variable vector */
     template<typename XU_t>
@@ -265,7 +270,7 @@ protected:
     }
     const IntMat int_mat = get_int_mat();
 
-public: //protected: // TODO ino1 (would like to make this protected)
+protected:
     /* Dynamic constraints */
     struct ContinuousDynamics {};
     template<typename x_t, typename u_t, typename p_t, typename tf_t,
@@ -365,7 +370,7 @@ public: //protected: // TODO ino1 (would like to make this protected)
     {
         /* Register variables */
         optProblem.add_variable(XU_var);
-        optProblem.add_variable(tf_var);
+        static_cast<Derived*>(this)->register_tf_var(optProblem);
         optProblem.add_variable(p_var);
 
         /* Loop through segments */
@@ -384,13 +389,12 @@ public: //protected: // TODO ino1 (would like to make this protected)
 
                 /* Add differential constraint at each node */
                 optProblem.add_constr(this->function(DifferentialApproximation{}, X_seg_diff, j_node) ==
-                                      this->function(ContinuousDynamics{},
-                                                     get_x(XU_var, k), get_u(XU_var, k), p_var, tf_var));
+                                      this->function(ContinuousDynamics{}, get_x(XU_var, k), get_u(XU_var, k), p_var, static_cast<Derived*>(this)->get_tf_var()));
             }
         }
 
         /* Last grid point */
-        optProblem.add_obj(this->function(MayerCost{}, get_x(XU_var, N), p_var, tf_var));
+        optProblem.add_obj(this->function(MayerCost{}, get_x(XU_var, N), p_var, static_cast<Derived*>(this)->get_tf_var()));
 
         /* Box constraints */
         for (unsigned k = 0; k <= N; k++)
@@ -402,7 +406,7 @@ public: //protected: // TODO ino1 (would like to make this protected)
         /* Boundary constraints */
         optProblem.add_constr(controlProblem.x0_lb <= get_x(XU_var, 0) <= controlProblem.x0_ub);
         optProblem.add_constr(controlProblem.xf_lb <= get_x(XU_var, N) <= controlProblem.xf_ub);
-        optProblem.add_constr(controlProblem.tf_lb <= tf_var <= controlProblem.tf_ub); // TODO: Here I can use tf_var as scalar!?
+        static_cast<Derived*>(this)->add_tf_var_contr(optProblem);
         optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
 
         /* Set last control equal second last for easier data handling */
@@ -410,7 +414,7 @@ public: //protected: // TODO ino1 (would like to make this protected)
     }
 
 public:
-    explicit RadauCollocation(ControlProblem &ctrlProblem_) :
+    explicit RadauCollocationBase(ControlProblem &ctrlProblem_) :
             controlProblem(ctrlProblem_)
     {
         /* Construct trajectory time grid on [0, 1] */
@@ -458,7 +462,10 @@ public:
     void set_p_guess(const Param &p_guess) { p_var = p_guess; }
 
     /* Get functions */
-    double get_tf_opt() const { return tf_var; }
+    double get_tf_opt() const
+    {
+        return static_cast<const Derived*>(this)->get_tf_var()(0);
+    }
     TimeTrajectory get_T_opt() const
     {
         return TimeTrajectory::Constant(controlProblem.t0) + (get_tf_opt() - controlProblem.t0) * T;
@@ -600,6 +607,67 @@ protected: /* Helpers for resampling */
     }
 };
 
+template<typename ControlProblem, unsigned N_segs, unsigned D_poly, int Options = FixedEndTime>
+class RadauCollocation;
+
+template<typename ControlProblem, unsigned N_segs, unsigned D_poly>
+class RadauCollocation<ControlProblem, N_segs, D_poly, FixedEndTime> : public RadauCollocationBase<RadauCollocation<ControlProblem, N_segs, D_poly, FixedEndTime>, ControlProblem, N_segs, D_poly>
+{
+protected:
+    using Base = RadauCollocationBase<RadauCollocation<ControlProblem, N_segs, D_poly, FixedEndTime>, ControlProblem, N_segs, D_poly>;
+    friend Base;
+
+    using Scalar = typename Base::Scalar;
+
+    Eigen::Vector<Scalar, 1> tf_var;
+
+    inline Eigen::Vector<Scalar, 1>& get_tf_var() { return tf_var; }
+    inline const Eigen::Vector<Scalar, 1>& get_tf_var() const { return tf_var; }
+
+    template<typename OptProblem>
+    inline void register_tf_var(OptProblem &optProblem)
+    {
+        assert(this->controlProblem.tf_lb == this->controlProblem.tf_lb && "tf upper and lower bound have to be the same");
+        tf_var(0) = this->controlProblem.tf_lb;
+    }
+
+    template<typename OptProblem>
+    inline void add_tf_var_contr(OptProblem &optProblem) {}
+public:
+    using Base::Base;
+};
+
+template<typename ControlProblem, unsigned N_segs, unsigned D_poly>
+class RadauCollocation<ControlProblem, N_segs, D_poly, FreeEndTime> : public RadauCollocationBase<RadauCollocation<ControlProblem, N_segs, D_poly, FreeEndTime>, ControlProblem, N_segs, D_poly>
+{
+protected:
+    using Base = RadauCollocationBase<RadauCollocation<ControlProblem, N_segs, D_poly, FreeEndTime>, ControlProblem, N_segs, D_poly>;
+    friend Base;
+
+    using Scalar = typename Base::Scalar;
+    template<int n>
+    using variable_t = laopt::Variable<Scalar, n>;
+
+    variable_t<1> tf_var;
+
+    inline variable_t<1>& get_tf_var() { return tf_var; }
+    inline const variable_t<1>& get_tf_var() const { return tf_var; }
+
+    template<typename OptProblem>
+    inline void register_tf_var(OptProblem &optProblem)
+    {
+        optProblem.add_variable(tf_var);
+    }
+
+    template<typename OptProblem>
+    inline void add_tf_var_contr(OptProblem &optProblem)
+    {
+        optProblem.add_constr(this->controlProblem.tf_lb <= tf_var <= this->controlProblem.tf_ub);
+    }
+public:
+    using Base::Base;
+};
+
 } // namespace laopt_tools
 
-#endif //LAOPT_RADAUCOLLOCATION_HPP
+#endif //LAOPT_RADAU_COLLOCATION_HPP

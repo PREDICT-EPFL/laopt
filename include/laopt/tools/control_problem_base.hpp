@@ -1,5 +1,5 @@
-#ifndef LAOPT_CTRLPROBLEMBASE_HPP
-#define LAOPT_CTRLPROBLEMBASE_HPP
+#ifndef LAOPT_CONTROL_PROBLEM_BASE_HPP
+#define LAOPT_CONTROL_PROBLEM_BASE_HPP
 
 #include <Eigen/Dense>
 #include "laopt/laopt.hpp"
@@ -106,11 +106,11 @@ public:
                          const Eigen::Ref<const input_t<T>> &u,
                          const Eigen::Ref<const param_t<T>> &p) { return static_cast<T>(0); }
 
-    template<typename T>
+    template<typename T, typename Ttf>
     // T is scalar type
     T mayer_term_impl(const Eigen::Ref<const state_t<T>> &x,
                       const Eigen::Ref<const param_t<T>> &p,
-                      const Eigen::Ref<const T> &tf) { return static_cast<T>(0); }
+                      const Ttf &tf) { return static_cast<T>(0); }
 
     template<typename T>
     // T is scalar type
@@ -127,4 +127,4 @@ public:
 
 } // namespace laopt_tools
 
-#endif //LAOPT_CTRLPROBLEMBASE_HPP
+#endif // LAOPT_CONTROL_PROBLEM_BASE_HPP
