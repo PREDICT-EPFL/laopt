@@ -131,7 +131,15 @@ public:
 
 protected:
 
-    EIGEN_STRONG_INLINE void
+    template<typename T>
+    EIGEN_STRONG_INLINE bool compare_assign(T& dest, const T& value)
+    {
+        bool changed = dest != value;
+        dest = value;
+        return changed;
+    }
+
+    EIGEN_STRONG_INLINE bool
     parse_constraints_bounds(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xlb,
                              const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xub,
                              const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
@@ -140,6 +148,13 @@ protected:
         eigen_assert((xlb.array() <= xub.array()).any());
         eigen_assert((Alb.array() <= Aub.array()).any());
 
+        unsigned int prev_box_lower_bounded_constraints = m_box_lower_bounded_constraints;
+        unsigned int prev_box_upper_bounded_constraints = m_box_upper_bounded_constraints;
+        unsigned int prev_lower_bounded_constraints = m_lower_bounded_constraints;
+        unsigned int prev_upper_bounded_constraints = m_upper_bounded_constraints;
+
+        bool bounds_changed = false;
+
         // parse box constraints
         m_box_lower_bounded_constraints = 0;
         m_box_upper_bounded_constraints = 0;
@@ -147,27 +162,27 @@ protected:
         {
             if (xlb(i) < -UNBOUNDED_THRESHOLD && xub(i) > UNBOUNDED_THRESHOLD)
             {
-                m_box_constraint_type[i] = constraint_t::UNBOUNDED_CONSTR;
+                bounds_changed |= compare_assign(m_box_constraint_type[i], constraint_t::UNBOUNDED_CONSTR);
             }
             else if (xub(i) - xlb(i) < EQ_TOL)
             {
-                m_box_constraint_type[i] = constraint_t::EQ_CONSTR;
+                bounds_changed |= compare_assign(m_box_constraint_type[i], constraint_t::EQ_CONSTR);
                 m_box_lower_bounded_constraints++;
                 m_box_upper_bounded_constraints++;
             }
             else if (xub(i) > UNBOUNDED_THRESHOLD)
             {
-                m_box_constraint_type[i] = constraint_t::INEQ_LB_ONLY_CONSTR;
+                bounds_changed |= compare_assign(m_box_constraint_type[i], constraint_t::INEQ_LB_ONLY_CONSTR);
                 m_box_lower_bounded_constraints++;
             }
             else if (xlb(i) < -UNBOUNDED_THRESHOLD)
             {
-                m_box_constraint_type[i] = constraint_t::INEQ_UB_ONLY_CONSTR;
+                bounds_changed |= compare_assign(m_box_constraint_type[i], constraint_t::INEQ_UB_ONLY_CONSTR);
                 m_box_upper_bounded_constraints++;
             }
             else
             {
-                m_box_constraint_type[i] = constraint_t::INEQ_CONSTR;
+                bounds_changed |= compare_assign(m_box_constraint_type[i], constraint_t::INEQ_CONSTR);
                 m_box_lower_bounded_constraints++;
                 m_box_upper_bounded_constraints++;
             }
@@ -180,31 +195,41 @@ protected:
         {
             if (Alb(i) < -UNBOUNDED_THRESHOLD && Aub(i) > UNBOUNDED_THRESHOLD)
             {
-                m_constraint_type[i] = constraint_t::UNBOUNDED_CONSTR;
+                bounds_changed |= compare_assign(m_constraint_type[i], constraint_t::UNBOUNDED_CONSTR);
             }
             else if (Aub(i) - Alb(i) < EQ_TOL)
             {
-                m_constraint_type[i] = constraint_t::EQ_CONSTR;
+                bounds_changed |= compare_assign(m_constraint_type[i], constraint_t::EQ_CONSTR);
                 m_lower_bounded_constraints++;
                 m_upper_bounded_constraints++;
             }
             else if (Aub(i) > UNBOUNDED_THRESHOLD)
             {
-                m_constraint_type[i] = constraint_t::INEQ_LB_ONLY_CONSTR;
+                bounds_changed |= compare_assign(m_constraint_type[i], constraint_t::INEQ_LB_ONLY_CONSTR);
                 m_lower_bounded_constraints++;
             }
             else if (Alb(i) < -UNBOUNDED_THRESHOLD)
             {
-                m_constraint_type[i] = constraint_t::INEQ_UB_ONLY_CONSTR;
+                bounds_changed |= compare_assign(m_constraint_type[i], constraint_t::INEQ_UB_ONLY_CONSTR);
                 m_upper_bounded_constraints++;
             }
             else
             {
-                m_constraint_type[i] = constraint_t::INEQ_CONSTR;
+                bounds_changed |= compare_assign(m_constraint_type[i], constraint_t::INEQ_CONSTR);
                 m_lower_bounded_constraints++;
                 m_upper_bounded_constraints++;
             }
         }
+
+        if (prev_box_lower_bounded_constraints != m_box_lower_bounded_constraints ||
+            prev_box_upper_bounded_constraints != m_box_upper_bounded_constraints ||
+            prev_lower_bounded_constraints != m_lower_bounded_constraints ||
+            prev_upper_bounded_constraints != m_upper_bounded_constraints)
+        {
+            bounds_changed = true;
+        }
+
+        return bounds_changed;
     }
 };
 

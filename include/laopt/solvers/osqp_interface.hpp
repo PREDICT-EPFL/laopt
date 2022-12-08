@@ -185,13 +185,19 @@ private:
                         const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
                         const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
     {
-        if (!this->settings().reuse_pattern)
+        bool prev_reuse_pattern = this->settings().reuse_pattern;
+
+        bool constraints_type_changed = this->parse_constraints_bounds(xlb, xub, Alb, Aub);
+        if (constraints_type_changed)
         {
-            this->parse_constraints_bounds(xlb, xub, Alb, Aub);
+            // if the types of constraints have changed we can't reuse pattern
+            this->settings().reuse_pattern = false;
         }
 
         construct_osqp_cost(H, f);
         construct_osqp_constraints(xlb, xub, A, Alb, Aub);
+
+        this->settings().reuse_pattern = prev_reuse_pattern;
     }
 
     EIGEN_STRONG_INLINE void
