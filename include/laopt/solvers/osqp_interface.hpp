@@ -23,8 +23,8 @@ private:
     OSQPData* m_osqp_data;
     bool m_osqp_initialized;
 
-    Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, c_int> m_H_osqp;
-    Eigen::VectorX<scalar_t> m_f_osqp;
+    Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, c_int> m_P_osqp;
+    Eigen::VectorX<scalar_t> m_q_osqp;
     Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, c_int> m_A_osqp;
     Eigen::VectorX<scalar_t> m_Alb_osqp;
     Eigen::VectorX<scalar_t> m_Aub_osqp;
@@ -79,17 +79,17 @@ public:
 
         construct_osqp_data(H, f, xlb, xub, A, Alb, Aub);
 
-        m_osqp_data->n = m_H_osqp.rows();
+        m_osqp_data->n = m_P_osqp.rows();
         m_osqp_data->m = m_A_osqp.rows();
 
-        m_osqp_data->P->m = m_H_osqp.rows();
-        m_osqp_data->P->n = m_H_osqp.cols();
-        m_osqp_data->P->nzmax = m_H_osqp.nonZeros();
-        m_osqp_data->P->x = m_H_osqp.valuePtr();
-        m_osqp_data->P->i = m_H_osqp.innerIndexPtr();
-        m_osqp_data->P->p = m_H_osqp.outerIndexPtr();
+        m_osqp_data->P->m = m_P_osqp.rows();
+        m_osqp_data->P->n = m_P_osqp.cols();
+        m_osqp_data->P->nzmax = m_P_osqp.nonZeros();
+        m_osqp_data->P->x = m_P_osqp.valuePtr();
+        m_osqp_data->P->i = m_P_osqp.innerIndexPtr();
+        m_osqp_data->P->p = m_P_osqp.outerIndexPtr();
 
-        m_osqp_data->q = m_f_osqp.data();
+        m_osqp_data->q = m_q_osqp.data();
 
         m_osqp_data->A->m = m_A_osqp.rows();
         m_osqp_data->A->n = m_A_osqp.cols();
@@ -109,9 +109,6 @@ public:
 
             osqp_setup(&m_osqp_workspace, m_osqp_data, m_osqp_settings);
             m_osqp_initialized = true;
-
-            osqp_warm_start(m_osqp_workspace, this->m_x_osqp.data(), m_lam_osqp.data());
-            osqp_solve(m_osqp_workspace);
         }
         else
         {
@@ -121,10 +118,10 @@ public:
                                               m_osqp_data->A->x, OSQP_NULL, m_osqp_data->A->nzmax);
             osqp_update_lin_cost(m_osqp_workspace, m_osqp_data->q);
             osqp_update_bounds(m_osqp_workspace, m_osqp_data->l, m_osqp_data->u);
-
-            osqp_warm_start(m_osqp_workspace, this->m_x_osqp.data(), m_lam_osqp.data());
-            osqp_solve(m_osqp_workspace);
         }
+
+        osqp_warm_start(m_osqp_workspace, this->m_x_osqp.data(), m_lam_osqp.data());
+        osqp_solve(m_osqp_workspace);
 
         Eigen::Map<Eigen::Vector<c_float, -1>> primal_solution(m_osqp_workspace->solution->x, m_osqp_workspace->data->n);
         Eigen::Map<Eigen::Vector<c_float, -1>> dual_solution(m_osqp_workspace->solution->y, m_osqp_workspace->data->m);
@@ -216,8 +213,8 @@ private:
             }
 
             m_x_osqp.resize(n_vars);
-            m_H_osqp.resize(n_vars, n_vars);
-            m_f_osqp.resize(n_vars);
+            m_P_osqp.resize(n_vars, n_vars);
+            m_q_osqp.resize(n_vars);
 
             m_x_osqp.setZero();
             m_x_osqp(Eigen::seqN(0, this->m_n)) = this->m_x;
@@ -229,7 +226,7 @@ private:
                 {
                     if (it.row() <= it.col())
                     {
-                        m_H_osqp.coeffRef(it.row(), it.col()) = it.value();
+                        m_P_osqp.coeffRef(it.row(), it.col()) = it.value();
                     }
                 }
             }
@@ -237,32 +234,32 @@ private:
             // add l2 penalties to slack
             for (int i = this->m_n; i < n_vars; ++i)
             {
-                m_H_osqp.coeffRef(i, i) = this->m_settings.elastic_weight_l2;
+                m_P_osqp.coeffRef(i, i) = this->m_settings.elastic_weight_l2;
             }
             // add l1 penalties to slack
-            m_f_osqp(Eigen::lastN(n_vars - this->m_n)).array() = this->m_settings.elastic_weight_l1;
+            m_q_osqp(Eigen::lastN(n_vars - this->m_n)).array() = this->m_settings.elastic_weight_l1;
 
-            m_H_osqp.makeCompressed();
+            m_P_osqp.makeCompressed();
         }
         else
         {
             m_x_osqp(Eigen::seqN(0, this->m_n)) = this->m_x;
 
-            eigen_assert(m_H_osqp.isCompressed());
+            eigen_assert(m_P_osqp.isCompressed());
 
-            // copy H to the upper left block of m_H_osqp
+            // copy H to the upper left block of m_P_osqp
             for (Eigen::Index col = 0; col < this->m_n; col++)
             {
-                int inner_nnz_H_tri = m_H_osqp.outerIndexPtr()[col + 1] - m_H_osqp.outerIndexPtr()[col];
-                copy_n_into_sparse_matrix(H.valuePtr() + H.outerIndexPtr()[col], inner_nnz_H_tri, m_H_osqp, col, 0);
+                int inner_nnz_H_tri = m_P_osqp.outerIndexPtr()[col + 1] - m_P_osqp.outerIndexPtr()[col];
+                copy_n_into_sparse_matrix(H.valuePtr() + H.outerIndexPtr()[col], inner_nnz_H_tri, m_P_osqp, col, 0);
             }
 
             // entries for slacks are kept from last iteration
         }
 
-        m_f_osqp(Eigen::seqN(0, this->m_n)) = f;
+        m_q_osqp(Eigen::seqN(0, this->m_n)) = f;
 
-        eigen_assert(m_H_osqp.isCompressed());
+        eigen_assert(m_P_osqp.isCompressed());
     }
 
     EIGEN_STRONG_INLINE void

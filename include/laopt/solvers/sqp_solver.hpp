@@ -26,7 +26,7 @@ struct sqp_settings_t {
     hessian_approximation_t hessian_approximation = hessian_approximation_t::EXACT; // hessian approximation
     int max_iter                                  = 1000;
     int line_search_max_iter                      = 100;
-    bool verbose             = false;
+    bool verbose                                  = false;
 
     bool validate()
     {
