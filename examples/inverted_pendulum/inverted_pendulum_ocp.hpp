@@ -7,7 +7,7 @@
 #include <Eigen/Dense>
 
 #include "laopt/laopt.hpp"
-#include "laopt/tools/ControlProblemBase.hpp"
+#include "laopt/tools/control_problem_base.hpp"
 
 class InvertedPendulumOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 2>
 {
@@ -72,10 +72,10 @@ public:
         return get_non_control_cost(x, p) + get_control_cost(u, p);
     }
 
-    template<typename T> // T is scalar type
+    template<typename T, typename Ttf> // T is scalar type
     T mayer_term_impl(const Eigen::Ref<const state_t<T>> &xf,
                       const Eigen::Ref<const param_t<T>> &p,
-                      const T &tf)
+                      const Ttf &tf)
     {
         return mayer_multiplier * get_non_control_cost(xf, p) +
                w_tf * tf;

@@ -7,7 +7,7 @@
 #include <Eigen/Dense>
 
 #include "laopt/laopt.hpp"
-#include "laopt/tools/ControlProblemBase.hpp"
+#include "laopt/tools/control_problem_base.hpp"
 
 class DoubleIntegratorOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1>
 {
@@ -32,10 +32,10 @@ public:
         return (x_ref - x).dot(Q * (x_ref - x)) + u.dot(R * u);
     }
 
-    template<typename T> // T is scalar type
+    template<typename T, typename Ttf> // T is scalar type
     T mayer_term_impl(const Eigen::Ref<const state_t<T>> &xf,
                       const Eigen::Ref<const param_t<T>> &p,
-                      const T &tf)
+                      const Ttf &tf)
     {
         return (x_ref - xf).dot(Q * (x_ref - xf));
     }

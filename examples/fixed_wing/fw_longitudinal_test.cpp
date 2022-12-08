@@ -1,13 +1,14 @@
 #include <iostream>
-#include <iomanip>
 #include <chrono>
 
 #include "laopt/laopt.hpp"
 
 #include "LonOcpEigen.hpp"
-#include "laopt/tools/MultipleShooting.hpp"
-#include "laopt/tools/RadauCollocation.hpp"
+#include "laopt/tools/multiple_shooting.hpp"
+#include "laopt/tools/radau_collocation.hpp"
 #include "laopt/ipopt_interface/ipopt_wrapper.hpp"
+#include "laopt/solvers/sqp_solver.hpp"
+#include "laopt/solvers/osqp_interface.hpp"
 
 #include "examples_helper.hpp"
 
@@ -47,26 +48,8 @@ int main()
     const double Ts_max = 0.02;
     const double t_test = 0.166;
 
-    /* Solve with Multiple Shooting transcription */
-    if (true)
+    auto solve_and_print = [&](auto& transcription, auto& opt_problem, auto& solver)
     {
-        std::cout << "Multiple Shooting\n";
-        const int N = 20;
-        using Transcription = laopt_tools::MultipleShooting<Ocp, N>;
-
-        /* Define specific Tape, laOPT, and IPOPT problem types for the resulting NLP */
-        using Tape = laopt::TapeInfo<Transcription>;
-        using OptProblem = laopt::Problem<Transcription>;
-        using Solver = laopt::IpoptWrapper<OptProblem>;
-
-        /* Construct transcription for OCP, optionally generate/store tape for that combination */
-        Transcription transcription(ocp);
-        Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
-
-        /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
-        OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
-        Solver solver(opt_problem);
-
         /* Set initial guess for state trajectory */
         transcription.set_X_guess(ocp.model.get_default_initial_state());
         std::cout << "X_guess = \n" << transcription.get_X_opt() << "\n";
@@ -83,45 +66,83 @@ int main()
         /* Print out the solution */
         print_solution(transcription, opt_problem, duration_us, duration2_us);
         print_sampled_solution(transcription, Ts_max, t_test);
+    };
+
+    /* Solve with Multiple Shooting transcription */
+    if (true)
+    {
+        const int N = 20;
+        using Transcription = laopt_tools::MultipleShooting<Ocp, N>;
+
+        /* Define specific Tape and laOPT problem types for the resulting NLP */
+        using Tape = laopt::TapeInfo<Transcription>;
+        using OptProblem = laopt::Problem<Transcription>;
+
+        /* Construct transcription for OCP, optionally generate/store tape for that combination */
+        Transcription transcription(ocp);
+        Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
+
+        /* Construct laOPT problem for transcribed OCP using according tape */
+        OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
+
+        {
+            std::cout << "Multiple Shooting - Ipopt\n";
+
+            using Solver = laopt::IpoptWrapper<OptProblem>;
+            Solver solver(opt_problem);
+
+            solve_and_print(transcription, opt_problem, solver);
+        }
+
+        {
+            std::cout << "Multiple Shooting - SQP\n";
+
+            using Solver = laopt::SQPSolver<OptProblem, laopt::OSQPSolver<OptProblem::scalar_t>>;
+            Solver solver(opt_problem);
+            solver.settings().verbose = true;
+            solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT_NO_CONSTRAINTS;
+
+            solve_and_print(transcription, opt_problem, solver);
+        }
     }
 
     /* Solve with Radau Collocation transcription */
     if (true)
     {
-        std::cout << "Radau Collocation\n";
         const int D_poly = 4;
         const int N_segs = 3;
         using Transcription = laopt_tools::RadauCollocation<Ocp, N_segs, D_poly>;
 
-        /* Define specific Tape, laOPT, and IPOPT problem types for the resulting NLP */
+        /* Define specific Tape and laOPT problem types for the resulting NLP */
         using Tape = laopt::TapeInfo<Transcription>;
         using OptProblem = laopt::Problem<Transcription>;
-        using Solver = laopt::IpoptWrapper<OptProblem>;
 
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
         Transcription transcription(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
 
-        /* Construct laOPT and IPOPT problems for transcribed OCP using according tape */
+        /* Construct laOPT problem for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
-        Solver solver(opt_problem);
 
-        /* Set initial guess for state trajectory */
-        transcription.set_X_guess(ocp.model.get_default_initial_state());
-        std::cout << "X_guess = \n" << transcription.get_X_opt() << "\n";
+        {
+            std::cout << "Radau Collocation - Ipopt\n";
 
-        const steady_clock::time_point t_start = steady_clock::now();
-        solver.solve();
-        const steady_clock::time_point t_end = steady_clock::now();
-        const long duration_us = duration_cast<microseconds>(t_end - t_start).count();
+            using Solver = laopt::IpoptWrapper<OptProblem>;
+            Solver solver(opt_problem);
 
-        solver.solve(); // Call second time to test repeatability
-        const steady_clock::time_point t_end2 = steady_clock::now();
-        const long duration2_us = duration_cast<microseconds>(t_end2 - t_end).count();
+            solve_and_print(transcription, opt_problem, solver);
+        }
 
-        /* Print out the solution */
-        print_solution(transcription, opt_problem, duration_us, duration2_us);
-        print_sampled_solution(transcription, Ts_max, t_test);
+        {
+            std::cout << "Radau Collocation - SQP\n";
+
+            using Solver = laopt::SQPSolver<OptProblem, laopt::OSQPSolver<OptProblem::scalar_t>>;
+            Solver solver(opt_problem);
+            solver.settings().verbose = true;
+            solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT_NO_CONSTRAINTS;
+
+            solve_and_print(transcription, opt_problem, solver);
+        }
     }
     return 0;
 }

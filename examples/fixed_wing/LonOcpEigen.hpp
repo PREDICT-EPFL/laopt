@@ -3,7 +3,7 @@
 
 // End user (level 1)
 
-#include "laopt/tools/ControlProblemBase.hpp"
+#include "laopt/tools/control_problem_base.hpp"
 #include "LonOcpSettings.hpp"
 #include "fixed_wing_model/FixedWingDynamicsEigen.hpp"
 
@@ -92,10 +92,10 @@ public:
         return get_non_control_cost(x) + get_control_cost(u);
     }
 
-    template<typename T> // T is scalar type
+    template<typename T, typename Ttf> // T is scalar type
     T mayer_term_impl(const Eigen::Ref<const state_t<T>> &xf,
                       const Eigen::Ref<const param_t<T>> &p,
-                      const T &tf)
+                      const Ttf &tf)
     {
         T mayer = mayer_multiplier * get_non_control_cost(xf);
 //        mayer = mayer_multiplier * non_control_cost + p(0); // Time-optimal ocp
@@ -121,6 +121,7 @@ public:
 
         // Nonlinear dynamics
         Model::DynamicParams p_plant;
+        p_plant.setZero();
         Model::output_t <T> y;
         state_t<T> xdot;
         model.dynamics<T>(xdot, x, u, p_plant, y);
