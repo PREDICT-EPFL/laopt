@@ -141,6 +141,7 @@ struct VectorFunctionMemory {
             jacobian_buffer(nullptr, 0)
     {
         f.jacobian.allocate_memory(jacobian);
+        jacobian_buffer.~Map<Eigen::VectorX<scalar_t>>();
         new (&jacobian_buffer) Eigen::Map<Eigen::VectorX<scalar_t>>(jacobian.valuePtr(), jacobian.nonZeros());
 
         // Set this memory as the buffer for the function

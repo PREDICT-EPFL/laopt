@@ -55,6 +55,7 @@ public:
     void set_memory(int offset, typename Base::Scalar* master_variable)
     {
         this->set_offset(offset);
+        this->~Base();
         new (this) Base(master_variable + offset);
     }
 

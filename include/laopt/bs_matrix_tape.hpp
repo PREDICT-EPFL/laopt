@@ -159,6 +159,7 @@ public:
      */
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
+        null_mat.~Map<Eigen::MatrixX<int>>();
         new (&null_mat) Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols);
     }
 

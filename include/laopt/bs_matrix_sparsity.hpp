@@ -82,7 +82,8 @@ public:
      */
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
-        new(&null_mat) Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols);
+        null_mat.~Map<Eigen::MatrixX<int>>();
+        new (&null_mat) Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols);
         sparsity_pattern.conservativeResize(rows, cols);
     }
 

@@ -173,7 +173,8 @@ public:
 
     void set_buffer(Eigen::Ref<Eigen::MatrixX<scalar_t>> mat)
     {
-        new(&m_mat) Eigen::Map<Eigen::MatrixX<scalar_t>>(mat.data(), mat.rows(), mat.cols());
+        m_mat.~Map<Eigen::MatrixX<scalar_t>>();
+        new (&m_mat) Eigen::Map<Eigen::MatrixX<scalar_t>>(mat.data(), mat.rows(), mat.cols());
     }
 
     void resize(Eigen::Index rows, Eigen::Index cols)
