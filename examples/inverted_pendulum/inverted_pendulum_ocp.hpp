@@ -3,7 +3,6 @@
 
 // End user (level 1)
 
-#include <limits>
 #include <Eigen/Dense>
 
 #include "laopt/laopt.hpp"

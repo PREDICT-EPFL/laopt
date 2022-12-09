@@ -1,9 +1,11 @@
 #ifndef LAOPT_CONTROL_PROBLEM_BASE_HPP
 #define LAOPT_CONTROL_PROBLEM_BASE_HPP
 
+#include <iostream>
+#include <iomanip>
+
 #include <Eigen/Dense>
 #include "laopt/laopt.hpp"
-#include <iomanip>
 
 namespace laopt_tools {
 

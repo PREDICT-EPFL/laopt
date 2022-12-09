@@ -3,6 +3,8 @@
 
 // End user (level 1)
 
+#include <iostream>
+
 #include "laopt/tools/control_problem_base.hpp"
 #include "FixedWingOcpSettings.hpp"
 #include "fixed_wing_model/FixedWingDynamicsEigen.hpp"

@@ -2,6 +2,7 @@
 #define LAOPT_EXAMPLES_HELPER_HPP
 
 #include <iostream>
+#include <iomanip>
 
 template<typename Transcription, typename OptProblem, typename Duration>
 void print_solution(const Transcription &transcription, OptProblem &opt_problem,
