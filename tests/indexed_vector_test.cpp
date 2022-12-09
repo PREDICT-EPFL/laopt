@@ -206,7 +206,8 @@ TEST(IndexedVectorTest, NullMap) {
     Eigen::Vector<double, 3> x;
     x << 1, 2, 3;
 
-    new(&vec) map_t(x.data());
+    vec.~map_t();
+    new (&vec) map_t(x.data());
 
     testing::internal::CaptureStdout();
     std::cout << "vec = " << vec.transpose();
