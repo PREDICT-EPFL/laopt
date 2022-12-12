@@ -50,7 +50,8 @@ public:
 
         if (!this->m_settings.reuse_pattern)
         {
-            m_proxqp_solver.~QP<scalar_t, int>();
+            using SolverType = proxsuite::proxqp::sparse::QP<scalar_t, int>;
+            m_proxqp_solver.~SolverType();
             new (&m_proxqp_solver) proxsuite::proxqp::sparse::QP<scalar_t, int>(H.rows(), m_A_proxqp.rows(), m_C_proxqp.rows());
 
             m_proxqp_solver.init(H, f, m_A_proxqp, m_b_proxqp, m_C_proxqp, m_Clb_proxqp, m_Cub_proxqp);
