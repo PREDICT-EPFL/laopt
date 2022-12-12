@@ -13,6 +13,7 @@ env:
   CASADI_VERSION: 3.3.5
   EIGEN_VERSION: 3.4.0
   OSQP_VERSION: v0.6.2
+  SIMDE_VERSION: v0.7.2
   PROXQP_VERSION: v0.2.13
   QPSWIFT_VERSION: v0.0.2
   BUILD_RELEASE: ON
@@ -33,7 +34,7 @@ jobs:
           mkdir -p build
 
       - name: Install dependencies
-        run: sudo apt-get -y install libyaml-cpp-dev libbenchmark-dev libsimde-dev
+        run: sudo apt-get -y install libyaml-cpp-dev libbenchmark-dev
 
       - name: Cache Ipopt
         id: cache-ipopt
@@ -86,6 +87,10 @@ jobs:
       - name: Install osqp
         working-directory: build_external
         run: bash  ../ci/shared/install_osqp.sh
+
+      - name: Install SIMDe
+        working-directory: build_external
+        run: bash  ../ci/shared/install_simde.sh
 
       - name: Install ProxQP
         working-directory: build_external
