@@ -37,6 +37,7 @@ jobs:
         run: |
           sudo apt-get -y install libyaml-cpp-dev libbenchmark-dev python3 python3-pip python3-setuptools python3-wheel ninja-build
           pip3 install meson
+          sudo pip3 install --user meson
 
       - name: Cache Ipopt
         id: cache-ipopt
