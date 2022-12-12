@@ -188,9 +188,12 @@ public:
         m_info.qp_iter = 0;
         m_info.iter = 0;
 
+        // linearize problem which is needed to calculate convergence criteria
+        linearize_problem(m_x);
+
         // update convergence criteria
         m_primal_feasibility_inf = max_constraints_violation(m_x);
-        m_complementarity_inf = max_complementarity_violation(m_x, m_lam);
+        m_complementarity_inf = max_complementarity_violation(m_x, m_lam, m_lam_bounds);
         m_stationarity_inf = max_stationarity_violation(m_x, m_lam, m_lam_bounds);
 
         if (m_settings.verbose)
@@ -218,8 +221,8 @@ public:
         {
             m_info.iter++;
 
-            // linearize and solve problem
-            linearize_problem();
+            // problem is already linearized, we just need to calculate the hessian
+            calculate_regularized_problem_hessian(m_x);
             solve_qp();
 
             // reuse sparsity pattern for further solves
@@ -265,9 +268,12 @@ public:
             m_lam        += alpha * (m_lam_qp - m_lam);
             m_lam_bounds += alpha * (m_lam_bounds_qp - m_lam_bounds);
 
+            // linearize problem which is needed to calculate convergence criteria
+            linearize_problem(m_x);
+
             // update convergence criteria
             m_primal_feasibility_inf = max_constraints_violation(m_x);
-            m_complementarity_inf = max_complementarity_violation(m_x, m_lam);
+            m_complementarity_inf = max_complementarity_violation(m_x, m_lam, m_lam_bounds);
             m_stationarity_inf = max_stationarity_violation(m_x, m_lam, m_lam_bounds);
 
             if (m_settings.verbose)
@@ -331,12 +337,36 @@ protected:
         std::cout << "qp iterations: " << m_info.qp_iter << std::endl;
     }
 
-    EIGEN_STRONG_INLINE void linearize_problem() noexcept
+    EIGEN_STRONG_INLINE void eval_objective_gradient(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
     {
-        prob.set_decision_variable(m_x);
-
+        prob.set_decision_variable(x);
         prob.eval_objective_gradient(m_cost_grad);
+    }
+
+    EIGEN_STRONG_INLINE void eval_constraints(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
+    {
+        prob.set_decision_variable(x);
+        prob.eval_constraints(m_g, m_lbg, m_ubg);
         prob.eval_variable_bounds(m_lbx, m_ubx);
+    }
+
+    EIGEN_STRONG_INLINE void eval_constraints_jacobian(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
+    {
+        prob.set_decision_variable(x);
+        Eigen::Map<Eigen::VectorX<scalar_t>> jacobian_buffer(m_g_jac.valuePtr(), m_g_jac.nonZeros());
+        prob.eval_constraints_jacobian(jacobian_buffer);
+    }
+
+    EIGEN_STRONG_INLINE void linearize_problem(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
+    {
+        eval_objective_gradient(x);
+        eval_constraints(x);
+        eval_constraints_jacobian(x);
+    }
+
+    EIGEN_STRONG_INLINE void calculate_regularized_problem_hessian(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
+    {
+        prob.set_decision_variable(x);
 
         Eigen::Map<Eigen::VectorX<scalar_t>> hessian_buffer(m_lag_hess.valuePtr(), m_lag_hess.nonZeros());
         if (m_settings.hessian_approximation == hessian_approximation_t::EXACT_NO_CONSTRAINTS)
@@ -348,16 +378,6 @@ protected:
             prob.eval_lagrangian_hessian(1.0, m_lam, hessian_buffer);
         }
 
-        prob.eval_constraints(m_g, m_lbg, m_ubg);
-        Eigen::Map<Eigen::VectorX<scalar_t>> jacobian_buffer(m_g_jac.valuePtr(), m_g_jac.nonZeros());
-        prob.eval_constraints_jacobian(jacobian_buffer);
-
-        // add constant part from linearization to bounds
-        m_lbx -= m_x;
-        m_ubx -= m_x;
-        m_lbg -= m_g;
-        m_ubg -= m_g;
-
         // regularize hessian
         hessian_regularisation(m_lag_hess);
     }
@@ -365,6 +385,12 @@ protected:
     /** prepare and solve the qp */
     EIGEN_STRONG_INLINE void solve_qp() noexcept
     {
+        // add constant part from linearization to bounds
+        m_lbx -= m_x;
+        m_ubx -= m_x;
+        m_lbg -= m_g;
+        m_ubg -= m_g;
+
         m_qp_solver.solve(m_lag_hess, m_cost_grad, m_lbx, m_ubx, m_g_jac, m_lbg, m_ubg);
         m_info.qp_iter += m_qp_solver.info().iter;
 
@@ -379,15 +405,11 @@ protected:
     {
         scalar_t c = scalar_t(0);
 
-        prob.set_decision_variable(x);
-
         // l <= g(x) <= u
-        prob.eval_constraints(m_g, m_lbg, m_ubg);
         c += (m_lbg - m_g).cwiseMax(0.0).sum();
         c += (m_g - m_ubg).cwiseMax(0.0).sum();
 
         // l <= x <= u
-        prob.eval_variable_bounds(m_lbx, m_ubx);
         c += (m_lbx - x).cwiseMax(0.0).sum();
         c += (x - m_ubx).cwiseMax(0.0).sum();
 
@@ -399,15 +421,11 @@ protected:
     {
         scalar_t c = scalar_t(0);
 
-        prob.set_decision_variable(x);
-
         // lbg <= g <= ubg
-        prob.eval_constraints(m_g, m_lbg, m_ubg);
         c = fmax(c, (m_lbg - m_g).maxCoeff());
         c = fmax(c, (m_g - m_ubg).maxCoeff());
 
         // l <= x <= u
-        prob.eval_variable_bounds(m_lbx, m_ubx);
         c = fmax(c, (m_lbx - x).maxCoeff());
         c = fmax(c, (x - m_ubx).maxCoeff());
 
@@ -415,19 +433,19 @@ protected:
     }
 
     EIGEN_STRONG_INLINE scalar_t
-    max_complementarity_violation(Eigen::Ref<Eigen::VectorX<scalar_t>> x, const Eigen::Ref<const Eigen::VectorX<scalar_t>> &dual) noexcept
+    max_complementarity_violation(Eigen::Ref<Eigen::VectorX<scalar_t>> x,
+                                  const Eigen::Ref<const Eigen::VectorX<scalar_t>> &dual,
+                                  const Eigen::Ref<const Eigen::VectorX<scalar_t>> &dual_bounds) noexcept
     {
         scalar_t c = scalar_t(0);
 
-        prob.set_decision_variable(x);
-
         // lbg <= g <= ubg
-        prob.eval_constraints(m_g, m_lbg, m_ubg);
         c = fmax(c, (m_lbg - m_g).cwiseMax(0.0).cwiseProduct(dual).maxCoeff());
         c = fmax(c, (m_g - m_ubg).cwiseMax(0.0).cwiseProduct(dual).maxCoeff());
 
-        // note that we only check the complementarity condition for non-linear constraints,
-        // the complementarity condition for variable bounds should already be satisfied by the QP solution
+        // l <= x <= u
+        c = fmax(c, (m_lbx - x).cwiseMax(0.0).cwiseProduct(dual_bounds).maxCoeff());
+        c = fmax(c, (x - m_ubx).cwiseMax(0.0).cwiseProduct(dual_bounds).maxCoeff());
 
         return c;
     }
@@ -437,18 +455,7 @@ protected:
                                const Eigen::Ref<const Eigen::VectorX<scalar_t>> &dual,
                                const Eigen::Ref<const Eigen::VectorX<scalar_t>> &dual_bounds) noexcept
     {
-        scalar_t c = scalar_t(0);
-
-        prob.set_decision_variable(x);
-
-        prob.eval_objective_gradient(m_cost_grad);
-
-        Eigen::Map<Eigen::VectorX<scalar_t>> jacobian_buffer(m_g_jac.valuePtr(), m_g_jac.nonZeros());
-        prob.eval_constraints_jacobian(jacobian_buffer);
-
-        c = (m_cost_grad + m_g_jac.transpose() * dual + dual_bounds).cwiseAbs().maxCoeff();
-
-        return c;
+        return (m_cost_grad + m_g_jac.transpose() * dual + dual_bounds).cwiseAbs().maxCoeff();
     }
 
     /** step size selection: line search / filter / trust region */
@@ -484,6 +491,7 @@ protected:
             // we are at watchdog search beginning
             if (m_watchdog_step == 0)
             {
+                eval_constraints(m_x);
                 scalar_t constr_l1 = l1_constraints_violation(m_x);
                 // for a full step m_lam_qp is lam_{k+1} and a good estimate for mu
                 m_mu_search_begin = m_lam_qp.template lpNorm<Eigen::Infinity>() + m_settings.K;
@@ -498,6 +506,7 @@ protected:
 
                 prob.set_decision_variable(m_x_step_line_search);
                 scalar_t cost_step = prob.eval_objective();
+                eval_constraints(m_x_step_line_search);
                 scalar_t phi_step = cost_step + m_mu_search_begin * l1_constraints_violation(m_x_step_line_search);
 
                 if (phi_step > (m_phi_begin + m_settings.eta * m_Dp_phi_begin))
@@ -532,6 +541,7 @@ protected:
 
                 prob.set_decision_variable(m_x_step_line_search);
                 scalar_t cost_step = prob.eval_objective();
+                eval_constraints(m_x_step_line_search);
                 scalar_t phi_step = cost_step + m_mu_search_begin * l1_constraints_violation(m_x_step_line_search);
 
                 if (phi_step <= (m_phi_begin + m_settings.eta * m_Dp_phi_begin))
@@ -571,6 +581,7 @@ protected:
         // watchdog strategy failed, we have to backtrack now...
 
         // first we start with a line search from current iterate
+        eval_constraints(m_x);
         scalar_t constr_l1 = l1_constraints_violation(m_x);
         scalar_t mu = std::abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1) + m_settings.K;
 
@@ -587,6 +598,7 @@ protected:
 
             prob.set_decision_variable(m_x_step_line_search);
             scalar_t cost_step = prob.eval_objective();
+            eval_constraints(m_x_step_line_search);
             phi_step = cost_step + mu * l1_constraints_violation(m_x_step_line_search);
 
             if (phi_step <= (phi_current + alpha * m_settings.eta * Dp_phi_current))
@@ -610,6 +622,7 @@ protected:
 
             // as a last resort we perform a line search on the last primal merit decrease iterate
             // in the worst case this is just the beginning of the watchdog search
+            eval_constraints(m_x_merit_decrease);
             constr_l1 = l1_constraints_violation(m_x_merit_decrease);
             mu = std::abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1) + m_settings.K;
 
@@ -625,6 +638,7 @@ protected:
 
                 prob.set_decision_variable(m_x_step_line_search);
                 scalar_t cost_step = prob.eval_objective();
+                eval_constraints(m_x_step_line_search);
                 phi_step = cost_step + mu * l1_constraints_violation(m_x_step_line_search);
 
                 if (phi_step <= (phi_current + alpha * m_settings.eta * Dp_phi_current))
