@@ -4,7 +4,7 @@ QPSWIFT_VERSION=${QPSWIFT_VERSION:-v0.0.2};
 
 echo "Installing QPSwift..."
 
-git git clone https://github.com/qpSWIFT/qpSWIFT.git --recursive qpswift
+git clone --recursive https://github.com/qpSWIFT/qpSWIFT.git qpswift
 cd qpswift
 git checkout "$QPSWIFT_VERSION"
 

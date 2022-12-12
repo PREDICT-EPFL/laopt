@@ -4,7 +4,7 @@ PROXQP_VERSION=${PROXQP_VERSION:-v0.2.13};
 
 echo "Installing ProxQP..."
 
-git git clone https://github.com/Simple-Robotics/proxsuite.git --recursive proxqp
+git clone --recursive https://github.com/Simple-Robotics/proxsuite.git proxqp
 cd proxqp
 git checkout "$PROXQP_VERSION"
 
