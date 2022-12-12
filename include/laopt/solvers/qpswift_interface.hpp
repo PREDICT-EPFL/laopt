@@ -67,43 +67,6 @@ public:
                                         m_A_qpswift.outerIndexPtr(), m_A_qpswift.innerIndexPtr(), m_A_qpswift.valuePtr(),
                                         m_G_qpswift.outerIndexPtr(), m_G_qpswift.innerIndexPtr(), m_G_qpswift.valuePtr(),
                                         m_c_qpswift.data(), m_h_qpswift.data(), m_b_qpswift.data(), 0.0, nullptr);
-//            std::cout << m_c_qpswift.transpose() << std::endl;
-//            std::cout << m_h_qpswift.transpose() << std::endl;
-//            std::cout << m_b_qpswift.transpose() << std::endl;
-//            Eigen::Map<Eigen::Vector<qp_real, -1>> primal_solution2(m_qpswift_solver->x, m_qpswift_solver->n);
-//            std::cout << primal_solution2.transpose() << std::endl;
-//            Eigen::Map<Eigen::Vector<qp_real, -1>> dual_eq_solution2(m_qpswift_solver->y, m_qpswift_solver->p);
-//            std::cout << dual_eq_solution2.transpose() << std::endl;
-//            Eigen::Map<Eigen::Vector<qp_real, -1>> dual_ineq_solution2(m_qpswift_solver->z, m_qpswift_solver->m);
-//            std::cout << dual_ineq_solution2.transpose() << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->kktmatrix->jc[m_qpswift_solver->kkt->kktmatrix->n]; i++) {
-//                std::cout << m_qpswift_solver->kkt->kktmatrix->pr[i] << " ";
-//            }
-//            std::cout << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->kktmatrix->n; i++) {
-//                std::cout << m_qpswift_solver->kkt->Lp[i] << " ";
-//            }
-//            std::cout << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->Lp[m_qpswift_solver->kkt->kktmatrix->n]; i++) {
-//                std::cout << m_qpswift_solver->kkt->Li[i] << " ";
-//            }
-//            std::cout << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->Lp[m_qpswift_solver->kkt->kktmatrix->n]; i++) {
-//                std::cout << m_qpswift_solver->kkt->Lx[i] << " ";
-//            }
-//            std::cout << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->kktmatrix->n; i++) {
-//                std::cout << m_qpswift_solver->kkt->D[i] << " ";
-//            }
-//            std::cout << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->kktmatrix->n; i++) {
-//                std::cout << m_qpswift_solver->kkt->P[i] << " ";
-//            }
-//            std::cout << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->kktmatrix->n; i++) {
-//                std::cout << m_qpswift_solver->kkt->b[i] << " ";
-//            }
-//            std::cout << std::endl;
         }
         else
         {
@@ -237,44 +200,6 @@ public:
 
             m_qpswift_solver->stats->ldl_numeric = 0.0;
             m_qpswift_solver->stats->tsetup = toc(&tsetup);
-
-//            std::cout << Eigen::Map<Eigen::Vector<qp_real, -1>>(m_qpswift_solver->c, m_qpswift_solver->n).transpose() << std::endl;
-//            std::cout << Eigen::Map<Eigen::Vector<qp_real, -1>>(m_qpswift_solver->h, m_qpswift_solver->m).transpose() << std::endl;
-//            std::cout << Eigen::Map<Eigen::Vector<qp_real, -1>>(m_qpswift_solver->b, m_qpswift_solver->p).transpose() << std::endl;
-//            Eigen::Map<Eigen::Vector<qp_real, -1>> primal_solution2(m_qpswift_solver->x, m_qpswift_solver->n);
-//            std::cout << primal_solution2.transpose() << std::endl;
-//            Eigen::Map<Eigen::Vector<qp_real, -1>> dual_eq_solution2(m_qpswift_solver->y, m_qpswift_solver->p);
-//            std::cout << dual_eq_solution2.transpose() << std::endl;
-//            Eigen::Map<Eigen::Vector<qp_real, -1>> dual_ineq_solution2(m_qpswift_solver->z, m_qpswift_solver->m);
-//            std::cout << dual_ineq_solution2.transpose() << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->kktmatrix->jc[m_qpswift_solver->kkt->kktmatrix->n]; i++) {
-//                std::cout << m_qpswift_solver->kkt->kktmatrix->pr[i] << " ";
-//            }
-//            std::cout << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->kktmatrix->n; i++) {
-//                std::cout << m_qpswift_solver->kkt->Lp[i] << " ";
-//            }
-//            std::cout << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->Lp[m_qpswift_solver->kkt->kktmatrix->n]; i++) {
-//                std::cout << m_qpswift_solver->kkt->Li[i] << " ";
-//            }
-//            std::cout << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->Lp[m_qpswift_solver->kkt->kktmatrix->n]; i++) {
-//                std::cout << m_qpswift_solver->kkt->Lx[i] << " ";
-//            }
-//            std::cout << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->kktmatrix->n; i++) {
-//                std::cout << m_qpswift_solver->kkt->D[i] << " ";
-//            }
-//            std::cout << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->kktmatrix->n; i++) {
-//                std::cout << m_qpswift_solver->kkt->P[i] << " ";
-//            }
-//            std::cout << std::endl;
-//            for (int i = 0; i < m_qpswift_solver->kkt->kktmatrix->n; i++) {
-//                std::cout << m_qpswift_solver->kkt->b[i] << " ";
-//            }
-//            std::cout << std::endl;
         }
 
         set_qpswift_settings();
