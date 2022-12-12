@@ -15,10 +15,12 @@
 #include "gtest/gtest.h"
 
 /**
- * min_x f(x) = (x2-2)^2
+ * min_x f(x) = (x2-2)^2 - x3 + x4
  *  s.t.
  *       0 = x1^2 + x2 - 1
  *       -1 <= x1 <= 1
+ *       -1 <= x3 <= 1
+ *       -1 <= x4 <= 1
  */
 template<typename scalar_t_>
 struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>>
@@ -31,9 +33,9 @@ struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>>
     struct Cost {};
     template<typename X, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
     EIGEN_STRONG_INLINE Scalar
-    function_impl(Cost, const Eigen::MatrixBase<X>& x1, const Eigen::MatrixBase<X>& x2) noexcept
+    function_impl(Cost, const Eigen::MatrixBase<X>& x) noexcept
     {
-        return (x2(0) - 2.0) * (x2(0) - 2.0);
+        return (x(1) - 2.0) * (x(1) - 2.0) - x(2) + x(3);
     }
 
     /**
@@ -44,27 +46,25 @@ struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>>
     struct Equality {};
     template<typename X, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
     EIGEN_STRONG_INLINE Scalar
-    function_impl(Equality, const Eigen::MatrixBase<X>& x1, const Eigen::MatrixBase<X>& x2) noexcept
+    function_impl(Equality, const Eigen::MatrixBase<X>& x) noexcept
     {
-        return x1(0) * x1(0) + x2(0) - 1.0;
+        return x(0) * x(0) + x(1) - 1.0;
     }
 
-    Variable<1> x1_var;
-    Variable<1> x2_var;
+    Variable<4> x_var;
 
     SimpleExample() = default;
 
     template<typename Problem>
     void define_problem(Problem& problem)
     {
-        problem.add_variable(x1_var);
-        problem.add_variable(x2_var);
+        problem.add_variable(x_var);
 
-        problem.add_obj(this->function(Cost{}, x1_var, x2_var));
+        problem.add_obj(this->function(Cost{}, x_var));
 
-        problem.add_constr(-1 <= x1_var <= 1);
+        problem.add_constr(-1 <= x_var({0, 2, 3}) <= 1);
 
-        problem.add_constr(this->function(Equality{}, x1_var, x2_var) == 0);
+        problem.add_constr(this->function(Equality{}, x_var) == 0);
     }
 };
 
@@ -88,13 +88,24 @@ TEST(SQPTest, SimpleExampleOSQP)
     solver.settings().verbose = true;
 
     // Set the initial primal variable
-    my_problem.x1_var << 0.5;
-    my_problem.x2_var << 1.5;
+    my_problem.x_var << 0.5, 1.5, 0.0, 0.0;
 
     solver.solve();
 
-    EXPECT_NEAR(my_problem.x1_var, 0, 1e-4);
-    EXPECT_NEAR(my_problem.x2_var, 1, 1e-4);
+    EXPECT_NEAR(my_problem.x_var(0), 0, 1e-4);
+    EXPECT_NEAR(my_problem.x_var(1), 1, 1e-4);
+    EXPECT_NEAR(my_problem.x_var(2), 1, 1e-4);
+    EXPECT_NEAR(my_problem.x_var(3), -1, 1e-4);
+
+    EXPECT_NEAR(solver.primal()(0), 0, 1e-4);
+    EXPECT_NEAR(solver.primal()(1), 1, 1e-4);
+    EXPECT_NEAR(solver.primal()(2), 1, 1e-4);
+    EXPECT_NEAR(solver.primal()(3), -1, 1e-4);
+    EXPECT_NEAR(solver.dual()(0), 2, 1e-4);
+    EXPECT_NEAR(solver.dual_bounds()(0), 0, 1e-4);
+    EXPECT_NEAR(solver.dual_bounds()(1), 0, 1e-4);
+    EXPECT_NEAR(solver.dual_bounds()(2), 1, 1e-4);
+    EXPECT_NEAR(solver.dual_bounds()(3), -1, 1e-4);
 }
 #endif
 
@@ -118,13 +129,24 @@ TEST(SQPTest, SimpleExampleProxQP)
     solver.settings().verbose = true;
 
     // Set the initial primal variable
-    my_problem.x1_var << 0.5;
-    my_problem.x2_var << 1.5;
+    my_problem.x_var << 0.5, 1.5, 0.0, 0.0;
 
     solver.solve();
 
-    EXPECT_NEAR(my_problem.x1_var, 0, 1e-4);
-    EXPECT_NEAR(my_problem.x2_var, 1, 1e-4);
+    EXPECT_NEAR(my_problem.x_var(0), 0, 1e-4);
+    EXPECT_NEAR(my_problem.x_var(1), 1, 1e-4);
+    EXPECT_NEAR(my_problem.x_var(2), 1, 1e-4);
+    EXPECT_NEAR(my_problem.x_var(3), -1, 1e-4);
+
+    EXPECT_NEAR(solver.primal()(0), 0, 1e-4);
+    EXPECT_NEAR(solver.primal()(1), 1, 1e-4);
+    EXPECT_NEAR(solver.primal()(2), 1, 1e-4);
+    EXPECT_NEAR(solver.primal()(3), -1, 1e-4);
+    EXPECT_NEAR(solver.dual()(0), 2, 1e-4);
+    EXPECT_NEAR(solver.dual_bounds()(0), 0, 1e-4);
+    EXPECT_NEAR(solver.dual_bounds()(1), 0, 1e-4);
+    EXPECT_NEAR(solver.dual_bounds()(2), 1, 1e-4);
+    EXPECT_NEAR(solver.dual_bounds()(3), -1, 1e-4);
 }
 #endif
 
@@ -148,12 +170,23 @@ TEST(SQPTest, SimpleExampleQPSwift)
     solver.settings().verbose = true;
 
     // Set the initial primal variable
-    my_problem.x1_var << 0.5;
-    my_problem.x2_var << 1.5;
+    my_problem.x_var << 0.5, 1.5, 0.0, 0.0;
 
     solver.solve();
 
-    EXPECT_NEAR(my_problem.x1_var, 0, 1e-4);
-    EXPECT_NEAR(my_problem.x2_var, 1, 1e-4);
+    EXPECT_NEAR(my_problem.x_var(0), 0, 1e-4);
+    EXPECT_NEAR(my_problem.x_var(1), 1, 1e-4);
+    EXPECT_NEAR(my_problem.x_var(2), 1, 1e-4);
+    EXPECT_NEAR(my_problem.x_var(3), -1, 1e-4);
+
+    EXPECT_NEAR(solver.primal()(0), 0, 1e-4);
+    EXPECT_NEAR(solver.primal()(1), 1, 1e-4);
+    EXPECT_NEAR(solver.primal()(2), 1, 1e-4);
+    EXPECT_NEAR(solver.primal()(3), -1, 1e-4);
+    EXPECT_NEAR(solver.dual()(0), 2, 1e-4);
+    EXPECT_NEAR(solver.dual_bounds()(0), 0, 1e-4);
+    EXPECT_NEAR(solver.dual_bounds()(1), 0, 1e-4);
+    EXPECT_NEAR(solver.dual_bounds()(2), 1, 1e-4);
+    EXPECT_NEAR(solver.dual_bounds()(3), -1, 1e-4);
 }
 #endif
