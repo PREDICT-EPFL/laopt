@@ -21,7 +21,6 @@ private:
     OSQPWorkspace* m_osqp_workspace;
     OSQPSettings* m_osqp_settings;
     OSQPData* m_osqp_data;
-    bool m_osqp_initialized;
 
     Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, c_int> m_P_osqp;
     Eigen::VectorX<scalar_t> m_q_osqp;
@@ -37,7 +36,6 @@ public:
         m_osqp_workspace = nullptr;
         m_osqp_settings = (OSQPSettings*) c_malloc(sizeof(OSQPSettings));
         m_osqp_data = (OSQPData*) c_malloc(sizeof(OSQPData));
-        m_osqp_initialized = false;
 
         if (m_osqp_data) {
             m_osqp_data->P = (csc*) c_malloc(sizeof(csc));
@@ -54,7 +52,7 @@ public:
 
     ~OSQPSolver()
     {
-        if (m_osqp_initialized) {
+        if (m_osqp_workspace != nullptr) {
             osqp_cleanup(m_osqp_workspace);
         }
         if (m_osqp_data) {
@@ -103,16 +101,15 @@ public:
 
         if (!this->m_settings.reuse_pattern)
         {
-            if (m_osqp_initialized) {
+            if (m_osqp_workspace != nullptr) {
                 osqp_cleanup(m_osqp_workspace);
             }
 
             osqp_setup(&m_osqp_workspace, m_osqp_data, m_osqp_settings);
-            m_osqp_initialized = true;
         }
         else
         {
-            eigen_assert(m_osqp_initialized);
+            eigen_assert(m_osqp_workspace != nullptr);
 
             osqp_update_P_A(m_osqp_workspace, m_osqp_data->P->x, OSQP_NULL, m_osqp_data->P->nzmax,
                                               m_osqp_data->A->x, OSQP_NULL, m_osqp_data->A->nzmax);
@@ -465,7 +462,7 @@ private:
         m_osqp_settings->warm_start = true;
         m_osqp_settings->verbose = this->m_settings.verbose;
 
-        if (m_osqp_initialized) {
+        if (m_osqp_workspace != nullptr) {
             osqp_update_eps_rel(m_osqp_workspace, this->m_settings.eps_rel);
             osqp_update_eps_abs(m_osqp_workspace, this->m_settings.eps_abs);
             osqp_update_max_iter(m_osqp_workspace, this->m_settings.max_iter);
