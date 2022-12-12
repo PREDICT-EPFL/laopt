@@ -117,8 +117,6 @@ struct WeightedSumFunctionMemory
         weights.array() = 1;
 
         w.hessian.allocate_memory(hessian);
-        using MapType = Eigen::Map<Eigen::VectorX<scalar_t>>;
-        hessian_buffer.~MapType();
         new (&hessian_buffer) Eigen::Map<Eigen::VectorX<scalar_t>>(hessian.valuePtr(), hessian.nonZeros());
 
         // Set this memory as the buffer for the function

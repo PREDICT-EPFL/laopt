@@ -173,10 +173,6 @@ public:
 
     void set_buffer(Eigen::Ref<Eigen::MatrixX<scalar_t>> mat)
     {
-        {
-            using MapType = Eigen::Map<Eigen::MatrixX<scalar_t>>;
-            m_mat.~MapType();
-        }
         new (&m_mat) Eigen::Map<Eigen::MatrixX<scalar_t>>(mat.data(), mat.rows(), mat.cols());
     }
 

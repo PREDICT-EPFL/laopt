@@ -200,14 +200,11 @@ TEST(IndexedVectorTest, Assignment) {
 }
 
 TEST(IndexedVectorTest, NullMap) {
-
-    using map_t = laopt::IndexedVector<Eigen::Map<Eigen::Vector<double, 3>>>;
-    map_t vec(nullptr);
     Eigen::Vector<double, 3> x;
     x << 1, 2, 3;
 
-    vec.~map_t();
-    new (&vec) map_t(x.data());
+    using map_t = laopt::IndexedVector<Eigen::Map<Eigen::Vector<double, 3>>>;
+    map_t vec(x.data());
 
     testing::internal::CaptureStdout();
     std::cout << "vec = " << vec.transpose();
