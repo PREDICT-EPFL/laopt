@@ -1,6 +1,6 @@
 #!/bin/bash
 
-EIGEN_VERSION=${OSQP_VERSION:-v0.6.2};
+OSQP_VERSION=${OSQP_VERSION:-v0.6.2};
 
 echo "Installing osqp..."
 
@@ -10,6 +10,6 @@ git checkout "$OSQP_VERSION"
 
 mkdir build
 cd build
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j2
 sudo make install

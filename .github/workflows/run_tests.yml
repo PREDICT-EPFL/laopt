@@ -13,6 +13,8 @@ env:
   CASADI_VERSION: 3.3.5
   EIGEN_VERSION: 3.4.0
   OSQP_VERSION: v0.6.2
+  PROXQP_VERSION: v0.2.13
+  QPSWIFT_VERSION: v0.0.2
   BUILD_RELEASE: ON
   ENABLE_SANITIZERS: ON
 
@@ -84,6 +86,14 @@ jobs:
       - name: Install osqp
         working-directory: build_external
         run: bash  ../ci/shared/install_osqp.sh
+
+      - name: Install ProxQP
+        working-directory: build_external
+        run: bash  ../ci/shared/install_proxqp.sh
+
+      - name: Install QPSwift
+        working-directory: build_external
+        run: bash  ../ci/shared/install_qpswift.sh
 
       - name: Build laopt
         working-directory: build
