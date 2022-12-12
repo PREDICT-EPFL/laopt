@@ -125,8 +125,8 @@ public:
 
         if (init_z)
         {
-            Eigen::Map<Eigen::VectorX<scalar_t>>(z_L, n) = dual_bounds;
-            Eigen::Map<Eigen::VectorX<scalar_t>>(z_U, n) = dual_bounds;
+            Eigen::Map<Eigen::VectorX<scalar_t>>(z_L, n) = -dual_bounds.cwiseMin(0.0);
+            Eigen::Map<Eigen::VectorX<scalar_t>>(z_U, n) = dual_bounds.cwiseMax(0.0);
         }
 
 		if (init_lambda)
