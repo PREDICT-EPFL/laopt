@@ -10,6 +10,6 @@ git checkout "$SIMDE_VERSION"
 
 mkdir build
 cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j2
-sudo make install
+meson .. -Dtests=false
+ninja
+sudo ninja install
