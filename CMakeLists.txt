@@ -4,6 +4,8 @@ project(laopt)
 #### User options ####
 option(WITH_IPOPT "Build IPOPT interface" ON)
 option(WITH_OSQP "Build OSQP interface" ON)
+option(WITH_PROXQP "Build ProxQP interface" ON)
+option(WITH_QPSWIFT "Build qpSWIFT interface" ON)
 option(BUILD_BENCHMARKS "Build benchmarks" ON)
 option(BUILD_EXAMPLES "Build examples" ON)
 option(BUILD_TESTS "Build tests" ON)
@@ -60,16 +62,32 @@ endif ()
 ## Find solvers, append to laOPT interface library
 # Find IPOPT
 if (WITH_IPOPT)
+    add_compile_definitions(LAOPT_WITH_IPOPT=1)
     find_package(Ipopt REQUIRED)
     list(APPEND SOLVER_INCLUDE_DIRS ${Ipopt_INCLUDE_DIRS})
     list(APPEND SOLVER_LIBRARIES ${Ipopt_LIBRARIES})
 endif ()
 
-# Find OsqpEigen
+# Find Osqp
 if (WITH_OSQP)
+    add_compile_definitions(LAOPT_WITH_OSQP=1)
     find_package(osqp REQUIRED)
     list(APPEND SOLVER_LIBRARIES osqp::osqp)
 endif ()
+
+# Find ProxQP
+if (WITH_PROXQP)
+    add_compile_definitions(LAOPT_WITH_PROXQP=1)
+    find_package(proxsuite REQUIRED)
+    list(APPEND SOLVER_LIBRARIES proxsuite::proxsuite)
+endif ()
+
+# Find qpSwift
+if (WITH_QPSWIFT)
+    add_compile_definitions(LAOPT_WITH_QPSWIFT=1)
+    find_package(qpSWIFT REQUIRED)
+    list(APPEND SOLVER_LIBRARIES qpSWIFT::qpSWIFT-static)
+endif()
 
 ## Define laOPT interface library (to be linked into user code)
 add_library(laopt INTERFACE)

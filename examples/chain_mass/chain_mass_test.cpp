@@ -6,9 +6,13 @@
 #include "chain_mass_ocp.hpp"
 #include "laopt/tools/multiple_shooting.hpp"
 #include "laopt/tools/radau_collocation.hpp"
+#ifdef LAOPT_WITH_IPOPT
 #include "laopt/ipopt_interface/ipopt_wrapper.hpp"
+#endif
 #include "laopt/solvers/sqp_solver.hpp"
+#ifdef LAOPT_WITH_OSQP
 #include "laopt/solvers/osqp_interface.hpp"
+#endif
 
 #include "examples_helper.hpp"
 
@@ -75,6 +79,7 @@ int main()
         /* Construct laOPT problem for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
 
+#ifdef LAOPT_WITH_IPOPT
         {
             std::cout << "Multiple Shooting - Ipopt\n";
 
@@ -83,7 +88,9 @@ int main()
 
             solve_and_print(transcription, opt_problem, solver);
         }
+#endif
 
+#ifdef LAOPT_WITH_OSQP
         {
             std::cout << "Multiple Shooting - SQP\n";
 
@@ -94,6 +101,7 @@ int main()
 
             solve_and_print(transcription, opt_problem, solver);
         }
+#endif
     }
 
     /* Solve with Radau Collocation transcription */
@@ -114,6 +122,7 @@ int main()
         /* Construct laOPT problem for transcribed OCP using according tape */
         OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
 
+#ifdef LAOPT_WITH_IPOPT
         {
             std::cout << "Radau Collocation - Ipopt\n";
 
@@ -122,7 +131,9 @@ int main()
 
             solve_and_print(transcription, opt_problem, solver);
         }
+#endif
 
+#ifdef LAOPT_WITH_OSQP
         {
             std::cout << "Radau Collocation - SQP\n";
 
@@ -133,6 +144,7 @@ int main()
 
             solve_and_print(transcription, opt_problem, solver);
         }
+#endif
     }
 
     return 0;

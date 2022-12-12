@@ -1,7 +1,15 @@
 #include <iostream>
 #include "laopt/laopt.hpp"
 #include "laopt/solvers/sqp_solver.hpp"
+#ifdef LAOPT_WITH_OSQP
 #include "laopt/solvers/osqp_interface.hpp"
+#endif
+#ifdef LAOPT_WITH_PROXQP
+#include "laopt/solvers/proxqp_interface.hpp"
+#endif
+#ifdef LAOPT_WITH_QPSWIFT
+#include "laopt/solvers/qpswift_interface.hpp"
+#endif
 
 #include "test_utils.hpp"
 #include "gtest/gtest.h"
@@ -60,7 +68,7 @@ struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>>
     }
 };
 
-
+#ifdef LAOPT_WITH_OSQP
 TEST(SQPTest, SimpleExampleOSQP)
 {
     using scalar_t = double;
@@ -88,3 +96,64 @@ TEST(SQPTest, SimpleExampleOSQP)
     EXPECT_NEAR(my_problem.x1_var, 0, 1e-4);
     EXPECT_NEAR(my_problem.x2_var, 1, 1e-4);
 }
+#endif
+
+#ifdef LAOPT_WITH_PROXQP
+TEST(SQPTest, SimpleExampleProxQP)
+{
+    using scalar_t = double;
+
+    using UserCode = SimpleExample<scalar_t>;
+    UserCode my_problem;
+    auto sparsity = laopt::generate_sparsity(my_problem);
+    auto tape = laopt::generate_tape(my_problem, sparsity);
+
+    std::cout << sparsity << std::endl;
+    std::cout << tape << std::endl;
+
+    using Problem = laopt::Problem<UserCode>;
+    Problem prob(my_problem, tape);
+
+    laopt::SQPSolver<Problem, laopt::ProxQPSolver<Problem::scalar_t>> solver(prob);
+    solver.settings().verbose = true;
+
+    // Set the initial primal variable
+    my_problem.x1_var << 0.5;
+    my_problem.x2_var << 1.5;
+
+    solver.solve();
+
+    EXPECT_NEAR(my_problem.x1_var, 0, 1e-4);
+    EXPECT_NEAR(my_problem.x2_var, 1, 1e-4);
+}
+#endif
+
+#ifdef LAOPT_WITH_QPSWIFT
+TEST(SQPTest, SimpleExampleQPSwift)
+{
+    using scalar_t = double;
+
+    using UserCode = SimpleExample<scalar_t>;
+    UserCode my_problem;
+    auto sparsity = laopt::generate_sparsity(my_problem);
+    auto tape = laopt::generate_tape(my_problem, sparsity);
+
+    std::cout << sparsity << std::endl;
+    std::cout << tape << std::endl;
+
+    using Problem = laopt::Problem<UserCode>;
+    Problem prob(my_problem, tape);
+
+    laopt::SQPSolver<Problem, laopt::QPSwiftSolver<Problem::scalar_t>> solver(prob);
+    solver.settings().verbose = true;
+
+    // Set the initial primal variable
+    my_problem.x1_var << 0.5;
+    my_problem.x2_var << 1.5;
+
+    solver.solve();
+
+    EXPECT_NEAR(my_problem.x1_var, 0, 1e-4);
+    EXPECT_NEAR(my_problem.x2_var, 1, 1e-4);
+}
+#endif
