@@ -5,6 +5,9 @@
 #include "laopt/solvers/qp_base.hpp"
 #include "osqp.h"
 
+// TODO: Handle conflicting macros better
+#undef WARM_START
+
 namespace laopt
 {
 
