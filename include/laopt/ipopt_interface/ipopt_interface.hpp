@@ -25,17 +25,20 @@ private:
 public:
 	// internal storage for primal and dual variables
 	Eigen::VectorX<scalar_t> primal;
+    Eigen::VectorX<scalar_t> dual_bounds;
     Eigen::VectorX<scalar_t> dual;
 
     /* Constructor. */
 	explicit Solver_IPOpt(UserProblem& prob) :
         prob(prob),
         primal(prob.variables()),
+        dual_bounds(prob.variables()),
         dual(prob.constraints.rows())
 	{
         // Default to zero if user doesn't set
         primal.setZero();
         dual.setZero();
+        dual_bounds.setZero();
 
 		prob.lagrangian.hessian.allocate_memory(lag_hessian);
 
@@ -118,6 +121,12 @@ public:
 		if (init_x)
         {
             Eigen::Map<Eigen::VectorX<scalar_t>>(x, n) = primal;
+        }
+
+        if (init_z)
+        {
+            Eigen::Map<Eigen::VectorX<scalar_t>>(z_L, n) = dual_bounds;
+            Eigen::Map<Eigen::VectorX<scalar_t>>(z_U, n) = dual_bounds;
         }
 
 		if (init_lambda)
@@ -309,6 +318,8 @@ public:
 	) override
 	{
 		primal = Eigen::Map<const Eigen::VectorX<Ipopt::Number>>(x, n);
+        dual_bounds = -Eigen::Map<const Eigen::VectorX<Ipopt::Number>>(z_L, n);
+        dual_bounds += Eigen::Map<const Eigen::VectorX<Ipopt::Number>>(z_U, n);
 		dual = Eigen::Map<const Eigen::VectorX<Ipopt::Number>>(lambda, m);
 	}
 };

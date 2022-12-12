@@ -147,6 +147,16 @@ public:
     EIGEN_STRONG_INLINE const QPSolver& qp_solver() const noexcept { return m_qp_solver; }
     EIGEN_STRONG_INLINE QPSolver& qp_solver() noexcept { return m_qp_solver; }
 
+    /* Setters */
+    void set_initial_primal(const Eigen::VectorX<scalar_t> &init_primal) { m_x = init_primal; }
+    void set_initial_dual(const Eigen::VectorX<scalar_t> &init_dual) { m_lam = init_dual; }
+    void set_initial_dual_bounds(const Eigen::VectorX<scalar_t> &init_dual_bounds) { m_lam_bounds = init_dual_bounds; }
+
+    /* Getters */
+    const Eigen::VectorX<scalar_t> &primal() const { return m_x; }
+    const Eigen::VectorX<scalar_t> &dual() const { return m_lam; }
+    const Eigen::VectorX<scalar_t> &dual_bounds() const { return m_lam_bounds; }
+
     /** solve the NLP */
     sqp_info_t solve() noexcept
     {

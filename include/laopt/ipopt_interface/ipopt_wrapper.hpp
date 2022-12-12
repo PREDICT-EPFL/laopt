@@ -70,15 +70,16 @@ public:
     }
 
     using Scalar = typename OptProblem::scalar_t;
+
     /* Setters */
     void set_initial_primal(const Eigen::VectorX<Scalar> &init_primal) { ipopt_problem->primal = init_primal; }
     void set_initial_dual(const Eigen::VectorX<Scalar> &init_dual) { ipopt_problem->dual = init_dual; }
+    void set_initial_dual_bounds(const Eigen::VectorX<Scalar> &init_dual_bounds) { ipopt_problem->dual_bounds = init_dual_bounds; }
 
     /* Getters */
     const Eigen::VectorX<Scalar> &primal() const { return ipopt_problem->primal; }
-    const Eigen::VectorX<Scalar> &dual_lb() const { return ipopt_problem->dual_lb; }
-    const Eigen::VectorX<Scalar> &dual_ub() const { return ipopt_problem->dual_ub; }
     const Eigen::VectorX<Scalar> &dual() const { return ipopt_problem->dual; }
+    const Eigen::VectorX<Scalar> &dual_bounds() const { return ipopt_problem->dual_bounds; }
 
 protected:
     Ipopt::SmartPtr<IpoptProblem> ipopt_problem;
