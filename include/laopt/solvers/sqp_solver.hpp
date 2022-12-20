@@ -133,6 +133,9 @@ public:
         m_lam.setZero();
         m_lam_bounds.setZero();
 
+        // turn on elastic mode by default to make qp problem always feasible
+        m_qp_solver.settings().elastic_mode = true;
+
         prob.constraints.jacobian.allocate_memory(m_g_jac);
 
         prob.set_decision_variable(m_x);

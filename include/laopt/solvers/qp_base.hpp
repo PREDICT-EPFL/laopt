@@ -16,7 +16,7 @@ struct qp_solver_settings_t {
     bool   reuse_pattern     = false; /** Assume that problem size and sparsity pattern have not changed since last 'solve call' */
     bool   elastic_mode      = false; /** Add slack variables to all non-box constraints to make QP always feasible */
     Scalar elastic_weight_l1 = 1e4;   /** Weight for l1 slacks if elastic mode is activated */
-    Scalar elastic_weight_l2 = 1e3;   /** Weight for l2 slacks if elastic mode is activated */
+    Scalar elastic_weight_l2 = 1e2;   /** Weight for l2 slacks if elastic mode is activated */
     bool   verbose           = false;
 
     bool validate()

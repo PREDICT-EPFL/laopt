@@ -209,7 +209,7 @@ public:
         Eigen::Map<Eigen::Vector<qp_real, -1>> dual_eq_solution(m_qpswift_solver->y, m_qpswift_solver->p);
         Eigen::Map<Eigen::Vector<qp_real, -1>> dual_ineq_solution(m_qpswift_solver->z, m_qpswift_solver->m);
 
-        this->m_x = primal_solution;
+        this->m_x = primal_solution(Eigen::seqN(0, this->m_n));
         // copy eq and ineq dual variables
         int eq_bound_i = 0;
         int ineq_bound_i = 0;
@@ -326,15 +326,26 @@ private:
 
         if (!this->settings().reuse_pattern)
         {
-            Eigen::VectorXi P_qpswift_nnz(this->m_n);
+            int n_vars = this->m_n;
+            if (this->m_settings.elastic_mode)
+            {
+                // we have to add a variable for the slack
+                n_vars += 1;
+            }
+
+            Eigen::VectorXi P_qpswift_nnz(n_vars);
             for (int col = 0; col < H.outerSize(); col++)
             {
                 P_qpswift_nnz(col) = H.outerIndexPtr()[col + 1] - H.outerIndexPtr()[col];
             }
+            if (this->m_settings.elastic_mode)
+            {
+                P_qpswift_nnz(this->m_n) = 1;
+            }
 
-            m_P_qpswift.resize(this->m_n, this->m_n);
+            m_P_qpswift.resize(n_vars, n_vars);
             m_P_qpswift.reserve(P_qpswift_nnz);
-            m_c_qpswift.resize(this->m_n);
+            m_c_qpswift.resize(n_vars);
 
             // copy H
             for (int i = 0; i < H.outerSize(); ++i)
@@ -343,6 +354,14 @@ private:
                 {
                     m_P_qpswift.coeffRef(it.row(), it.col()) = it.value();
                 }
+            }
+
+            if (this->m_settings.elastic_mode)
+            {
+                // add l2 penalties to slack
+                m_P_qpswift.coeffRef(this->m_n, this->m_n) = this->m_settings.elastic_weight_l2;
+                // add l1 penalties to slack
+                m_c_qpswift(this->m_n) = this->m_settings.elastic_weight_l1;
             }
 
             m_P_qpswift.makeCompressed();
@@ -357,9 +376,11 @@ private:
                 int inner_nnz_H_tri = m_P_qpswift.outerIndexPtr()[col + 1] - m_P_qpswift.outerIndexPtr()[col];
                 copy_n_into_sparse_matrix(H.valuePtr() + H.outerIndexPtr()[col], inner_nnz_H_tri, m_P_qpswift, col, 0);
             }
+
+            // entries for slacks are kept from last iteration
         }
 
-        m_c_qpswift = f;
+        m_c_qpswift(Eigen::seqN(0, this->m_n)) = f;
 
         eigen_assert(m_P_qpswift.isCompressed());
     }
@@ -375,9 +396,16 @@ private:
 
         if (!this->settings().reuse_pattern)
         {
+            int n_vars = this->m_n;
+            if (this->m_settings.elastic_mode)
+            {
+                // we have to add a variable for the slack
+                n_vars += 1;
+            }
+
             // keep track of how many nnz we need per column for A (eq) and G (ineq)
-            Eigen::VectorXi A_qpswift_nnz(this->m_n);
-            Eigen::VectorXi G_qpswift_nnz(this->m_n);
+            Eigen::VectorXi A_qpswift_nnz(n_vars);
+            Eigen::VectorXi G_qpswift_nnz(n_vars);
             A_qpswift_nnz.setZero();
             G_qpswift_nnz.setZero();
 
@@ -389,15 +417,27 @@ private:
                     if (this->m_constraint_type[it.row()] == constraint_t::EQ_CONSTR)
                     {
                         A_qpswift_nnz(it.col()) += 1;
+                        if (this->m_settings.elastic_mode)
+                        {
+                            A_qpswift_nnz(this->m_n) += 1;
+                        }
                     }
                     else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_LB_ONLY_CONSTR ||
                              this->m_constraint_type[it.row()] == constraint_t::INEQ_UB_ONLY_CONSTR)
                     {
                         G_qpswift_nnz(it.col()) += 1;
+                        if (this->m_settings.elastic_mode)
+                        {
+                            G_qpswift_nnz(this->m_n) += 1;
+                        }
                     }
                     else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_CONSTR)
                     {
                         G_qpswift_nnz(it.col()) += 2;
+                        if (this->m_settings.elastic_mode)
+                        {
+                            G_qpswift_nnz(this->m_n) += 2;
+                        }
                     }
                 }
             }
@@ -443,6 +483,12 @@ private:
                     num_box_ineq_constraints += 2;
                     G_qpswift_nnz(i) += 2;
                 }
+            }
+            // lower and upper bound for slack variables
+            if (this->m_settings.elastic_mode)
+            {
+                num_box_ineq_constraints += 2;
+                G_qpswift_nnz(this->m_n) += 2;
             }
 
             m_b_qpswift.resize(num_eq_constraints + num_box_eq_constraints);
@@ -508,9 +554,18 @@ private:
                 }
             }
 
-            m_A_qpswift.resize(num_eq_constraints + num_box_eq_constraints, this->m_n);
+            // set slack constraints
+            if (this->m_settings.elastic_mode)
+            {
+                m_h_qpswift(ineq_bound_i) = -scalar_t(0);
+                ineq_bound_i++;
+                m_h_qpswift(ineq_bound_i) = scalar_t(1);
+                ineq_bound_i++;
+            }
+
+            m_A_qpswift.resize(num_eq_constraints + num_box_eq_constraints, n_vars);
             m_A_qpswift.reserve(A_qpswift_nnz);
-            m_G_qpswift.resize(num_ineq_constraints + num_box_ineq_constraints, this->m_n);
+            m_G_qpswift.resize(num_ineq_constraints + num_box_ineq_constraints, n_vars);
             m_G_qpswift.reserve(G_qpswift_nnz);
 
             // copy eq and ineq matrix values
@@ -560,6 +615,62 @@ private:
                     m_G_qpswift.coeffRef(ineq_bound_i++, col) = -1;
                     m_G_qpswift.coeffRef(ineq_bound_i++, col) = 1;
                 }
+            }
+
+            // create entries for the slack constraints
+            if (this->m_settings.elastic_mode)
+            {
+                eq_bound_i = 0;
+                ineq_bound_i = 0;
+                for (int i = 0; i < this->m_m; i++)
+                {
+                    scalar_t slack_coeff = 0;
+
+                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR)
+                    {
+                        slack_coeff = Alb(i);
+                        m_A_qpswift.coeffRef(eq_bound_i, this->m_n) = slack_coeff;
+                        eq_bound_i++;
+                    }
+                    else if (this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
+                    {
+                        if (Alb(i) > scalar_t(0)) {
+                            slack_coeff = -Alb(i);
+                        }
+                        m_G_qpswift.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
+                        ineq_bound_i++;
+                    }
+                    else if (this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
+                    {
+                        if (Aub(i) < scalar_t(0)) {
+                            slack_coeff = Aub(i);
+                        }
+                        m_G_qpswift.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
+                        ineq_bound_i++;
+                    }
+                    else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
+                    {
+                        if (Alb(i) > scalar_t(0)) {
+                            slack_coeff = -Alb(i);
+                        }
+                        m_G_qpswift.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
+                        ineq_bound_i++;
+
+                        slack_coeff = 0;
+                        if (Aub(i) < scalar_t(0)) {
+                            slack_coeff = Aub(i);
+                        }
+                        m_G_qpswift.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
+                        ineq_bound_i++;
+                    }
+                }
+
+                // entry for slack box constraints
+                ineq_bound_i = num_ineq_constraints + num_box_ineq_constraints - 2;
+                m_G_qpswift.coeffRef(ineq_bound_i, this->m_n) = -1;
+                ineq_bound_i++;
+                m_G_qpswift.coeffRef(ineq_bound_i, this->m_n) = 1;
+                ineq_bound_i++;
             }
 
             m_A_qpswift.makeCompressed();
@@ -648,6 +759,55 @@ private:
                     {
                         m_G_qpswift.coeffRef(m_A_to_qpswift_map(it.row()), it.col()) = -it.value();
                         m_G_qpswift.coeffRef(m_A_to_qpswift_map(it.row()) + 1, it.col()) = it.value();
+                    }
+                }
+            }
+
+            // copy slack coefficients
+            if (this->m_settings.elastic_mode)
+            {
+                eq_bound_i = 0;
+                ineq_bound_i = 0;
+                for (int i = 0; i < this->m_m; i++)
+                {
+                    scalar_t slack_coeff = 0;
+
+                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR)
+                    {
+                        slack_coeff = Alb(i);
+                        m_A_qpswift.coeffRef(eq_bound_i, this->m_n) = slack_coeff;
+                        eq_bound_i++;
+                    }
+                    else if (this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
+                    {
+                        if (Alb(i) > scalar_t(0)) {
+                            slack_coeff = -Alb(i);
+                        }
+                        m_G_qpswift.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
+                        ineq_bound_i++;
+                    }
+                    else if (this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
+                    {
+                        if (Aub(i) < scalar_t(0)) {
+                            slack_coeff = Aub(i);
+                        }
+                        m_G_qpswift.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
+                        ineq_bound_i++;
+                    }
+                    else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
+                    {
+                        if (Alb(i) > scalar_t(0)) {
+                            slack_coeff = -Alb(i);
+                        }
+                        m_G_qpswift.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
+                        ineq_bound_i++;
+
+                        slack_coeff = 0;
+                        if (Aub(i) < scalar_t(0)) {
+                            slack_coeff = Aub(i);
+                        }
+                        m_G_qpswift.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
+                        ineq_bound_i++;
                     }
                 }
             }

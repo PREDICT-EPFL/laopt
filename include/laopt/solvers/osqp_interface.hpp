@@ -204,8 +204,8 @@ private:
             int n_vars = this->m_n;
             if (this->m_settings.elastic_mode)
             {
-                // we have to add variables for the slacks
-                n_vars += this->m_lower_bounded_constraints + this->m_upper_bounded_constraints;
+                // we have to add a variable for the slack
+                n_vars += 1;
             }
 
             m_x_osqp.resize(n_vars);
@@ -227,13 +227,13 @@ private:
                 }
             }
 
-            // add l2 penalties to slack
-            for (int i = this->m_n; i < n_vars; ++i)
+            if (this->m_settings.elastic_mode)
             {
-                m_P_osqp.coeffRef(i, i) = this->m_settings.elastic_weight_l2;
+                // add l2 penalties to slack
+                m_P_osqp.coeffRef(this->m_n, this->m_n) = this->m_settings.elastic_weight_l2;
+                // add l1 penalties to slack
+                m_q_osqp(this->m_n) = this->m_settings.elastic_weight_l1;
             }
-            // add l1 penalties to slack
-            m_q_osqp(Eigen::lastN(n_vars - this->m_n)).array() = this->m_settings.elastic_weight_l1;
 
             m_P_osqp.makeCompressed();
         }
@@ -272,8 +272,8 @@ private:
             int n_vars = this->m_n;
             if (this->m_settings.elastic_mode)
             {
-                // we have to add variables for the slacks
-                n_vars += this->m_lower_bounded_constraints + this->m_upper_bounded_constraints;
+                // we have to add a variable for the slack
+                n_vars += 1;
             }
 
             // keep track of how many nnz we need per column
@@ -300,28 +300,10 @@ private:
             // add nnz's for slack constraints
             if (this->m_settings.elastic_mode)
             {
-                unsigned int slack_i = 0;
-                for (int i = 0; i < this->m_m; i++)
-                {
-                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR ||
-                        this->m_constraint_type[i] == constraint_t::INEQ_CONSTR ||
-                        this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
-                    {
-                        // need box constraint on slack (>= 0)
-                        num_box_constraints++;
-                        // add two nnz's for lb slack variable (for constraint and positivity constraint)
-                        A_osqp_nnz(this->m_n + slack_i++) += 2;
-                    }
-                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR ||
-                        this->m_constraint_type[i] == constraint_t::INEQ_CONSTR ||
-                        this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
-                    {
-                        // need box constraint on slack (>= 0)
-                        num_box_constraints++;
-                        // add two nnz's for ub slack variable (for constraint and positivity constraint)
-                        A_osqp_nnz(this->m_n + slack_i++) += 2;
-                    }
-                }
+                // need box constraint on slack in [0, 1]
+                num_box_constraints++;
+                // for each non-linear constraint we have to add slacks + 1 for slack box constraints
+                A_osqp_nnz(this->m_n) = this->m_m + 1;
             }
 
             m_Alb_osqp.resize(this->m_m + num_box_constraints);
@@ -349,27 +331,9 @@ private:
             // set slack constraints
             if (this->m_settings.elastic_mode)
             {
-                for (int i = 0; i < this->m_m; i++)
-                {
-                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR ||
-                        this->m_constraint_type[i] == constraint_t::INEQ_CONSTR ||
-                        this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
-                    {
-                        m_Alb_osqp(this->m_m + bound_i) = scalar_t(0);
-                        m_Aub_osqp(this->m_m + bound_i) = std::numeric_limits<scalar_t>::infinity();
-                        m_lam_osqp(this->m_m + bound_i) = scalar_t(0);
-                        bound_i++;
-                    }
-                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR ||
-                        this->m_constraint_type[i] == constraint_t::INEQ_CONSTR ||
-                        this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
-                    {
-                        m_Alb_osqp(this->m_m + bound_i) = scalar_t(0);
-                        m_Aub_osqp(this->m_m + bound_i) = std::numeric_limits<scalar_t>::infinity();
-                        m_lam_osqp(this->m_m + bound_i) = scalar_t(0);
-                        bound_i++;
-                    }
-                }
+                m_Alb_osqp(this->m_m + bound_i) = scalar_t(0);
+                m_Aub_osqp(this->m_m + bound_i) = scalar_t(1);
+                m_lam_osqp(this->m_m + bound_i) = scalar_t(0);
             }
 
             m_A_osqp.resize(this->m_m + num_box_constraints, n_vars);
@@ -397,28 +361,24 @@ private:
             // create entries for the slack constraints
             if (this->m_settings.elastic_mode)
             {
-                unsigned int slack_i = 0;
                 for (int i = 0; i < this->m_m; i++)
                 {
-                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR ||
-                        this->m_constraint_type[i] == constraint_t::INEQ_CONSTR ||
-                        this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
+                    scalar_t slack_coeff = 0;
+
+                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR || Alb(i) > scalar_t(0))
                     {
-                        m_A_osqp.coeffRef(i, this->m_n + slack_i) = 1;
-                        m_A_osqp.coeffRef(this->m_m + bound_i, this->m_n + slack_i) = 1;
-                        slack_i++;
-                        bound_i++;
+                        slack_coeff = Alb(i);
                     }
-                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR ||
-                        this->m_constraint_type[i] == constraint_t::INEQ_CONSTR ||
-                        this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
+                    else if (Aub(i) < scalar_t(0))
                     {
-                        m_A_osqp.coeffRef(i, this->m_n + slack_i) = -1;
-                        m_A_osqp.coeffRef(this->m_m + bound_i, this->m_n + slack_i) = 1;
-                        slack_i++;
-                        bound_i++;
+                        slack_coeff = Aub(i);
                     }
+
+                    m_A_osqp.coeffRef(i, this->m_n) = slack_coeff;
                 }
+
+                // entry for slack box constraints
+                m_A_osqp.coeffRef(this->m_m + bound_i++, this->m_n) = 1;
             }
 
             m_A_osqp.makeCompressed();
@@ -449,6 +409,26 @@ private:
             {
                 int inner_nnz_A = A.outerIndexPtr()[col + 1] - A.outerIndexPtr()[col];
                 copy_n_into_sparse_matrix(A.valuePtr() + A.outerIndexPtr()[col], inner_nnz_A, m_A_osqp, col, 0);
+            }
+
+            // copy slack coefficients
+            if (this->m_settings.elastic_mode)
+            {
+                for (int i = 0; i < this->m_m; i++)
+                {
+                    scalar_t slack_coeff = 0;
+
+                    if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR || Alb(i) > scalar_t(0))
+                    {
+                        slack_coeff = Alb(i);
+                    }
+                    else if (Aub(i) < scalar_t(0))
+                    {
+                        slack_coeff = Aub(i);
+                    }
+
+                    *(m_A_osqp.valuePtr() + m_A_osqp.outerIndexPtr()[this->m_n] + i) = slack_coeff;
+                }
             }
 
             // all other entries of m_A_osqp are unchanged
