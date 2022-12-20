@@ -688,7 +688,33 @@ protected:
     }
 
     /** default regularisation: do nothing */
-    EIGEN_STRONG_INLINE void hessian_regularisation_impl(Eigen::SparseMatrix<scalar_t>& lag_hessian) noexcept {}
+    EIGEN_STRONG_INLINE void hessian_regularisation_impl(Eigen::SparseMatrix<scalar_t>& lag_hessian) noexcept
+    {
+//        m_gershgorin_bound.setZero();
+//
+//        for (int i = 0; i < lag_hessian.outerSize(); ++i)
+//        {
+//            for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(lag_hessian, i); it; ++it)
+//            {
+//                if (it.row() == it.col())
+//                {
+//                    m_gershgorin_bound(it.row()) += it.value();
+//                }
+//                else
+//                {
+//                    m_gershgorin_bound(it.row()) -= fabs(it.value());
+//                }
+//            }
+//        }
+//
+//        scalar_t eig_lower_bound = m_gershgorin_bound.minCoeff();
+//        scalar_t eig_offset = fmax(scalar_t(0), -eig_lower_bound);
+//
+//        for (int i = 0; i < lag_hessian.rows(); i++)
+//        {
+//            lag_hessian.coeffRef(i, i) += eig_offset;
+//        }
+    }
 };
 
 template<typename Problem, typename QPSolver>
