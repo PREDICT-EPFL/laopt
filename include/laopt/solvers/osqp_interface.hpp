@@ -127,6 +127,9 @@ public:
         Eigen::Map<Eigen::Vector<c_float, -1>> dual_solution(m_osqp_workspace->solution->y, m_osqp_workspace->data->m);
 
         this->m_x = primal_solution(Eigen::seqN(0, this->m_n));
+        if (this->m_settings.elastic_mode) {
+            this->m_elastic_var = primal_solution(this->m_n);
+        }
         this->m_lam = dual_solution(Eigen::seqN(0, this->m_m));
         // copy box constraints dual variables
         int bound_i = 0;
@@ -250,7 +253,13 @@ private:
                 copy_n_into_sparse_matrix(H.valuePtr() + H.outerIndexPtr()[col], inner_nnz_H_tri, m_P_osqp, col, 0);
             }
 
-            // entries for slacks are kept from last iteration
+            if (this->m_settings.elastic_mode)
+            {
+                // add l2 penalties to slack
+                m_P_osqp.coeffRef(this->m_n, this->m_n) = this->m_settings.elastic_weight_l2;
+                // add l1 penalties to slack
+                m_q_osqp(this->m_n) = this->m_settings.elastic_weight_l1;
+            }
         }
 
         m_q_osqp(Eigen::seqN(0, this->m_n)) = f;

@@ -15,8 +15,8 @@ struct qp_solver_settings_t {
     int    max_iter          = 4000;  /** Maximal number of iteration, 0 < max_iter */
     bool   reuse_pattern     = false; /** Assume that problem size and sparsity pattern have not changed since last 'solve call' */
     bool   elastic_mode      = false; /** Add slack variables to all non-box constraints to make QP always feasible */
-    Scalar elastic_weight_l1 = 1e4;   /** Weight for l1 slacks if elastic mode is activated */
-    Scalar elastic_weight_l2 = 1e2;   /** Weight for l2 slacks if elastic mode is activated */
+    Scalar elastic_weight_l1 = 1.0;   /** Weight for l1 slacks if elastic mode is activated */
+    Scalar elastic_weight_l2 = 1.0;   /** Weight for l2 slacks if elastic mode is activated */
     bool   verbose           = false;
 
     bool validate()
@@ -53,9 +53,10 @@ protected:
     int m_n; // number of decision variables
     int m_m; // number of constraints
 
-    Eigen::VectorX<scalar_t> m_x;          // primal decision variable
-    Eigen::VectorX<scalar_t> m_lam;        // dual variable for constraints
-    Eigen::VectorX<scalar_t> m_lam_bounds; // dual variable for simple bounds
+    Eigen::VectorX<scalar_t> m_x;           // primal decision variable
+    Eigen::VectorX<scalar_t> m_lam;         // dual variable for constraints
+    Eigen::VectorX<scalar_t> m_lam_bounds;  // dual variable for simple bounds
+    scalar_t                 m_elastic_var; // variable of elastic variable
 
     qp_solver_settings_t<scalar_t> m_settings;
     qp_solver_info_t m_info;
@@ -81,7 +82,7 @@ public:
 
     QPBase(int n, int m) :
         m_n(n), m_m(m),
-        m_x(n), m_lam(m), m_lam_bounds(n),
+        m_x(n), m_lam(m), m_lam_bounds(n), m_elastic_var(0),
         m_box_constraint_type(n), m_box_lower_bounded_constraints(0), m_box_upper_bounded_constraints(0),
         m_constraint_type(m), m_lower_bounded_constraints(0), m_upper_bounded_constraints(0)
     {
@@ -99,6 +100,9 @@ public:
 
     EIGEN_STRONG_INLINE const Eigen::VectorX<scalar_t>& dual_bounds_solution() const { return m_lam_bounds; }
     EIGEN_STRONG_INLINE Eigen::VectorX<scalar_t>& dual_bounds_solution() noexcept { return m_lam_bounds; }
+
+    EIGEN_STRONG_INLINE const scalar_t& elastic_var_solution() const { return m_elastic_var; }
+    EIGEN_STRONG_INLINE scalar_t& elastic_var_solution() noexcept { return m_elastic_var; }
 
     EIGEN_STRONG_INLINE const qp_solver_settings_t<scalar_t>& settings() const noexcept { return m_settings; }
     EIGEN_STRONG_INLINE qp_solver_settings_t<scalar_t>& settings() noexcept { return m_settings; }

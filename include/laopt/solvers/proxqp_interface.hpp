@@ -71,6 +71,11 @@ public:
         m_proxqp_solver.solve(m_x_proxqp, m_y_proxqp, m_z_proxqp);
 
         this->m_x = m_proxqp_solver.results.x(Eigen::seqN(0, this->m_n));
+
+        if (this->m_settings.elastic_mode) {
+            this->m_elastic_var = m_proxqp_solver.results.x(this->m_n);
+        }
+
         // copy eq and ineq dual variables
         int eq_bound_i = 0;
         int ineq_bound_i = 0;
@@ -209,7 +214,13 @@ private:
                 copy_n_into_sparse_matrix(H.valuePtr() + H.outerIndexPtr()[col], inner_nnz_H_tri, m_H_proxqp, col, 0);
             }
 
-            // entries for slacks are kept from last iteration
+            if (this->m_settings.elastic_mode)
+            {
+                // add l2 penalties to slack
+                m_H_proxqp.coeffRef(this->m_n, this->m_n) = this->m_settings.elastic_weight_l2;
+                // add l1 penalties to slack
+                m_g_proxqp(this->m_n) = this->m_settings.elastic_weight_l1;
+            }
         }
 
         m_g_proxqp(Eigen::seqN(0, this->m_n)) = f;

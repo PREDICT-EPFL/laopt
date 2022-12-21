@@ -24,6 +24,12 @@ struct sqp_settings_t {
     Scalar min_alpha                              = 1e-4;                           // minimum step size
     int max_watchdog_steps                        = 5;                              // minimum full size steps for non-monotone watchdog strategy (0 for normal line search)
     hessian_approximation_t hessian_approximation = hessian_approximation_t::EXACT; // hessian approximation
+    Scalar elastic_max_delta                      = 0.9;                            // maximum acceptable value of constant relaxation variable, if below penalty gets increased by a factor elastic_increase and resolved
+    Scalar elastic_min_delta                      = 1e-6;                           // if constant relaxation variable falls below this value the penalty gets decreased by a factor elastic_decrease
+    Scalar elastic_max_penalty                    = 1e7;                            // maximum value of relaxation penalty
+    Scalar elastic_min_penalty                    = 1.0;                            // minimum value of relaxation penalty
+    Scalar elastic_increase                       = 4.8;                            // increase factor for relaxation penalty
+    Scalar elastic_decrease                       = 0.25;                           // decrease factor for relaxation penalty
     int max_iter                                  = 1000;
     int line_search_max_iter                      = 100;
     bool verbose                                  = false;
@@ -38,6 +44,12 @@ struct sqp_settings_t {
                eps_dual > 0.0 &&
                0.0 < min_alpha && min_alpha <= 1.0 &&
                max_watchdog_steps >= 0 &&
+               elastic_max_delta > 0 &&
+               elastic_min_delta > 0 &&
+               elastic_max_penalty > 0 &&
+               elastic_min_penalty > 0 &&
+               elastic_increase > 1 &&
+               elastic_decrease < 1 &&
                max_iter > 0 &&
                line_search_max_iter > 0;
     }
@@ -211,9 +223,9 @@ public:
 
         if (m_settings.verbose)
         {
-            printf("iter   objective     primal_inf    comp_inf      stat_inf      alpha       watchdog   qp_iter\n");
+            printf("iter    objective     primal_inf    comp_inf      stat_inf      alpha       watchdog   qp_iter\n");
             prob.set_decision_variable(m_x);
-            printf("%4d   %.5e   %.5e   %.5e   %.5e   %.3e       %4d   %7d\n",
+            printf("%4d   % .5e   %.5e   %.5e   %.5e   %.3e       %4d   %7d\n",
                    m_info.iter,
                    prob.eval_objective(),
                    m_primal_feasibility_inf,
@@ -237,6 +249,23 @@ public:
             // problem is already linearized, we just need to calculate the hessian
             calculate_regularized_problem_hessian(m_x);
             solve_qp();
+
+            if (m_qp_solver.settings().elastic_mode)
+            {
+                while (m_qp_solver.elastic_var_solution() > m_settings.elastic_max_delta &&
+                       m_qp_solver.settings().elastic_weight_l2 < m_settings.elastic_max_penalty)
+                {
+                    m_qp_solver.settings().elastic_weight_l1 = fmin(m_settings.elastic_max_penalty, m_qp_solver.settings().elastic_weight_l1 * m_settings.elastic_increase);
+                    m_qp_solver.settings().elastic_weight_l2 = fmin(m_settings.elastic_max_penalty, m_qp_solver.settings().elastic_weight_l2 * m_settings.elastic_increase);
+                    solve_qp();
+                }
+
+                if (m_qp_solver.elastic_var_solution() < m_settings.elastic_min_delta)
+                {
+                    m_qp_solver.settings().elastic_weight_l1 = fmax(m_settings.elastic_min_penalty, m_qp_solver.settings().elastic_weight_l1 * m_settings.elastic_decrease);
+                    m_qp_solver.settings().elastic_weight_l2 = fmax(m_settings.elastic_min_penalty, m_qp_solver.settings().elastic_weight_l2 * m_settings.elastic_decrease);
+                }
+            }
 
             // reuse sparsity pattern for further solves
             m_qp_solver.settings().reuse_pattern = true;
@@ -292,7 +321,7 @@ public:
             if (m_settings.verbose)
             {
                 prob.set_decision_variable(m_x);
-                printf("%4d   %.5e   %.5e   %.5e   %.5e   %.3e       %4d   %7d\n",
+                printf("%4d   % .5e   %.5e   %.5e   %.5e   %.3e       %4d   %7d\n",
                        m_info.iter,
                        prob.eval_objective(),
                        m_primal_feasibility_inf,

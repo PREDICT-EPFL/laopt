@@ -210,6 +210,11 @@ public:
         Eigen::Map<Eigen::Vector<qp_real, -1>> dual_ineq_solution(m_qpswift_solver->z, m_qpswift_solver->m);
 
         this->m_x = primal_solution(Eigen::seqN(0, this->m_n));
+
+        if (this->m_settings.elastic_mode) {
+            this->m_elastic_var = primal_solution(this->m_n);
+        }
+
         // copy eq and ineq dual variables
         int eq_bound_i = 0;
         int ineq_bound_i = 0;
@@ -377,7 +382,13 @@ private:
                 copy_n_into_sparse_matrix(H.valuePtr() + H.outerIndexPtr()[col], inner_nnz_H_tri, m_P_qpswift, col, 0);
             }
 
-            // entries for slacks are kept from last iteration
+            if (this->m_settings.elastic_mode)
+            {
+                // add l2 penalties to slack
+                m_P_qpswift.coeffRef(this->m_n, this->m_n) = this->m_settings.elastic_weight_l2;
+                // add l1 penalties to slack
+                m_c_qpswift(this->m_n) = this->m_settings.elastic_weight_l1;
+            }
         }
 
         m_c_qpswift(Eigen::seqN(0, this->m_n)) = f;
