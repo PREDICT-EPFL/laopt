@@ -99,9 +99,9 @@ private:
     Eigen::VectorX<scalar_t> m_lam_qp;        // dual variable solution of qp
     Eigen::VectorX<scalar_t> m_lam_bounds_qp; // dual variable solution of qp for bounds
 
-    scalar_t m_primal_feasibility_inf;
-    scalar_t m_complementarity_inf;
-    scalar_t m_stationarity_inf;
+    scalar_t m_primal_feasibility_inf = 0;
+    scalar_t m_complementarity_inf = 0;
+    scalar_t m_stationarity_inf = 0;
 
     // internal variables for line search
     Eigen::VectorX<scalar_t> m_x_step_line_search;           // primal search step for line search
@@ -168,9 +168,13 @@ public:
     void set_initial_dual_bounds(const Eigen::VectorX<scalar_t> &init_dual_bounds) { m_lam_bounds = init_dual_bounds; }
 
     /* Getters */
-    const Eigen::VectorX<scalar_t> &primal() const { return m_x; }
-    const Eigen::VectorX<scalar_t> &dual() const { return m_lam; }
-    const Eigen::VectorX<scalar_t> &dual_bounds() const { return m_lam_bounds; }
+    const Eigen::VectorX<scalar_t>& primal() const { return m_x; }
+    const Eigen::VectorX<scalar_t>& dual() const { return m_lam; }
+    const Eigen::VectorX<scalar_t>& dual_bounds() const { return m_lam_bounds; }
+
+    scalar_t primal_feasibility() const { return m_primal_feasibility_inf; }
+    scalar_t complementarity() const { return m_complementarity_inf; }
+    scalar_t stationarity() const { return m_stationarity_inf; }
 
     /** solve the NLP */
     sqp_info_t solve() noexcept
