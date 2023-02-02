@@ -9,10 +9,10 @@ namespace laopt
 {
 
 template<typename Scalar = double, int Mode = piqp::KKTMode::KKT_FULL>
-class PIQPSolver : public QPBase<PIQPSolver<Scalar>, Scalar>
+class PIQPSolver : public QPBase<PIQPSolver<Scalar, Mode>, Scalar>
 {
 public:
-    using Base = QPBase<PIQPSolver<Scalar>, Scalar>;
+    using Base = QPBase<PIQPSolver<Scalar, Mode>, Scalar>;
     using scalar_t = typename Base::scalar_t;
 
 private:
