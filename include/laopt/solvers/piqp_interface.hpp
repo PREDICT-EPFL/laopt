@@ -18,7 +18,7 @@ public:
 private:
     using constraint_t = typename Base::constraint_t;
 
-    piqp::Solver<Scalar, int, Mode> m_piqp_solver;
+    piqp::SparseSolver<Scalar, int, Mode> m_piqp_solver;
     bool m_piqp_initialized;
 
     Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, int> m_P_piqp;
