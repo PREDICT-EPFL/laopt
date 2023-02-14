@@ -27,6 +27,8 @@ private:
     Eigen::VectorX<scalar_t> m_b_piqp;
     Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, int> m_G_piqp;
     Eigen::VectorX<scalar_t> m_h_piqp;
+    Eigen::VectorX<scalar_t> m_x_lb_piqp;
+    Eigen::VectorX<scalar_t> m_x_ub_piqp;
 
     Eigen::VectorX<int> m_A_to_piqp_map; // maps row in A to row in A_piqp or C_piqp
 
@@ -46,22 +48,23 @@ public:
     {
         construct_piqp_data(H, f, xlb, xub, A, Alb, Aub);
 
+        set_piqp_settings();
+
         if (!this->m_settings.reuse_pattern)
         {
-            m_piqp_solver.setup(m_P_piqp, m_A_piqp, m_G_piqp, m_c_piqp, m_b_piqp, m_h_piqp);
+            m_piqp_solver.setup(m_P_piqp, m_c_piqp, m_A_piqp, m_b_piqp, m_G_piqp, m_h_piqp, m_x_lb_piqp, m_x_ub_piqp);
             m_piqp_initialized = true;
         }
         else
         {
             eigen_assert(m_piqp_initialized);
 
-            m_piqp_solver.update(m_P_piqp, m_A_piqp, m_G_piqp, m_c_piqp, m_b_piqp, m_h_piqp);
+            m_piqp_solver.update(m_P_piqp, m_c_piqp, m_A_piqp, m_b_piqp, m_G_piqp, m_h_piqp, m_x_lb_piqp, m_x_ub_piqp);
         }
 
-        set_piqp_settings();
         m_piqp_solver.solve();
 
-        this->m_x = m_piqp_solver.result().x(Eigen::seqN(0, this->m_n));
+        this->m_x = m_piqp_solver.result().x.head(this->m_n);
 
         if (this->m_settings.elastic_mode) {
             this->m_elastic_var = m_piqp_solver.result().x(this->m_n);
@@ -91,26 +94,7 @@ public:
             }
         }
         // copy box constraints dual variables
-        for (int i = 0; i < this->m_n; i++)
-        {
-            if (this->m_box_constraint_type[i] == constraint_t::EQ_CONSTR)
-            {
-                this->m_lam_bounds(i) = m_piqp_solver.result().y(eq_bound_i++);
-            }
-            else if (this->m_box_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
-            {
-                this->m_lam_bounds(i) = -m_piqp_solver.result().z(ineq_bound_i++);
-            }
-            else if (this->m_box_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
-            {
-                this->m_lam_bounds(i) = m_piqp_solver.result().z(ineq_bound_i++);
-            }
-            else if (this->m_box_constraint_type[i] == constraint_t::INEQ_CONSTR)
-            {
-                this->m_lam_bounds(i) = -m_piqp_solver.result().z(ineq_bound_i++);
-                this->m_lam_bounds(i) += m_piqp_solver.result().z(ineq_bound_i++);
-            }
-        }
+        this->m_lam_bounds = m_piqp_solver.result().z_ub.head(this->m_n) - m_piqp_solver.result().z_lb.head(this->m_n);
 
         this->m_info.iter = m_piqp_solver.result().info.iter;
 
@@ -310,37 +294,10 @@ private:
                 }
             }
 
-            // count and add nnz's for box constraints
-            int num_box_eq_constraints = 0;
-            int num_box_ineq_constraints = 0;
-            for (int i = 0; i < this->m_n; i++)
-            {
-                if (this->m_box_constraint_type[i] == constraint_t::EQ_CONSTR)
-                {
-                    num_box_eq_constraints++;
-                    A_piqp_nnz(i) += 1;
-                }
-                else if (this->m_box_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR ||
-                         this->m_box_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
-                {
-                    num_box_ineq_constraints++;
-                    G_piqp_nnz(i) += 1;
-                }
-                else if (this->m_box_constraint_type[i] == constraint_t::INEQ_CONSTR)
-                {
-                    num_box_ineq_constraints += 2;
-                    G_piqp_nnz(i) += 2;
-                }
-            }
-            // lower and upper bound for slack variables
-            if (this->m_settings.elastic_mode)
-            {
-                num_box_ineq_constraints += 2;
-                G_piqp_nnz(this->m_n) += 2;
-            }
-
-            m_b_piqp.resize(num_eq_constraints + num_box_eq_constraints);
-            m_h_piqp.resize(num_ineq_constraints + num_box_ineq_constraints);
+            m_b_piqp.resize(num_eq_constraints);
+            m_h_piqp.resize(num_ineq_constraints);
+            m_x_lb_piqp.resize(n_vars);
+            m_x_ub_piqp.resize(n_vars);
 
             // copy bounds
             int eq_bound_i = 0;
@@ -376,44 +333,19 @@ private:
             }
 
             // copy box bounds
-            for (int i = 0; i < this->m_n; i++)
-            {
-                if (this->m_box_constraint_type[i] == constraint_t::EQ_CONSTR)
-                {
-                    m_b_piqp(eq_bound_i) = xlb(i);
-                    eq_bound_i++;
-                }
-                else if (this->m_box_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
-                {
-                    m_h_piqp(ineq_bound_i) = -xlb(i);
-                    ineq_bound_i++;
-                }
-                else if (this->m_box_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
-                {
-                    m_h_piqp(ineq_bound_i) = xub(i);
-                    ineq_bound_i++;
-                }
-                else if (this->m_box_constraint_type[i] == constraint_t::INEQ_CONSTR)
-                {
-                    m_h_piqp(ineq_bound_i) = -xlb(i);
-                    ineq_bound_i++;
-                    m_h_piqp(ineq_bound_i) = xub(i);
-                    ineq_bound_i++;
-                }
-            }
+            m_x_lb_piqp.head(this->m_n) = xlb;
+            m_x_ub_piqp.head(this->m_n) = xub;
 
             // set slack constraints
             if (this->m_settings.elastic_mode)
             {
-                m_h_piqp(ineq_bound_i) = -scalar_t(0);
-                ineq_bound_i++;
-                m_h_piqp(ineq_bound_i) = scalar_t(1);
-                ineq_bound_i++;
+                m_x_lb_piqp(this->m_n) = scalar_t(0);
+                m_x_ub_piqp(this->m_n) = scalar_t(1);
             }
 
-            m_A_piqp.resize(num_eq_constraints + num_box_eq_constraints, n_vars);
+            m_A_piqp.resize(num_eq_constraints, n_vars);
             m_A_piqp.reserve(A_piqp_nnz);
-            m_G_piqp.resize(num_ineq_constraints + num_box_ineq_constraints, n_vars);
+            m_G_piqp.resize(num_ineq_constraints, n_vars);
             m_G_piqp.reserve(G_piqp_nnz);
 
             // copy eq and ineq matrix values
@@ -438,30 +370,6 @@ private:
                         m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = -it.value();
                         m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()) + 1, it.col()) = it.value();
                     }
-                }
-            }
-
-            // create entries for the box constraints
-            eq_bound_i = num_eq_constraints;
-            ineq_bound_i = num_ineq_constraints;
-            for (Eigen::Index col = 0; col < this->m_n; col++)
-            {
-                if (this->m_box_constraint_type[col] == constraint_t::EQ_CONSTR)
-                {
-                    m_A_piqp.coeffRef(eq_bound_i++, col) = 1;
-                }
-                else if (this->m_box_constraint_type[col] == constraint_t::INEQ_LB_ONLY_CONSTR)
-                {
-                    m_G_piqp.coeffRef(ineq_bound_i++, col) = -1;
-                }
-                else if (this->m_box_constraint_type[col] == constraint_t::INEQ_UB_ONLY_CONSTR)
-                {
-                    m_G_piqp.coeffRef(ineq_bound_i++, col) = 1;
-                }
-                else if (this->m_box_constraint_type[col] == constraint_t::INEQ_CONSTR)
-                {
-                    m_G_piqp.coeffRef(ineq_bound_i++, col) = -1;
-                    m_G_piqp.coeffRef(ineq_bound_i++, col) = 1;
                 }
             }
 
@@ -512,13 +420,6 @@ private:
                         ineq_bound_i++;
                     }
                 }
-
-                // entry for slack box constraints
-                ineq_bound_i = num_ineq_constraints + num_box_ineq_constraints - 2;
-                m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = -1;
-                ineq_bound_i++;
-                m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = 1;
-                ineq_bound_i++;
             }
 
             m_A_piqp.makeCompressed();
@@ -560,31 +461,8 @@ private:
             }
 
             // copy box bounds
-            for (int i = 0; i < this->m_n; i++)
-            {
-                if (this->m_box_constraint_type[i] == constraint_t::EQ_CONSTR)
-                {
-                    m_b_piqp(eq_bound_i) = xlb(i);
-                    eq_bound_i++;
-                }
-                else if (this->m_box_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
-                {
-                    m_h_piqp(ineq_bound_i) = -xlb(i);
-                    ineq_bound_i++;
-                }
-                else if (this->m_box_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
-                {
-                    m_h_piqp(ineq_bound_i) = xub(i);
-                    ineq_bound_i++;
-                }
-                else if (this->m_box_constraint_type[i] == constraint_t::INEQ_CONSTR)
-                {
-                    m_h_piqp(ineq_bound_i) = -xlb(i);
-                    ineq_bound_i++;
-                    m_h_piqp(ineq_bound_i) = xub(i);
-                    ineq_bound_i++;
-                }
-            }
+            m_x_lb_piqp.head(this->m_n) = xlb;
+            m_x_ub_piqp.head(this->m_n) = xub;
 
             // copy eq and ineq matrix values
             for (int i = 0; i < A.outerSize(); i++)

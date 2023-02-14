@@ -21,7 +21,7 @@ struct qp_solver_settings_t {
 
     bool validate()
     {
-        return 0.0 < eps_rel &&
+        return 0.0 <= eps_rel &&
                0.0 < eps_abs &&
                0 < max_iter &&
                0.0 < elastic_weight_l1 &&
