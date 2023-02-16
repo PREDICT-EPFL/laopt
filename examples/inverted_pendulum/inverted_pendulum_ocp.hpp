@@ -8,7 +8,7 @@
 #include "laopt/laopt.hpp"
 #include "laopt/tools/control_problem_base.hpp"
 
-class InvertedPendulumOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 2>
+class InvertedPendulumOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 2, laopt_tools::FreeEndTime>
 {
 public:
     struct OptParam : OptParamBase

@@ -71,7 +71,7 @@ int main()
     if (true)
     {
         const int N = 20;
-        using Transcription = laopt_tools::MultipleShooting<Ocp, N, laopt_tools::FreeEndTime>;
+        using Transcription = laopt_tools::MultipleShooting<Ocp, N>;
 
         /* Define specific Tape and laOPT problem types for the resulting NLP */
         using Tape = laopt::TapeInfo<Transcription>;
@@ -114,7 +114,7 @@ int main()
     {
         const int D_poly = 4;
         const int N_segs = 3;
-        using Transcription = laopt_tools::RadauCollocation<Ocp, N_segs, D_poly, laopt_tools::FreeEndTime>;
+        using Transcription = laopt_tools::RadauCollocation<Ocp, N_segs, D_poly>;
 
         /* Define specific Tape and laOPT problem types for the resulting NLP */
         using Tape = laopt::TapeInfo<Transcription>;

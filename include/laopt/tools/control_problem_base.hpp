@@ -6,10 +6,11 @@
 
 #include <Eigen/Dense>
 #include "laopt/laopt.hpp"
+#include "constants.hpp"
 
 namespace laopt_tools {
 
-template<typename cScalar, int cNX, int cNU, int cNP = 0>
+template<typename cScalar, int cNX, int cNU, int cNP = 0, int cOptions = FixedEndTime>
 class ControlProblemBase
 {
 public:
@@ -18,6 +19,7 @@ public:
     static const int NX = cNX;
     static const int NU = cNU;
     static const int NP = cNP;
+    static const int Options = cOptions;
 
     /* Define state and input types */
     template<typename T> using state_t = Eigen::Vector<T, NX>;

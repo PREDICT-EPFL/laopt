@@ -4,10 +4,10 @@
 namespace laopt_tools
 {
 
-enum TranscriptionOptions
+enum OCPOptions
 {
-    FixedEndTime = 0,
-    FreeEndTime = 1
+    FixedEndTime = 0x0,
+    FreeEndTime  = 0x1
 };
 
 } // namespace laopt_tools
