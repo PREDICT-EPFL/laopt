@@ -547,9 +547,10 @@ private:
 
     void set_piqp_settings() noexcept
     {
-        m_piqp_solver.settings().feas_tol_rel = this->m_settings.eps_rel;
-        m_piqp_solver.settings().feas_tol_abs = this->m_settings.eps_abs;
-        m_piqp_solver.settings().dual_tol = this->m_settings.eps_abs;
+        m_piqp_solver.settings().eps_rel = this->m_settings.eps_rel;
+        m_piqp_solver.settings().eps_abs = this->m_settings.eps_abs;
+        m_piqp_solver.settings().eps_duality_gap_rel = this->m_settings.eps_rel;
+        m_piqp_solver.settings().eps_duality_gap_abs = this->m_settings.eps_abs;
         m_piqp_solver.settings().max_iter = this->m_settings.max_iter;
         m_piqp_solver.settings().verbose = this->m_settings.verbose;
     }
