@@ -91,7 +91,8 @@ protected:
 
     template<int Option = ControlProblem::Options>
     inline typename std::enable_if<(Option & FreeEndTime) == 0, Eigen::Vector<Scalar, 1>>::type
-    get_tf_var() const {
+    get_tf_var() const
+    {
         assert(controlProblem.tf_lb == controlProblem.tf_lb && "tf upper and lower bound have to be the same");
         Eigen::Vector<Scalar, 1> tf;
         tf(0) = controlProblem.tf_lb;
@@ -100,7 +101,8 @@ protected:
 
     template<int Option = ControlProblem::Options>
     inline typename std::enable_if<(Option & FreeEndTime) != 0, const variable_t<1>&>::type
-    get_tf_var() const {
+    get_tf_var() const
+    {
         return tf_var;
     }
 

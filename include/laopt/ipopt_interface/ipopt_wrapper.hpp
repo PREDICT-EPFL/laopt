@@ -41,6 +41,7 @@ public:
     void set_max_iter(int max_iter) { ipopt_application->Options()->SetIntegerValue("max_iter", max_iter); }
     void set_banner_message(bool active) { ipopt_application->Options()->SetBoolValue("sb", !active); }
     void set_print_level(int print_level) { ipopt_application->Options()->SetIntegerValue("print_level", print_level); }
+    void set_print_time(bool active) { ipopt_application->Options()->SetBoolValue("print_time", active); }
 
     Ipopt::ApplicationReturnStatus solve() const
     {
