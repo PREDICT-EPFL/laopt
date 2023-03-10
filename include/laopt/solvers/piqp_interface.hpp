@@ -36,7 +36,10 @@ public:
     PIQPSolver(int n, int m) :
         Base(n, m),
         m_piqp_initialized(false),
-        m_A_to_piqp_map(m) {}
+        m_A_to_piqp_map(m)
+    {
+        this->m_settings.max_iter = 30;
+    }
 
     qp_solver_info_t solve_impl(const Eigen::SparseMatrix<scalar_t>& H,
                                 const Eigen::Ref<const Eigen::VectorX<scalar_t>>& f,
