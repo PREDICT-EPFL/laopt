@@ -2,6 +2,8 @@
 #define LAOPT_MULTIPLE_SHOOTING_HPP
 
 // Advanced user (level 2)
+#include <iostream>
+#include <iomanip>
 
 #include <Eigen/Dense>
 #include "laopt/laopt.hpp"

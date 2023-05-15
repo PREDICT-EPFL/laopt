@@ -2,6 +2,8 @@
 #define LAOPT_RADAU_COLLOCATION_HPP
 
 // Advanced user (level 2)
+#include <iostream>
+#include <iomanip>
 
 #include <Eigen/Dense>
 #include "unsupported/Eigen/Polynomials"
