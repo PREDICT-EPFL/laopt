@@ -15,21 +15,22 @@ enum struct hessian_approximation_t {
 
 template <typename Scalar>
 struct sqp_settings_t {
-    Scalar tau                                    = 0.7;                            // line search iteration decrease, 0 < tau < 1
-    Scalar eta                                    = 0.25;                           // line search parameter, 0 < eta < 1
-    Scalar rho                                    = 0.5;                            // line search parameter, 0 < rho < 1
-    Scalar K                                      = 1e1;                            // constant added to penalty parameter of line search
-    Scalar eps_prim                               = 1e-6;                           // primal step termination threshold, eps_prim > 0
-    Scalar eps_dual                               = 1e-4;                           // dual step termination threshold, eps_dual > 0
-    Scalar min_alpha                              = 1e-4;                           // minimum step size
-    int max_watchdog_steps                        = 5;                              // minimum full size steps for non-monotone watchdog strategy (0 for normal line search)
-    hessian_approximation_t hessian_approximation = hessian_approximation_t::EXACT; // hessian approximation
-    Scalar elastic_max_delta                      = 0.9;                            // maximum acceptable value of constant relaxation variable, if below penalty gets increased by a factor elastic_increase and resolved
-    Scalar elastic_min_delta                      = 1e-6;                           // if constant relaxation variable falls below this value the penalty gets decreased by a factor elastic_decrease
-    Scalar elastic_max_penalty                    = 1e7;                            // maximum value of relaxation penalty
-    Scalar elastic_min_penalty                    = 1.0;                            // minimum value of relaxation penalty
-    Scalar elastic_increase                       = 4.8;                            // increase factor for relaxation penalty
-    Scalar elastic_decrease                       = 0.25;                           // decrease factor for relaxation penalty
+    Scalar tau                                    = 0.7;   // line search iteration decrease, 0 < tau < 1
+    Scalar eta                                    = 0.25;  // line search parameter, 0 < eta < 1
+    Scalar rho                                    = 0.5;   // line search parameter, 0 < rho < 1
+    Scalar K                                      = 1e1;   // constant added to penalty parameter of line search
+    Scalar eps_prim                               = 1e-6;  // primal step termination threshold, eps_prim > 0
+    Scalar eps_dual                               = 1e-4;  // dual step termination threshold, eps_dual > 0
+    Scalar min_alpha                              = 1e-4;  // minimum step size
+    int max_watchdog_steps                        = 0;     // minimum full size steps for non-monotone watchdog strategy (0 for normal line search)
+    hessian_approximation_t hessian_approximation = hessian_approximation_t::EXACT_NO_CONSTRAINTS; // hessian approximation
+    bool regularize_hessian                       = false; // regularize hessian using the gershgorin circle theorem (can lead to bad convergence)
+    Scalar elastic_max_delta                      = 0.9;   // maximum acceptable value of constant relaxation variable, if below penalty gets increased by a factor elastic_increase and resolved
+    Scalar elastic_min_delta                      = 1e-6;  // if constant relaxation variable falls below this value the penalty gets decreased by a factor elastic_decrease
+    Scalar elastic_max_penalty                    = 1e7;   // maximum value of relaxation penalty
+    Scalar elastic_min_penalty                    = 1.0;   // minimum value of relaxation penalty
+    Scalar elastic_increase                       = 4.8;   // increase factor for relaxation penalty
+    Scalar elastic_decrease                       = 0.25;  // decrease factor for relaxation penalty
     int max_iter                                  = 1000;
     int line_search_max_iter                      = 100;
     bool verbose                                  = false;
@@ -116,6 +117,8 @@ private:
     Eigen::VectorX<scalar_t> m_lam_qp_merit_decrease;        // last dual variable solution of qp iterate with merit function decrease
     Eigen::VectorX<scalar_t> m_lam_bounds_qp_merit_decrease; // last dual variable solution of qp for bounds iterate with merit function decrease
 
+    Eigen::VectorX<scalar_t> m_gershgorin_bound; // variable used to calculate hessian regularization (gershgorin circle theorem)
+
 public:
 
     explicit SQPBase(Problem& prob) :
@@ -139,7 +142,8 @@ public:
         m_lam_bounds_merit_decrease(prob.variables()),
         m_p_merit_decrease(prob.variables()),
         m_lam_qp_merit_decrease(prob.constraints.rows()),
-        m_lam_bounds_qp_merit_decrease(prob.variables())
+        m_lam_bounds_qp_merit_decrease(prob.variables()),
+        m_gershgorin_bound(prob.variables())
     {
         m_x.setZero();
         m_lam.setZero();
@@ -723,30 +727,33 @@ protected:
     /** default regularisation: do nothing */
     EIGEN_STRONG_INLINE void hessian_regularisation_impl(Eigen::SparseMatrix<scalar_t>& lag_hessian) noexcept
     {
-//        m_gershgorin_bound.setZero();
-//
-//        for (int i = 0; i < lag_hessian.outerSize(); ++i)
-//        {
-//            for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(lag_hessian, i); it; ++it)
-//            {
-//                if (it.row() == it.col())
-//                {
-//                    m_gershgorin_bound(it.row()) += it.value();
-//                }
-//                else
-//                {
-//                    m_gershgorin_bound(it.row()) -= fabs(it.value());
-//                }
-//            }
-//        }
-//
-//        scalar_t eig_lower_bound = m_gershgorin_bound.minCoeff();
-//        scalar_t eig_offset = fmax(scalar_t(0), -eig_lower_bound);
-//
-//        for (int i = 0; i < lag_hessian.rows(); i++)
-//        {
-//            lag_hessian.coeffRef(i, i) += eig_offset;
-//        }
+        if (m_settings.regularize_hessian)
+        {
+            m_gershgorin_bound.setZero();
+
+            for (int i = 0; i < lag_hessian.outerSize(); ++i)
+            {
+                for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(lag_hessian, i); it; ++it)
+                {
+                    if (it.row() == it.col())
+                    {
+                        m_gershgorin_bound(it.row()) += it.value();
+                    }
+                    else
+                    {
+                        m_gershgorin_bound(it.row()) -= fabs(it.value());
+                    }
+                }
+            }
+
+            scalar_t eig_lower_bound = m_gershgorin_bound.minCoeff();
+            scalar_t eig_offset = fmax(scalar_t(0), -eig_lower_bound);
+
+            for (int i = 0; i < lag_hessian.rows(); i++)
+            {
+                lag_hessian.coeffRef(i, i) += eig_offset;
+            }
+        }
     }
 };
 
