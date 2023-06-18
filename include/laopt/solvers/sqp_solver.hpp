@@ -8,6 +8,12 @@
 namespace laopt
 {
 
+enum struct globalization_t {
+    FULL_STEP,
+    LINE_SEARCH_L1,
+    LINE_SEARCH_FILTER
+};
+
 enum struct hessian_approximation_t {
     EXACT,
     EXACT_NO_CONSTRAINTS,
@@ -15,6 +21,7 @@ enum struct hessian_approximation_t {
 
 template <typename Scalar>
 struct sqp_settings_t {
+    globalization_t globalization_strategy        = globalization_t::LINE_SEARCH_L1;
     Scalar tau                                    = 0.7;   // line search iteration decrease, 0 < tau < 1
     Scalar eta                                    = 0.25;  // line search parameter, 0 < eta < 1
     Scalar rho                                    = 0.5;   // line search parameter, 0 < rho < 1
@@ -23,6 +30,7 @@ struct sqp_settings_t {
     Scalar eps_dual                               = 1e-4;  // dual step termination threshold, eps_dual > 0
     Scalar min_alpha                              = 1e-4;  // minimum step size
     int max_watchdog_steps                        = 0;     // minimum full size steps for non-monotone watchdog strategy (0 for normal line search)
+    Scalar filter_beta                             = 1e-5;  // sufficient decrease value for filter
     hessian_approximation_t hessian_approximation = hessian_approximation_t::EXACT_NO_CONSTRAINTS; // hessian approximation
     bool regularize_hessian                       = false; // regularize hessian using the gershgorin circle theorem (can lead to bad convergence)
     Scalar elastic_max_delta                      = 0.9;   // maximum acceptable value of constant relaxation variable, if below penalty gets increased by a factor elastic_increase and resolved
@@ -117,6 +125,10 @@ private:
     Eigen::VectorX<scalar_t> m_lam_qp_merit_decrease;        // last dual variable solution of qp iterate with merit function decrease
     Eigen::VectorX<scalar_t> m_lam_bounds_qp_merit_decrease; // last dual variable solution of qp for bounds iterate with merit function decrease
 
+    static constexpr int max_filter_elements = 20;
+    int m_current_filter_elements = 0;
+    Eigen::Matrix<scalar_t, 2, max_filter_elements> m_filter_list; // list of elements
+
     Eigen::VectorX<scalar_t> m_gershgorin_bound; // variable used to calculate hessian regularization (gershgorin circle theorem)
 
 public:
@@ -208,6 +220,9 @@ public:
                 printf("constraints jacobian nnz = %ld\n", m_g_jac.nonZeros());
             }
         }
+
+        // reset filter
+        m_current_filter_elements = 0;
 
         if (!m_settings.validate())
         {
@@ -531,9 +546,22 @@ protected:
     * default implementations
     */
 
-    /** default algorithm: watchdog l1-norm line search */
     EIGEN_STRONG_INLINE scalar_t
     step_size_selection_impl(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& p) noexcept
+    {
+        switch (m_settings.globalization_strategy) {
+            case globalization_t::FULL_STEP:
+                return scalar_t(1);
+            case globalization_t::LINE_SEARCH_L1:
+                return l1_line_search(p);
+            case globalization_t::LINE_SEARCH_FILTER:
+                return filter_line_search(p);
+        }
+        return scalar_t(1);
+    }
+
+    EIGEN_STRONG_INLINE scalar_t
+    l1_line_search(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& p) noexcept
     {
         // we only use watchdog if QP solver succeeded
         if (m_settings.max_watchdog_steps > 0 && m_qp_solver.info().status == qp_status_t::SOLVED)
@@ -712,6 +740,126 @@ protected:
 
         // reset watchdog
         m_watchdog_step = 0;
+        return alpha;
+    }
+
+    EIGEN_STRONG_INLINE scalar_t
+    filter_line_search(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& p) noexcept
+    {
+        scalar_t cost_current = prob.eval_objective();
+
+        if (m_current_filter_elements == 0)
+        {
+            eval_constraints(m_x);
+            scalar_t constraint_violation = l1_constraints_violation(m_x);
+            m_filter_list(0, 0) = cost_current;
+            m_filter_list(1, 0) = constraint_violation;
+            m_current_filter_elements = 1;
+        }
+
+        scalar_t alpha = scalar_t(1.0);
+        for (int i = 1; i < m_settings.line_search_max_iter; i++)
+        {
+            m_x_step_line_search = m_x + alpha * p;
+
+            prob.set_decision_variable(m_x_step_line_search);
+            scalar_t cost = prob.eval_objective();
+            eval_constraints(m_x_step_line_search);
+            scalar_t constraint_violation = l1_constraints_violation(m_x_step_line_search);
+
+            bool violates_filter = false;
+            for (int j = 0; j < m_current_filter_elements; j++)
+            {
+                scalar_t filter_cost = m_filter_list(0, j);
+                scalar_t filter_constraint_violation = m_filter_list(1, j);
+                if (cost > filter_cost && constraint_violation > filter_constraint_violation)
+                {
+                    violates_filter = true;
+                    break;
+                }
+            }
+
+            if (violates_filter)
+            {
+                alpha = m_settings.tau * alpha;
+                continue;
+            }
+
+            scalar_t m = alpha * m_cost_grad.dot(p);
+            if (m < scalar_t(0))
+            {
+                if (cost > cost_current + m_settings.eta * m)
+                {
+                    alpha = m_settings.tau * alpha;
+                    continue;
+                }
+            }
+            else
+            {
+                bool violates_reduced_filter = false;
+                for (int j = 0; j < m_current_filter_elements; j++)
+                {
+                    scalar_t filter_cost = m_filter_list(0, j);
+                    scalar_t filter_constraint_violation = m_filter_list(1, j);
+                    if (cost > filter_cost - m_settings.filter_beta * filter_constraint_violation
+                        && constraint_violation > (scalar_t(1) - m_settings.filter_beta) * filter_constraint_violation)
+                    {
+                        violates_reduced_filter = true;
+                        break;
+                    }
+                }
+
+                if (violates_reduced_filter)
+                {
+                    alpha = m_settings.tau * alpha;
+                    continue;
+                }
+            }
+
+            // remove dominated elements in filter
+            int pointer = 0;
+            for (int j = 0; j < m_current_filter_elements; j++)
+            {
+                scalar_t filter_cost = m_filter_list(0, j);
+                scalar_t filter_constraint_violation = m_filter_list(1, j);
+                if (cost > filter_cost || constraint_violation > filter_constraint_violation)
+                {
+                    // element is not dominated
+                    // if there were dominated elements before we have to shift list
+                    if (j > pointer)
+                    {
+                        m_filter_list(0, pointer) = filter_cost;
+                        m_filter_list(1, pointer) = filter_constraint_violation;
+                    }
+                    pointer++;
+                }
+            }
+
+            if (pointer < max_filter_elements)
+            {
+                // we have still space in the filter, let's add the current element
+                m_filter_list(0, pointer) = cost;
+                m_filter_list(1, pointer) = constraint_violation;
+                pointer++;
+            }
+            else
+            {
+                // just replace the first element
+                m_filter_list(0, 0) = cost;
+                m_filter_list(1, 0) = constraint_violation;
+            }
+
+            if (pointer > 0)
+            {
+                m_current_filter_elements = pointer;
+            }
+            else
+            {
+                m_current_filter_elements = 1;
+            }
+
+            break;
+        }
         return alpha;
     }
 
