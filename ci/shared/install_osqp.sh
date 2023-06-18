@@ -7,6 +7,8 @@ echo "Installing osqp..."
 git clone --recursive https://github.com/osqp/osqp osqp
 cd osqp
 git checkout "$OSQP_VERSION"
+git submodule init
+git submodule update
 
 mkdir build
 cd build
