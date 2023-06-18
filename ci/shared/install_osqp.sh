@@ -1,6 +1,6 @@
 #!/bin/bash
 
-OSQP_VERSION=${OSQP_VERSION:-v0.6.2};
+OSQP_VERSION=${OSQP_VERSION:-v0.6.3};
 
 echo "Installing osqp..."
 
