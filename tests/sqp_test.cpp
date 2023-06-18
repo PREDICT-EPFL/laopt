@@ -85,6 +85,7 @@ TEST(SQPTest, SimpleExampleOSQP)
     Problem prob(my_problem, tape);
 
     laopt::SQPSolver<Problem, laopt::OSQPSolver<Problem::scalar_t>> solver(prob);
+    solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT;
     solver.settings().verbose = true;
 
     // Set the initial primal variable
@@ -126,6 +127,7 @@ TEST(SQPTest, SimpleExampleProxQP)
     Problem prob(my_problem, tape);
 
     laopt::SQPSolver<Problem, laopt::ProxQPSolver<Problem::scalar_t>> solver(prob);
+    solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT;
     solver.settings().verbose = true;
 
     // Set the initial primal variable
@@ -167,6 +169,7 @@ TEST(SQPTest, SimpleExampleQPSwift)
     Problem prob(my_problem, tape);
 
     laopt::SQPSolver<Problem, laopt::QPSwiftSolver<Problem::scalar_t>> solver(prob);
+    solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT;
     solver.settings().verbose = true;
 
     // Set the initial primal variable
