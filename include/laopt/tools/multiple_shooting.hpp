@@ -37,9 +37,8 @@ protected:
     /* Instance of end user's ControlProblem */
     ControlProblem &controlProblem;
 
-    /* Create discrete problem variables (define U_var with same length than X_var for easier data handling,
-     * although last u will not be used */
-    static const unsigned N = N_segs; // Last index of decision variables
+    /* Create discrete problem variables */
+    static const unsigned N = N_segs; // Last index of input
     const double h{1.0 / N};
     Eigen::Vector<Scalar, N + 1> T; // Normalized time grid (0 ... 1)
     std::array<variable_t<ControlProblem::NX>, N + 1> X_var;
@@ -64,6 +63,27 @@ protected:
         state_t k3 = tf(0) * controlProblem.template dynamics_impl<scalar_t>(x + h * 0.5 * k2, u, p);
         state_t k4 = tf(0) * controlProblem.template dynamics_impl<scalar_t>(x + h * k3, u, p);
         return x + h / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
+    }
+
+    /* Inequality constraints */
+    struct InequalityConstraints {};
+    template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NG>
+    function_impl(InequalityConstraints,
+                  const Eigen::MatrixBase<x_t> &x,
+                  const Eigen::MatrixBase<u_t> &u,
+                  const Eigen::MatrixBase<p_t> &p)
+    {
+        return controlProblem.template inequality_constraints_impl<scalar_t>(x, u, p);
+    }
+    struct FinalInequalityConstraints {};
+    template<typename x_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NGF>
+    function_impl(FinalInequalityConstraints,
+                  const Eigen::MatrixBase<x_t> &xf,
+                  const Eigen::MatrixBase<p_t> &p)
+    {
+        return controlProblem.template final_inequality_constraints_impl<scalar_t>(xf, p);
     }
 
     /* Objective */
@@ -95,7 +115,11 @@ protected:
     inline typename std::enable_if<(Option & FreeEndTime) == 0, Eigen::Vector<Scalar, 1>>::type
     get_tf_var() const
     {
-        assert(controlProblem.tf_lb == controlProblem.tf_lb && "tf upper and lower bound have to be the same");
+        if (controlProblem.tf_lb != controlProblem.tf_ub)
+        {
+            std::cerr << "MultipleShooting<FixedEndTime>: final time bounds need to be identical (tf_lb == tf_ub)\n";
+            exit(EXIT_FAILURE);
+        }
         Eigen::Vector<Scalar, 1> tf;
         tf(0) = controlProblem.tf_lb;
         return tf;
@@ -150,6 +174,13 @@ protected:
             optProblem.add_constr(controlProblem.tf_lb <= tf_var <= controlProblem.tf_ub);
         }
         optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
+
+        /* Inequality constraints */
+        for (unsigned i = 0; i < N; i++)
+        {
+            optProblem.add_constr(this->function(InequalityConstraints{}, X_var[i], U_var[i], p_var) <= 0);
+        }
+        optProblem.add_constr(this->function(FinalInequalityConstraints{}, X_var[N], p_var) <= 0);
     }
 
 public:

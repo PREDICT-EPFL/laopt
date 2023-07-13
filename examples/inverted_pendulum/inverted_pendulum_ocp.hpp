@@ -8,7 +8,7 @@
 #include "laopt/laopt.hpp"
 #include "laopt/tools/control_problem_base.hpp"
 
-class InvertedPendulumOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 2, laopt_tools::FreeEndTime>
+class InvertedPendulumOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 2, /*NG*/ 2, /*NGF*/ 1, laopt_tools::FreeEndTime>
 {
 public:
     struct OptParam : OptParamBase
@@ -103,6 +103,25 @@ public:
         x_dot << theta_dot,
                 (m * g * l * sin(theta) - b * theta_dot + torque) / (m * l * l);
         return x_dot;
+    }
+
+    template<typename T> // T is scalar type
+    ineq_constr_t<T> inequality_constraints_impl(const Eigen::Ref<const state_t <T>> &x,
+                                                 const Eigen::Ref<const input_t <T>> &u,
+                                                 const Eigen::Ref<const param_t <T>> &p)
+    {
+        ineq_constr_t<T> ineq_constr;
+        ineq_constr(0) = (-x(0) + 0.2); // <= 0
+        ineq_constr(1) = (-u(0) - 2.8); // <= 0
+        return ineq_constr;
+    }
+    template<typename T> // T is scalar type
+    final_ineq_constr_t<T> final_inequality_constraints_impl(const Eigen::Ref<const state_t <T>> &xf,
+                                                             const Eigen::Ref<const param_t <T>> &p)
+    {
+        final_ineq_constr_t<T> final_ineq_constr;
+        final_ineq_constr(0) = (-xf(0) + 0.2); // <= 0
+        return final_ineq_constr;
     }
 };
 

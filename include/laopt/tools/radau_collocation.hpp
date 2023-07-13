@@ -340,6 +340,27 @@ protected:
         // Hessian is zero, i.e., we don't set any values
     }
 
+    /* Inequality constraints */
+    struct InequalityConstraints {};
+    template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NG>
+    function_impl(InequalityConstraints,
+                  const Eigen::MatrixBase<x_t> &x,
+                  const Eigen::MatrixBase<u_t> &u,
+                  const Eigen::MatrixBase<p_t> &p)
+    {
+        return controlProblem.template inequality_constraints_impl<scalar_t>(x, u, p);
+    }
+    struct FinalInequalityConstraints {};
+    template<typename x_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NGF>
+    function_impl(FinalInequalityConstraints,
+                  const Eigen::MatrixBase<x_t> &xf,
+                  const Eigen::MatrixBase<p_t> &p)
+    {
+        return controlProblem.template final_inequality_constraints_impl<scalar_t>(xf, p);
+    }
+
     /* Objective */
     struct NodeCost {};
     template<typename X_t, typename U_t, typename p_t,
@@ -370,8 +391,13 @@ protected:
 
     template<int Option = ControlProblem::Options>
     inline typename std::enable_if<(Option & FreeEndTime) == 0, Eigen::Vector<Scalar, 1>>::type
-    get_tf_var() const {
-        assert(controlProblem.tf_lb == controlProblem.tf_lb && "tf upper and lower bound have to be the same");
+    get_tf_var() const
+    {
+        if (controlProblem.tf_lb != controlProblem.tf_ub)
+        {
+            std::cerr << "RadauCollocation<FixedEndTime>: final time bounds need to be identical (tf_lb == tf_ub)\n";
+            exit(EXIT_FAILURE);
+        }
         Eigen::Vector<Scalar, 1> tf;
         tf(0) = controlProblem.tf_lb;
         return tf;
@@ -379,7 +405,8 @@ protected:
 
     template<int Option = ControlProblem::Options>
     inline typename std::enable_if<(Option & FreeEndTime) != 0, const variable_t<1>&>::type
-    get_tf_var() const {
+    get_tf_var() const
+    {
         return tf_var;
     }
 
@@ -432,6 +459,14 @@ protected:
             optProblem.add_constr(controlProblem.tf_lb <= tf_var <= controlProblem.tf_ub);
         }
         optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
+
+        /* Inequality constraints */
+        for (unsigned k = 0; k < N; k++)
+        {
+            optProblem.add_constr(this->function(InequalityConstraints{}, get_x(XU_var, k), get_u(XU_var, k), p_var) <= 0);
+        }
+        optProblem.add_constr(this->function(FinalInequalityConstraints{}, get_x(XU_var, N), p_var) <= 0);
+        // TODO: FinalInequalityConstraints could also be on input for collocation scheme!?
 
         /* Set last control equal second last for easier data handling */
         optProblem.add_constr(get_u(XU_var, N) == get_u(XU_var, N - 1));
