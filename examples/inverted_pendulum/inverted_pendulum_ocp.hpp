@@ -8,7 +8,10 @@
 #include "laopt/laopt.hpp"
 #include "laopt/tools/control_problem_base.hpp"
 
-class InvertedPendulumOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 2, /*NG*/ 2, /*NGF*/ 1, laopt_tools::FreeEndTime>
+class InvertedPendulumOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double,
+        /*NX*/ 2, /*NU*/ 1, /*NP*/ 2,
+        /*NG*/ 2, /*NG0*/ 2, /*NGF*/ 1,
+        laopt_tools::FreeEndTime>
 {
 public:
     struct OptParam : OptParamBase
@@ -106,6 +109,17 @@ public:
     }
 
     template<typename T> // T is scalar type
+    ineq_constr0_t<T> inequality_constraints0_impl(const Eigen::Ref<const state_t <T>> &x0,
+                                                   const Eigen::Ref<const input_t <T>> &u0,
+                                                   const Eigen::Ref<const param_t <T>> &p)
+    {
+        ineq_constr0_t<T> initial_ineq_constr;
+        initial_ineq_constr(0) = (-x0(0) + 0.2); // <= 0
+        initial_ineq_constr(1) = (-u0(0) - 2.8); // <= 0
+        return initial_ineq_constr;
+    }
+
+    template<typename T> // T is scalar type
     ineq_constr_t<T> inequality_constraints_impl(const Eigen::Ref<const state_t <T>> &x,
                                                  const Eigen::Ref<const input_t <T>> &u,
                                                  const Eigen::Ref<const param_t <T>> &p)
@@ -115,11 +129,12 @@ public:
         ineq_constr(1) = (-u(0) - 2.8); // <= 0
         return ineq_constr;
     }
+
     template<typename T> // T is scalar type
-    final_ineq_constr_t<T> final_inequality_constraints_impl(const Eigen::Ref<const state_t <T>> &xf,
-                                                             const Eigen::Ref<const param_t <T>> &p)
+    ineq_constrf_t<T> inequality_constraintsf_impl(const Eigen::Ref<const state_t <T>> &xf,
+                                                   const Eigen::Ref<const param_t <T>> &p)
     {
-        final_ineq_constr_t<T> final_ineq_constr;
+        ineq_constrf_t<T> final_ineq_constr;
         final_ineq_constr(0) = (-xf(0) + 0.2); // <= 0
         return final_ineq_constr;
     }

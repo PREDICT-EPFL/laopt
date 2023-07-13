@@ -351,6 +351,18 @@ protected:
     {
         return controlProblem.template inequality_constraints_impl<scalar_t>(x, u, p);
     }
+
+    struct InitialInequalityConstraints {};
+    template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NG0>
+    function_impl(InitialInequalityConstraints,
+                  const Eigen::MatrixBase<x_t> &x0,
+                  const Eigen::MatrixBase<u_t> &u0,
+                  const Eigen::MatrixBase<p_t> &p)
+    {
+        return controlProblem.template inequality_constraints0_impl<scalar_t>(x0, u0, p);
+    }
+
     struct FinalInequalityConstraints {};
     template<typename x_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NGF>
@@ -358,7 +370,7 @@ protected:
                   const Eigen::MatrixBase<x_t> &xf,
                   const Eigen::MatrixBase<p_t> &p)
     {
-        return controlProblem.template final_inequality_constraints_impl<scalar_t>(xf, p);
+        return controlProblem.template inequality_constraintsf_impl<scalar_t>(xf, p);
     }
 
     /* Objective */
@@ -461,12 +473,14 @@ protected:
         optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
 
         /* Inequality constraints */
-        for (unsigned k = 0; k < N; k++)
+        optProblem.add_constr(this->function(InitialInequalityConstraints{},  get_x(XU_var, 0), get_u(XU_var, 0), p_var) <= 0);
+
+        for (unsigned k = 1; k < N; k++)
         {
             optProblem.add_constr(this->function(InequalityConstraints{}, get_x(XU_var, k), get_u(XU_var, k), p_var) <= 0);
         }
         optProblem.add_constr(this->function(FinalInequalityConstraints{}, get_x(XU_var, N), p_var) <= 0);
-        // TODO: FinalInequalityConstraints could also be on input for collocation scheme!?
+        // TODO: FinalInequalityConstraints could also be on input for collocation scheme
 
         /* Set last control equal second last for easier data handling */
         optProblem.add_constr(get_u(XU_var, N) == get_u(XU_var, N - 1));

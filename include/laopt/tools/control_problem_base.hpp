@@ -10,7 +10,16 @@
 
 namespace laopt_tools {
 
-template<typename cScalar, int cNX, int cNU, int cNP = 0, int cNG = 0, int cNGF = 0, int cOptions = FixedEndTime>
+/* ControlProblemBase template parameters:
+ * cScalar:           Numeric scalar type
+ * cNX, cNU, cNP:     Length of state, input, optimization parameter
+ * cNG cNG0, cNGF:    Number of inequality constraints (elsewhere, initial, final)
+ * cOptions:          Problem options (free/fixed end time)
+ * */
+template<typename cScalar,
+        int cNX, int cNU, int cNP = 0,
+        int cNG = 0, int cNG0 = 0, int cNGF = 0,
+        int cOptions = FixedEndTime>
 class ControlProblemBase
 {
 public:
@@ -19,16 +28,21 @@ public:
     static const int NX = cNX;
     static const int NU = cNU;
     static const int NP = cNP;
+
     static const int NG = cNG;
+    static const int NG0 = cNG0;
     static const int NGF = cNGF;
+
     static const int Options = cOptions;
 
     /* Define state and input types */
     template<typename T> using state_t = Eigen::Vector<T, NX>;
     template<typename T> using input_t = Eigen::Vector<T, NU>;
     template<typename T> using param_t = Eigen::Vector<T, NP>;
+
     template<typename T> using ineq_constr_t = Eigen::Vector<T, NG>;
-    template<typename T> using final_ineq_constr_t = Eigen::Vector<T, NGF>;
+    template<typename T> using ineq_constr0_t = Eigen::Vector<T, NG0>;
+    template<typename T> using ineq_constrf_t = Eigen::Vector<T, NGF>;
 
     /* Scalar state and input types */
     using State = state_t<Scalar>;
@@ -110,20 +124,17 @@ public:
     /*
      * Templates for problem formulation
      */
-    template<typename T>
-    // T is scalar type
+    template<typename T> // T is scalar type
     T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
                          const Eigen::Ref<const input_t<T>> &u,
                          const Eigen::Ref<const param_t<T>> &p) { return static_cast<T>(0); }
 
-    template<typename T, typename Ttf>
-    // T is scalar type
+    template<typename T, typename Ttf> // T is scalar type
     T mayer_term_impl(const Eigen::Ref<const state_t<T>> &x,
                       const Eigen::Ref<const param_t<T>> &p,
                       const Ttf &tf) { return static_cast<T>(0); }
 
-    template<typename T>
-    // T is scalar type
+    template<typename T> // T is scalar type
     state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
                              const Eigen::Ref<const input_t<T>> &u,
                              const Eigen::Ref<const param_t<T>> &p)
@@ -132,6 +143,7 @@ public:
         return state_t<T>();
     }
 
+    /* Inequality constraints */
     template<typename T> // T is scalar type
     ineq_constr_t<T> inequality_constraints_impl(const Eigen::Ref<const state_t<T>> &x,
                                                  const Eigen::Ref<const input_t<T>> &u,
@@ -139,11 +151,21 @@ public:
     {
         return ineq_constr_t<T>();
     }
+
     template<typename T> // T is scalar type
-    final_ineq_constr_t<T> final_inequality_constraints_impl(const Eigen::Ref<const state_t<T>> &xf,
-                                                             const Eigen::Ref<const param_t<T>> &p)
+    ineq_constr0_t<T> inequality_constraints0_impl(const Eigen::Ref<const state_t<T>> &x0,
+                                                   const Eigen::Ref<const input_t<T>> &u0,
+                                                   const Eigen::Ref<const param_t<T>> &p)
     {
-        return final_ineq_constr_t<T>();
+        return ineq_constr0_t<T>();
+    }
+
+    template<typename T> // T is scalar type
+    ineq_constrf_t<T> inequality_constraintsf_impl(const Eigen::Ref<const state_t<T>> &xf,
+                                                   // TODO: Add final input for more generality?
+                                                   const Eigen::Ref<const param_t<T>> &p)
+    {
+        return ineq_constrf_t<T>();
     }
 
     // TODO: Add template for box constraints on particular times (first and last of the trajectory)

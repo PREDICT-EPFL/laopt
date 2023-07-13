@@ -76,6 +76,18 @@ protected:
     {
         return controlProblem.template inequality_constraints_impl<scalar_t>(x, u, p);
     }
+
+    struct InitialInequalityConstraints {};
+    template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NG0>
+    function_impl(InitialInequalityConstraints,
+                  const Eigen::MatrixBase<x_t> &x0,
+                  const Eigen::MatrixBase<u_t> &u0,
+                  const Eigen::MatrixBase<p_t> &p)
+    {
+        return controlProblem.template inequality_constraints0_impl<scalar_t>(x0, u0, p);
+    }
+
     struct FinalInequalityConstraints {};
     template<typename x_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NGF>
@@ -83,7 +95,7 @@ protected:
                   const Eigen::MatrixBase<x_t> &xf,
                   const Eigen::MatrixBase<p_t> &p)
     {
-        return controlProblem.template final_inequality_constraints_impl<scalar_t>(xf, p);
+        return controlProblem.template inequality_constraintsf_impl<scalar_t>(xf, p);
     }
 
     /* Objective */
@@ -176,7 +188,8 @@ protected:
         optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
 
         /* Inequality constraints */
-        for (unsigned i = 0; i < N; i++)
+        optProblem.add_constr(this->function(InitialInequalityConstraints{}, X_var[0], U_var[0], p_var) <= 0);
+        for (unsigned i = 1; i < N; i++)
         {
             optProblem.add_constr(this->function(InequalityConstraints{}, X_var[i], U_var[i], p_var) <= 0);
         }
