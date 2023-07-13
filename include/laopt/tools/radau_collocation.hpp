@@ -473,13 +473,12 @@ protected:
         optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
 
         /* Inequality constraints */
-        optProblem.add_constr(this->function(InitialInequalityConstraints{},  get_x(XU_var, 0), get_u(XU_var, 0), p_var) <= 0);
-
+        optProblem.add_constr(controlProblem.g0_lb <= this->function(InitialInequalityConstraints{},  get_x(XU_var, 0), get_u(XU_var, 0), p_var) <= controlProblem.g0_ub);
         for (unsigned k = 1; k < N; k++)
         {
-            optProblem.add_constr(this->function(InequalityConstraints{}, get_x(XU_var, k), get_u(XU_var, k), p_var) <= 0);
+            optProblem.add_constr(controlProblem.g_lb <= this->function(InequalityConstraints{}, get_x(XU_var, k), get_u(XU_var, k), p_var) <= controlProblem.g_ub);
         }
-        optProblem.add_constr(this->function(FinalInequalityConstraints{}, get_x(XU_var, N), p_var) <= 0);
+        optProblem.add_constr(controlProblem.gf_lb <= this->function(FinalInequalityConstraints{}, get_x(XU_var, N), p_var) <= controlProblem.gf_ub);
         // TODO: FinalInequalityConstraints could also be on input for collocation scheme
 
         /* Set last control equal second last for easier data handling */

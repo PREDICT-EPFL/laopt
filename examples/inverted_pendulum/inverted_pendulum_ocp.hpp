@@ -114,8 +114,8 @@ public:
                                                    const Eigen::Ref<const param_t <T>> &p)
     {
         ineq_constr0_t<T> initial_ineq_constr;
-        initial_ineq_constr(0) = (-x0(0) + 0.2); // <= 0
-        initial_ineq_constr(1) = (-u0(0) - 2.8); // <= 0
+        initial_ineq_constr(0) = (-x0(0) + 0.2); // <= g0_ub
+        initial_ineq_constr(1) = (-u0(0) - 2.8); // <= g0_ub
         return initial_ineq_constr;
     }
 
@@ -125,8 +125,8 @@ public:
                                                  const Eigen::Ref<const param_t <T>> &p)
     {
         ineq_constr_t<T> ineq_constr;
-        ineq_constr(0) = (-x(0) + 0.2); // <= 0
-        ineq_constr(1) = (-u(0) - 2.8); // <= 0
+        ineq_constr(0) = (-x(0) + 0.2); // <= g_ub
+        ineq_constr(1) = (-u(0) - 2.8); // <= g_ub
         return ineq_constr;
     }
 
@@ -135,7 +135,7 @@ public:
                                                    const Eigen::Ref<const param_t <T>> &p)
     {
         ineq_constrf_t<T> final_ineq_constr;
-        final_ineq_constr(0) = (-xf(0) + 0.2); // <= 0
+        final_ineq_constr(0) = /* gf_lb <= */ (-xf(0) + 0.2); /* <= gf_ub */
         return final_ineq_constr;
     }
 };

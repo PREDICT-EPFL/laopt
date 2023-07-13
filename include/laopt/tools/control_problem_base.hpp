@@ -48,6 +48,9 @@ public:
     using State = state_t<Scalar>;
     using Input = input_t<Scalar>;
     using Param = param_t<Scalar>;
+    using IneqBound = ineq_constr_t<Scalar>;
+    using Ineq0Bound = ineq_constr0_t<Scalar>;
+    using IneqfBound = ineq_constrf_t<Scalar>;
 
     /* Static parameters */
     Scalar t0 = 0;
@@ -62,6 +65,14 @@ public:
     State x0_lb = -x0_ub;
     State xf_ub = State::Constant(std::numeric_limits<Scalar>::infinity());
     State xf_lb = -xf_ub;
+
+    /* Bounds on inequality constraints */
+    IneqBound g_ub = IneqBound::Zero();
+    IneqBound g_lb = IneqBound::Constant(-std::numeric_limits<Scalar>::infinity());
+    Ineq0Bound g0_ub = Ineq0Bound::Zero();
+    Ineq0Bound g0_lb = Ineq0Bound::Constant(-std::numeric_limits<Scalar>::infinity());
+    IneqfBound gf_ub = IneqfBound::Zero();
+    IneqfBound gf_lb = IneqfBound::Constant(-std::numeric_limits<Scalar>::infinity());
 
     /* Final time bounds */
     Scalar tf_lb{1}, tf_ub{1};

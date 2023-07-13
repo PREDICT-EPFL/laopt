@@ -188,12 +188,12 @@ protected:
         optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
 
         /* Inequality constraints */
-        optProblem.add_constr(this->function(InitialInequalityConstraints{}, X_var[0], U_var[0], p_var) <= 0);
+        optProblem.add_constr(controlProblem.g0_lb <= this->function(InitialInequalityConstraints{}, X_var[0], U_var[0], p_var) <= controlProblem.g0_ub);
         for (unsigned i = 1; i < N; i++)
         {
-            optProblem.add_constr(this->function(InequalityConstraints{}, X_var[i], U_var[i], p_var) <= 0);
+            optProblem.add_constr(controlProblem.g_lb <= this->function(InequalityConstraints{}, X_var[i], U_var[i], p_var) <= controlProblem.g_ub);
         }
-        optProblem.add_constr(this->function(FinalInequalityConstraints{}, X_var[N], p_var) <= 0);
+        optProblem.add_constr(controlProblem.gf_lb <= this->function(FinalInequalityConstraints{}, X_var[N], p_var) <= controlProblem.gf_ub);
     }
 
 public:
