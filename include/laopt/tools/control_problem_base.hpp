@@ -158,7 +158,8 @@ public:
                              const Eigen::Ref<const input_t<T>> &u,
                              const Eigen::Ref<const param_t<T>> &p)
     {
-        assert(false && "dynamics must be implemented");
+        std::cerr << "dynamics_impl() not implemented.\n";
+        exit(EXIT_FAILURE);
         return state_t<T>();
     }
 
