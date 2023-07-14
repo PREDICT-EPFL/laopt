@@ -106,11 +106,19 @@ public:
     void set_tf(const Scalar &tf) { tf_lb = tf_ub = tf; }
 
     /* Diagnosis */
-    void print_diagnostics() const
+    void print_problem_dimension() const
     {
         std::cout << std::setprecision(4) << std::defaultfloat;
-        std::cout << "Diagnostics: ControlProblem with NX = "
-                  << NX << ", NU = " << NU << ", NP = " << NP << "\n";
+        std::cout << "Diagnostics: ControlProblem with \n"
+                  << "NX = " << NX << ", NU = " << NU << ", NP = " << NP << "\n"
+                  << "NG = " << NG << ", NG0 = " << NG0 << ", NGF = " << NGF << "\n"
+                  << "End time: " << ((Options & FreeEndTime) ? "free" : "fixed") << "\n";
+    }
+    void print_diagnostics() const
+    {
+        print_problem_dimension();
+
+        std::cout << std::setprecision(4) << std::defaultfloat;
         std::cout << "ubu: " << u_ub.transpose() << "\n"
                   << "lbu: " << u_lb.transpose() << "\n"
                   << "ubx: " << x_ub.transpose() << "\n"
@@ -160,7 +168,12 @@ public:
                                                  const Eigen::Ref<const input_t<T>> &u,
                                                  const Eigen::Ref<const param_t<T>> &p)
     {
-        return ineq_constr_t<T>();
+        if (NG > 0)
+        {
+            std::cerr << "control_problem_base: NG = " << NG << " but inequality_constraints_impl() not implemented.\n";
+            exit(EXIT_FAILURE);
+        }
+        return {};
     }
 
     template<typename T> // T is scalar type
@@ -168,7 +181,12 @@ public:
                                                    const Eigen::Ref<const input_t<T>> &u0,
                                                    const Eigen::Ref<const param_t<T>> &p)
     {
-        return ineq_constr0_t<T>();
+        if (NG0 > 0)
+        {
+            std::cerr << "control_problem_base: NG0 = " << NG0 << " but inequality_constraints0_impl() not implemented.\n";
+            exit(EXIT_FAILURE);
+        }
+        return {};
     }
 
     template<typename T> // T is scalar type
@@ -176,7 +194,12 @@ public:
                                                    // TODO: Add final input for more generality?
                                                    const Eigen::Ref<const param_t<T>> &p)
     {
-        return ineq_constrf_t<T>();
+        if (NGF > 0)
+        {
+            std::cerr << "control_problem_base: NGF = " << NGF << " but inequality_constraintsf_impl() not implemented.\n";
+            exit(EXIT_FAILURE);
+        }
+        return {};
     }
 
     // TODO: Add template for box constraints on particular times (first and last of the trajectory)
