@@ -491,7 +491,7 @@ public:
 
         using is_return_matrix = typename meta::matrix_info<raw_return_t>::is_matrix_t;
 
-        static_assert(n_outputs > 0 && n_inputs >= 0, "The function cannot have a dynamic size.");
+        static_assert(n_outputs >= 0 && n_inputs >= 0, "The function cannot have a dynamic size.");
     };
 
 private:
@@ -631,7 +631,7 @@ public:
 
         using is_return_matrix = typename meta::matrix_info<raw_return_t>::is_matrix_t;
 
-        static_assert(n_outputs > 0 && n_inputs >= 0, "The function cannot have a dynamic size.");
+        static_assert(n_outputs >= 0 && n_inputs >= 0, "The function cannot have a dynamic size.");
     };
 
 private:
