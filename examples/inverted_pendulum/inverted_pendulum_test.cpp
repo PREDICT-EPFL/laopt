@@ -10,8 +10,8 @@
 #include "laopt/ipopt_interface/ipopt_wrapper.hpp"
 #endif
 #include "laopt/solvers/sqp_solver.hpp"
-#ifdef LAOPT_WITH_OSQP
-#include "laopt/solvers/osqp_interface.hpp"
+#ifdef LAOPT_WITH_PIQP
+#include "laopt/solvers/piqp_interface.hpp"
 #endif
 
 #include "examples_helper.hpp"
@@ -95,11 +95,11 @@ int main()
         }
 #endif
 
-#ifdef LAOPT_WITH_OSQP
+#ifdef LAOPT_WITH_PIQP
         {
             std::cout << "Multiple Shooting - SQP\n";
 
-            using Solver = laopt::SQPSolver<OptProblem, laopt::OSQPSolver<OptProblem::scalar_t>>;
+            using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
             Solver solver(opt_problem);
             solver.settings().verbose = true;
             solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT_NO_CONSTRAINTS;
@@ -138,11 +138,11 @@ int main()
         }
 #endif
 
-#ifdef LAOPT_WITH_OSQP
+#ifdef LAOPT_WITH_PIQP
         {
             std::cout << "Radau Collocation - SQP\n";
 
-            using Solver = laopt::SQPSolver<OptProblem, laopt::OSQPSolver<OptProblem::scalar_t>>;
+            using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
             Solver solver(opt_problem);
             solver.settings().verbose = true;
             solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT_NO_CONSTRAINTS;
