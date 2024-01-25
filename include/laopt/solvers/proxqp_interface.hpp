@@ -39,7 +39,10 @@ public:
         Base(n, m),
         m_proxqp_solver(1, 0, 0),
         m_proxqp_initialized(false),
-        m_A_to_proxqp_map(m) {}
+        m_A_to_proxqp_map(m)
+    {
+        this->m_settings.max_iter = 10000;
+    }
 
     qp_solver_info_t solve_impl(const Eigen::SparseMatrix<scalar_t>& H,
                                 const Eigen::Ref<const Eigen::VectorX<scalar_t>>& f,
@@ -534,6 +537,7 @@ private:
         m_proxqp_solver.settings.eps_abs = this->m_settings.eps_abs;
         m_proxqp_solver.settings.max_iter = this->m_settings.max_iter;
         m_proxqp_solver.settings.verbose = this->m_settings.verbose;
+        m_proxqp_solver.settings.initial_guess = proxsuite::proxqp::InitialGuessStatus::WARM_START_WITH_PREVIOUS_RESULT;
     }
 };
 

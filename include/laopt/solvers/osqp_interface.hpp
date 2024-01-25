@@ -36,6 +36,8 @@ private:
 public:
     OSQPSolver(int n, int m) : Base(n, m)
     {
+        this->m_settings.max_iter = 10000;
+
         m_osqp_workspace = nullptr;
         m_osqp_settings = (OSQPSettings*) c_malloc(sizeof(OSQPSettings));
         m_osqp_data = (OSQPData*) c_malloc(sizeof(OSQPData));

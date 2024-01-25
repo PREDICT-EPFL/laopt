@@ -12,7 +12,7 @@ struct qp_solver_settings_t {
     /** Common settings */
     Scalar eps_rel           = 1e-6;  /** Relative tolerance for termination, 0 < eps_rel */
     Scalar eps_abs           = 1e-6;  /** Absolute tolerance for termination, 0 < eps_abs */
-    int    max_iter          = 4000;  /** Maximal number of iteration, 0 < max_iter */
+    int    max_iter          = 200;   /** Maximal number of iteration, 0 < max_iter */
     bool   reuse_pattern     = false; /** Assume that problem size and sparsity pattern have not changed since last 'solve call' */
     bool   elastic_mode      = false; /** Add slack variables to all non-box constraints to make QP always feasible */
     Scalar elastic_weight_l1 = 1.0;   /** Weight for l1 slacks if elastic mode is activated */

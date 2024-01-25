@@ -36,7 +36,10 @@ public:
     QPSwiftSolver(int n, int m) :
         Base(n, m),
         m_qpswift_solver(nullptr),
-        m_A_to_qpswift_map(m) {}
+        m_A_to_qpswift_map(m)
+    {
+        this->m_settings.max_iter = 50;
+    }
 
     ~QPSwiftSolver()
     {
