@@ -16,6 +16,7 @@ env:
   SIMDE_VERSION: v0.7.2
   PROXQP_VERSION: v0.2.13
   QPSWIFT_VERSION: v0.0.2
+  PIQP_VERSION: v0.2.4
   BUILD_RELEASE: ON
   ENABLE_SANITIZERS: ON
 
@@ -102,6 +103,10 @@ jobs:
       - name: Install QPSwift
         working-directory: build_external
         run: bash  ../ci/shared/install_qpswift.sh
+
+      - name: Install PIQP
+        working-directory: build_external
+        run: bash  ../ci/shared/install_piqp.sh
 
       - name: Build laopt
         working-directory: build
