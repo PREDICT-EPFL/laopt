@@ -422,8 +422,8 @@ protected:
         return tf_var;
     }
 
-    template<typename OptProblem>
-    void define_problem(OptProblem &optProblem)
+    template<typename Derived>
+    void define_problem(laopt::OptProblem<Derived>& optProblem)
     {
         /* Register variables */
         optProblem.add_variable(XU_var);

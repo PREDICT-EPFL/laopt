@@ -8,26 +8,23 @@ namespace laopt
 {
 
 template<typename Scalar>
-class DecisionVariableSetter
+class DecisionVariableSetter : public OptProblem<DecisionVariableSetter<Scalar>>
 {
+    friend OptProblem<DecisionVariableSetter<Scalar>>;
+
     Eigen::Ref<Eigen::VectorX<Scalar>>& master_var;
     int offset = 0;
 
 public:
     explicit DecisionVariableSetter(Eigen::Ref<Eigen::VectorX<Scalar>>& var) : master_var(var) {}
 
+protected:
     template<int n>
-    EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>& var)
+    EIGEN_STRONG_INLINE void add_variable_impl(Variable<Scalar, n>& var)
     {
         var.set_memory(offset, master_var.data());
         offset += n;
     }
-
-    template<typename ...Args>
-    EIGEN_STRONG_INLINE void add_obj(Args...) {}
-
-    template<typename ...Args>
-    EIGEN_STRONG_INLINE void add_constr(Args...) {}
 };
 
 } // namespace laopt

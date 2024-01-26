@@ -9,23 +9,20 @@ namespace laopt
 {
 
 template<typename DType, typename Matrix, typename Vector>
-class WeightedSumConstraintsEvaluator
+class WeightedSumConstraintsEvaluator : public OptProblem<WeightedSumConstraintsEvaluator<DType, Matrix, Vector>>
 {
+    friend OptProblem<WeightedSumConstraintsEvaluator<DType, Matrix, Vector>>;
+
     WeightedSumFunction<Matrix, Vector>& constraints;
     int row_offset;
 
 public:
     explicit WeightedSumConstraintsEvaluator(WeightedSumFunction<Matrix, Vector>& constraints) : constraints(constraints), row_offset(0) {}
 
-    template<typename ...Args>
-    EIGEN_STRONG_INLINE void add_variable(Args...) {}
-
-    template<typename ...Args>
-    EIGEN_STRONG_INLINE void add_obj(Args...) {}
-
+protected:
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value && !is_variable_constraint_expr<Derived>::value>::type
-    add_constr(const ConstraintExpr<Derived>& const_expr)
+    add_constr_impl(const ConstraintExpr<Derived>& const_expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
@@ -37,7 +34,7 @@ public:
 
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Gradient>::value && !is_variable_constraint_expr<Derived>::value>::type
-    add_constr(const ConstraintExpr<Derived>& const_expr)
+    add_constr_impl(const ConstraintExpr<Derived>& const_expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
@@ -49,7 +46,7 @@ public:
 
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Hessian>::value && !is_variable_constraint_expr<Derived>::value>::type
-    add_constr(const ConstraintExpr<Derived>& const_expr)
+    add_constr_impl(const ConstraintExpr<Derived>& const_expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
@@ -62,7 +59,7 @@ public:
 
     template<typename Derived>
     EIGEN_STRONG_INLINE typename std::enable_if<is_variable_constraint_expr<Derived>::value>::type
-    add_constr(ConstraintExpr<Derived>) {}
+    add_constr_impl(const ConstraintExpr<Derived>&) {}
 };
 
 } // namespace laopt

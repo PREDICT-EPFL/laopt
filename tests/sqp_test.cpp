@@ -55,8 +55,8 @@ struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>>
 
     SimpleExample() = default;
 
-    template<typename Problem>
-    void define_problem(Problem& problem)
+    template<typename Derived>
+    void define_problem(laopt::OptProblem<Derived>& problem)
     {
         problem.add_variable(x_var);
 

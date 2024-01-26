@@ -9,8 +9,10 @@ namespace laopt
 {
 
 template<typename DType, typename Matrix, typename Vector>
-class ObjectiveEvaluator
+class ObjectiveEvaluator : public OptProblem<ObjectiveEvaluator<DType, Matrix, Vector>>
 {
+    friend OptProblem<ObjectiveEvaluator<DType, Matrix, Vector>>;
+
     using scalar_t = typename Vector::scalar_t;
 
     WeightedSumFunction<Matrix, Vector>& objective;
@@ -20,12 +22,10 @@ public:
     explicit ObjectiveEvaluator(WeightedSumFunction<Matrix, Vector>& objective, const scalar_t obj_factor = static_cast<scalar_t>(1)) :
         objective(objective), obj_factor(obj_factor) {}
 
-    template<typename ...Args>
-    EIGEN_STRONG_INLINE void add_variable(Args...) {}
-
+protected:
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value>::type
-    add_obj(const ExprBase<Derived>& expr)
+    add_obj_impl(const ExprBase<Derived>& expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
@@ -36,7 +36,7 @@ public:
 
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Gradient>::value>::type
-    add_obj(const ExprBase<Derived>& expr)
+    add_obj_impl(const ExprBase<Derived>& expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
@@ -47,7 +47,7 @@ public:
 
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Hessian>::value>::type
-    add_obj(const ExprBase<Derived>& expr)
+    add_obj_impl(const ExprBase<Derived>& expr)
     {
         static constexpr int n_outputs = Derived::n_outputs;
 
@@ -56,9 +56,6 @@ public:
 
         ExprEvaluator<Derived>::hessian(expr.derived(), objective.hessian(in_indices, in_indices), weights);
     }
-
-    template<typename ...Args>
-    EIGEN_STRONG_INLINE void add_constr(Args...) {}
 };
 
 } // namespace laopt

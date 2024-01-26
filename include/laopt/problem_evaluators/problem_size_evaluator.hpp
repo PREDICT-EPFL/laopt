@@ -8,8 +8,10 @@ namespace laopt
 {
 
 template<typename Matrix, typename Vector>
-class ProblemSizeEvaluator
+class ProblemSizeEvaluator : public OptProblem<ProblemSizeEvaluator<Matrix, Vector>>
 {
+    friend OptProblem<ProblemSizeEvaluator<Matrix, Vector>>;
+
     VectorFunction<Matrix, Vector>& variable_bounds;
     WeightedSumFunction<Matrix, Vector>& objective;
     VectorFunction<Matrix, Vector>& constraints;
@@ -25,8 +27,9 @@ public:
           constraints(constraints),
           lagrangian(lagrangian) {}
 
+protected:
     template<typename Scalar, int n>
-    EIGEN_STRONG_INLINE void add_variable(Variable<Scalar, n>& var)
+    EIGEN_STRONG_INLINE void add_variable_impl(Variable<Scalar, n>& var)
     {
         variable_bounds.extend_variables(n);
         variable_bounds.extend_rows(n);
@@ -37,11 +40,8 @@ public:
     }
 
     template<typename Derived>
-    EIGEN_STRONG_INLINE void add_obj(const ExprBase<Derived>& expr) {}
-
-    template<typename Derived>
     EIGEN_STRONG_INLINE typename std::enable_if<!is_variable_constraint_expr<Derived>::value>::type
-    add_constr(const ConstraintExpr<Derived>& const_expr)
+    add_constr_impl(const ConstraintExpr<Derived>&)
     {
         constraints.extend_rows(Derived::n_outputs);
         lagrangian.extend_rows(Derived::n_outputs);
@@ -49,7 +49,7 @@ public:
 
     template<typename Derived>
     EIGEN_STRONG_INLINE typename std::enable_if<is_variable_constraint_expr<Derived>::value>::type
-    add_constr(ConstraintExpr<Derived>) {}
+    add_constr_impl(const ConstraintExpr<Derived>&) {}
 };
 
 } // namespace laopt
