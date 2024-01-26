@@ -131,7 +131,6 @@ protected:
         // Convert the arguments to AD variables, and call the function
         ADOutput out = seed_and_call(std::forward<Tag>(tag), make_ad_touchable<ADScalar>(args)...);
 
-        // Since we used NaNs in the derivative propagation, all non-zeros are the actual sparsity pattern
         for(int i = 0; i < out.rows(); i++)
         {
             for (int j = 0; j < out[i].derivatives().rows(); j++)
@@ -234,7 +233,7 @@ protected:
 
         // First order derivative
         using ADScalar = laopt::AutoDiffScalar<Eigen::Vector<Scalar, Info::n_inputs>>;
-        // only calculate one row of the hessian at once to reduce memory requirements
+        // only calculate one col of the hessian at once to reduce memory requirements
         using outerDerivatives = Eigen::Vector<ADScalar, 1>;
         // Second order derivative
         using outerADScalar = laopt::AutoDiffScalar<outerDerivatives>;
@@ -245,7 +244,7 @@ protected:
             // Convert to AD variables for the inputs and call our function for ith row of hessian
             out = seed_and_call2(i, std::forward<Tag>(tag), make_ad2<outerADScalar>(args)...);
             for(size_t j = 0; j < Info::n_outputs; j++) {
-                out_hessian(i, Eigen::all) += weight(j) * out[j].derivatives()(0).derivatives().transpose();
+                out_hessian(Eigen::all, i) += weight(j) * out[j].derivatives()(0).derivatives().transpose();
             }
         }
     }
@@ -289,7 +288,6 @@ protected:
         using outerADScalar = laopt::AutoDiffScalar<outerDerivatives>;
         using ADOutput = Eigen::Vector<outerADScalar, Info::n_outputs>;
 
-        // Since we used NaNs in the derivative propagation, all non-zeros are the actual sparsity pattern
         ADOutput out;
         for (size_t i = 0; i < Info::n_inputs; i++) {
             // Convert to AD variables for the inputs and call our function for ith row of hessian
