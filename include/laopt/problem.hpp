@@ -6,7 +6,7 @@
 #include "problem_dispatch_types.hpp"
 #include "problem_vector_function.hpp"
 #include "problem_weighted_sum_function.hpp"
-#include "problem_evaluators/opt_problem.hpp"
+#include "opt_problem.hpp"
 #include "problem_evaluators/problem_size_evaluator.hpp"
 #include "problem_evaluators/objective_evaluator.hpp"
 #include "problem_evaluators/decision_variable_setter.hpp"
