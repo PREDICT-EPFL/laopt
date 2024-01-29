@@ -244,7 +244,7 @@ protected:
             // Convert to AD variables for the inputs and call our function for ith row of hessian
             out = seed_and_call2(i, std::forward<Tag>(tag), make_ad2<outerADScalar>(args)...);
             for(size_t j = 0; j < Info::n_outputs; j++) {
-                out_hessian(Eigen::all, i) += weight(j) * out[j].derivatives()(0).derivatives().transpose();
+                out_hessian(Eigen::all, i) += weight(j) * out[j].derivatives()(0).derivatives();
             }
         }
     }
@@ -296,7 +296,7 @@ protected:
                 for (int k = 0; k < out[j].derivatives()(0).derivatives().rows(); k++) {
                     if (out[j].derivatives()(0).derivatives()(k).value() != 0)
                     {
-                        out_hessian(i, k) += 1;
+                        out_hessian(k, i) += 1;
                     }
                 }
             }

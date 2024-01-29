@@ -16,13 +16,13 @@ public:
     template<typename Derived>
     EIGEN_STRONG_INLINE void add_obj(const ExprBase<Derived>& expr)
     {
-        static_cast<Evaluator*>(this)->add_obj_impl(expr);
+        static_cast<Evaluator*>(this)->add_obj_impl(expr.derived());
     }
 
     template<typename Derived>
     EIGEN_STRONG_INLINE void add_constr(const ConstraintExpr<Derived>& expr)
     {
-        static_cast<Evaluator*>(this)->add_constr_impl(expr);
+        static_cast<Evaluator*>(this)->add_constr_impl(expr.derived());
     }
 
 protected:

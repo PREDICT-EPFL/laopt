@@ -36,8 +36,8 @@ protected:
     template<typename DerivedLb, typename Derived, typename DerivedUb>
     EIGEN_STRONG_INLINE void add_constr_impl(const BoundedExpr<DerivedLb, IndexedVector<Derived>, DerivedUb>& bounded_expr)
     {
-        add_constr(IneqConstraintExpr<DerivedLb, IndexedVector<Derived>>(bounded_expr.lb, bounded_expr.expr));
-        add_constr(IneqConstraintExpr<IndexedVector<Derived>, DerivedUb>(bounded_expr.expr, bounded_expr.ub));
+        this->add_constr(IneqConstraintExpr<DerivedLb, IndexedVector<Derived>>(bounded_expr.lb, bounded_expr.expr));
+        this->add_constr(IneqConstraintExpr<IndexedVector<Derived>, DerivedUb>(bounded_expr.expr, bounded_expr.ub));
     }
 
     template<typename Derived>
