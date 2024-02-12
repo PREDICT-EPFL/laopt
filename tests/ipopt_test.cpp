@@ -23,7 +23,7 @@ namespace
  *       -1 <= x4 <= 1
  */
 template<typename scalar_t_>
-struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>>
+struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>, laopt::TAGGED>
 {
     using scalar_t = scalar_t_;
 
@@ -115,7 +115,7 @@ TEST(IpoptTest, SimpleExample)
  *       -1 <= x1 <= 1
  */
 template<typename scalar_t_>
-struct Ipopt_example : public laopt::Differentiable<Ipopt_example<scalar_t_>>
+struct Ipopt_example : public laopt::Differentiable<Ipopt_example<scalar_t_>, laopt::TAGGED>
 {
     using scalar_t = scalar_t_;
 
@@ -199,7 +199,7 @@ TEST(IpoptTest, IpoptExample)
  *      1 <= x1,x2,x3,x4 <= 5
  */
 template<typename _scalar_t>
-struct Prob71 : public laopt::Differentiable<Prob71<_scalar_t>>
+struct Prob71 : public laopt::Differentiable<Prob71<_scalar_t>, laopt::TAGGED>
 {
     using scalar_t = _scalar_t; // laopt::Problem assumes that the user code will contain a scalar_t
 

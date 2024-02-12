@@ -23,7 +23,7 @@
  *       -1 <= x4 <= 1
  */
 template<typename scalar_t_>
-struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>>
+struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>, laopt::TAGGED>
 {
     using scalar_t = scalar_t_;
 

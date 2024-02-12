@@ -11,7 +11,7 @@ using namespace casadi;
 // https://github.com/acados/acados/blob/master/examples/acados_python/chain_mass/export_chain_mass_model.py
 
 template<int n_mass = 10>
-struct LAOptChainMass : public laopt::Differentiable<LAOptChainMass<n_mass>, true>
+struct LAOptChainMass : public laopt::Differentiable<LAOptChainMass<n_mass>>
 {
     const Eigen::Vector<double, 3> x0{0, 0, 0}; // fix mass (at wall)
     const double m = 0.033; // mass of the balls

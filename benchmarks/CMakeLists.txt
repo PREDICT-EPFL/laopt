@@ -17,10 +17,8 @@ if(NOT benchmark_POPULATED)
     add_subdirectory(${benchmark_SOURCE_DIR} ${benchmark_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
 
-find_package(Casadi REQUIRED)
-
 add_executable(simple_function_benchmark simple_function_benchmark.cpp simple_function_benchmark_casadi_codegen.cpp)
-target_link_libraries(simple_function_benchmark PRIVATE laopt benchmark::benchmark casadi)
+target_link_libraries(simple_function_benchmark PRIVATE laopt benchmark::benchmark)
 
 add_executable(chain_mass_benchmark chain_mass_benchmark.cpp chain_mass_benchmark_casadi_codegen.cpp)
-target_link_libraries(chain_mass_benchmark PRIVATE laopt benchmark::benchmark casadi)
+target_link_libraries(chain_mass_benchmark PRIVATE laopt benchmark::benchmark)

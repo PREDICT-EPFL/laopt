@@ -1,13 +1,13 @@
 #ifndef LAOPT_COMMON_FUNCTIONS_HPP
 #define LAOPT_COMMON_FUNCTIONS_HPP
 
-#include "differentiable.hpp"
+#include "autodiff/differentiable.hpp"
 
 namespace laopt {
 
 namespace common_functions {
 
-class IDENTITY : public Differentiable<IDENTITY, true>
+class IDENTITY : public Differentiable<IDENTITY, TAGLESS>
 {
     const double multiplier;
 
@@ -56,7 +56,7 @@ public:
 };
 
 template<typename F, typename Scalar, typename Tag = DefaultTag>
-class RK4 : public Differentiable<RK4<F, Scalar, Tag>, true>
+class RK4 : public Differentiable<RK4<F, Scalar, Tag>, TAGLESS>
 {
     F& f;
     Scalar h;

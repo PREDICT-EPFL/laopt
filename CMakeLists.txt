@@ -60,6 +60,9 @@ else ()
     message(STATUS "Using Eigen3 from: ${EIGEN3_INCLUDE_DIRS}")
 endif ()
 
+# Find Casadi
+find_package(Casadi REQUIRED)
+
 ## Find solvers, append to laOPT interface library
 # Find IPOPT
 if (WITH_IPOPT)
@@ -100,7 +103,7 @@ endif()
 ## Define laOPT interface library (to be linked into user code)
 add_library(laopt INTERFACE)
 target_include_directories(laopt INTERFACE include/ ${SOLVER_INCLUDE_DIRS})
-target_link_libraries(laopt INTERFACE Eigen3.4 ${SOLVER_LIBRARIES})
+target_link_libraries(laopt INTERFACE Eigen3.4 casadi ${SOLVER_LIBRARIES})
 
 target_compile_definitions(laopt INTERFACE -DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB - For both Windows and UNIX)
 

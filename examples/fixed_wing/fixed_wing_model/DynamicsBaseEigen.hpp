@@ -5,7 +5,7 @@
 #include <vector>
 
 #include <Eigen/Core>
-#include "laopt/autodiff_scalar.hpp"
+#include "laopt/autodiff/autodiff_scalar.hpp"
 
 namespace flight_model {
 namespace eigen_model {

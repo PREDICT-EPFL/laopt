@@ -23,9 +23,9 @@ namespace laopt_tools {
  *  0                1                2         N_segs-1                    Segment indices of N_segs segments
  * */
 template<typename ControlProblem, unsigned N_segs, unsigned D_poly>
-class RadauCollocation : public laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly>>
+class RadauCollocation : public laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly>, laopt::TAGGED>
 {
-    friend laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly>>;
+    friend laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly>, laopt::TAGGED>;
 
     template<typename, typename, typename, typename>
     friend class laopt::ProblemBase;

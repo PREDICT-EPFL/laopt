@@ -2,59 +2,20 @@
 #define LAOPT_DIFFERENTIABLE_HPP
 
 #include <Eigen/Dense>
-#include "autodiff_scalar.hpp"
 
-#include "utility.hpp"
-#include "expressions/expr_base.hpp"
-#include "indexed_vector.hpp"
+#include "../utility.hpp"
+#include "../expressions/function_capture.hpp"
+#include "../indexed_vector.hpp"
+#include "differentiable_options.hpp"
+#include "differentiable_eigen.hpp"
+#include "differentiable_casadi.hpp"
 
 namespace laopt
 {
 
-struct DefaultTag {};
-
-/*
- * This struct captures a function call.
- * Capture is a lambda which takes another lambda as input which is then called with the original parameters.
- */
-template<typename Derived, typename Tag, typename Info, typename Capture>
-class FunctionCapture : public ExprBase<FunctionCapture<Derived, Tag, Info, Capture>>
-{
-public:
-    Derived& func;
-    Capture capture;
-
-    static constexpr int n_inputs = Info::n_inputs;
-    static constexpr int n_outputs = Info::n_outputs;
-    using Scalar = typename Info::scalar_t;
-
-    explicit FunctionCapture(Derived& func, const Capture& capture) : func(func), capture(capture) {}
-
-    EIGEN_STRONG_INLINE Eigen::Vector<int, n_inputs> indices() const
-    {
-        return capture([&](auto&&... vars) {
-            return concatenate_indices(get_indices(vars)...);
-        });
-    }
-
-private:
-    // We only consider IndexedVectors for AD. All other types don't contribute.
-    template<typename Base>
-    Eigen::Vector<int, IndexedVector<Base>::n_inputs> get_indices(const IndexedVector<Base>& var) const
-    {
-        return var.indices();
-    }
-
-    template<typename T>
-    Eigen::Vector<int, 0> get_indices(T) const
-    {
-        return {};
-    }
-};
-
-
-template<typename Derived>
-class DifferentiableBase
+template<typename Derived, int Options>
+class DifferentiableBase : public DifferentiableBaseEigen<Derived, Options>,
+                           public DifferentiableBaseCasadi<Derived, Options>
 {
 public:
     template<typename... Args>
@@ -65,162 +26,36 @@ public:
     }
 
 protected:
-    //
-    // Eigen Autodiff Implementations
-    //
+    using DifferentiableBaseEigen<Derived, Options>::jacobian_impl_autodiff_eval;
+    using DifferentiableBaseEigen<Derived, Options>::jacobian_impl_autodiff_sparsity;
+    using DifferentiableBaseEigen<Derived, Options>::hessian_impl_autodiff_eval;
+    using DifferentiableBaseEigen<Derived, Options>::hessian_impl_autodiff_sparsity;
 
+    using DifferentiableBaseCasadi<Derived, Options>::jacobian_impl_autodiff_eval;
+    using DifferentiableBaseCasadi<Derived, Options>::jacobian_impl_autodiff_sparsity;
+    using DifferentiableBaseCasadi<Derived, Options>::hessian_impl_autodiff_eval;
+    using DifferentiableBaseCasadi<Derived, Options>::hessian_impl_autodiff_sparsity;
 
-    /**
-     * Class that provides implementations of jacobian_impl, hessian_impl, gradient_impl
-     * using the Eigen AutoDiff tool
-     */
-
-    // Compute the jacobian using eigen autodiff
     template<typename Tag, typename OutJacobian, typename... Args>
     EIGEN_STRONG_INLINE void
-    jacobian_impl_autodiff(
-            Tag&& tag, // Function to call
-            OutJacobian& out_jacobian, // Outputs
-            const Args&... args) noexcept // Function arguments
+    jacobian_impl_autodiff(Tag&& tag, OutJacobian& out_jacobian, const Args&... args) noexcept
     {
-        using Info = typename Derived::template FuncInfo<Tag, Args...>;
-        using Scalar = typename Info::scalar_t;
-
-        // First order derivative
-        using ADScalar = laopt::AutoDiffScalar<Eigen::Vector<Scalar, Info::n_inputs>>;
-        using ADOutput = Eigen::Vector<ADScalar, Info::n_outputs>;
-
-        // Convert the arguments to AD variables, and call the function
-        ADOutput out = seed_and_call(std::forward<Tag>(tag), make_ad<ADScalar>(args)...);
-
-        // Copy out into output variables
-        for(int i = 0; i < out.rows(); i++)
-        {
-            out_jacobian(i, Eigen::all) += out[i].derivatives().transpose();
-        }
+        this->jacobian_impl_autodiff_eval(std::forward<Tag>(tag), out_jacobian, args...);
     }
 
     template<typename Tag, typename... Args>
     EIGEN_STRONG_INLINE void
     jacobian_impl_autodiff(Tag&& tag, BSMatrixSparsity& out_jacobian, const Args&... args) noexcept
     {
-        jacobian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_jacobian, args...);
+        this->jacobian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_jacobian, args...);
     }
     template<typename Tag, typename SparsityNullMat, typename... Args>
     EIGEN_STRONG_INLINE void
     jacobian_impl_autodiff(Tag&& tag, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_jacobian, const Args&... args) noexcept
     {
-        jacobian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_jacobian, args...);
+        this->jacobian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_jacobian, args...);
     }
 
-    // Compute sparsity pattern of the jacobian using eigen autodiff
-    template<typename Tag, typename SparsityNullMat, typename... Args>
-    EIGEN_STRONG_INLINE void
-    jacobian_impl_autodiff_sparsity(
-            Tag&& tag, // Function to call
-            BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_jacobian, // Outputs
-            const Args&... args) noexcept // Function arguments
-    {
-        using Info = typename Derived::template FuncInfo<Tag, Args...>;
-        using Scalar = typename Info::scalar_t;
-
-        // First order derivative
-        using ADScalar = laopt::AutoDiffScalar<Eigen::Vector<TouchableDerivative<Scalar>, Info::n_inputs>>;
-        using ADOutput = Eigen::Vector<ADScalar, Info::n_outputs>;
-
-        // Convert the arguments to AD variables, and call the function
-        ADOutput out = seed_and_call(std::forward<Tag>(tag), make_ad_touchable<ADScalar>(args)...);
-
-        for(int i = 0; i < out.rows(); i++)
-        {
-            for (int j = 0; j < out[i].derivatives().rows(); j++)
-            {
-                if (out[i].derivatives()(j).value() != 0)
-                {
-                    out_jacobian(i, j) += 1;
-                }
-            }
-        }
-    }
-
-    // Take a vector input and return an AD version of the vector
-    template<typename ADScalar, typename Base>
-    static EIGEN_STRONG_INLINE auto
-    make_ad(const IndexedVector<Base>& x) noexcept
-    {
-        constexpr size_t n = Base::RowsAtCompileTime;
-        Eigen::Vector<ADScalar, n> y;
-        y = x;
-        for (int i = 0; i < y.rows(); i++) {
-            y[i].derivatives().setZero();
-        }
-        return y;
-    }
-
-    template<typename ADScalar, typename T>
-    static EIGEN_STRONG_INLINE const T&
-    make_ad(const T& x) noexcept
-    {
-        return x;
-    }
-
-    // Take a vector input and return an AD version of the vector
-    template<typename ADScalar, typename Base>
-    static EIGEN_STRONG_INLINE auto
-    make_ad_touchable(const IndexedVector<Base>& x) noexcept
-    {
-        constexpr size_t n = Base::RowsAtCompileTime;
-        Eigen::Vector<ADScalar, n> y;
-        for (int i = 0; i < y.rows(); i++) {
-            y[i].value() = 1;
-        }
-        return y;
-    }
-
-    template<typename ADScalar, typename T>
-    static EIGEN_STRONG_INLINE const T&
-    make_ad_touchable(const T& x) noexcept
-    {
-        return x;
-    }
-
-    template<typename Tag, typename... Args>
-    EIGEN_STRONG_INLINE auto
-    seed_and_call(Tag&& tag, Args&&... args) noexcept
-    {
-        // Set derivative equal to identity
-        int offset = 0;
-        (void) std::initializer_list<int>{
-            (
-                offset = ad_seed(args, offset), // Set to unit vectors
-                0
-            )...
-        };
-
-        return static_cast<Derived*>(this)->function(std::forward<Tag>(tag), std::forward<Args>(args)...);
-    }
-
-    // Sets the input derivatives to the identity.
-    // Assumes that the derivative matrix is initially zero
-    template<typename X, int n>
-    static EIGEN_STRONG_INLINE int
-    ad_seed(Eigen::Vector<laopt::AutoDiffScalar<X>, n>& x, int offset) noexcept
-    {
-        for (int i = 0; i < x.rows(); i++)
-        {
-            x[i].derivatives().coeffRef(i + offset) = 1;
-        }
-        return offset + x.rows();
-    }
-
-    template<typename T>
-    static EIGEN_STRONG_INLINE int
-    ad_seed(const T, int offset) noexcept
-    {
-        return offset;
-    }
-
-    // Compute the jacobian using eigen autodiff
     template<typename Tag, typename Weight, typename OutHessian, typename... Args>
     EIGEN_STRONG_INLINE void
     hessian_impl_autodiff(Tag&& tag,
@@ -228,25 +63,7 @@ protected:
                           const Eigen::MatrixBase<Weight>& weight,
                           const Args&... args) noexcept
     {
-        using Info = typename Derived::template FuncInfo<Tag, Args...>;
-        using Scalar = typename Info::scalar_t;
-
-        // First order derivative
-        using ADScalar = laopt::AutoDiffScalar<Eigen::Vector<Scalar, Info::n_inputs>>;
-        // only calculate one col of the hessian at once to reduce memory requirements
-        using outerDerivatives = Eigen::Vector<ADScalar, 1>;
-        // Second order derivative
-        using outerADScalar = laopt::AutoDiffScalar<outerDerivatives>;
-        using ADOutput = Eigen::Vector<outerADScalar, Info::n_outputs>;
-
-        ADOutput out;
-        for (size_t i = 0; i < Info::n_inputs; i++) {
-            // Convert to AD variables for the inputs and call our function for ith row of hessian
-            out = seed_and_call2(i, std::forward<Tag>(tag), make_ad2<outerADScalar>(args)...);
-            for(size_t j = 0; j < Info::n_outputs; j++) {
-                out_hessian(Eigen::all, i) += weight(j) * out[j].derivatives()(0).derivatives();
-            }
-        }
+        this->hessian_impl_autodiff_eval(std::forward<Tag>(tag), out_hessian, weight, args...);
     }
 
     template<typename Tag, typename Weight, typename... Args>
@@ -256,7 +73,7 @@ protected:
                           const Eigen::MatrixBase<Weight>& weight,
                           const Args&... args) noexcept
     {
-        hessian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_hessian, weight, args...);
+        this->hessian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_hessian, weight, args...);
     }
 
     template<typename Tag, typename Weight, typename SparsityNullMat, typename... Args>
@@ -266,132 +83,10 @@ protected:
                           const Eigen::MatrixBase<Weight>& weight,
                           const Args&... args) noexcept
     {
-        hessian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_hessian, weight, args...);
+        this->hessian_impl_autodiff_sparsity(std::forward<Tag>(tag), out_hessian, weight, args...);
     }
 
-    // Compute sparsity pattern of the hessian using eigen autodiff
-    template<typename Tag, typename Weight, typename SparsityNullMat, typename... Args>
-    EIGEN_STRONG_INLINE void
-    hessian_impl_autodiff_sparsity(Tag&& tag,
-                                   BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_hessian,
-                                   const Eigen::MatrixBase<Weight>& weight,
-                                   const Args&... args) noexcept
-    {
-        using Info = typename Derived::template FuncInfo<Tag, Args...>;
-        using Scalar = typename Info::scalar_t;
-
-        // First order derivative
-        using ADScalar = laopt::AutoDiffScalar<Eigen::Vector<TouchableDerivative<Scalar>, Info::n_inputs>>;
-        // only calculate one row of the hessian at once to reduce memory requirements
-        using outerDerivatives = Eigen::Vector<ADScalar, 1>;
-        // Second order derivative
-        using outerADScalar = laopt::AutoDiffScalar<outerDerivatives>;
-        using ADOutput = Eigen::Vector<outerADScalar, Info::n_outputs>;
-
-        ADOutput out;
-        for (size_t i = 0; i < Info::n_inputs; i++) {
-            // Convert to AD variables for the inputs and call our function for ith row of hessian
-            out = seed_and_call2(i, std::forward<Tag>(tag), make_ad2_touchable<outerADScalar>(args)...);
-            for(size_t j = 0; j < Info::n_outputs; j++) {
-                for (int k = 0; k < out[j].derivatives()(0).derivatives().rows(); k++) {
-                    if (out[j].derivatives()(0).derivatives()(k).value() != 0)
-                    {
-                        out_hessian(k, i) += 1;
-                    }
-                }
-            }
-        }
-    }
-
-    // Take a vector input and return an AD version of the vector
-    template<typename outerADScalar, typename Base>
-    EIGEN_STRONG_INLINE auto
-    make_ad2(const IndexedVector<Base>& x) noexcept
-    {
-        constexpr size_t n = Base::RowsAtCompileTime;
-        Eigen::Vector<outerADScalar, n> y;
-        // y = x;
-        for (size_t i = 0; i < n; i++) {
-            y(i).value().value() = x.cast_base()(i);
-            y(i).value().derivatives().setZero();
-            y(i).derivatives().setZero();
-            y(i).derivatives()(0).derivatives().setZero();
-        }
-        return y;
-    }
-
-    template<typename outerADScalar, typename T>
-    EIGEN_STRONG_INLINE const T&
-    make_ad2(const T& x) noexcept
-    {
-        return x;
-    }
-
-    // Take a vector input and return an AD version of the vector
-    template<typename outerADScalar, typename Base>
-    EIGEN_STRONG_INLINE auto
-    make_ad2_touchable(const IndexedVector<Base>& x) noexcept
-    {
-        constexpr size_t n = Base::RowsAtCompileTime;
-        Eigen::Vector<outerADScalar, n> y;
-        // y = x;
-        for (size_t i = 0; i < n; i++) {
-            y(i).value().value() = 1;
-        }
-        return y;
-    }
-
-    template<typename outerADScalar, typename T>
-    EIGEN_STRONG_INLINE const T&
-    make_ad2_touchable(const T& x) noexcept
-    {
-        return x;
-    }
-
-    template<typename Tag, typename... Args>
-    EIGEN_STRONG_INLINE auto seed_and_call2(int outer_index, Tag&& tag, Args&&... args) noexcept
-    {
-        // Set derivative equal to identity
-        int inner_offset = 0;
-        (void) std::initializer_list<int>{
-            (
-                inner_offset = ad_seed2(args, outer_index, inner_offset), // Set to unit vectors
-                0
-            )...
-        };
-
-        // Call our function
-        return static_cast<Derived*>(this)->function(std::forward<Tag>(tag), std::forward<Args>(args)...);
-    }
-
-    // Sets the input derivatives to the identity.
-    // Assumes that the derivative matrix is initially zero
-    template <typename X, int n>
-    EIGEN_STRONG_INLINE int
-    ad_seed2(Eigen::Vector<laopt::AutoDiffScalar<X>, n>& x, int outer_index, int inner_offset) noexcept
-    {
-        for (int i = 0; i < x.rows(); i++)
-        {
-            x(i).value().derivatives().coeffRef(i + inner_offset) = 1;
-            // Seed only the relevant value for the current row of the hessian
-            if (i + inner_offset == outer_index) {
-                x(i).derivatives().coeffRef(0).value() = 1;
-            }
-        }
-
-        return inner_offset + x.rows();
-    }
-
-    template<typename T>
-    static EIGEN_STRONG_INLINE int
-    ad_seed2(const T, int outer_index, int inner_offset) noexcept
-    {
-        return inner_offset;
-    }
-
-    /**
-      * Returns the value w'*f(x)
-      */
+    // returns the value w'*f(x)
     template<typename Tag, typename Weight, typename... Args, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
     inline scalar_t
     wsum_impl_autodiff(Tag&& tag,
@@ -415,9 +110,7 @@ protected:
         return arg;
     }
 
-    /**
-     * Returns the value w'*f(x) and *adds* the gradient to gradient
-     */
+    // returns the value w'*f(x) and *adds* the gradient to gradient
     template<typename Tag, typename Weight, typename Gradient, typename... Args>
     inline void
     gradient_impl_autodiff(Tag&& tag,
@@ -464,11 +157,11 @@ static auto test_user_hessian(long) -> std::false_type;
 template<typename T, typename... Args>
 struct has_user_hessian : decltype(test_user_hessian<T, Args...>(0)){};
 
-template<typename Derived, bool tagless = false>
+template<typename Derived, int Options = TAGLESS, bool Tagged = (Options & TAGGED) != 0>
 class Differentiable;
 
-template<typename Derived>
-class Differentiable<Derived, false> : public DifferentiableBase<Differentiable<Derived, false>>
+template<typename Derived, int Options>
+class Differentiable<Derived, Options, true> : public DifferentiableBase<Differentiable<Derived, Options, true>, Options>
 {
 public:
 
@@ -607,8 +300,8 @@ public:
     }
 };
 
-template<typename Derived>
-class Differentiable<Derived, true> : public DifferentiableBase<Differentiable<Derived, true>>
+template<typename Derived, int Options>
+class Differentiable<Derived, Options, false> : public DifferentiableBase<Differentiable<Derived, Options, false>, Options>
 {
 public:
 

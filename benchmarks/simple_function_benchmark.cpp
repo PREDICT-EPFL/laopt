@@ -7,7 +7,7 @@
 
 using namespace casadi;
 
-struct LAOptTestFunction : public laopt::Differentiable<LAOptTestFunction, true>
+struct LAOptTestFunction : public laopt::Differentiable<LAOptTestFunction>
 {
     const Eigen::Matrix<double, 2, 2> A{{1, 2}, {3, 4}};
     const Eigen::Matrix<double, 2, 1> B{{5}, {6}};

@@ -3,7 +3,7 @@
 #include "laopt/laopt.hpp"
 
 template<typename scalar_t>
-struct User : public laopt::Differentiable<User<scalar_t>>
+struct User : public laopt::Differentiable<User<scalar_t>, laopt::TAGGED>
 {
     static constexpr int nx = 2;
     static constexpr int nu = 1;

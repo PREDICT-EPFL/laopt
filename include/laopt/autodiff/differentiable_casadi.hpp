@@ -1,0 +1,259 @@
+#ifndef LAOPT_DIFFERENTIABLE_CASADI_HPP
+#define LAOPT_DIFFERENTIABLE_CASADI_HPP
+
+#include <Eigen/Dense>
+#include "autodiff_scalar.hpp"
+#include "../eigen_casadi_support.hpp"
+#include "differentiable_options.hpp"
+
+namespace laopt
+{
+
+template<typename Derived, int Options>
+class DifferentiableBaseCasadi
+{
+protected:
+    std::size_t jacobian_tag_id_counter = 0;
+    std::size_t hessian_tag_id_counter = 0;
+
+    std::vector<std::unique_ptr<casadi::Function>> casadi_jacobian_sparse;
+    std::vector<std::unique_ptr<casadi::Function>> casadi_hessian_sparse;
+    std::vector<std::unique_ptr<casadi::FunctionBuffer>> casadi_jacobian_buffer;
+    std::vector<std::unique_ptr<casadi::FunctionBuffer>> casadi_hessian_buffer;
+
+    template<typename Tag, typename OutJacobian, typename... Args, int Opts = Options>
+    EIGEN_STRONG_INLINE typename std::enable_if<(Opts & CASADI_JACOBIAN) != 0>::type
+    jacobian_impl_autodiff_eval(
+        Tag&& tag, // Function to call
+        OutJacobian& out_jacobian, // Outputs
+        const Args&... args) noexcept // Function arguments
+    {
+        using Info = typename Derived::template FuncInfo<Tag, Args...>;
+
+        build_casadi_jacobian(std::forward<Tag>(tag), args...);
+        auto& buffer = casadi_jacobian_buffer[get_jacobian_tag_id<Tag>()];
+
+        int offset = 0;
+        (void) std::initializer_list<int>{
+            (
+                offset = set_casadi_buffer(offset, *buffer, args),
+                0
+            )...
+        };
+
+        Eigen::Matrix<double, Info::n_outputs, Info::n_inputs> res;
+        buffer->set_res(0, res.data(), Info::n_outputs * Info::n_inputs * sizeof(double));
+        buffer->_eval();
+
+        out_jacobian += res;
+    }
+
+    template<typename Tag, typename SparsityNullMat, typename... Args, int Opts = Options>
+    EIGEN_STRONG_INLINE typename std::enable_if<(Opts & CASADI_JACOBIAN) != 0>::type
+    jacobian_impl_autodiff_sparsity(
+        Tag&& tag, // Function to call
+        BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_jacobian, // Outputs
+        const Args&... args) noexcept // Function arguments
+    {
+        using Info = typename Derived::template FuncInfo<Tag, Args...>;
+
+        build_casadi_jacobian(std::forward<Tag>(tag), args...);
+
+        const casadi::Sparsity& sparsity = casadi_jacobian_sparse[get_jacobian_tag_id<Tag>()]->sparsity_out(0);
+        for (int col = 0; col < Info::n_inputs; col++) {
+            for (int i = sparsity.colind()[col]; i < sparsity.colind()[col + 1]; i++) {
+                int row = sparsity.row()[i];
+                out_jacobian(row, col) += 1;
+            }
+        }
+    }
+
+    template<typename Tag, typename Weight, typename OutHessian, typename... Args, int Opts = Options>
+    EIGEN_STRONG_INLINE typename std::enable_if<(Opts & CASADI_HESSIAN) != 0>::type
+    hessian_impl_autodiff_eval(
+        Tag&& tag,
+        OutHessian& out_hessian,
+        const Eigen::MatrixBase<Weight>& weight,
+        const Args&... args) noexcept
+    {
+        using Info = typename Derived::template FuncInfo<Tag, Args...>;
+
+        build_casadi_hessian(std::forward<Tag>(tag), weight, args...);
+        auto& buffer = casadi_hessian_buffer[get_hessian_tag_id<Tag>()];
+
+        int offset = set_casadi_buffer(0, *buffer, weight);
+        (void) std::initializer_list<int>{
+            (
+                offset = set_casadi_buffer(offset, *buffer, args),
+                0
+            )...
+        };
+
+        Eigen::Matrix<double, Info::n_inputs, Info::n_inputs> res;
+        buffer->set_res(0, res.data(), Info::n_inputs * Info::n_inputs * sizeof(double));
+        buffer->_eval();
+
+        out_hessian += res;
+    }
+
+    template<typename Tag, typename Weight, typename SparsityNullMat, typename... Args, int Opts = Options>
+    EIGEN_STRONG_INLINE typename std::enable_if<(Opts & CASADI_HESSIAN) != 0>::type
+    hessian_impl_autodiff_sparsity(
+        Tag&& tag,
+        BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_hessian,
+        const Eigen::MatrixBase<Weight>& weight,
+        const Args&... args) noexcept
+    {
+        using Info = typename Derived::template FuncInfo<Tag, Args...>;
+
+        build_casadi_hessian(std::forward<Tag>(tag), weight, args...);
+
+        const casadi::Sparsity& sparsity = casadi_hessian_sparse[get_hessian_tag_id<Tag>()]->sparsity_out(0);
+        for (int col = 0; col < Info::n_inputs; col++) {
+            for (int i = sparsity.colind()[col]; i < sparsity.colind()[col + 1]; i++) {
+                int row = sparsity.row()[i];
+                out_hessian(row, col) += 1;
+            }
+        }
+    }
+
+    template<typename Tag>
+    std::size_t get_jacobian_tag_id()
+    {
+        static std::size_t id = jacobian_tag_id_counter++;
+        return id;
+    }
+
+    template<typename Tag>
+    std::size_t get_hessian_tag_id()
+    {
+        static std::size_t id = hessian_tag_id_counter++;
+        return id;
+    }
+
+    template<typename Tag, typename... Args>
+    EIGEN_STRONG_INLINE void
+    build_casadi_jacobian(Tag&& tag, const Args&... args) noexcept
+    {
+        using Info = typename Derived::template FuncInfo<Tag, Args...>;
+
+        assert(get_jacobian_tag_id<Tag>() <= casadi_jacobian_sparse.size());
+        if (get_jacobian_tag_id<Tag>() == casadi_jacobian_sparse.size())
+        {
+            std::vector<casadi::SX> casadi_args;
+            std::vector<casadi::SX> casadi_vars;
+            Eigen::Vector<casadi::SX, Info::n_outputs> out = static_cast<Derived*>(this)->function(std::forward<Tag>(tag), make_casadi_sx(casadi_args, casadi_vars, args)...);
+            casadi::SX casadi_out = casadi::SX::vertcat({out.data(), out.data() + Info::n_outputs});
+
+            casadi_jacobian_sparse.emplace_back(std::unique_ptr<casadi::Function>(new casadi::Function(
+                "jacobian_sparse",
+                casadi_args,
+                {casadi::SX::jacobian(casadi_out, casadi::SX::vertcat(casadi_vars))})));
+            casadi::Function jacobian_dense(
+                "jacobian_dense",
+                casadi_args,
+                {casadi::SX::densify(casadi::SX::jacobian(casadi_out, casadi::SX::vertcat(casadi_vars)))},
+                {{"jit", true}, {"compiler", "shell"}});
+            casadi_jacobian_buffer.emplace_back(std::make_unique<casadi::FunctionBuffer>(jacobian_dense));
+        }
+    }
+
+    template<typename Tag, typename Weight, typename... Args>
+    EIGEN_STRONG_INLINE void
+    build_casadi_hessian(Tag&& tag, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
+    {
+        using Info = typename Derived::template FuncInfo<Tag, Args...>;
+
+        assert(get_hessian_tag_id<Tag>() <= casadi_hessian_sparse.size());
+        if (get_hessian_tag_id<Tag>() == casadi_hessian_sparse.size())
+        {
+            std::vector<casadi::SX> casadi_args;
+            std::vector<casadi::SX> casadi_vars;
+            Eigen::Vector<casadi::SX, Info::n_outputs> casadi_weight = make_casadi_sx(casadi_args, casadi_vars, weight);
+            Eigen::Vector<casadi::SX, Info::n_outputs> out = static_cast<Derived*>(this)->function(std::forward<Tag>(tag), make_casadi_sx(casadi_args, casadi_vars, args)...);
+            casadi::SX out_weight = casadi_weight.dot(out);
+
+            casadi_hessian_sparse.emplace_back(std::unique_ptr<casadi::Function>(new casadi::Function(
+                "hessian_sparse",
+                casadi_args,
+                {casadi::SX::hessian(out_weight, casadi::SX::vertcat(casadi_vars))})));
+            casadi::Function hessian_dense(
+                "hessian_dense",
+                casadi_args,
+                {casadi::SX::densify(casadi::SX::hessian(out_weight, casadi::SX::vertcat(casadi_vars)))},
+                {{"jit", true}, {"compiler", "shell"}});
+            casadi_hessian_buffer.emplace_back(std::make_unique<casadi::FunctionBuffer>(hessian_dense));
+        }
+    }
+
+    template<typename Base>
+    EIGEN_STRONG_INLINE auto
+    make_casadi_sx(std::vector<casadi::SX>& casadi_args, std::vector<casadi::SX>& casadi_vars, const IndexedVector<Base>& x) noexcept
+    {
+        constexpr size_t n = Base::RowsAtCompileTime;
+        Eigen::Vector<casadi::SX, n> y;
+        for (size_t i = 0; i < n; i++) {
+            casadi::SX sym = casadi::SX::sym("var" + std::to_string(i), 1);
+            y[i] = sym;
+        }
+        casadi_args.push_back(casadi::SX::vertcat({y.data(), y.data() + n}));
+        casadi_vars.push_back(casadi::SX::vertcat({y.data(), y.data() + n}));
+        return y;
+    }
+
+    template<typename T>
+    EIGEN_STRONG_INLINE auto
+    make_casadi_sx(std::vector<casadi::SX>& casadi_args, std::vector<casadi::SX>& casadi_vars, const Eigen::MatrixBase<T>& x) noexcept
+    {
+        constexpr size_t rows = Eigen::MatrixBase<T>::RowsAtCompileTime;
+        constexpr size_t cols = Eigen::MatrixBase<T>::ColsAtCompileTime;
+        static_assert(rows >= 0 && cols == 1, "vector based parameters can not be dynamic");
+        Eigen::Vector<casadi::SX, rows> y;
+        for (size_t i = 0; i < rows; i++) {
+            y[i] = casadi::SX::sym("arg" + std::to_string(i), 1);
+        }
+        casadi_args.push_back(casadi::SX::vertcat({y.data(), y.data() + rows}));
+        return y;
+    }
+
+    template<typename T>
+    EIGEN_STRONG_INLINE typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<T>, T>::value, casadi::SX>::type
+    make_casadi_sx(std::vector<casadi::SX>& casadi_args, std::vector<casadi::SX>& casadi_vars, const T& x) noexcept
+    {
+        casadi::SX sym = casadi::SX::sym("arg", 1);
+        casadi_args.push_back(sym);
+        return sym;
+    }
+
+    template<typename Base>
+    EIGEN_STRONG_INLINE int
+    set_casadi_buffer(int offset, casadi::FunctionBuffer& buffer, const IndexedVector<Base>& x) noexcept
+    {
+        constexpr size_t n = Base::RowsAtCompileTime;
+        static_assert((Base::Flags & Eigen::DirectAccessBit) != 0, "vector is not continuous in memory");
+        buffer.set_arg(offset, x.cast_base().data(), n * sizeof(double));
+        return offset + 1;
+    }
+
+    template<typename T>
+    EIGEN_STRONG_INLINE int
+    set_casadi_buffer(int offset, casadi::FunctionBuffer& buffer, const Eigen::MatrixBase<T>& x) noexcept
+    {
+        constexpr size_t n = Eigen::MatrixBase<T>::RowsAtCompileTime;
+        static_assert((Eigen::MatrixBase<T>::Flags & Eigen::DirectAccessBit) != 0, "vector is not continuous in memory");
+        buffer.set_arg(offset, x.derived().data(), n * sizeof(double));
+        return offset + 1;
+    }
+
+    template<typename T>
+    EIGEN_STRONG_INLINE typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<T>, T>::value, int>::type
+    set_casadi_buffer(int offset, casadi::FunctionBuffer& buffer, const T& x) noexcept
+    {
+        buffer.set_arg(offset, &x, sizeof(double));
+        return offset + 1;
+    }
+};
+
+} // namespace laopt
+
+#endif // LAOPT_DIFFERENTIABLE_CASADI_HPP

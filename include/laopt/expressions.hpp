@@ -4,6 +4,7 @@
 #include "expressions/expr_base.hpp"
 #include "expressions/add_expr.hpp"
 #include "expressions/sub_expr.hpp"
+#include "expressions/function_capture.hpp"
 
 #include "expressions/constraint_expr.hpp"
 #include "expressions/ineq_constraint_expr.hpp"
