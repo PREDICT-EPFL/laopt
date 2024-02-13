@@ -7,7 +7,8 @@
 
 using namespace casadi;
 
-struct LAOptTestFunction : public laopt::Differentiable<LAOptTestFunction>
+template<int Options>
+struct LAOptTestFunction : public laopt::Differentiable<LAOptTestFunction<Options>, Options>
 {
     const Eigen::Matrix<double, 2, 2> A{{1, 2}, {3, 4}};
     const Eigen::Matrix<double, 2, 1> B{{5}, {6}};
@@ -22,7 +23,7 @@ struct LAOptTestFunction : public laopt::Differentiable<LAOptTestFunction>
 
 static void BM_LAOPT_FUNCTION(benchmark::State& state)
 {
-    LAOptTestFunction test_function;
+    LAOptTestFunction<laopt::EIGEN_ALL> test_function;
     Eigen::Vector<double, 2> x{1, 1};
     Eigen::Vector<double, 1> u{1};
     Eigen::Vector<double, 2> value;
@@ -34,9 +35,10 @@ static void BM_LAOPT_FUNCTION(benchmark::State& state)
     }
 }
 
-static void BM_LAOPT_JACOBIAN(benchmark::State& state)
+template<int Options>
+static void laopt_jacobian(benchmark::State& state)
 {
-    LAOptTestFunction test_function;
+    LAOptTestFunction<Options> test_function;
     laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
     laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
     Eigen::Matrix<double, 2, 3> jacobian;
@@ -48,9 +50,24 @@ static void BM_LAOPT_JACOBIAN(benchmark::State& state)
     }
 }
 
+static void BM_LAOPT_JACOBIAN(benchmark::State& state)
+{
+    laopt_jacobian<laopt::EIGEN_ALL>(state);
+}
+
+static void BM_LAOPT_JACOBIAN_CASADI(benchmark::State& state)
+{
+    laopt_jacobian<laopt::CASADI_ALL>(state);
+}
+
+static void BM_LAOPT_JACOBIAN_CASADI_NO_JIT(benchmark::State& state)
+{
+    laopt_jacobian<laopt::CASADI_ALL | laopt::CASADI_NO_JIT>(state);
+}
+
 static void BM_LAOPT_WSUM(benchmark::State& state)
 {
-    LAOptTestFunction test_function;
+    LAOptTestFunction<laopt::EIGEN_ALL> test_function;
     laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
     laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
     Eigen::Vector<double, 2> weight{1, 1};
@@ -63,9 +80,10 @@ static void BM_LAOPT_WSUM(benchmark::State& state)
     }
 }
 
-static void BM_LAOPT_GRADIENT(benchmark::State& state)
+template<int Options>
+static void laopt_gradient(benchmark::State& state)
 {
-    LAOptTestFunction test_function;
+    LAOptTestFunction<Options> test_function;
     laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
     laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
     Eigen::Vector<double, 2> weight{1, 1};
@@ -78,9 +96,25 @@ static void BM_LAOPT_GRADIENT(benchmark::State& state)
     }
 }
 
-static void BM_LAOPT_HESSIAN(benchmark::State& state)
+static void BM_LAOPT_GRADIENT(benchmark::State& state)
 {
-    LAOptTestFunction test_function;
+    laopt_gradient<laopt::EIGEN_ALL>(state);
+}
+
+static void BM_LAOPT_GRADIENT_CASADI(benchmark::State& state)
+{
+    laopt_gradient<laopt::CASADI_ALL>(state);
+}
+
+static void BM_LAOPT_GRADIENT_CASADI_NO_JIT(benchmark::State& state)
+{
+    laopt_gradient<laopt::CASADI_ALL | laopt::CASADI_NO_JIT>(state);
+}
+
+template<int Options>
+static void laopt_hessian(benchmark::State& state)
+{
+    LAOptTestFunction<Options> test_function;
     laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
     laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
     Eigen::Vector<double, 2> weight{1, 1};
@@ -91,6 +125,21 @@ static void BM_LAOPT_HESSIAN(benchmark::State& state)
         test_function.hessian(hessian, weight, x, u);
         benchmark::DoNotOptimize(hessian);
     }
+}
+
+static void BM_LAOPT_HESSIAN(benchmark::State& state)
+{
+    laopt_hessian<laopt::EIGEN_ALL>(state);
+}
+
+static void BM_LAOPT_HESSIAN_CASADI(benchmark::State& state)
+{
+    laopt_hessian<laopt::CASADI_ALL>(state);
+}
+
+static void BM_LAOPT_HESSIAN_CASADI_NO_JIT(benchmark::State& state)
+{
+    laopt_hessian<laopt::CASADI_ALL | laopt::CASADI_NO_JIT>(state);
 }
 
 struct CasadiSXTestFunction
@@ -327,21 +376,29 @@ static void BM_CASADI_CODEGEN_HESSIAN(benchmark::State& state)
 }
 
 BENCHMARK(BM_LAOPT_FUNCTION);
-BENCHMARK(BM_LAOPT_JACOBIAN);
-BENCHMARK(BM_LAOPT_WSUM);
-BENCHMARK(BM_LAOPT_GRADIENT);
-BENCHMARK(BM_LAOPT_HESSIAN);
-
 BENCHMARK(BM_CASADI_SX_FUNCTION);
-BENCHMARK(BM_CASADI_SX_JACOBIAN);
-BENCHMARK(BM_CASADI_SX_WSUM);
-BENCHMARK(BM_CASADI_SX_GRADIENT);
-BENCHMARK(BM_CASADI_SX_HESSIAN);
-
 BENCHMARK(BM_CASADI_CODEGEN_FUNCTION);
+
+BENCHMARK(BM_LAOPT_JACOBIAN);
+BENCHMARK(BM_LAOPT_JACOBIAN_CASADI);
+BENCHMARK(BM_LAOPT_JACOBIAN_CASADI_NO_JIT);
+BENCHMARK(BM_CASADI_SX_JACOBIAN);
 BENCHMARK(BM_CASADI_CODEGEN_JACOBIAN);
+
+BENCHMARK(BM_LAOPT_WSUM);
+BENCHMARK(BM_CASADI_SX_WSUM);
 BENCHMARK(BM_CASADI_CODEGEN_WSUM);
+
+BENCHMARK(BM_LAOPT_GRADIENT);
+BENCHMARK(BM_LAOPT_GRADIENT_CASADI);
+BENCHMARK(BM_LAOPT_GRADIENT_CASADI_NO_JIT);
+BENCHMARK(BM_CASADI_SX_GRADIENT);
 BENCHMARK(BM_CASADI_CODEGEN_GRADIENT);
+
+BENCHMARK(BM_LAOPT_HESSIAN);
+BENCHMARK(BM_LAOPT_HESSIAN_CASADI);
+BENCHMARK(BM_LAOPT_HESSIAN_CASADI_NO_JIT);
+BENCHMARK(BM_CASADI_SX_HESSIAN);
 BENCHMARK(BM_CASADI_CODEGEN_HESSIAN);
 
 BENCHMARK_MAIN();
