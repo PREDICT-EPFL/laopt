@@ -20,10 +20,10 @@ namespace laopt_tools {
  * 0     1     2     3    ...    N-1    N     Decision variable indices (initial condition + number of segments)
  * 0     1     2     3         N_segs-1       Segment indices of N_segs segments
  * */
-template<typename ControlProblem, unsigned N_segs>
-class MultipleShooting : public laopt::Differentiable<MultipleShooting<ControlProblem, N_segs>, laopt::TAGGED>
+template<typename ControlProblem, unsigned N_segs, int DiffOptions = laopt::EIGEN_ALL>
+class MultipleShooting : public laopt::Differentiable<MultipleShooting<ControlProblem, N_segs>, laopt::TAGGED | DiffOptions>
 {
-    friend laopt::Differentiable<MultipleShooting<ControlProblem, N_segs>, laopt::TAGGED>;
+    friend laopt::Differentiable<MultipleShooting<ControlProblem, N_segs>, laopt::TAGGED | DiffOptions>;
 
     template<typename, typename, typename, typename>
     friend class laopt::ProblemBase;
