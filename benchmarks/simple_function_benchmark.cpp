@@ -21,7 +21,7 @@ struct LAOptTestFunction : public laopt::Differentiable<LAOptTestFunction<Option
     }
 };
 
-static void BM_LAOPT_FUNCTION(benchmark::State& state)
+static void BM_LAOPT_FUNCTION_EIGEN(benchmark::State& state)
 {
     LAOptTestFunction<laopt::EIGEN_ALL> test_function;
     Eigen::Vector<double, 2> x{1, 1};
@@ -50,7 +50,7 @@ static void laopt_jacobian(benchmark::State& state)
     }
 }
 
-static void BM_LAOPT_JACOBIAN(benchmark::State& state)
+static void BM_LAOPT_JACOBIAN_EIGEN(benchmark::State& state)
 {
     laopt_jacobian<laopt::EIGEN_ALL>(state);
 }
@@ -96,7 +96,7 @@ static void laopt_gradient(benchmark::State& state)
     }
 }
 
-static void BM_LAOPT_GRADIENT(benchmark::State& state)
+static void BM_LAOPT_GRADIENT_EIGEN(benchmark::State& state)
 {
     laopt_gradient<laopt::EIGEN_ALL>(state);
 }
@@ -127,7 +127,7 @@ static void laopt_hessian(benchmark::State& state)
     }
 }
 
-static void BM_LAOPT_HESSIAN(benchmark::State& state)
+static void BM_LAOPT_HESSIAN_EIGEN(benchmark::State& state)
 {
     laopt_hessian<laopt::EIGEN_ALL>(state);
 }
@@ -375,11 +375,11 @@ static void BM_CASADI_CODEGEN_HESSIAN(benchmark::State& state)
     }
 }
 
-BENCHMARK(BM_LAOPT_FUNCTION);
+BENCHMARK(BM_LAOPT_FUNCTION_EIGEN);
 BENCHMARK(BM_CASADI_SX_FUNCTION);
 BENCHMARK(BM_CASADI_CODEGEN_FUNCTION);
 
-BENCHMARK(BM_LAOPT_JACOBIAN);
+BENCHMARK(BM_LAOPT_JACOBIAN_EIGEN);
 BENCHMARK(BM_LAOPT_JACOBIAN_CASADI);
 BENCHMARK(BM_LAOPT_JACOBIAN_CASADI_NO_JIT);
 BENCHMARK(BM_CASADI_SX_JACOBIAN);
@@ -389,13 +389,13 @@ BENCHMARK(BM_LAOPT_WSUM);
 BENCHMARK(BM_CASADI_SX_WSUM);
 BENCHMARK(BM_CASADI_CODEGEN_WSUM);
 
-BENCHMARK(BM_LAOPT_GRADIENT);
+BENCHMARK(BM_LAOPT_GRADIENT_EIGEN);
 BENCHMARK(BM_LAOPT_GRADIENT_CASADI);
 BENCHMARK(BM_LAOPT_GRADIENT_CASADI_NO_JIT);
 BENCHMARK(BM_CASADI_SX_GRADIENT);
 BENCHMARK(BM_CASADI_CODEGEN_GRADIENT);
 
-BENCHMARK(BM_LAOPT_HESSIAN);
+BENCHMARK(BM_LAOPT_HESSIAN_EIGEN);
 BENCHMARK(BM_LAOPT_HESSIAN_CASADI);
 BENCHMARK(BM_LAOPT_HESSIAN_CASADI_NO_JIT);
 BENCHMARK(BM_CASADI_SX_HESSIAN);
