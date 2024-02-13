@@ -55,8 +55,8 @@ public:
     }
 };
 
-template<typename F, typename Scalar, typename Tag = DefaultTag>
-class RK4 : public Differentiable<RK4<F, Scalar, Tag>, TAGLESS>
+template<typename F, typename Scalar, int Options = TAGLESS, typename Tag = DefaultTag>
+class RK4 : public Differentiable<RK4<F, Scalar, Options, Tag>, Options>
 {
     F& f;
     Scalar h;

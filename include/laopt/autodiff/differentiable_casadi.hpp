@@ -149,11 +149,12 @@ protected:
                 "jacobian_sparse",
                 casadi_args,
                 {casadi::SX::jacobian(casadi_out, casadi::SX::vertcat(casadi_vars))})));
+            casadi::Dict jit_options = {{"flags", "-O3"}};
             casadi::Function jacobian_dense(
                 "jacobian_dense",
                 casadi_args,
                 {casadi::SX::densify(casadi::SX::jacobian(casadi_out, casadi::SX::vertcat(casadi_vars)))},
-                {{"jit", true}, {"compiler", "shell"}});
+                {{"jit", !(Options & CASADI_NO_JIT)}, {"compiler", "shell"}, {"jit_options", jit_options}});
             casadi_jacobian_buffer.emplace_back(std::make_unique<casadi::FunctionBuffer>(jacobian_dense));
         }
     }
@@ -177,11 +178,12 @@ protected:
                 "hessian_sparse",
                 casadi_args,
                 {casadi::SX::hessian(out_weight, casadi::SX::vertcat(casadi_vars))})));
+            casadi::Dict jit_options = {{"flags", "-O3"}};
             casadi::Function hessian_dense(
                 "hessian_dense",
                 casadi_args,
                 {casadi::SX::densify(casadi::SX::hessian(out_weight, casadi::SX::vertcat(casadi_vars)))},
-                {{"jit", true}, {"compiler", "shell"}});
+                {{"jit", !(Options & CASADI_NO_JIT)}, {"compiler", "shell"}, {"jit_options", jit_options}});
             casadi_hessian_buffer.emplace_back(std::make_unique<casadi::FunctionBuffer>(hessian_dense));
         }
     }

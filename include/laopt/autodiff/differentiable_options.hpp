@@ -11,6 +11,7 @@ enum DiffOptions
     EIGEN_ALL       = 0x00,
     CASADI_JACOBIAN = 0x02,
     CASADI_HESSIAN  = 0x04,
+    CASADI_NO_JIT   = 0x08,
     CASADI_ALL      = CASADI_JACOBIAN | CASADI_HESSIAN,
 };
 
