@@ -85,7 +85,7 @@ protected:
         };
 
         Eigen::Matrix<double, Info::n_outputs, Info::n_inputs> res;
-        buffer->set_res(0, res.data(), Info::n_outputs * Info::n_inputs * sizeof(double));
+        buffer->set_res(0, res.data(), Info::n_outputs * Info::n_inputs);
         buffer->eval();
 
         out_jacobian += res;
@@ -133,7 +133,7 @@ protected:
         };
 
         Eigen::Matrix<double, Info::n_inputs, Info::n_inputs> res;
-        buffer->set_res(0, res.data(), Info::n_inputs * Info::n_inputs * sizeof(double));
+        buffer->set_res(0, res.data(), Info::n_inputs * Info::n_inputs);
         buffer->eval();
 
         out_hessian += res;
