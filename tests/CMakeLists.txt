@@ -40,11 +40,9 @@ if(WITH_IPOPT)
             PRIVATE laopt ${Ipopt_LIBRARIES} gtest_main gtest)
 endif()
 
-if(WITH_OSQP)
-    add_executable(sqp_test sqp_test.cpp)
-    target_link_libraries(sqp_test
-            PRIVATE laopt gtest_main gtest)
-endif()
+add_executable(sqp_test sqp_test.cpp)
+target_link_libraries(sqp_test
+        PRIVATE laopt gtest_main gtest)
 
 include(GoogleTest)
 gtest_discover_tests(func_test)

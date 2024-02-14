@@ -4,6 +4,9 @@
 #ifdef LAOPT_WITH_OSQP
 #include "laopt/solvers/osqp_interface.hpp"
 #endif
+#ifdef LAOPT_WITH_PIQP
+#include "laopt/solvers/piqp_interface.hpp"
+#endif
 #ifdef LAOPT_WITH_PROXQP
 #include "laopt/solvers/proxqp_interface.hpp"
 #endif
@@ -68,8 +71,8 @@ struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>, la
     }
 };
 
-#ifdef LAOPT_WITH_OSQP
-TEST(SQPTest, SimpleExampleOSQP)
+template<template<typename, int...> class Solver>
+static void generic_sqp_test()
 {
     using scalar_t = double;
 
@@ -84,7 +87,7 @@ TEST(SQPTest, SimpleExampleOSQP)
     using Problem = laopt::Problem<UserCode>;
     Problem prob(my_problem, tape);
 
-    laopt::SQPSolver<Problem, laopt::OSQPSolver<Problem::scalar_t>> solver(prob);
+    laopt::SQPSolver<Problem, Solver<Problem::scalar_t>> solver(prob);
     solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT;
     solver.settings().verbose = true;
 
@@ -107,89 +110,32 @@ TEST(SQPTest, SimpleExampleOSQP)
     EXPECT_NEAR(solver.dual_bounds()(1), 0, 1e-4);
     EXPECT_NEAR(solver.dual_bounds()(2), 1, 1e-4);
     EXPECT_NEAR(solver.dual_bounds()(3), -1, 1e-4);
+}
+
+#ifdef LAOPT_WITH_OSQP
+TEST(SQPTest, SimpleExampleOSQP)
+{
+    generic_sqp_test<laopt::OSQPSolver>();
+}
+#endif
+
+#ifdef LAOPT_WITH_PIQP
+TEST(SQPTest, SimpleExamplePIQP)
+{
+    generic_sqp_test<laopt::PIQPSolver>();
 }
 #endif
 
 #ifdef LAOPT_WITH_PROXQP
 TEST(SQPTest, SimpleExampleProxQP)
 {
-    using scalar_t = double;
-
-    using UserCode = SimpleExample<scalar_t>;
-    UserCode my_problem;
-    auto sparsity = laopt::generate_sparsity(my_problem);
-    auto tape = laopt::generate_tape(my_problem, sparsity);
-
-    std::cout << sparsity << std::endl;
-    std::cout << tape << std::endl;
-
-    using Problem = laopt::Problem<UserCode>;
-    Problem prob(my_problem, tape);
-
-    laopt::SQPSolver<Problem, laopt::ProxQPSolver<Problem::scalar_t>> solver(prob);
-    solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT;
-    solver.settings().verbose = true;
-
-    // Set the initial primal variable
-    my_problem.x_var << 0.5, 1.5, 0.0, 0.0;
-
-    solver.solve();
-
-    EXPECT_NEAR(my_problem.x_var(0), 0, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(1), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(2), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(3), -1, 1e-4);
-
-    EXPECT_NEAR(solver.primal()(0), 0, 1e-4);
-    EXPECT_NEAR(solver.primal()(1), 1, 1e-4);
-    EXPECT_NEAR(solver.primal()(2), 1, 1e-4);
-    EXPECT_NEAR(solver.primal()(3), -1, 1e-4);
-    EXPECT_NEAR(solver.dual()(0), 2, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(0), 0, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(1), 0, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(2), 1, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(3), -1, 1e-4);
+    generic_sqp_test<laopt::ProxQPSolver>();
 }
 #endif
 
 #ifdef LAOPT_WITH_QPSWIFT
 TEST(SQPTest, SimpleExampleQPSwift)
 {
-    using scalar_t = double;
-
-    using UserCode = SimpleExample<scalar_t>;
-    UserCode my_problem;
-    auto sparsity = laopt::generate_sparsity(my_problem);
-    auto tape = laopt::generate_tape(my_problem, sparsity);
-
-    std::cout << sparsity << std::endl;
-    std::cout << tape << std::endl;
-
-    using Problem = laopt::Problem<UserCode>;
-    Problem prob(my_problem, tape);
-
-    laopt::SQPSolver<Problem, laopt::QPSwiftSolver<Problem::scalar_t>> solver(prob);
-    solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT;
-    solver.settings().verbose = true;
-
-    // Set the initial primal variable
-    my_problem.x_var << 0.5, 1.5, 0.0, 0.0;
-
-    solver.solve();
-
-    EXPECT_NEAR(my_problem.x_var(0), 0, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(1), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(2), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(3), -1, 1e-4);
-
-    EXPECT_NEAR(solver.primal()(0), 0, 1e-4);
-    EXPECT_NEAR(solver.primal()(1), 1, 1e-4);
-    EXPECT_NEAR(solver.primal()(2), 1, 1e-4);
-    EXPECT_NEAR(solver.primal()(3), -1, 1e-4);
-    EXPECT_NEAR(solver.dual()(0), 2, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(0), 0, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(1), 0, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(2), 1, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(3), -1, 1e-4);
+    generic_sqp_test<laopt::QPSwiftSolver>();
 }
 #endif
