@@ -92,6 +92,7 @@ static void laopt_jacobian(benchmark::State& state)
     u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
     Eigen::Matrix<double, LAOptChainMass<n_mass>::NX, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> jacobian;
 
+    chain_mass_d.jacobian(jacobian, x, u);
     for (auto _: state)
     {
         chain_mass_d.jacobian(jacobian, x, u);
@@ -150,6 +151,7 @@ static void laopt_gradient(benchmark::State& state)
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> weight = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> gradient;
 
+    chain_mass_d.gradient(gradient, weight, x, u);
     for (auto _: state)
     {
         chain_mass_d.gradient(gradient, weight, x, u);
@@ -188,6 +190,7 @@ static void laopt_hessian(benchmark::State& state)
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> weight = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
     Eigen::Matrix<double, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> hessian;
 
+    chain_mass_d.hessian(hessian, weight, x, u);
     for (auto _: state)
     {
         chain_mass_d.hessian(hessian, weight, x, u);

@@ -43,6 +43,7 @@ static void laopt_jacobian(benchmark::State& state)
     laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
     Eigen::Matrix<double, 2, 3> jacobian;
 
+    test_function.jacobian(jacobian, x, u);
     for (auto _: state)
     {
         test_function.jacobian(jacobian, x, u);
@@ -89,6 +90,7 @@ static void laopt_gradient(benchmark::State& state)
     Eigen::Vector<double, 2> weight{1, 1};
     Eigen::Vector<double, 3> gradient;
 
+    test_function.gradient(gradient, weight, x, u);
     for (auto _: state)
     {
         test_function.gradient(gradient, weight, x, u);
@@ -120,6 +122,7 @@ static void laopt_hessian(benchmark::State& state)
     Eigen::Vector<double, 2> weight{1, 1};
     Eigen::Matrix<double, 3, 3> hessian;
 
+    test_function.hessian(hessian, weight, x, u);
     for (auto _: state)
     {
         test_function.hessian(hessian, weight, x, u);
@@ -375,31 +378,31 @@ static void BM_CASADI_CODEGEN_HESSIAN(benchmark::State& state)
     }
 }
 
-BENCHMARK(BM_LAOPT_FUNCTION_EIGEN);
-BENCHMARK(BM_CASADI_SX_FUNCTION);
-BENCHMARK(BM_CASADI_CODEGEN_FUNCTION);
+//BENCHMARK(BM_LAOPT_FUNCTION_EIGEN);
+//BENCHMARK(BM_CASADI_SX_FUNCTION);
+//BENCHMARK(BM_CASADI_CODEGEN_FUNCTION);
 
-BENCHMARK(BM_LAOPT_JACOBIAN_EIGEN);
+//BENCHMARK(BM_LAOPT_JACOBIAN_EIGEN);
 BENCHMARK(BM_LAOPT_JACOBIAN_CASADI);
-BENCHMARK(BM_LAOPT_JACOBIAN_CASADI_NO_JIT);
-BENCHMARK(BM_CASADI_SX_JACOBIAN);
+//BENCHMARK(BM_LAOPT_JACOBIAN_CASADI_NO_JIT);
+//BENCHMARK(BM_CASADI_SX_JACOBIAN);
 BENCHMARK(BM_CASADI_CODEGEN_JACOBIAN);
 
-BENCHMARK(BM_LAOPT_WSUM);
-BENCHMARK(BM_CASADI_SX_WSUM);
-BENCHMARK(BM_CASADI_CODEGEN_WSUM);
-
-BENCHMARK(BM_LAOPT_GRADIENT_EIGEN);
-BENCHMARK(BM_LAOPT_GRADIENT_CASADI);
-BENCHMARK(BM_LAOPT_GRADIENT_CASADI_NO_JIT);
-BENCHMARK(BM_CASADI_SX_GRADIENT);
-BENCHMARK(BM_CASADI_CODEGEN_GRADIENT);
-
-BENCHMARK(BM_LAOPT_HESSIAN_EIGEN);
-BENCHMARK(BM_LAOPT_HESSIAN_CASADI);
-BENCHMARK(BM_LAOPT_HESSIAN_CASADI_NO_JIT);
-BENCHMARK(BM_CASADI_SX_HESSIAN);
-BENCHMARK(BM_CASADI_CODEGEN_HESSIAN);
+//BENCHMARK(BM_LAOPT_WSUM);
+//BENCHMARK(BM_CASADI_SX_WSUM);
+//BENCHMARK(BM_CASADI_CODEGEN_WSUM);
+//
+//BENCHMARK(BM_LAOPT_GRADIENT_EIGEN);
+//BENCHMARK(BM_LAOPT_GRADIENT_CASADI);
+//BENCHMARK(BM_LAOPT_GRADIENT_CASADI_NO_JIT);
+//BENCHMARK(BM_CASADI_SX_GRADIENT);
+//BENCHMARK(BM_CASADI_CODEGEN_GRADIENT);
+//
+//BENCHMARK(BM_LAOPT_HESSIAN_EIGEN);
+//BENCHMARK(BM_LAOPT_HESSIAN_CASADI);
+//BENCHMARK(BM_LAOPT_HESSIAN_CASADI_NO_JIT);
+//BENCHMARK(BM_CASADI_SX_HESSIAN);
+//BENCHMARK(BM_CASADI_CODEGEN_HESSIAN);
 
 BENCHMARK_MAIN();
 
