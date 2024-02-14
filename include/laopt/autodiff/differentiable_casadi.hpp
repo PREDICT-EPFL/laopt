@@ -9,6 +9,49 @@
 namespace laopt
 {
 
+/**
+ * This is a faster implementation of casadi::FunctionBuffer using less run-time checks.
+ */
+class FastCasadiFunctionBuffer {
+    casadi::Function f;
+    std::vector<double> w;
+    std::vector<casadi_int> iw;
+    std::vector<const double*> arg;
+    std::vector<double*> res;
+    int mem;
+public:
+    FastCasadiFunctionBuffer(const casadi::Function& f) : f(f)
+    {
+        w.resize(f.sz_w());
+        iw.resize(f.sz_iw());
+        arg.resize(f.sz_arg());
+        res.resize(f.sz_res());
+        mem = (int) f.checkout();
+    }
+
+    ~FastCasadiFunctionBuffer()
+    {
+        f.release(mem);
+    }
+
+    void set_arg(casadi_int i, const double* a, casadi_int size)
+    {
+        assert(size >= f.nnz_in(i) && "Buffer is not large enough.");
+        arg[i] = a;
+    }
+
+    void set_res(casadi_int i, double* a, casadi_int size)
+    {
+        assert(size >= f.nnz_out(i) && "Buffer is not large enough.");
+        res[i] = a;
+    }
+
+    void eval()
+    {
+        f(casadi::get_ptr(arg), casadi::get_ptr(res), casadi::get_ptr(iw), casadi::get_ptr(w), mem);
+    }
+};
+
 template<typename Derived, int Options>
 class DifferentiableBaseCasadi
 {
@@ -18,8 +61,8 @@ protected:
 
     std::vector<std::unique_ptr<casadi::Function>> casadi_jacobian_sparse;
     std::vector<std::unique_ptr<casadi::Function>> casadi_hessian_sparse;
-    std::vector<std::unique_ptr<casadi::FunctionBuffer>> casadi_jacobian_buffer;
-    std::vector<std::unique_ptr<casadi::FunctionBuffer>> casadi_hessian_buffer;
+    std::vector<std::unique_ptr<FastCasadiFunctionBuffer>> casadi_jacobian_buffer;
+    std::vector<std::unique_ptr<FastCasadiFunctionBuffer>> casadi_hessian_buffer;
 
     template<typename Tag, typename OutJacobian, typename... Args, int Opts = Options>
     EIGEN_STRONG_INLINE typename std::enable_if<(Opts & CASADI_JACOBIAN) != 0>::type
@@ -43,7 +86,7 @@ protected:
 
         Eigen::Matrix<double, Info::n_outputs, Info::n_inputs> res;
         buffer->set_res(0, res.data(), Info::n_outputs * Info::n_inputs * sizeof(double));
-        buffer->_eval();
+        buffer->eval();
 
         out_jacobian += res;
     }
@@ -91,7 +134,7 @@ protected:
 
         Eigen::Matrix<double, Info::n_inputs, Info::n_inputs> res;
         buffer->set_res(0, res.data(), Info::n_inputs * Info::n_inputs * sizeof(double));
-        buffer->_eval();
+        buffer->eval();
 
         out_hessian += res;
     }
@@ -170,7 +213,7 @@ protected:
                 casadi_args,
                 {casadi::SX::densify(casadi::SX::jacobian(casadi_out, casadi::SX::vertcat(casadi_vars)))},
                 {{"jit", !(Options & CASADI_NO_JIT)}, {"compiler", "shell"}, {"jit_options", jit_options}});
-            casadi_jacobian_buffer.emplace_back(std::make_unique<casadi::FunctionBuffer>(jacobian_dense));
+            casadi_jacobian_buffer.emplace_back(std::make_unique<FastCasadiFunctionBuffer>(jacobian_dense));
         }
     }
 
@@ -201,7 +244,7 @@ protected:
                 casadi_args,
                 {casadi::SX::densify(casadi::SX::hessian(out_weight, casadi::SX::vertcat(casadi_vars)))},
                 {{"jit", !(Options & CASADI_NO_JIT)}, {"compiler", "shell"}, {"jit_options", jit_options}});
-            casadi_hessian_buffer.emplace_back(std::make_unique<casadi::FunctionBuffer>(hessian_dense));
+            casadi_hessian_buffer.emplace_back(std::make_unique<FastCasadiFunctionBuffer>(hessian_dense));
         }
     }
 
@@ -246,29 +289,29 @@ protected:
 
     template<typename Base>
     EIGEN_STRONG_INLINE int
-    set_casadi_buffer(int offset, casadi::FunctionBuffer& buffer, const IndexedVector<Base>& x) noexcept
+    set_casadi_buffer(int offset, FastCasadiFunctionBuffer& buffer, const IndexedVector<Base>& x) noexcept
     {
         constexpr size_t n = Base::RowsAtCompileTime;
         static_assert((Base::Flags & Eigen::DirectAccessBit) != 0, "vector is not continuous in memory");
-        buffer.set_arg(offset, x.cast_base().data(), n * sizeof(double));
+        buffer.set_arg(offset, x.cast_base().data(), n);
         return offset + 1;
     }
 
     template<typename T>
     EIGEN_STRONG_INLINE int
-    set_casadi_buffer(int offset, casadi::FunctionBuffer& buffer, const Eigen::MatrixBase<T>& x) noexcept
+    set_casadi_buffer(int offset, FastCasadiFunctionBuffer& buffer, const Eigen::MatrixBase<T>& x) noexcept
     {
         constexpr size_t n = Eigen::MatrixBase<T>::RowsAtCompileTime;
         static_assert((Eigen::MatrixBase<T>::Flags & Eigen::DirectAccessBit) != 0, "vector is not continuous in memory");
-        buffer.set_arg(offset, x.derived().data(), n * sizeof(double));
+        buffer.set_arg(offset, x.derived().data(), n);
         return offset + 1;
     }
 
     template<typename T>
     EIGEN_STRONG_INLINE typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<T>, T>::value, int>::type
-    set_casadi_buffer(int offset, casadi::FunctionBuffer& buffer, const T& x) noexcept
+    set_casadi_buffer(int offset, FastCasadiFunctionBuffer& buffer, const T& x) noexcept
     {
-        buffer.set_arg(offset, &x, sizeof(double));
+        buffer.set_arg(offset, &x, 1);
         return offset + 1;
     }
 };
