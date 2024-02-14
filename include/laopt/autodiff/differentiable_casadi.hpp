@@ -131,6 +131,19 @@ protected:
         return id;
     }
 
+    template<typename Tag, typename Tuple, size_t... I>
+    auto call_function_from_tuple(Tag&& tag, Tuple& t, std::index_sequence<I...>)
+    {
+        return static_cast<Derived*>(this)->function(std::forward<Tag>(tag), std::get<I>(t)...);
+    }
+
+    template<typename Tag, typename Tuple>
+    auto call_function_from_tuple(Tag&& tag, Tuple& t)
+    {
+        static constexpr auto size = std::tuple_size<Tuple>::value;
+        return call_function_from_tuple(std::forward<Tag>(tag), t, std::make_index_sequence<size>{});
+    }
+
     template<typename Tag, typename... Args>
     EIGEN_STRONG_INLINE void
     build_casadi_jacobian(Tag&& tag, const Args&... args) noexcept
@@ -142,7 +155,9 @@ protected:
         {
             std::vector<casadi::SX> casadi_args;
             std::vector<casadi::SX> casadi_vars;
-            Eigen::Vector<casadi::SX, Info::n_outputs> out = static_cast<Derived*>(this)->function(std::forward<Tag>(tag), make_casadi_sx(casadi_args, casadi_vars, args)...);
+            // we have to go into tuple land here to ensure make_casadi_sx is executed in order which is enforced by the brace initialization list
+            std::tuple<decltype(make_casadi_sx(casadi_args, casadi_vars, args))...> func_args{make_casadi_sx(casadi_args, casadi_vars, args)...};
+            Eigen::Vector<casadi::SX, Info::n_outputs> out = call_function_from_tuple(std::forward<Tag>(tag), func_args);
             casadi::SX casadi_out = casadi::SX::vertcat({out.data(), out.data() + Info::n_outputs});
 
             casadi_jacobian_sparse.emplace_back(std::unique_ptr<casadi::Function>(new casadi::Function(
@@ -171,7 +186,9 @@ protected:
             std::vector<casadi::SX> casadi_args;
             std::vector<casadi::SX> casadi_vars;
             Eigen::Vector<casadi::SX, Info::n_outputs> casadi_weight = make_casadi_sx(casadi_args, casadi_vars, weight);
-            Eigen::Vector<casadi::SX, Info::n_outputs> out = static_cast<Derived*>(this)->function(std::forward<Tag>(tag), make_casadi_sx(casadi_args, casadi_vars, args)...);
+            // we have to go into tuple land here to ensure make_casadi_sx is executed in order which is enforced by the brace initialization list
+            std::tuple<decltype(make_casadi_sx(casadi_args, casadi_vars, args))...> func_args{make_casadi_sx(casadi_args, casadi_vars, args)...};
+            Eigen::Vector<casadi::SX, Info::n_outputs> out = call_function_from_tuple(std::forward<Tag>(tag), func_args);
             casadi::SX out_weight = casadi_weight.dot(out);
 
             casadi_hessian_sparse.emplace_back(std::unique_ptr<casadi::Function>(new casadi::Function(
