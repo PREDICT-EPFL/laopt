@@ -261,6 +261,7 @@ SparsityInfo<UserCode> generate_sparsity(UserCode& user_code)
 
     prob.eval_constraints_no_memory(Jacobian{});
     prob.eval_variable_bounds_no_memory();
+    prob.eval_objective_no_memory(Gradient{});
     prob.eval_objective_no_memory(Hessian{});
     prob.eval_lagrangian_no_memory(Hessian{});
 
@@ -281,6 +282,7 @@ TapeInfo<UserCode> generate_tape(UserCode& user_code, SparsityInfo<UserCode> spa
 
     prob.eval_constraints_no_memory(Jacobian{});
     prob.eval_variable_bounds_no_memory();
+    prob.eval_objective_no_memory(Gradient{});
     prob.eval_objective_no_memory(Hessian{});
     prob.eval_lagrangian_no_memory(Hessian{});
 
