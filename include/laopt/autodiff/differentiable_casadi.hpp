@@ -86,13 +86,13 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_casadi<Tag>::value) ||
                                                 (!has_tag_override<Tag>::type::value && (Opts & CASADI_JACOBIAN) != 0)>::type
     jacobian_impl_autodiff_eval(
-        Tag&& tag, // Function to call
+        const Tag& tag, // Function to call
         OutJacobian& out_jacobian, // Outputs
         const Args&... args) noexcept // Function arguments
     {
         using Info = typename Derived::template FuncInfo<Tag, Args...>;
 
-        build_casadi_jacobian(std::forward<Tag>(tag), args...);
+        build_casadi_jacobian(tag, args...);
         auto& buffer = casadi_jacobian_buffer[get_jacobian_tag_id<Tag>()];
 
         int offset = 0;
@@ -114,13 +114,13 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_casadi<Tag>::value) ||
                                                 (!has_tag_override<Tag>::type::value && (Opts & CASADI_JACOBIAN) != 0)>::type
     jacobian_impl_autodiff_sparsity(
-        Tag&& tag, // Function to call
+        const Tag& tag, // Function to call
         BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_jacobian, // Outputs
         const Args&... args) noexcept // Function arguments
     {
         using Info = typename Derived::template FuncInfo<Tag, Args...>;
 
-        build_casadi_jacobian(std::forward<Tag>(tag), args...);
+        build_casadi_jacobian(tag, args...);
 
         const casadi::Sparsity& sparsity = casadi_jacobian_sparse[get_jacobian_tag_id<Tag>()]->sparsity_out(0);
         for (int col = 0; col < Info::n_inputs; col++) {
@@ -135,14 +135,14 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_casadi<Tag>::value) ||
                                                 (!has_tag_override<Tag>::type::value && (Opts & CASADI_HESSIAN) != 0)>::type
     hessian_impl_autodiff_eval(
-        Tag&& tag,
+        const Tag& tag,
         OutHessian& out_hessian,
         const Eigen::MatrixBase<Weight>& weight,
         const Args&... args) noexcept
     {
         using Info = typename Derived::template FuncInfo<Tag, Args...>;
 
-        build_casadi_hessian(std::forward<Tag>(tag), weight, args...);
+        build_casadi_hessian(tag, weight, args...);
         auto& buffer = casadi_hessian_buffer[get_hessian_tag_id<Tag>()];
 
         int offset = set_casadi_buffer(0, *buffer, weight);
@@ -164,14 +164,14 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_casadi<Tag>::value) ||
                                                 (!has_tag_override<Tag>::type::value && (Opts & CASADI_HESSIAN) != 0)>::type
     hessian_impl_autodiff_sparsity(
-        Tag&& tag,
+        const Tag& tag,
         BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_hessian,
         const Eigen::MatrixBase<Weight>& weight,
         const Args&... args) noexcept
     {
         using Info = typename Derived::template FuncInfo<Tag, Args...>;
 
-        build_casadi_hessian(std::forward<Tag>(tag), weight, args...);
+        build_casadi_hessian(tag, weight, args...);
 
         const casadi::Sparsity& sparsity = casadi_hessian_sparse[get_hessian_tag_id<Tag>()]->sparsity_out(0);
         for (int col = 0; col < Info::n_inputs; col++) {
@@ -197,21 +197,21 @@ protected:
     }
 
     template<typename Tag, typename Tuple, size_t... I>
-    auto call_function_from_tuple(Tag&& tag, Tuple& t, std::index_sequence<I...>)
+    auto call_function_from_tuple(const Tag& tag, Tuple& t, std::index_sequence<I...>)
     {
-        return static_cast<Derived*>(this)->function(std::forward<Tag>(tag), std::get<I>(t)...);
+        return static_cast<Derived*>(this)->function(tag, std::get<I>(t)...);
     }
 
     template<typename Tag, typename Tuple>
-    auto call_function_from_tuple(Tag&& tag, Tuple& t)
+    auto call_function_from_tuple(const Tag& tag, Tuple& t)
     {
         static constexpr auto size = std::tuple_size<Tuple>::value;
-        return call_function_from_tuple(std::forward<Tag>(tag), t, std::make_index_sequence<size>{});
+        return call_function_from_tuple(tag, t, std::make_index_sequence<size>{});
     }
 
     template<typename Tag, typename... Args>
     EIGEN_STRONG_INLINE void
-    build_casadi_jacobian(Tag&& tag, const Args&... args) noexcept
+    build_casadi_jacobian(const Tag& tag, const Args&... args) noexcept
     {
         using Info = typename Derived::template FuncInfo<Tag, Args...>;
 
@@ -222,7 +222,7 @@ protected:
             std::vector<casadi::SX> casadi_vars;
             // we have to go into tuple land here to ensure make_casadi_sx is executed in order which is enforced by the brace initialization list
             std::tuple<decltype(make_casadi_sx(casadi_args, casadi_vars, args))...> func_args{make_casadi_sx(casadi_args, casadi_vars, args)...};
-            Eigen::Vector<casadi::SX, Info::n_outputs> out = call_function_from_tuple(std::forward<Tag>(tag), func_args);
+            Eigen::Vector<casadi::SX, Info::n_outputs> out = call_function_from_tuple(tag, func_args);
             casadi::SX casadi_out = casadi::SX::vertcat({out.data(), out.data() + Info::n_outputs});
 
             casadi_jacobian_sparse.emplace_back(std::unique_ptr<casadi::Function>(new casadi::Function(
@@ -241,7 +241,7 @@ protected:
 
     template<typename Tag, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE void
-    build_casadi_hessian(Tag&& tag, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
+    build_casadi_hessian(const Tag& tag, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
         using Info = typename Derived::template FuncInfo<Tag, Args...>;
 
@@ -253,7 +253,7 @@ protected:
             Eigen::Vector<casadi::SX, Info::n_outputs> casadi_weight = make_casadi_sx(casadi_args, casadi_vars, weight);
             // we have to go into tuple land here to ensure make_casadi_sx is executed in order which is enforced by the brace initialization list
             std::tuple<decltype(make_casadi_sx(casadi_args, casadi_vars, args))...> func_args{make_casadi_sx(casadi_args, casadi_vars, args)...};
-            Eigen::Vector<casadi::SX, Info::n_outputs> out = call_function_from_tuple(std::forward<Tag>(tag), func_args);
+            Eigen::Vector<casadi::SX, Info::n_outputs> out = call_function_from_tuple(tag, func_args);
             casadi::SX out_weight = casadi_weight.dot(out);
 
             casadi_hessian_sparse.emplace_back(std::unique_ptr<casadi::Function>(new casadi::Function(

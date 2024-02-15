@@ -17,7 +17,7 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_eigen<Tag>::value) ||
                                                 (!has_tag_override<Tag>::type::value && (Opts & CASADI_JACOBIAN) == 0)>::type
     jacobian_impl_autodiff_eval(
-        Tag&& tag, // Function to call
+        const Tag& tag, // Function to call
         OutJacobian& out_jacobian, // Outputs
         const Args&... args) noexcept // Function arguments
     {
@@ -29,7 +29,7 @@ protected:
         using ADOutput = Eigen::Vector<ADScalar, Info::n_outputs>;
 
         // Convert the arguments to AD variables, and call the function
-        ADOutput out = seed_and_call(std::forward<Tag>(tag), make_ad<ADScalar>(args)...);
+        ADOutput out = seed_and_call(tag, make_ad<ADScalar>(args)...);
 
         // Copy out into output variables
         for(int i = 0; i < out.rows(); i++)
@@ -43,7 +43,7 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_eigen<Tag>::value) ||
                                                 (!has_tag_override<Tag>::type::value && (Opts & CASADI_JACOBIAN) == 0)>::type
     jacobian_impl_autodiff_sparsity(
-        Tag&& tag, // Function to call
+        const Tag& tag, // Function to call
         BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_jacobian, // Outputs
         const Args&... args) noexcept // Function arguments
     {
@@ -55,7 +55,7 @@ protected:
         using ADOutput = Eigen::Vector<ADScalar, Info::n_outputs>;
 
         // Convert the arguments to AD variables, and call the function
-        ADOutput out = seed_and_call(std::forward<Tag>(tag), make_ad_touchable<ADScalar>(args)...);
+        ADOutput out = seed_and_call(tag, make_ad_touchable<ADScalar>(args)...);
 
         for(int i = 0; i < out.rows(); i++)
         {
@@ -74,7 +74,7 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_eigen<Tag>::value) ||
                                                 (!has_tag_override<Tag>::type::value && (Opts & CASADI_HESSIAN) == 0)>::type
     hessian_impl_autodiff_eval(
-        Tag&& tag,
+        const Tag& tag,
         OutHessian& out_hessian,
         const Eigen::MatrixBase<Weight>& weight,
         const Args&... args) noexcept
@@ -93,7 +93,7 @@ protected:
         ADOutput out;
         for (size_t i = 0; i < Info::n_inputs; i++) {
             // Convert to AD variables for the inputs and call our function for ith row of hessian
-            out = seed_and_call2(i, std::forward<Tag>(tag), make_ad2<outerADScalar>(args)...);
+            out = seed_and_call2(i, tag, make_ad2<outerADScalar>(args)...);
             for(size_t j = 0; j < Info::n_outputs; j++) {
                 out_hessian(Eigen::all, i) += weight(j) * out[j].derivatives()(0).derivatives();
             }
@@ -105,7 +105,7 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_eigen<Tag>::value) ||
                                                 (!has_tag_override<Tag>::type::value && (Opts & CASADI_HESSIAN) == 0)>::type
     hessian_impl_autodiff_sparsity(
-        Tag&& tag,
+        const Tag& tag,
         BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_hessian,
         const Eigen::MatrixBase<Weight>& weight,
         const Args&... args) noexcept
@@ -124,7 +124,7 @@ protected:
         ADOutput out;
         for (size_t i = 0; i < Info::n_inputs; i++) {
             // Convert to AD variables for the inputs and call our function for ith row of hessian
-            out = seed_and_call2(i, std::forward<Tag>(tag), make_ad2_touchable<outerADScalar>(args)...);
+            out = seed_and_call2(i, tag, make_ad2_touchable<outerADScalar>(args)...);
             for(size_t j = 0; j < Info::n_outputs; j++) {
                 for (int k = 0; k < out[j].derivatives()(0).derivatives().rows(); k++) {
                     if (out[j].derivatives()(0).derivatives()(k).value() != 0)
@@ -179,7 +179,7 @@ protected:
 
     template<typename Tag, typename... Args>
     EIGEN_STRONG_INLINE auto
-    seed_and_call(Tag&& tag, Args&&... args) noexcept
+    seed_and_call(const Tag& tag, Args&&... args) noexcept
     {
         // Set derivative equal to identity
         int offset = 0;
@@ -190,7 +190,7 @@ protected:
             )...
         };
 
-        return static_cast<Derived*>(this)->function(std::forward<Tag>(tag), std::forward<Args>(args)...);
+        return static_cast<Derived*>(this)->function(tag, std::forward<Args>(args)...);
     }
 
     // Sets the input derivatives to the identity.
@@ -259,7 +259,7 @@ protected:
     }
 
     template<typename Tag, typename... Args>
-    EIGEN_STRONG_INLINE auto seed_and_call2(int outer_index, Tag&& tag, Args&&... args) noexcept
+    EIGEN_STRONG_INLINE auto seed_and_call2(int outer_index, const Tag& tag, Args&&... args) noexcept
     {
         // Set derivative equal to identity
         int inner_offset = 0;
@@ -271,7 +271,7 @@ protected:
         };
 
         // Call our function
-        return static_cast<Derived*>(this)->function(std::forward<Tag>(tag), std::forward<Args>(args)...);
+        return static_cast<Derived*>(this)->function(tag, std::forward<Args>(args)...);
     }
 
     // Sets the input derivatives to the identity.
