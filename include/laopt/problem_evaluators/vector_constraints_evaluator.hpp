@@ -43,7 +43,7 @@ protected:
         auto out_indices = Eigen::seqN(row_offset, Eigen::fix<n_outputs>);
         row_offset += n_outputs;
 
-        ExprEvaluator<Derived>::jacobian(const_expr.derived(), constraints.jacobian(out_indices, const_expr.derived().indices()));
+        ExprEvaluator<Derived>::jacobian(const_expr.derived(), constraints.jacobian(out_indices, const_expr.derived().indices()), 1);
     }
 
     template<typename Derived>

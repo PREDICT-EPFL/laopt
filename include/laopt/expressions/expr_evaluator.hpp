@@ -20,12 +20,13 @@ struct ExprEvaluator<IndexedVector<Derived>>
         return id.function(indexed_vector.cast_base());
     }
 
-    template<typename OutJacobian>
+    template<typename OutJacobian, typename AScalar>
     static EIGEN_STRONG_INLINE void
-    jacobian(const IndexedVector<Derived>& indexed_vector, OutJacobian&& out_jacobian)
+    jacobian(const IndexedVector<Derived>& indexed_vector, OutJacobian&& out_jacobian, const AScalar& alpha)
     {
         common_functions::IDENTITY id;
         id.jacobian(out_jacobian,
+                    alpha,
                     indexed_vector);
     }
 

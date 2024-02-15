@@ -115,11 +115,11 @@ struct ExprEvaluator<IneqConstraintExpr<DerivedLhs, DerivedRhs>,
         return ExprEvaluator<DerivedLhs>::function(ineq.lhs);
     }
 
-    template<typename OutJacobian>
+    template<typename OutJacobian, typename AScalar>
     static EIGEN_STRONG_INLINE void
-    jacobian(const IneqConstraintExpr<DerivedLhs, DerivedRhs>& ineq, OutJacobian&& out_jacobian)
+    jacobian(const IneqConstraintExpr<DerivedLhs, DerivedRhs>& ineq, OutJacobian&& out_jacobian, const AScalar& alpha)
     {
-        ExprEvaluator<DerivedLhs>::jacobian(ineq.lhs, std::forward<OutJacobian>(out_jacobian));
+        ExprEvaluator<DerivedLhs>::jacobian(ineq.lhs, std::forward<OutJacobian>(out_jacobian), alpha);
     }
 
     template<typename Weight>
@@ -167,11 +167,11 @@ struct ExprEvaluator<IneqConstraintExpr<DerivedLhs, DerivedRhs>,
         return ExprEvaluator<DerivedRhs>::function(ineq.rhs);
     }
 
-    template<typename OutJacobian>
+    template<typename OutJacobian, typename AScalar>
     static EIGEN_STRONG_INLINE void
-    jacobian(const IneqConstraintExpr<DerivedLhs, DerivedRhs>& ineq, OutJacobian&& out_jacobian)
+    jacobian(const IneqConstraintExpr<DerivedLhs, DerivedRhs>& ineq, OutJacobian&& out_jacobian, const AScalar& alpha)
     {
-        ExprEvaluator<DerivedRhs>::jacobian(ineq.rhs, std::forward<OutJacobian>(out_jacobian));
+        ExprEvaluator<DerivedRhs>::jacobian(ineq.rhs, std::forward<OutJacobian>(out_jacobian), alpha);
     }
 
     template<typename Weight>
@@ -220,12 +220,12 @@ struct ExprEvaluator<IneqConstraintExpr<DerivedLhs, DerivedRhs>,
         return ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>::function(sub_expr);
     }
 
-    template<typename OutJacobian>
+    template<typename OutJacobian, typename AScalar>
     static EIGEN_STRONG_INLINE void
-    jacobian(const IneqConstraintExpr<DerivedLhs, DerivedRhs>& ineq, OutJacobian&& out_jacobian)
+    jacobian(const IneqConstraintExpr<DerivedLhs, DerivedRhs>& ineq, OutJacobian&& out_jacobian, const AScalar& alpha)
     {
         SubExpr<DerivedLhs, DerivedRhs> sub_expr(ineq.lhs, ineq.rhs);
-        ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>::jacobian(sub_expr, std::forward<OutJacobian>(out_jacobian));
+        ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>::jacobian(sub_expr, std::forward<OutJacobian>(out_jacobian), alpha);
     }
 
     template<typename Weight>

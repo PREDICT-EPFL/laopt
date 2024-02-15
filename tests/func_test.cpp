@@ -122,7 +122,7 @@ TYPED_TEST(FunctionTest, VectorFunction)
     EXPECT_EQ(value, val);
 
     jacobian.setZero();
-    test.jacobian(jacobian, x, u);
+    test.jacobian(jacobian, 1, x, u);
 
     Eigen::Matrix<scalar_t, 2, 3> jac;
     jac << 21, 4, 10, 34, 8, 12;
@@ -151,7 +151,7 @@ TYPED_TEST(FunctionTest, VectorFunctionParameter)
     EXPECT_EQ(value, val);
 
     jacobian.setZero();
-    test.jacobian(jacobian, p, x, u);
+    test.jacobian(jacobian, 1, p, x, u);
 
     Eigen::Matrix<scalar_t, 2, 3> jac;
     jac << 5, 10, 25, 15, 20, 30;
@@ -239,7 +239,7 @@ TYPED_TEST(FunctionTest, RK4) {
 
     // Compute jacobian and evaluation
     jacobian.setZero();
-    dsys.jacobian(jacobian, x, u);
+    dsys.jacobian(jacobian, 1, x, u);
 
     Eigen::Matrix<scalar_t, 2, 3> jac;
     jac << 1, 0.1, 0.005, 0, 1, 0.1;
@@ -268,7 +268,7 @@ TYPED_TEST(FunctionTest, BSMatrixJacobain) {
             x << i, 2 * i;
             u << 3 * i;
             value(Eigen::seqN(i*2, Eigen::fix<2>)) = test(x.cast_base(), u.cast_base());
-            test.jacobian(jacobian(Eigen::seqN(i*2, Eigen::fix<2>), laopt::multiSeq_to_index(Eigen::seqN(i*2, Eigen::fix<2>), Eigen::seqN(10+i, Eigen::fix<1>))), x, u);
+            test.jacobian(jacobian(Eigen::seqN(i*2, Eigen::fix<2>), laopt::multiSeq_to_index(Eigen::seqN(i*2, Eigen::fix<2>), Eigen::seqN(10+i, Eigen::fix<1>))), 1, x, u);
         }
     };
 
@@ -316,7 +316,7 @@ TEST(FunctionTest, Identity) {
     value = id.function(x.cast_base());
 
     jacobian.setZero();
-    id.jacobian(jacobian, x);
+    id.jacobian(jacobian, 1, x);
 
     Eigen::MatrixX<scalar_t> value_g(2,1);
     value_g << 1, 2;

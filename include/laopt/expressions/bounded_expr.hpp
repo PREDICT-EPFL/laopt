@@ -98,11 +98,11 @@ struct ExprEvaluator<BoundedExpr<DerivedLb, Derived, DerivedUb>>
         return ExprEvaluator<Derived>::function(bounded_expr.expr);
     }
 
-    template<typename OutJacobian>
+    template<typename OutJacobian, typename AScalar>
     static EIGEN_STRONG_INLINE void
-    jacobian(const BoundedExpr<DerivedLb, Derived, DerivedUb>& bounded_expr, OutJacobian&& out_jacobian)
+    jacobian(const BoundedExpr<DerivedLb, Derived, DerivedUb>& bounded_expr, OutJacobian&& out_jacobian, const AScalar& alpha)
     {
-        ExprEvaluator<Derived>::jacobian(bounded_expr.expr, std::forward<OutJacobian>(out_jacobian));
+        ExprEvaluator<Derived>::jacobian(bounded_expr.expr, std::forward<OutJacobian>(out_jacobian), alpha);
     }
 
     template<typename Weight>

@@ -73,13 +73,14 @@ public:
         });
     }
 
-    template<typename OutJacobian>
+    template<typename OutJacobian, typename AScalar>
     static EIGEN_STRONG_INLINE void
-    jacobian(const FunctionCapture<Function, Tag, Info, Capture>& function_capture, OutJacobian&& out_jacobian)
+    jacobian(const FunctionCapture<Function, Tag, Info, Capture>& function_capture, OutJacobian&& out_jacobian, const AScalar& alpha)
     {
         function_capture.capture([&](auto&&... vars) {
             function_capture.func.jacobian(Tag{},
                                            out_jacobian,
+                                           alpha,
                                            vars...);
         });
     }

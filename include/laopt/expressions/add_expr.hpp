@@ -51,12 +51,12 @@ struct ExprEvaluator<AddExpr<DerivedLhs, DerivedRhs>>
         return ExprEvaluator<DerivedLhs>::function(expr.lhs) + ExprEvaluator<DerivedRhs>::function(expr.rhs);
     }
 
-    template<typename OutJacobian>
+    template<typename OutJacobian, typename AScalar>
     static EIGEN_STRONG_INLINE void
-    jacobian(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutJacobian&& out_jacobian)
+    jacobian(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutJacobian&& out_jacobian, const AScalar& alpha)
     {
-        ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_jacobian(Eigen::all, Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)));
-        ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_jacobian(Eigen::all, Eigen::lastN(Eigen::fix<DerivedRhs::n_inputs>)));
+        ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_jacobian(Eigen::all, Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), alpha);
+        ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_jacobian(Eigen::all, Eigen::lastN(Eigen::fix<DerivedRhs::n_inputs>)), alpha);
     }
 
     template<typename Weight>

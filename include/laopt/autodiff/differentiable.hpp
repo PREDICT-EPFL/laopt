@@ -39,27 +39,27 @@ protected:
     using DifferentiableBaseCasadi<Derived, Options>::hessian_impl_autodiff_eval;
     using DifferentiableBaseCasadi<Derived, Options>::hessian_impl_autodiff_sparsity;
 
-    template<typename Tag, typename OutJacobian, typename... Args>
+    template<typename Tag, typename OutJacobian, typename AScalar, typename... Args>
     EIGEN_STRONG_INLINE void
-    jacobian_impl_autodiff(const Tag& tag, OutJacobian& out_jacobian, const Args&... args) noexcept
+    jacobian_impl_autodiff(const Tag& tag, OutJacobian& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        this->jacobian_impl_autodiff_eval(tag, out_jacobian, args...);
+        this->jacobian_impl_autodiff_eval(tag, out_jacobian, alpha, args...);
     }
 
-    template<typename Tag, typename... Args>
+    template<typename Tag, typename AScalar, typename... Args>
     EIGEN_STRONG_INLINE void
-    jacobian_impl_autodiff(const Tag& tag, BSMatrixSparsity& out_jacobian, const Args&... args) noexcept
+    jacobian_impl_autodiff(const Tag& tag, BSMatrixSparsity& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        this->jacobian_impl_autodiff_sparsity(tag, out_jacobian, args...);
+        this->jacobian_impl_autodiff_sparsity(tag, out_jacobian, alpha, args...);
     }
-    template<typename Tag, typename SparsityNullMat, typename... Args>
+    template<typename Tag, typename AScalar, typename SparsityNullMat, typename... Args>
     EIGEN_STRONG_INLINE void
-    jacobian_impl_autodiff(const Tag& tag, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_jacobian, const Args&... args) noexcept
+    jacobian_impl_autodiff(const Tag& tag, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        this->jacobian_impl_autodiff_sparsity(tag, out_jacobian, args...);
+        this->jacobian_impl_autodiff_sparsity(tag, out_jacobian, alpha, args...);
     }
 
-    template<typename Tag, typename Weight, typename OutHessian, typename... Args>
+    template<typename Tag, typename OutHessian, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE void
     hessian_impl_autodiff(const Tag& tag,
                           OutHessian& out_hessian,
@@ -79,7 +79,7 @@ protected:
         this->hessian_impl_autodiff_sparsity(tag, out_hessian, weight, args...);
     }
 
-    template<typename Tag, typename Weight, typename SparsityNullMat, typename... Args>
+    template<typename Tag, typename SparsityNullMat, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE void
     hessian_impl_autodiff(const Tag& tag,
                           BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_hessian,
@@ -114,7 +114,7 @@ protected:
     }
 
     // returns the value w'*f(x) and *adds* the gradient to gradient
-    template<typename Tag, typename Weight, typename Gradient, typename... Args>
+    template<typename Tag, typename Gradient, typename Weight, typename... Args>
     inline void
     gradient_impl_autodiff(const Tag& tag,
                            Gradient& out_gradient,
@@ -127,7 +127,7 @@ protected:
         // Call the (possibly overloaded) jacobian
         Eigen::Matrix<Scalar, Info::n_outputs, Info::n_inputs> jacobian;
         jacobian.setZero();
-        static_cast<Derived*>(this)->jacobian(tag, jacobian, args...);
+        static_cast<Derived*>(this)->jacobian(tag, jacobian, 1, args...);
         out_gradient += jacobian.transpose() * weight;
     }
 };
@@ -239,19 +239,19 @@ public:
     }
 
     // user specified jacobian code
-    template <typename Tag, typename OutJacobian, typename... Args>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, Tag, OutJacobian&, Args...>() == true, void>::type
-    jacobian(const Tag& tag, OutJacobian&& out_jacobian, const Args&... args) noexcept
+    template <typename Tag, typename OutJacobian, typename AScalar, typename... Args>
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, Tag, OutJacobian&, AScalar, Args...>() == true, void>::type
+    jacobian(const Tag& tag, OutJacobian&& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        static_cast<Derived*>(this)->jacobian_impl(tag, out_jacobian, args...);
+        static_cast<Derived*>(this)->jacobian_impl(tag, out_jacobian, alpha, args...);
     }
 
     // default internal jacobian code
-    template <typename Tag, typename OutJacobian, typename... Args>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, Tag, OutJacobian&, Args...>() == false, void>::type
-    jacobian(const Tag& tag, OutJacobian&& out_jacobian, const Args&... args) noexcept
+    template <typename Tag, typename OutJacobian, typename AScalar, typename... Args>
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, Tag, OutJacobian&, AScalar, Args...>() == false, void>::type
+    jacobian(const Tag& tag, OutJacobian&& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        this->jacobian_impl_autodiff(tag, out_jacobian, args...);
+        this->jacobian_impl_autodiff(tag, out_jacobian, alpha, args...);
     }
 
     // user specified wsum code
@@ -271,7 +271,7 @@ public:
     }
 
     // user specified gradient code
-    template <typename Tag, typename Weight, typename OutGradient, typename... Args>
+    template <typename Tag, typename OutGradient, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, Tag, OutGradient&, Eigen::MatrixBase<Weight>, Args...>() == true, void>::type
     gradient(const Tag& tag, OutGradient&& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
@@ -279,7 +279,7 @@ public:
     }
 
     // default internal gradient code
-    template <typename Tag, typename Weight, typename OutGradient, typename... Args>
+    template <typename Tag, typename OutGradient, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, Tag, OutGradient&, Eigen::MatrixBase<Weight>, Args...>() == false, void>::type
     gradient(const Tag& tag, OutGradient&& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
@@ -287,7 +287,7 @@ public:
     }
 
     // user specified hessian code
-    template <typename Tag, typename Weight, typename OutHessian, typename... Args>
+    template <typename Tag, typename OutHessian, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, Tag, OutHessian&, Eigen::MatrixBase<Weight>, Args...>() == true, void>::type
     hessian(const Tag& tag, OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
@@ -295,7 +295,7 @@ public:
     }
 
     // default internal hessian code
-    template <typename Tag, typename Weight, typename OutHessian, typename... Args>
+    template <typename Tag, typename OutHessian, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, Tag, OutHessian&, Eigen::MatrixBase<Weight>, Args...>() == false, void>::type
     hessian(const Tag& tag, OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
@@ -394,27 +394,27 @@ public:
     }
 
     // user specified jacobian code
-    template <typename OutJacobian, typename... Args>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, OutJacobian&, Args...>() == true, void>::type
-    jacobian(OutJacobian&& out_jacobian, const Args&... args) noexcept
+    template <typename OutJacobian, typename AScalar, typename... Args>
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, OutJacobian&, AScalar, Args...>() == true, void>::type
+    jacobian(OutJacobian&& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        static_cast<Derived*>(this)->jacobian_impl(out_jacobian, args...);
+        static_cast<Derived*>(this)->jacobian_impl(out_jacobian, alpha, args...);
     }
 
     // default internal jacobian code
-    template <typename OutJacobian, typename... Args>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, OutJacobian&, Args...>() == false, void>::type
-    jacobian(OutJacobian&& out_jacobian, const Args&... args) noexcept
+    template <typename OutJacobian, typename AScalar, typename... Args>
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, OutJacobian&, AScalar, Args...>() == false, void>::type
+    jacobian(OutJacobian&& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        this->jacobian_impl_autodiff(DefaultTag{}, out_jacobian, args...);
+        this->jacobian_impl_autodiff(DefaultTag{}, out_jacobian, alpha, args...);
     }
 
     // define DefaultTag for jacobian
-    template <typename OutJacobian, typename... Args>
+    template <typename OutJacobian, typename AScalar, typename... Args>
     EIGEN_STRONG_INLINE void
-    jacobian(DefaultTag, OutJacobian&& out_jacobian, const Args&... args) noexcept
+    jacobian(DefaultTag, OutJacobian&& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        jacobian(std::forward<OutJacobian>(out_jacobian), args...);
+        jacobian(std::forward<OutJacobian>(out_jacobian), alpha, args...);
     }
 
     // user specified wsum code
@@ -442,7 +442,7 @@ public:
     }
 
     // user specified gradient code
-    template <typename Weight, typename OutGradient, typename... Args>
+    template <typename OutGradient, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, OutGradient&, Eigen::MatrixBase<Weight>, Args...>() == true, void>::type
     gradient(OutGradient&& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
@@ -450,7 +450,7 @@ public:
     }
 
     // default internal gradient code
-    template <typename Weight, typename OutGradient, typename... Args>
+    template <typename OutGradient, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, OutGradient&, Eigen::MatrixBase<Weight>, Args...>() == false, void>::type
     gradient(OutGradient&& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
@@ -458,7 +458,7 @@ public:
     }
 
     // define DefaultTag for gradient
-    template <typename Weight, typename OutGradient, typename... Args>
+    template <typename OutGradient, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE void
     gradient(DefaultTag, OutGradient&& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
@@ -466,7 +466,7 @@ public:
     }
 
     // user specified hessian code
-    template <typename Weight, typename OutHessian, typename... Args>
+    template <typename OutHessian, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, OutHessian&, Eigen::MatrixBase<Weight>, Args...>() == true, void>::type
     hessian(OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
@@ -474,7 +474,7 @@ public:
     }
 
     // default internal hessian code
-    template <typename Weight, typename OutHessian, typename... Args>
+    template <typename OutHessian, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, OutHessian&, Eigen::MatrixBase<Weight>, Args...>() == false, void>::type
     hessian(OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
@@ -482,7 +482,7 @@ public:
     }
 
     // define DefaultTag for hessian
-    template <typename Weight, typename OutHessian, typename... Args>
+    template <typename OutHessian, typename Weight, typename... Args>
     EIGEN_STRONG_INLINE void
     hessian(DefaultTag, OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {

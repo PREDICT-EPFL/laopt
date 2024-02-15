@@ -82,12 +82,13 @@ protected:
     std::vector<std::unique_ptr<FastCasadiFunctionBuffer>> casadi_jacobian_buffer;
     std::vector<std::unique_ptr<FastCasadiFunctionBuffer>> casadi_hessian_buffer;
 
-    template<typename Tag, typename OutJacobian, typename... Args, int Opts = Options>
+    template<typename Tag, typename OutJacobian, typename AScalar, typename... Args, int Opts = Options>
     EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_casadi<Tag>::value) ||
                                                 (!has_tag_override<Tag>::type::value && (Opts & CASADI_JACOBIAN) != 0)>::type
     jacobian_impl_autodiff_eval(
         const Tag& tag, // Function to call
         OutJacobian& out_jacobian, // Outputs
+        const AScalar& alpha, // Scaling factor
         const Args&... args) noexcept // Function arguments
     {
         using Info = typename Derived::template FuncInfo<Tag, Args...>;
@@ -107,15 +108,16 @@ protected:
         buffer->set_res(0, res.data(), Info::n_outputs * Info::n_inputs);
         buffer->eval();
 
-        out_jacobian += res;
+        out_jacobian += alpha * res;
     }
 
-    template<typename Tag, typename SparsityNullMat, typename... Args, int Opts = Options>
+    template<typename Tag, typename SparsityNullMat, typename AScalar, typename... Args, int Opts = Options>
     EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_casadi<Tag>::value) ||
                                                 (!has_tag_override<Tag>::type::value && (Opts & CASADI_JACOBIAN) != 0)>::type
     jacobian_impl_autodiff_sparsity(
         const Tag& tag, // Function to call
         BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_jacobian, // Outputs
+        const AScalar& alpha, // Scaling factor
         const Args&... args) noexcept // Function arguments
     {
         using Info = typename Derived::template FuncInfo<Tag, Args...>;
@@ -131,7 +133,7 @@ protected:
         }
     }
 
-    template<typename Tag, typename Weight, typename OutHessian, typename... Args, int Opts = Options>
+    template<typename Tag, typename OutHessian, typename Weight, typename... Args, int Opts = Options>
     EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_casadi<Tag>::value) ||
                                                 (!has_tag_override<Tag>::type::value && (Opts & CASADI_HESSIAN) != 0)>::type
     hessian_impl_autodiff_eval(
@@ -160,7 +162,7 @@ protected:
         out_hessian += res;
     }
 
-    template<typename Tag, typename Weight, typename SparsityNullMat, typename... Args, int Opts = Options>
+    template<typename Tag, typename SparsityNullMat, typename Weight, typename... Args, int Opts = Options>
     EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_casadi<Tag>::value) ||
                                                 (!has_tag_override<Tag>::type::value && (Opts & CASADI_HESSIAN) != 0)>::type
     hessian_impl_autodiff_sparsity(

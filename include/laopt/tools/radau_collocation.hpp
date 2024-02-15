@@ -306,9 +306,9 @@ protected:
         return 2.0 / h_seg * dx_apr;
     }
 
-    template<typename OutJacobian, typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
+    template<typename OutJacobian, typename AScalar, typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE void
-    jacobian_impl(DifferentialApproximation, OutJacobian& out_jacobian,
+    jacobian_impl(DifferentialApproximation, OutJacobian& out_jacobian, const AScalar& alpha,
                   const Eigen::MatrixBase<X_t> &X_vec, unsigned j_node)
     {
         for (unsigned l = 0; l <= D_poly; l++)
@@ -316,7 +316,7 @@ protected:
             Scalar diag = 2.0 / h_seg * diff_mat(j_node, l);
             // assign diagonal values
             for (unsigned i = 0; i < NX; i++) {
-                out_jacobian(i, l * NX + i) += diag;
+                out_jacobian(i, l * NX + i) += alpha * diag;
             }
         }
     }

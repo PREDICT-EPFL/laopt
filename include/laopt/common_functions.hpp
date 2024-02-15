@@ -9,27 +9,21 @@ namespace common_functions {
 
 class IDENTITY : public Differentiable<IDENTITY>
 {
-    const double multiplier;
-
 public:
-    IDENTITY() : multiplier(1) {}
-    explicit IDENTITY(double multiplier) : multiplier(multiplier) {}
-
     template<typename X>
     EIGEN_STRONG_INLINE typename X::PlainObject
     function_impl(const Eigen::MatrixBase<X>& x) noexcept
     {
-        return multiplier * x;
+        return x;
     }
 
-    template<typename OutJacobian, typename X>
+    template<typename OutJacobian, typename AScalar, typename X>
     EIGEN_STRONG_INLINE void
-    jacobian_impl(OutJacobian& jac, const Eigen::MatrixBase<X>& x) noexcept
+    jacobian_impl(OutJacobian& jac, const AScalar& alpha, const Eigen::MatrixBase<X>& x) noexcept
     {
-        using scalar_t = typename Eigen::MatrixBase<X>::Scalar;
         for(int i = 0; i < x.rows(); i++)
         {
-            jac(Eigen::seqN(i, Eigen::fix<1>), Eigen::seqN(i, Eigen::fix<1>)) = Eigen::Matrix<scalar_t, 1, 1>::Constant(multiplier);
+            jac(i, i) += alpha;
         }
     }
 
@@ -37,14 +31,14 @@ public:
     EIGEN_STRONG_INLINE scalar_t
     wsum_impl(const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
     {
-        return multiplier * weight.dot(x);
+        return weight.dot(x);
     }
 
     template <typename Weight, typename OutGradient, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
     EIGEN_STRONG_INLINE void
     gradient_impl(OutGradient& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Eigen::MatrixBase<X>& x) noexcept
     {
-        out_gradient += multiplier * weight;
+        out_gradient += weight;
     }
 
     template <typename Weight, typename OutHessian, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
@@ -55,8 +49,8 @@ public:
     }
 };
 
-template<typename F, typename Scalar, int Options = TAGLESS, typename Tag = DefaultTag>
-class RK4 : public Differentiable<RK4<F, Scalar, Options, Tag>, Options>
+template<typename F, typename Scalar, typename Tag = DefaultTag, int Options = TAGLESS>
+class RK4 : public Differentiable<RK4<F, Scalar, Tag, Options>, Options>
 {
     F& f;
     Scalar h;

@@ -84,7 +84,7 @@ template<int n_mass, int Options>
 static void laopt_jacobian(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double, Options> chain_mass_d(chain_mass, 0.2);
+    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double, laopt::DefaultTag, Options> chain_mass_d(chain_mass, 0.2);
 
     laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NX>> x;
     x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
@@ -92,10 +92,10 @@ static void laopt_jacobian(benchmark::State& state)
     u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
     Eigen::Matrix<double, LAOptChainMass<n_mass>::NX, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> jacobian;
 
-    chain_mass_d.jacobian(jacobian, x, u);
+    chain_mass_d.jacobian(jacobian, 1, x, u);
     for (auto _: state)
     {
-        chain_mass_d.jacobian(jacobian, x, u);
+        chain_mass_d.jacobian(jacobian, 1, x, u);
         benchmark::DoNotOptimize(jacobian);
     }
 }
@@ -142,7 +142,7 @@ template<int n_mass, int Options>
 static void laopt_gradient(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double, Options> chain_mass_d(chain_mass, 0.2);
+    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double, laopt::DefaultTag, Options> chain_mass_d(chain_mass, 0.2);
 
     laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NX>> x;
     x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
@@ -181,7 +181,7 @@ template<int n_mass, int Options>
 static void laopt_hessian(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double, Options> chain_mass_d(chain_mass, 0.2);
+    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double, laopt::DefaultTag, Options> chain_mass_d(chain_mass, 0.2);
 
     laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NX>> x;
     x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
