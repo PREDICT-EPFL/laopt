@@ -23,9 +23,9 @@ namespace laopt_tools {
  *  0                1                2         N_segs-1                    Segment indices of N_segs segments
  * */
 template<typename ControlProblem, unsigned N_segs, unsigned D_poly, int DiffOptions = laopt::EIGEN_ALL>
-class RadauCollocation : public laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly>, laopt::TAGGED | DiffOptions>
+class RadauCollocation : public laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly, DiffOptions>, laopt::TAGGED | DiffOptions>
 {
-    friend laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly>, laopt::TAGGED | DiffOptions>;
+    friend laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly, DiffOptions>, laopt::TAGGED | DiffOptions>;
 
     template<typename, typename, typename, typename>
     friend class laopt::ProblemBase;
@@ -288,7 +288,9 @@ protected:
         return tf(0) * controlProblem.template dynamics_impl<scalar_t>(x, u, p);
     }
 
-    struct DifferentialApproximation {};
+    struct DifferentialApproximation {
+        using UseEigen = std::true_type;
+    };
     template<typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NX>
     function_impl(DifferentialApproximation,
@@ -374,19 +376,16 @@ protected:
     }
 
     /* Objective */
-    struct NodeCost {};
+    struct LagrangeCost {};
     template<typename X_t, typename U_t, typename p_t,
             typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
-    function_impl(NodeCost,
+    function_impl(LagrangeCost,
                   const Eigen::MatrixBase<X_t> &x,
                   const Eigen::MatrixBase<U_t> &u,
-                  const Eigen::MatrixBase<p_t> &p,
-                  const unsigned j_node)
+                  const Eigen::MatrixBase<p_t> &p)
     {
-        /* Contribution of this node to integral approximation of the segment the node is in */
-        return h_seg / 2.0 * int_mat(int_mat.rows() - 1, j_node) *
-            controlProblem.template lagrange_term_impl<scalar_t>(x, u, p);
+        return controlProblem.template lagrange_term_impl<scalar_t>(x, u, p);
     }
 
     struct MayerCost {};
@@ -445,7 +444,8 @@ protected:
                 const unsigned k = id_seg_start + j_node; // Index of this node in the trajectory
 
                 /* Add contribution of this node to integral approximation of this segment */
-                optProblem.add_obj(this->function(NodeCost{}, get_x(XU_var, k), get_u(XU_var, k), p_var, j_node));
+                optProblem.add_obj(h_seg / 2.0 * int_mat(int_mat.rows() - 1, j_node)
+                                   * this->function(LagrangeCost{}, get_x(XU_var, k), get_u(XU_var, k), p_var));
 
                 /* Add differential constraint at each node */
                 optProblem.add_constr(this->function(DifferentialApproximation{}, X_seg_diff, j_node) ==
