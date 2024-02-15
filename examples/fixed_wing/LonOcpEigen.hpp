@@ -36,7 +36,7 @@ public:
     double W_pitch_err{2};
     double W_Va_err{4};
 
-    Eigen::Matrix<double, Model::nu, Model::nu> R;
+    Eigen::DiagonalMatrix<double, Model::nu> R;
 
     LonFlightOCP()
     {
