@@ -402,19 +402,19 @@ public:
     }
 
     // default internal jacobian code
-    template <typename OutValue, typename OutJacobian, typename... Args>
-    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, OutValue&, OutJacobian&, Args...>() == false, void>::type
-    jacobian(OutValue&& out_value, OutJacobian&& out_jacobian, const Args&... args) noexcept
+    template <typename OutJacobian, typename... Args>
+    EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, OutJacobian&, Args...>() == false, void>::type
+    jacobian(OutJacobian&& out_jacobian, const Args&... args) noexcept
     {
-        this->jacobian_impl_autodiff(DefaultTag{}, out_value, out_jacobian, args...);
+        this->jacobian_impl_autodiff(DefaultTag{}, out_jacobian, args...);
     }
 
     // define DefaultTag for jacobian
-    template <typename OutValue, typename OutJacobian, typename... Args>
+    template <typename OutJacobian, typename... Args>
     EIGEN_STRONG_INLINE void
-    jacobian(DefaultTag, OutValue&& out_value, OutJacobian&& out_jacobian, const Args&... args) noexcept
+    jacobian(DefaultTag, OutJacobian&& out_jacobian, const Args&... args) noexcept
     {
-        jacobian(std::forward<OutValue>(out_value), std::forward<OutJacobian>(out_jacobian), args...);
+        jacobian(std::forward<OutJacobian>(out_jacobian), args...);
     }
 
     // user specified wsum code
