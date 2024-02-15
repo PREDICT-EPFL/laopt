@@ -2,7 +2,7 @@
 #define LAOPT_AUTODIFF_SCALAR_HPP
 
 #include <Eigen/Dense>
-#include "../touchable_derivative.hpp"
+#include "touchable_derivative.hpp"
 
 #define EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE_NS(EXPR, SCALAR, OPNAME) \
   Eigen::CwiseBinaryOp<EIGEN_CAT(EIGEN_CAT(Eigen::internal::scalar_,OPNAME),_op)<typename Eigen::internal::traits<EXPR>::Scalar,SCALAR>, const EXPR, \
