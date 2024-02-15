@@ -4,7 +4,6 @@
 #include <Eigen/Dense>
 
 #include "../utility.hpp"
-#include "../expressions/function_capture.hpp"
 #include "../indexed_vector.hpp"
 #include "differentiable_options.hpp"
 #include "differentiable_eigen.hpp"
@@ -12,6 +11,10 @@
 
 namespace laopt
 {
+
+// forward declaration
+template<typename Derived, typename Tag, typename Info, typename Capture>
+class FunctionCapture;
 
 template<typename Derived, int Options>
 class DifferentiableBase : public DifferentiableBaseEigen<Derived, Options>,
