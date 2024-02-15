@@ -63,11 +63,11 @@ struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>, la
     {
         problem.add_variable(x_var);
 
-        problem.add_obj(this->function(Cost{}, x_var));
+        problem.add_obj(1.0 * this->function(Cost{}, x_var));
 
         problem.add_constr(-1 <= x_var({0, 2, 3}) <= 1);
 
-        problem.add_constr(this->function(Equality{}, x_var) == 0);
+        problem.add_constr(1.0f * this->function(Equality{}, x_var) == 0);
     }
 };
 
