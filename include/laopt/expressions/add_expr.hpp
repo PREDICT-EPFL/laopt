@@ -79,7 +79,7 @@ struct ExprEvaluator<AddExpr<DerivedLhs, DerivedRhs>>
     hessian(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutHessian&& out_hessian, const Weight& weight)
     {
         ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_hessian(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight);
-        ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_hessian(Eigen::seqN(0, Eigen::fix<DerivedRhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedRhs::n_inputs>)), weight);
+        ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_hessian(Eigen::lastN(DerivedRhs::n_inputs), Eigen::lastN(DerivedRhs::n_inputs)), weight);
     }
 };
 
