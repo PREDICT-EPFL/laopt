@@ -17,21 +17,39 @@ class FastCasadiFunctionBuffer {
     std::vector<double> w;
     std::vector<casadi_int> iw;
     std::vector<const double*> arg;
+    // arg_buffer is to buffer non-continuous arguments
+    std::vector<std::vector<double>> arg_buffer;
     std::vector<double*> res;
     int mem;
 public:
     FastCasadiFunctionBuffer(const casadi::Function& f) : f(f)
     {
+        size_t n_args = f.sz_arg();
+
         w.resize(f.sz_w());
         iw.resize(f.sz_iw());
-        arg.resize(f.sz_arg());
+        arg.resize(n_args);
+        arg_buffer.resize(n_args);
         res.resize(f.sz_res());
         mem = (int) f.checkout();
+
+        for (size_t i = 0; i < n_args; i++) {
+            arg_buffer[i].resize(f.nnz_in((casadi_int) i));
+        }
     }
 
     ~FastCasadiFunctionBuffer()
     {
         f.release(mem);
+    }
+
+    template<typename T>
+    void set_arg_buffer(casadi_int i, const Eigen::MatrixBase<T>& arg)
+    {
+        constexpr size_t n = Eigen::MatrixBase<T>::RowsAtCompileTime;
+        Eigen::Map<Eigen::Vector<double, n>> map(arg_buffer[i].data(), n);
+        map = arg;
+        set_arg(i, arg_buffer[i].data(), n);
     }
 
     void set_arg(casadi_int i, const double* a, casadi_int size)
@@ -292,22 +310,38 @@ protected:
     }
 
     template<typename Base>
-    EIGEN_STRONG_INLINE int
+    EIGEN_STRONG_INLINE typename std::enable_if<(Base::Flags & Eigen::DirectAccessBit) != 0, int>::type
     set_casadi_buffer(int offset, FastCasadiFunctionBuffer& buffer, const IndexedVector<Base>& x) noexcept
     {
         constexpr size_t n = Base::RowsAtCompileTime;
-        static_assert((Base::Flags & Eigen::DirectAccessBit) != 0, "vector is not continuous in memory");
         buffer.set_arg(offset, x.cast_base().data(), n);
         return offset + 1;
     }
 
+    template<typename Base>
+    EIGEN_STRONG_INLINE typename std::enable_if<(Base::Flags & Eigen::DirectAccessBit) == 0, int>::type
+    set_casadi_buffer(int offset, FastCasadiFunctionBuffer& buffer, const IndexedVector<Base>& x) noexcept
+    {
+        // x is non-continuous in memory
+        buffer.set_arg_buffer(offset, x.cast_base());
+        return offset + 1;
+    }
+
     template<typename T>
-    EIGEN_STRONG_INLINE int
+    EIGEN_STRONG_INLINE typename std::enable_if<(Eigen::MatrixBase<T>::Flags & Eigen::DirectAccessBit) != 0, int>::type
     set_casadi_buffer(int offset, FastCasadiFunctionBuffer& buffer, const Eigen::MatrixBase<T>& x) noexcept
     {
         constexpr size_t n = Eigen::MatrixBase<T>::RowsAtCompileTime;
-        static_assert((Eigen::MatrixBase<T>::Flags & Eigen::DirectAccessBit) != 0, "vector is not continuous in memory");
         buffer.set_arg(offset, x.derived().data(), n);
+        return offset + 1;
+    }
+
+    template<typename T>
+    EIGEN_STRONG_INLINE typename std::enable_if<(Eigen::MatrixBase<T>::Flags & Eigen::DirectAccessBit) == 0, int>::type
+    set_casadi_buffer(int offset, FastCasadiFunctionBuffer& buffer, const Eigen::MatrixBase<T>& x) noexcept
+    {
+        // x is non-continuous in memory
+        buffer.set_arg_buffer(offset, x.cast_base());
         return offset + 1;
     }
 
