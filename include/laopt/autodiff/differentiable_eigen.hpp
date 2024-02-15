@@ -14,7 +14,8 @@ class DifferentiableBaseEigen
 protected:
     // Compute the jacobian using eigen autodiff
     template<typename Tag, typename OutJacobian, typename... Args, int Opts = Options>
-    EIGEN_STRONG_INLINE typename std::enable_if<(Opts & CASADI_JACOBIAN) == 0>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_eigen<Tag>::value) ||
+                                                (!has_tag_override<Tag>::type::value && (Opts & CASADI_JACOBIAN) == 0)>::type
     jacobian_impl_autodiff_eval(
         Tag&& tag, // Function to call
         OutJacobian& out_jacobian, // Outputs
@@ -39,7 +40,8 @@ protected:
 
     // Compute sparsity pattern of the jacobian using eigen autodiff
     template<typename Tag, typename SparsityNullMat, typename... Args, int Opts = Options>
-    EIGEN_STRONG_INLINE typename std::enable_if<(Opts & CASADI_JACOBIAN) == 0>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_eigen<Tag>::value) ||
+                                                (!has_tag_override<Tag>::type::value && (Opts & CASADI_JACOBIAN) == 0)>::type
     jacobian_impl_autodiff_sparsity(
         Tag&& tag, // Function to call
         BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_jacobian, // Outputs
@@ -69,7 +71,8 @@ protected:
 
     // Compute the hessian using eigen autodiff
     template<typename Tag, typename Weight, typename OutHessian, typename... Args, int Opts = Options>
-    EIGEN_STRONG_INLINE typename std::enable_if<(Opts & CASADI_HESSIAN) == 0>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_eigen<Tag>::value) ||
+                                                (!has_tag_override<Tag>::type::value && (Opts & CASADI_HESSIAN) == 0)>::type
     hessian_impl_autodiff_eval(
         Tag&& tag,
         OutHessian& out_hessian,
@@ -99,7 +102,8 @@ protected:
 
     // Compute sparsity pattern of the hessian using eigen autodiff
     template<typename Tag, typename Weight, typename SparsityNullMat, typename... Args, int Opts = Options>
-    EIGEN_STRONG_INLINE typename std::enable_if<(Opts & CASADI_HESSIAN) == 0>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_eigen<Tag>::value) ||
+                                                (!has_tag_override<Tag>::type::value && (Opts & CASADI_HESSIAN) == 0)>::type
     hessian_impl_autodiff_sparsity(
         Tag&& tag,
         BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>& out_hessian,

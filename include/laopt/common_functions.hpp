@@ -7,7 +7,7 @@ namespace laopt {
 
 namespace common_functions {
 
-class IDENTITY : public Differentiable<IDENTITY, TAGLESS>
+class IDENTITY : public Differentiable<IDENTITY>
 {
     const double multiplier;
 
