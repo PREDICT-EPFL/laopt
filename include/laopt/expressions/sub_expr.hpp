@@ -82,18 +82,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>
     jacobian_sparsity(const SubExpr<DerivedLhs, DerivedRhs>& expr, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>&& out_jacobian)
     {
         ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_jacobian(Eigen::all, Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)));
-
-        BSMatrixSparsity out_jacobian_rhs(DerivedRhs::n_outputs, DerivedRhs::n_inputs);
-        ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_jacobian_rhs);
-
-        Eigen::SparseMatrix<bool> out_jacobian_rhs_sparsity_pattern = out_jacobian_rhs.get_sparsity_pattern();
-        for (int i = 0; i < out_jacobian_rhs_sparsity_pattern.outerSize(); ++i)
-        {
-            for (Eigen::SparseMatrix<bool>::InnerIterator it(out_jacobian_rhs_sparsity_pattern, i); it; ++it)
-            {
-                out_jacobian(Eigen::all, Eigen::lastN(DerivedRhs::n_inputs))(it.row(), it.col()) -= 1;
-            }
-        }
+        ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_jacobian(Eigen::all, Eigen::seqN(0, Eigen::fix<DerivedRhs::n_inputs>)));
     }
 
     template<typename Weight>
@@ -148,18 +137,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>
     hessian_sparsity(const SubExpr<DerivedLhs, DerivedRhs>& expr, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>&& out_hessian, const Weight& weight)
     {
         ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_hessian(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight);
-
-        BSMatrixSparsity out_hessian_rhs(DerivedRhs::n_inputs, DerivedRhs::n_inputs);
-        ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_hessian_rhs, weight);
-
-        Eigen::SparseMatrix<bool> out_hessian_rhs_sparsity_pattern = out_hessian_rhs.get_sparsity_pattern();
-        for (int i = 0; i < out_hessian_rhs_sparsity_pattern.outerSize(); ++i)
-        {
-            for (Eigen::SparseMatrix<bool>::InnerIterator it(out_hessian_rhs_sparsity_pattern, i); it; ++it)
-            {
-                out_hessian(Eigen::lastN(DerivedRhs::n_inputs), Eigen::lastN(DerivedRhs::n_inputs))(it.row(), it.col()) -= 1;
-            }
-        }
+        ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_hessian(Eigen::seqN(0, Eigen::fix<DerivedRhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedRhs::n_inputs>)), weight);
     }
 };
 

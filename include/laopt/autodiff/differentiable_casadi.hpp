@@ -108,7 +108,7 @@ protected:
         for (int col = 0; col < Info::n_inputs; col++) {
             for (int i = sparsity.colind()[col]; i < sparsity.colind()[col + 1]; i++) {
                 int row = sparsity.row()[i];
-                out_jacobian(row, col) += 1;
+                out_jacobian(row, col) = 1;
             }
         }
     }
@@ -159,7 +159,7 @@ protected:
         for (int col = 0; col < Info::n_inputs; col++) {
             for (int i = sparsity.colind()[col]; i < sparsity.colind()[col + 1]; i++) {
                 int row = sparsity.row()[i];
-                out_hessian(row, col) += 1;
+                out_hessian(row, col) = 1;
             }
         }
     }

@@ -63,7 +63,7 @@ protected:
             {
                 if (out[i].derivatives()(j).value() != 0)
                 {
-                    out_jacobian(i, j) += 1;
+                    out_jacobian(i, j) = 1;
                 }
             }
         }
@@ -129,7 +129,7 @@ protected:
                 for (int k = 0; k < out[j].derivatives()(0).derivatives().rows(); k++) {
                     if (out[j].derivatives()(0).derivatives()(k).value() != 0)
                     {
-                        out_hessian(k, i) += 1;
+                        out_hessian(k, i) = 1;
                     }
                 }
             }
