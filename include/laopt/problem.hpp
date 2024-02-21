@@ -329,15 +329,11 @@ std::ostream& operator<<(std::ostream &o, const ProblemInfo<BSMatrixSparsity, BS
 {
     o << "==== Problem Sparsity Information ====\n";
     o << "Variables    : " << info.objective.variables << std::endl;
-
     o << "Constraints  : " << info.constraints.rows << std::endl;
     o << "  Non-zeros  : " << info.constraints.jacobian.nonZeros() << std::endl;
-
     o << "Variable bnds: " << info.variable_bounds.rows << std::endl;
-
     o << "Objective    : " << info.objective.hessian.rows() << std::endl;
     o << "  Non-zeros  : " << info.objective.hessian.nonZeros() << std::endl;
-
     o << "Lagrangian   : " << info.lagrangian.hessian.rows() << std::endl;
     o << "  Non-zeros  : " << info.lagrangian.hessian.nonZeros() << std::endl;
     return o;
@@ -358,7 +354,6 @@ std::ostream& operator<<(std::ostream& o, const ProblemInfo<BSMatrixTape, BSMatr
     o << "Lagrangian   : " << info.lagrangian.rows << std::endl;
     o << "  Non-zeros  : " << info.lagrangian.hessian.sparsity_structure.nonZeros() << std::endl;
     o << "  Tape length: " << info.lagrangian.hessian.copy_segments.size() << std::endl;
-
     return o;
 }
 
