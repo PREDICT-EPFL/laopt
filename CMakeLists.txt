@@ -28,7 +28,7 @@ message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID}")
 
 # Set sanitizer flags
 if (ENABLE_SANITIZERS)
-    list(APPEND sanitizer_flags "-fsanitize=address" "-fno-omit-frame-pointer")
+    list(APPEND sanitizer_flags -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer)
     list(APPEND compiler_flags ${sanitizer_flags})
     message(STATUS "Building with sanitizers: ${sanitizer_flags}")
     unset(sanitizer_flags)
