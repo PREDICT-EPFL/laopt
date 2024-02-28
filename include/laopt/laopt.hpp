@@ -7,7 +7,7 @@
 #include "bs_matrix_dense.hpp"
 
 #include "autodiff/differentiable.hpp"
-#include "autodiff/differentiable_function.hpp"
+#include "autodiff/differentiable_functor.hpp"
 #include "common_functions.hpp"
 
 #include "indexed_vector.hpp"

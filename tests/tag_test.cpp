@@ -59,7 +59,7 @@ struct User : public laopt::Differentiable<User<scalar_t>, laopt::TAGGED>
     }
 
     laopt::common_functions::RK4<User<scalar_t>, double, Sys> rk4_sys;
-    laopt::Function<User<scalar_t>, Sys> sys;
+    laopt::Functor<User<scalar_t>, Sys> sys;
 
     User() : rk4_sys(*this, 0.2), sys(*this) {}
 

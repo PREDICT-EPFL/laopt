@@ -1,16 +1,16 @@
-#ifndef LAOPT_DIFFERENTIABLE_FUNCTION_HPP
-#define LAOPT_DIFFERENTIABLE_FUNCTION_HPP
+#ifndef LAOPT_DIFFERENTIABLE_FUNCTOR_HPP
+#define LAOPT_DIFFERENTIABLE_FUNCTOR_HPP
 
 #include "differentiable.hpp"
 
 namespace laopt {
 
 template<typename Derived, typename Tag>
-class Function
+class Functor
 {
     Derived& derived;
 public:
-    explicit Function(Derived& derived) : derived(derived) {};
+    explicit Functor(Derived& derived) : derived(derived) {};
 
     template<typename... Args>
     EIGEN_STRONG_INLINE auto
@@ -92,4 +92,4 @@ public:
 
 } // namespace laopt
 
-#endif // LAOPT_DIFFERENTIABLE_FUNCTION_HPP
+#endif // LAOPT_DIFFERENTIABLE_FUNCTOR_HPP
