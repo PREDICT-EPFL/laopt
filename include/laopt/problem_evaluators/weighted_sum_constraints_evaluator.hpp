@@ -1,9 +1,9 @@
 #ifndef LAOPT_WEIGHTED_SUM_CONSTRAINTS_EVALUATOR_HPP
 #define LAOPT_WEIGHTED_SUM_CONSTRAINTS_EVALUATOR_HPP
 
-#include "../problem_dispatch_types.hpp"
-#include "../problem_vector_function.hpp"
-#include "../problem_weighted_sum_function.hpp"
+#include "laopt/problem_dispatch_types.hpp"
+#include "laopt/problem_vector_function.hpp"
+#include "laopt/problem_weighted_sum_function.hpp"
 
 namespace laopt
 {

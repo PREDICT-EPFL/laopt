@@ -6,9 +6,9 @@
 #include <iomanip>
 
 #include <Eigen/Dense>
-#include "unsupported/Eigen/Polynomials"
+#include <unsupported/Eigen/Polynomials>
 #include "laopt/laopt.hpp"
-#include "constants.hpp"
+#include "laopt/tools/constants.hpp"
 
 namespace laopt_tools {
 

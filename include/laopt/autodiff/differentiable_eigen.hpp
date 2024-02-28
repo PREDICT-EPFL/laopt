@@ -2,8 +2,8 @@
 #define LAOPT_DIFFERENTIABLE_EIGEN_HPP
 
 #include <Eigen/Dense>
-#include "autodiff_scalar.hpp"
-#include "differentiable_options.hpp"
+#include "laopt/autodiff/autodiff_scalar.hpp"
+#include "laopt/autodiff/differentiable_options.hpp"
 
 namespace laopt
 {

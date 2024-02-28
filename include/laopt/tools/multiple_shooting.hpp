@@ -7,7 +7,7 @@
 
 #include <Eigen/Dense>
 #include "laopt/laopt.hpp"
-#include "constants.hpp"
+#include "laopt/tools/constants.hpp"
 
 namespace laopt_tools {
 

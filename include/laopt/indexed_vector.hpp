@@ -1,8 +1,8 @@
 #ifndef LAOPT_INDEXED_VECTOR_HPP
 #define LAOPT_INDEXED_VECTOR_HPP
 
-#include "Eigen/Dense"
-#include "expressions/expr_base.hpp"
+#include <Eigen/Dense>
+#include "laopt/expressions/expr_base.hpp"
 
 namespace laopt {
 

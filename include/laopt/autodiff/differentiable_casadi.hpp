@@ -2,9 +2,9 @@
 #define LAOPT_DIFFERENTIABLE_CASADI_HPP
 
 #include <Eigen/Dense>
-#include "autodiff_scalar.hpp"
-#include "../eigen_casadi_support.hpp"
-#include "differentiable_options.hpp"
+#include "laopt/autodiff/autodiff_scalar.hpp"
+#include "laopt/eigen_casadi_support.hpp"
+#include "laopt/autodiff/differentiable_options.hpp"
 
 namespace laopt
 {

@@ -1,7 +1,7 @@
 #ifndef LAOPT_IPOPT_WRAPPER_HPP
 #define LAOPT_IPOPT_WRAPPER_HPP
 
-#include "ipopt_interface.hpp"
+#include "laopt/ipopt_interface/ipopt_interface.hpp"
 #include "laopt/problem.hpp"
 
 namespace laopt {

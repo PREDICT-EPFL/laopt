@@ -3,11 +3,11 @@
 
 #include <Eigen/Dense>
 
-#include "../utility.hpp"
-#include "../indexed_vector.hpp"
-#include "differentiable_options.hpp"
-#include "differentiable_eigen.hpp"
-#include "differentiable_casadi.hpp"
+#include "laopt/utility.hpp"
+#include "laopt/indexed_vector.hpp"
+#include "laopt/autodiff/differentiable_options.hpp"
+#include "laopt/autodiff/differentiable_eigen.hpp"
+#include "laopt/autodiff/differentiable_casadi.hpp"
 
 namespace laopt
 {

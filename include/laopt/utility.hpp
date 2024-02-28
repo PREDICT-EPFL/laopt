@@ -4,9 +4,9 @@
 #include <iostream>
 #include <limits>
 #include <type_traits>
-#include "Eigen/Dense"
+#include <Eigen/Dense>
 
-#include "indexed_vector.hpp"
+#include "laopt/indexed_vector.hpp"
 
 namespace laopt
 {

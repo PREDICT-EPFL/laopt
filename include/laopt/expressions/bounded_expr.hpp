@@ -1,10 +1,10 @@
 #ifndef LAOPT_BOUNDED_EXPR_HPP
 #define LAOPT_BOUNDED_EXPR_HPP
 
-#include "Eigen/Dense"
-#include "constraint_expr.hpp"
-#include "ineq_constraint_expr.hpp"
-#include "expr_evaluator.hpp"
+#include <Eigen/Dense>
+#include "laopt/expressions/constraint_expr.hpp"
+#include "laopt/expressions/ineq_constraint_expr.hpp"
+#include "laopt/expressions/expr_evaluator.hpp"
 
 namespace laopt {
 

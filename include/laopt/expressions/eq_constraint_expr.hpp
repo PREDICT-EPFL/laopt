@@ -1,11 +1,11 @@
 #ifndef LAOPT_EQ_CONSTRAINT_EXPR_HPP
 #define LAOPT_EQ_CONSTRAINT_EXPR_HPP
 
-#include "Eigen/Dense"
-#include "constraint_expr.hpp"
-#include "expr_evaluator.hpp"
-#include "sub_expr.hpp"
-#include "../indexed_vector.hpp"
+#include <Eigen/Dense>
+#include "laopt/expressions/constraint_expr.hpp"
+#include "laopt/expressions/expr_evaluator.hpp"
+#include "laopt/expressions/sub_expr.hpp"
+#include "laopt/indexed_vector.hpp"
 
 namespace laopt {
 /**

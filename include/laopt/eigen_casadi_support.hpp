@@ -1,8 +1,8 @@
 #ifndef LAOPT_EIGEN_CASADI_SUPPORT_HPP
 #define LAOPT_EIGEN_CASADI_SUPPORT_HPP
 
+#include <Eigen/Core>
 #include "casadi/casadi.hpp"
-#include "Eigen/Core"
 
 namespace Eigen
 {

@@ -1,8 +1,8 @@
 #ifndef LAOPT_CONSTRAINT_EXPR_HPP
 #define LAOPT_CONSTRAINT_EXPR_HPP
 
-#include "Eigen/Dense"
-#include "expr_base.hpp"
+#include <Eigen/Dense>
+#include "laopt/expressions/expr_base.hpp"
 
 namespace laopt {
 

@@ -2,9 +2,8 @@
 #define LAOPT_SCALAR_EXPR_HPP
 
 #include <Eigen/Dense>
-
-#include "expr_base.hpp"
-#include "expr_evaluator.hpp"
+#include "laopt/expressions/expr_base.hpp"
+#include "laopt/expressions/expr_evaluator.hpp"
 
 namespace laopt {
 

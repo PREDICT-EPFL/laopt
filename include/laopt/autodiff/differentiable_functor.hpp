@@ -1,7 +1,7 @@
 #ifndef LAOPT_DIFFERENTIABLE_FUNCTOR_HPP
 #define LAOPT_DIFFERENTIABLE_FUNCTOR_HPP
 
-#include "differentiable.hpp"
+#include "laopt/autodiff/differentiable.hpp"
 
 namespace laopt {
 

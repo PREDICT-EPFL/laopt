@@ -4,8 +4,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
-#include "bs_slice_base.hpp"
-#include "bs_matrix_tape.hpp"
+#include "laopt/bs_slice_base.hpp"
+#include "laopt/bs_matrix_tape.hpp"
 
 namespace laopt {
 

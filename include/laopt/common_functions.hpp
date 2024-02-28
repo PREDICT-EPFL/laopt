@@ -1,7 +1,7 @@
 #ifndef LAOPT_COMMON_FUNCTIONS_HPP
 #define LAOPT_COMMON_FUNCTIONS_HPP
 
-#include "autodiff/differentiable.hpp"
+#include "laopt/autodiff/differentiable.hpp"
 
 namespace laopt {
 

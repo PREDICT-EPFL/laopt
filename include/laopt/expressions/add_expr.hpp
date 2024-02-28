@@ -2,10 +2,9 @@
 #define LAOPT_ADD_EXPR_HPP
 
 #include <Eigen/Dense>
-
-#include "expr_base.hpp"
-#include "expr_evaluator.hpp"
-#include "../indexed_vector.hpp"
+#include "laopt/expressions/expr_base.hpp"
+#include "laopt/expressions/expr_evaluator.hpp"
+#include "laopt/indexed_vector.hpp"
 
 namespace laopt {
 

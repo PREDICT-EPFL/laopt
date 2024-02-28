@@ -1,9 +1,9 @@
 #ifndef LAOPT_FUNCTION_CAPTURE_HPP
 #define LAOPT_FUNCTION_CAPTURE_HPP
 
-#include "Eigen/Dense"
-#include "expr_base.hpp"
-#include "expr_evaluator.hpp"
+#include <Eigen/Dense>
+#include "laopt/expressions/expr_base.hpp"
+#include "laopt/expressions/expr_evaluator.hpp"
 
 namespace laopt
 {

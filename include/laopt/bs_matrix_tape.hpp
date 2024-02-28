@@ -5,8 +5,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
-#include "bs_matrix.hpp"
-#include "bs_slice_base.hpp"
+#include "laopt/bs_matrix.hpp"
+#include "laopt/bs_slice_base.hpp"
 
 namespace laopt {
 

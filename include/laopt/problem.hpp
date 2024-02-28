@@ -3,18 +3,18 @@
 
 #include <numeric>
 #include <iterator>
-#include "problem_dispatch_types.hpp"
-#include "problem_vector_function.hpp"
-#include "problem_weighted_sum_function.hpp"
-#include "opt_problem.hpp"
-#include "problem_evaluators/problem_size_evaluator.hpp"
-#include "problem_evaluators/objective_evaluator.hpp"
-#include "problem_evaluators/decision_variable_setter.hpp"
-#include "problem_evaluators/variable_bounds_evaluator.hpp"
-#include "problem_evaluators/vector_constraints_evaluator.hpp"
-#include "problem_evaluators/weighted_sum_constraints_evaluator.hpp"
-#include "indexed_vector.hpp"
-#include "expressions.hpp"
+#include "laopt/problem_dispatch_types.hpp"
+#include "laopt/problem_vector_function.hpp"
+#include "laopt/problem_weighted_sum_function.hpp"
+#include "laopt/opt_problem.hpp"
+#include "laopt/problem_evaluators/problem_size_evaluator.hpp"
+#include "laopt/problem_evaluators/objective_evaluator.hpp"
+#include "laopt/problem_evaluators/decision_variable_setter.hpp"
+#include "laopt/problem_evaluators/variable_bounds_evaluator.hpp"
+#include "laopt/problem_evaluators/vector_constraints_evaluator.hpp"
+#include "laopt/problem_evaluators/weighted_sum_constraints_evaluator.hpp"
+#include "laopt/indexed_vector.hpp"
+#include "laopt/expressions/fwd.hpp"
 
 namespace laopt
 {

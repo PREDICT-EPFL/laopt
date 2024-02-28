@@ -1,18 +1,18 @@
 #ifndef LAOPT_LAOPT_HPP
 #define LAOPT_LAOPT_HPP
 
-#include "bs_matrix_sparsity.hpp"
-#include "bs_matrix_tape.hpp"
-#include "bs_matrix.hpp"
-#include "bs_matrix_dense.hpp"
+#include "laopt/bs_matrix_sparsity.hpp"
+#include "laopt/bs_matrix_tape.hpp"
+#include "laopt/bs_matrix.hpp"
+#include "laopt/bs_matrix_dense.hpp"
 
-#include "autodiff/differentiable.hpp"
-#include "autodiff/differentiable_functor.hpp"
-#include "common_functions.hpp"
+#include "laopt/autodiff/differentiable.hpp"
+#include "laopt/autodiff/differentiable_functor.hpp"
+#include "laopt/common_functions.hpp"
 
-#include "indexed_vector.hpp"
-#include "expressions.hpp"
+#include "laopt/indexed_vector.hpp"
+#include "laopt/expressions/fwd.hpp"
 
-#include "problem.hpp"
+#include "laopt/problem.hpp"
 
 #endif // LAOPT_LAOPT_HPP

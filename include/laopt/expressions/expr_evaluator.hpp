@@ -1,8 +1,8 @@
 #ifndef LAOPT_EXPR_EVALUATOR_HPP
 #define LAOPT_EXPR_EVALUATOR_HPP
 
-#include "../indexed_vector.hpp"
-#include "../common_functions.hpp"
+#include "laopt/indexed_vector.hpp"
+#include "laopt/common_functions.hpp"
 
 namespace laopt {
 
