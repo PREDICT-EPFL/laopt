@@ -1,5 +1,5 @@
-#ifndef LAOPT_EXPRESSIONS_HPP
-#define LAOPT_EXPRESSIONS_HPP
+#ifndef LAOPT_EXPRESSIONS_FWD_HPP
+#define LAOPT_EXPRESSIONS_FWD_HPP
 
 #include "laopt/expressions/expr_base.hpp"
 #include "laopt/expressions/scalar_expr.hpp"
@@ -12,4 +12,4 @@
 #include "laopt/expressions/eq_constraint_expr.hpp"
 #include "laopt/expressions/bounded_expr.hpp"
 
-#endif //LAOPT_EXPRESSIONS_HPP
+#endif //LAOPT_EXPRESSIONS_FWD_HPP
