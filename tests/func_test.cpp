@@ -305,7 +305,7 @@ TEST(FunctionTest, Identity) {
 
     // Discrete dynamics
     using scalar_t = double;
-    laopt::common_functions::IDENTITY id;
+    laopt::Identity id;
 
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 2> jacobian;

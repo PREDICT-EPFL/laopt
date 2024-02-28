@@ -5,6 +5,7 @@
 #include "laopt/expressions/expr_base.hpp"
 #include "laopt/expressions/expr_evaluator.hpp"
 #include "laopt/indexed_vector.hpp"
+#include "laopt/differentiable_functions/identity.hpp"
 
 namespace laopt {
 
@@ -132,7 +133,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     static EIGEN_STRONG_INLINE auto
     function(const SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>& expr) -> decltype(ExprEvaluator<DerivedLhs>::function(expr.lhs))
     {
-        common_functions::IDENTITY id;
+        Identity id;
         return ExprEvaluator<DerivedLhs>::function(expr.lhs) - id.function(expr.rhs.cast_base());
     }
 
@@ -141,7 +142,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     jacobian(const SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>& expr, OutJacobian&& out_jacobian, const AScalar& alpha)
     {
         ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_jacobian(Eigen::all, Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), alpha);
-        common_functions::IDENTITY id;
+        Identity id;
         id.jacobian(out_jacobian(Eigen::all, Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)), -alpha, expr.rhs);
     }
 
@@ -149,7 +150,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     static EIGEN_STRONG_INLINE auto
     wsum(const SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>& expr, const Weight& weight)
     {
-        common_functions::IDENTITY id;
+        Identity id;
         return ExprEvaluator<DerivedLhs>::wsum(expr.lhs, weight) - id.wsum(weight, expr.rhs);
     }
 
@@ -157,7 +158,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     static EIGEN_STRONG_INLINE void
     gradient(const SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>& expr, OutGradient&& out_gradient, const Weight& weight)
     {
-        common_functions::IDENTITY id;
+        Identity id;
         ExprEvaluator<DerivedLhs>::gradient(expr.lhs, out_gradient(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight);
         id.gradient(out_gradient(Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)), -weight, expr.rhs);
     }
@@ -166,7 +167,7 @@ struct ExprEvaluator<SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>>
     static EIGEN_STRONG_INLINE void
     hessian(const SubExpr<DerivedLhs, IndexedVector<DerivedRhs>>& expr, OutHessian&& out_hessian, const Weight& weight)
     {
-        common_functions::IDENTITY id;
+        Identity id;
         ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_hessian(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight);
         id.hessian(out_hessian(Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs), Eigen::lastN(IndexedVector<DerivedRhs>::n_inputs)), -weight, expr.rhs);
     }
