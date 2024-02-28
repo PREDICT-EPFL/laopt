@@ -63,10 +63,11 @@ private:
     friend class laopt::BSSliceSparsity;
 
     Eigen::SparseMatrix<bool> sparsity_pattern;
+    int dummy = 0; // we point the null matrix to this dummy variable do not trigger the undefined behaviour sanitizer
 
 public:
     explicit BSMatrixSparsity(Eigen::Index rows = 0, Eigen::Index cols = 0)
-            : BSSliceSparsity<BSMatrixSparsity, Eigen::Map<Eigen::MatrixX<int>>>(*this, Eigen::Map<Eigen::MatrixX<int>>(nullptr, 0, 0))
+            : BSSliceSparsity<BSMatrixSparsity, Eigen::Map<Eigen::MatrixX<int>>>(*this, Eigen::Map<Eigen::MatrixX<int>>(&dummy, 0, 0))
     {
         resize(rows, cols);
     };
@@ -82,7 +83,7 @@ public:
      */
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
-        new (&null_mat) Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols);
+        new (&null_mat) Eigen::Map<Eigen::MatrixX<int>>(&dummy, rows, cols);
         sparsity_pattern.conservativeResize(rows, cols);
     }
 

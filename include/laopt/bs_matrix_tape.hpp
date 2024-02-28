@@ -126,6 +126,7 @@ private:
     friend class laopt::BSSliceTape;
 
     Eigen::SparseMatrix<int> sparsity_structure; // Must have been created a-priori
+    int dummy = 0; // we point the null matrix to this dummy variable do not trigger the undefined behaviour sanitizer
 
     // Sequence of copy operations
     std::vector<Segment> copy_segments;
@@ -133,7 +134,7 @@ private:
 
 public:
     explicit BSMatrixTape(const Eigen::SparseMatrix<bool>& structure)
-    : BSSliceTape<BSMatrixTape, Eigen::Map<Eigen::MatrixX<int>>>(*this, Eigen::Map<Eigen::MatrixX<int>>(nullptr, structure.rows(), structure.cols()))
+    : BSSliceTape<BSMatrixTape, Eigen::Map<Eigen::MatrixX<int>>>(*this, Eigen::Map<Eigen::MatrixX<int>>(&dummy, structure.rows(), structure.cols()))
     {
         sparsity_structure = structure.cast<int>();
         sparsity_structure.makeCompressed();
@@ -159,7 +160,7 @@ public:
      */
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
-        new (&null_mat) Eigen::Map<Eigen::MatrixX<int>>(nullptr, rows, cols);
+        new (&null_mat) Eigen::Map<Eigen::MatrixX<int>>(&dummy, rows, cols);
     }
 
     /**
