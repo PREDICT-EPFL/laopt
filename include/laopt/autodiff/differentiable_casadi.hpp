@@ -343,7 +343,7 @@ protected:
     set_casadi_buffer(int offset, FastCasadiFunctionBuffer& buffer, const Eigen::MatrixBase<T>& x) noexcept
     {
         // x is non-continuous in memory
-        buffer.set_arg_buffer(offset, x.cast_base());
+        buffer.set_arg_buffer(offset, x.derived());
         return offset + 1;
     }
 
