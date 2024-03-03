@@ -19,10 +19,7 @@ public:
     EIGEN_STRONG_INLINE void
     jacobian_impl(OutJacobian& jac, const AScalar& alpha, const Eigen::MatrixBase<X>& x) noexcept
     {
-        for(int i = 0; i < x.rows(); i++)
-        {
-            jac(i, i) += alpha;
-        }
+        jac.diagonal() += X::Constant(alpha);
     }
 
     template <typename Weight, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
