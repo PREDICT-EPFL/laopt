@@ -3,7 +3,7 @@
 
 #include <Eigen/Dense>
 #include "laopt/autodiff/autodiff_scalar.hpp"
-#include "laopt/eigen_casadi_support.hpp"
+#include "laopt/autodiff/eigen_casadi_support.hpp"
 #include "laopt/autodiff/differentiable_options.hpp"
 
 namespace laopt
