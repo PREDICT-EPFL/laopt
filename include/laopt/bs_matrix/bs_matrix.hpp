@@ -172,13 +172,20 @@ public:
 
     // Assumption: The input matrix is contiguous.
     template<typename Derived>
-    inline BSMatrix& operator=(const Eigen::MatrixBase<Derived>& block)
+    inline BSMatrix& operator=(const Eigen::DenseBase<Derived>& block)
     {
         // MatrixBase may or may not be an expression. As a result, we call
         // eval, which evaluates into a contiguous temporary if required,
         // or is just a noop if not.
         // Note: Avoid temporaries here - they require malloc and are slow.
         execute_operation([](auto& a, auto& b) { a = b; }, block.eval().data());
+        return *this;
+    }
+
+    template<typename Derived>
+    inline BSMatrix& operator=(const Eigen::DiagonalBase<Derived>& block)
+    {
+        execute_operation([](auto& a, auto& b) { a = b; }, block.diagonal().eval().data());
         return *this;
     }
 
@@ -190,9 +197,16 @@ public:
 
     // Assumption: The input matrix is contiguous. Don't change this to a Ref.
     template<typename Derived>
-    inline BSMatrix& operator+=(const Eigen::MatrixBase<Derived>& block)
+    inline BSMatrix& operator+=(const Eigen::DenseBase<Derived>& block)
     {
         execute_operation([](auto& a, auto& b) { a += b; }, block.eval().data());
+        return *this;
+    }
+
+    template<typename Derived>
+    inline BSMatrix& operator+=(const Eigen::DiagonalBase<Derived>& block)
+    {
+        execute_operation([](auto& a, auto& b) { a += b; }, block.diagonal().eval().data());
         return *this;
     }
 
@@ -204,9 +218,16 @@ public:
 
     // Assumption: The input matrix is contiguous. Don't change this to a Ref.
     template<typename Derived>
-    inline BSMatrix& operator-=(const Eigen::MatrixBase<Derived>& block)
+    inline BSMatrix& operator-=(const Eigen::DenseBase<Derived>& block)
     {
         execute_operation([](auto& a, auto& b) { a -= b; }, block.eval().data());
+        return *this;
+    }
+
+    template<typename Derived>
+    inline BSMatrix& operator-=(const Eigen::DiagonalBase<Derived>& block)
+    {
+        execute_operation([](auto& a, auto& b) { a -= b; }, block.diagonal().eval().data());
         return *this;
     }
 
@@ -234,6 +255,8 @@ public:
 
     template<typename RowIndicesT, std::size_t RowIndicesN>
     BSMatrix<scalar_t>& operator()(const RowIndicesT (&row_indices)[RowIndicesN]) { return *this; }
+
+    BSMatrix<scalar_t>& diagonal() { return *this; }
 
     BSMatrix<scalar_t>& row(size_t i) { return *this; }
 

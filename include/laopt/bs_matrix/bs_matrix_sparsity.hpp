@@ -4,8 +4,9 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
-#include "laopt/bs_slice_base.hpp"
-#include "laopt/bs_matrix_tape.hpp"
+#include "laopt/bs_matrix/coord_matrix.hpp"
+#include "laopt/bs_matrix/bs_slice_base.hpp"
+#include "laopt/bs_matrix/bs_matrix_tape.hpp"
 
 namespace laopt {
 
@@ -31,19 +32,29 @@ private:
      * Record the position of nonzeros to assemble the sparsity pattern
      */
     template<typename Derived>
-    void capture_sparsity(const Eigen::DenseBase<Derived>& rhs_mat)
+    inline void capture_sparsity(const Eigen::DenseBase<Derived>& rhs_mat)
     {
         assert(rhs_mat.rows() == this->null_mat.rows() && rhs_mat.cols() == this->null_mat.cols() && "You assigned a matrix of the wrong size!");
 
-        auto m_row_indices = this->row_indices(this->null_mat);
-        auto m_col_indices = this->col_indices(this->null_mat);
-
-        for (Eigen::Index i = 0; i < (Eigen::Index) m_row_indices.size(); i++)
+        for (Eigen::Index i = 0; i < this->null_mat.rows(); i++)
         {
-            for (Eigen::Index j = 0; j < (Eigen::Index) m_col_indices.size(); j++)
+            for (Eigen::Index j = 0; j < this->null_mat.cols(); j++)
             {
-                this->child.sparsity_pattern.coeffRef(m_row_indices[i], m_col_indices[j]) = 1;
+                Coord coord = this->null_mat(i, j);
+                this->child.sparsity_pattern.coeffRef(coord.row, coord.col) = 1;
             }
+        }
+    }
+
+    template<typename Derived>
+    inline void capture_sparsity(const Eigen::DiagonalBase<Derived>& rhs_mat)
+    {
+        assert(rhs_mat.rows() == this->null_mat.rows() && rhs_mat.cols() == this->null_mat.cols() && "You assigned a matrix of the wrong size!");
+
+        for (Eigen::Index i = 0; i < this->null_mat.rows(); i++)
+        {
+            Coord coord = this->null_mat(i, i);
+            this->child.sparsity_pattern.coeffRef(coord.row, coord.col) = 1;
         }
     }
 
@@ -56,23 +67,22 @@ public:
 /**
  * A tape class to capture the sparsity pattern
  */
-class BSMatrixSparsity : public BSSliceSparsity<BSMatrixSparsity, Eigen::Map<Eigen::MatrixX<int>>>
+class BSMatrixSparsity : public BSSliceSparsity<BSMatrixSparsity, CoordMatrix>
 {
 private:
     template<typename, typename>
     friend class laopt::BSSliceSparsity;
 
     Eigen::SparseMatrix<bool> sparsity_pattern;
-    int dummy = 0; // we point the null matrix to this dummy variable do not trigger the undefined behaviour sanitizer
 
 public:
     explicit BSMatrixSparsity(Eigen::Index rows = 0, Eigen::Index cols = 0)
-            : BSSliceSparsity<BSMatrixSparsity, Eigen::Map<Eigen::MatrixX<int>>>(*this, Eigen::Map<Eigen::MatrixX<int>>(&dummy, 0, 0))
+            : BSSliceSparsity<BSMatrixSparsity, CoordMatrix>(*this, CoordMatrix(0, 0))
     {
         resize(rows, cols);
     };
 
-    using BSSliceSparsity<BSMatrixSparsity, Eigen::Map<Eigen::MatrixX<int>>>::operator=;
+    using BSSliceSparsity<BSMatrixSparsity, CoordMatrix>::operator=;
 
     void set_zero() {}
 
@@ -83,7 +93,7 @@ public:
      */
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
-        new (&null_mat) Eigen::Map<Eigen::MatrixX<int>>(&dummy, rows, cols);
+        null_mat.resize(rows, cols);
         sparsity_pattern.conservativeResize(rows, cols);
     }
 

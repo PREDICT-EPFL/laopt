@@ -5,8 +5,9 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
-#include "laopt/bs_matrix.hpp"
-#include "laopt/bs_slice_base.hpp"
+#include "laopt/bs_matrix/coord_matrix.hpp"
+#include "laopt/bs_matrix/bs_matrix.hpp"
+#include "laopt/bs_matrix/bs_slice_base.hpp"
 
 namespace laopt {
 
@@ -36,18 +37,16 @@ private:
     {
         assert(rhs_mat.rows() == this->null_mat.rows() && rhs_mat.cols() == this->null_mat.cols() && "You assigned a matrix of the wrong size!");
 
-        auto m_row_indices = this->row_indices(this->null_mat);
-        auto m_col_indices = this->col_indices(this->null_mat);
-
-        Eigen::VectorX<int> sequence(rhs_mat.rows() * rhs_mat.cols());
+        Eigen::VectorX<int> sequence(this->null_mat.rows() * this->null_mat.cols());
         if (Eigen::DenseBase<Derived>::IsRowMajor)
         {
             Eigen::Index s_i = 0;
-            for (Eigen::Index i = 0; i < (Eigen::Index) m_row_indices.size(); i++)
+            for (Eigen::Index i = 0; i < this->null_mat.rows(); i++)
             {
-                for (Eigen::Index j = 0; j < (Eigen::Index) m_col_indices.size(); j++)
+                for (Eigen::Index j = 0; j < this->null_mat.cols(); j++)
                 {
-                    int csc_index = this->child.sparsity_structure.coeff(m_row_indices[i], m_col_indices[j]);
+                    Coord coord = this->null_mat(i, j);
+                    int csc_index = this->child.sparsity_structure.coeff(coord.row, coord.col);
                     if (csc_index != 0) {
                         sequence(s_i++) = csc_index - 1;
                     } else {
@@ -59,18 +58,40 @@ private:
         else
         {
             Eigen::Index s_i = 0;
-            for (Eigen::Index j = 0; j < (Eigen::Index) m_col_indices.size(); j++)
+            for (Eigen::Index j = 0; j < this->null_mat.cols(); j++)
             {
-                for (Eigen::Index i = 0; i < (Eigen::Index) m_row_indices.size(); i++)
+                for (Eigen::Index i = 0; i < this->null_mat.rows(); i++)
                 {
-                    int csc_index = this->child.sparsity_structure.coeff(m_row_indices[i], m_col_indices[j]);
+                    Coord coord = this->null_mat(i, j);
+                    int csc_index = this->child.sparsity_structure.coeff(coord.row, coord.col);
                     if (csc_index != 0) {
                         sequence(s_i++) = csc_index - 1;
                     } else {
-                        //
                         sequence(s_i++) = -1;
                     }
                 }
+            }
+        }
+
+        // sequence is the set of indices into the sparse matrix that we'll be copying this block into
+        // Compress the index sequence into contiguous blocks
+        record_copy_sequence(sequence);
+    }
+
+    template<typename Derived>
+    inline void capture_sparsity(const Eigen::DiagonalBase<Derived>& rhs_mat)
+    {
+        assert(rhs_mat.rows() == this->null_mat.rows() && rhs_mat.cols() == this->null_mat.cols() && "You assigned a matrix of the wrong size!");
+
+        Eigen::VectorX<int> sequence(this->null_mat.rows());
+        for (Eigen::Index i = 0; i < this->null_mat.rows(); i++)
+        {
+            Coord coord = this->null_mat(i, i);
+            int csc_index = this->child.sparsity_structure.coeff(coord.row, coord.col);
+            if (csc_index != 0) {
+                sequence(i) = csc_index - 1;
+            } else {
+                sequence(i) = -1;
             }
         }
 
@@ -119,14 +140,13 @@ public:
 /**
 * A tape class to capture the copy pattern.
 */
-class BSMatrixTape : public BSSliceTape<BSMatrixTape, Eigen::Map<Eigen::MatrixX<int>>>
+class BSMatrixTape : public BSSliceTape<BSMatrixTape, CoordMatrix>
 {
 private:
     template<typename, typename>
     friend class laopt::BSSliceTape;
 
     Eigen::SparseMatrix<int> sparsity_structure; // Must have been created a-priori
-    int dummy = 0; // we point the null matrix to this dummy variable do not trigger the undefined behaviour sanitizer
 
     // Sequence of copy operations
     std::vector<Segment> copy_segments;
@@ -134,7 +154,7 @@ private:
 
 public:
     explicit BSMatrixTape(const Eigen::SparseMatrix<bool>& structure)
-    : BSSliceTape<BSMatrixTape, Eigen::Map<Eigen::MatrixX<int>>>(*this, Eigen::Map<Eigen::MatrixX<int>>(&dummy, structure.rows(), structure.cols()))
+    : BSSliceTape<BSMatrixTape, CoordMatrix>(*this, CoordMatrix(structure.rows(), structure.cols()))
     {
         sparsity_structure = structure.cast<int>();
         sparsity_structure.makeCompressed();
@@ -147,7 +167,7 @@ public:
         }
     };
 
-    using BSSliceTape<BSMatrixTape, Eigen::Map<Eigen::MatrixX<int>>>::operator=;
+    using BSSliceTape<BSMatrixTape, CoordMatrix>::operator=;
 
     void set_zero() {}
 
@@ -160,7 +180,7 @@ public:
      */
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
-        new (&null_mat) Eigen::Map<Eigen::MatrixX<int>>(&dummy, rows, cols);
+        this->null_mat.resize(rows, cols);
     }
 
     /**

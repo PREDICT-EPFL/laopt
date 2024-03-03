@@ -376,6 +376,84 @@ TEST(BSMatrixDense, Construction_Indexing) {
     test_BSMatrixDense_problem(problem);
 }
 
+/**
+ * Assign diagonal matrix.
+ */
+struct DiagonalProblem
+{
+    using scalar_t = double;
+
+    Eigen::DiagonalMatrix<scalar_t, Eigen::Dynamic> A;
+    Eigen::MatrixX<scalar_t> B;
+
+    Eigen::Index rows = 6;
+    Eigen::Index cols = 6;
+
+    DiagonalProblem() : A(2), B(2, 2)
+    {
+        A.diagonal() << 1, 2;
+        B << 3, 1,
+             0, 4;
+    }
+
+    template<typename Tape>
+    void eval(Tape& tape)
+    {
+        tape(Eigen::seqN(0, 2), Eigen::seqN(0, 2)) = A;
+        tape(Eigen::seqN(2, 2), Eigen::seqN(2, 2)) = B.diagonal().asDiagonal();
+        tape(Eigen::seqN(4, 2), Eigen::seqN(4, 2)).diagonal() = Eigen::VectorXd::Constant(2, 5);
+    }
+
+    static Eigen::MatrixX<bool> expected_sparsity()
+    {
+        Eigen::MatrixX<bool> sparsity(6, 6);
+        sparsity << 1, 0, 0, 0, 0, 0,
+                    0, 1, 0, 0, 0, 0,
+                    0, 0, 1, 0, 0, 0,
+                    0, 0, 0, 1, 0, 0,
+                    0, 0, 0, 0, 1, 0,
+                    0, 0, 0, 0, 0, 1;
+        return sparsity;
+    }
+
+    static std::vector<laopt::Segment> expected_copy_sequence()
+    {
+        return {{sC,0,2}, {sC,2,2}, {sC,4,2}};
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result()
+    {
+        Eigen::MatrixX<scalar_t> result(6, 6);
+        result << 1, 0, 0, 0, 0, 0,
+                  0, 2, 0, 0, 0, 0,
+                  0, 0, 3, 0, 0, 0,
+                  0, 0, 0, 4, 0, 0,
+                  0, 0, 0, 0, 5, 0,
+                  0, 0, 0, 0, 0, 5;
+        return result;
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_sparse()
+    {
+        return expected_result();
+    }
+
+    static Eigen::MatrixX<scalar_t> expected_result_dense()
+    {
+        return expected_result();
+    }
+};
+
+TEST(BSMatrix, Construction_Diagonal) {
+    DiagonalProblem problem;
+    test_BSMatrix_problem(problem);
+}
+
+TEST(BSMatrixDense, Construction_Diagonal) {
+    DiagonalProblem problem;
+    test_BSMatrixDense_problem(problem);
+}
+
 
 /**
  * Use arrays and initializer lists.
