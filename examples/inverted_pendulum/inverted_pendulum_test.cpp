@@ -102,7 +102,7 @@ int main()
             using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
             Solver solver(opt_problem);
             solver.settings().verbose = true;
-            solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT_NO_CONSTRAINTS;
+            solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
 
             solve_and_print(transcription, opt_problem, solver);
         }
@@ -145,7 +145,7 @@ int main()
             using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
             Solver solver(opt_problem);
             solver.settings().verbose = true;
-            solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT_NO_CONSTRAINTS;
+            solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
 
             solve_and_print(transcription, opt_problem, solver);
         }

@@ -16,7 +16,7 @@ enum struct globalization_t {
 
 enum struct hessian_approximation_t {
     EXACT,
-    EXACT_NO_CONSTRAINTS,
+    GAUSS_NEWTON,
 };
 
 template <typename Scalar>
@@ -31,7 +31,7 @@ struct sqp_settings_t {
     Scalar min_alpha                              = 1e-4;  // minimum step size
     int max_watchdog_steps                        = 0;     // minimum full size steps for non-monotone watchdog strategy (0 for normal line search)
     Scalar filter_beta                             = 1e-5;  // sufficient decrease value for filter
-    hessian_approximation_t hessian_approximation = hessian_approximation_t::EXACT_NO_CONSTRAINTS; // hessian approximation
+    hessian_approximation_t hessian_approximation = hessian_approximation_t::GAUSS_NEWTON; // hessian approximation
     bool regularize_hessian                       = false; // regularize hessian using the gershgorin circle theorem (can lead to bad convergence)
     Scalar elastic_max_delta                      = 0.9;   // maximum acceptable value of constant relaxation variable, if below penalty gets increased by a factor elastic_increase and resolved
     Scalar elastic_min_delta                      = 1e-6;  // if constant relaxation variable falls below this value the penalty gets decreased by a factor elastic_decrease
@@ -198,7 +198,7 @@ public:
         if (m_first_solve) {
             m_first_solve = false;
 
-            if (m_settings.hessian_approximation == hessian_approximation_t::EXACT_NO_CONSTRAINTS)
+            if (m_settings.hessian_approximation == hessian_approximation_t::GAUSS_NEWTON)
             {
                 prob.objective.hessian.allocate_memory(m_lag_hess);
             }
@@ -434,7 +434,7 @@ protected:
         prob.set_decision_variable(x);
 
         Eigen::Map<Eigen::VectorX<scalar_t>> hessian_buffer(m_lag_hess.valuePtr(), m_lag_hess.nonZeros());
-        if (m_settings.hessian_approximation == hessian_approximation_t::EXACT_NO_CONSTRAINTS)
+        if (m_settings.hessian_approximation == hessian_approximation_t::GAUSS_NEWTON)
         {
             prob.eval_objective_hessian(hessian_buffer);
         }

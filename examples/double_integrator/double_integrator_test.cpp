@@ -94,7 +94,7 @@ int main()
             Solver solver(opt_problem);
             solver.settings().verbose = true;
             solver.settings().globalization_strategy = laopt::globalization_t::FULL_STEP;
-            solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT_NO_CONSTRAINTS;
+            solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
 
             solve_and_print(transcription, opt_problem, solver);
         }
@@ -138,7 +138,7 @@ int main()
             Solver solver(opt_problem);
             solver.settings().verbose = true;
             solver.settings().globalization_strategy = laopt::globalization_t::FULL_STEP;
-            solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT_NO_CONSTRAINTS;
+            solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
 
             solve_and_print(transcription, opt_problem, solver);
         }
