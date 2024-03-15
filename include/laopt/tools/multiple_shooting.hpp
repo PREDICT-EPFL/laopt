@@ -52,16 +52,16 @@ protected:
             typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NX>
     function_impl(DiscreteDynamics,
-                  const Eigen::MatrixBase<x_t> &x,
-                  const Eigen::MatrixBase<u_t> &u,
-                  const Eigen::MatrixBase<p_t> &p,
-                  const Eigen::MatrixBase<tf_t> &tf)
+                  const Eigen::MatrixBase<x_t>& x,
+                  const Eigen::MatrixBase<u_t>& u,
+                  const Eigen::MatrixBase<p_t>& p,
+                  const Eigen::MatrixBase<tf_t>& tf)
     {
         using state_t = typename x_t::PlainObject;
-        state_t k1 = tf(0) * controlProblem.template dynamics_impl<scalar_t>(x, u, p);
-        state_t k2 = tf(0) * controlProblem.template dynamics_impl<scalar_t>(x + h * 0.5 * k1, u, p);
-        state_t k3 = tf(0) * controlProblem.template dynamics_impl<scalar_t>(x + h * 0.5 * k2, u, p);
-        state_t k4 = tf(0) * controlProblem.template dynamics_impl<scalar_t>(x + h * k3, u, p);
+        state_t k1 = tf(0) * controlProblem.dynamics_impl(x, u, p);
+        state_t k2 = tf(0) * controlProblem.dynamics_impl(x + h * 0.5 * k1, u, p);
+        state_t k3 = tf(0) * controlProblem.dynamics_impl(x + h * 0.5 * k2, u, p);
+        state_t k4 = tf(0) * controlProblem.dynamics_impl(x + h * k3, u, p);
         return x + h / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
     }
 
@@ -70,57 +70,57 @@ protected:
     template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NG>
     function_impl(InequalityConstraints,
-                  const Eigen::MatrixBase<x_t> &x,
-                  const Eigen::MatrixBase<u_t> &u,
-                  const Eigen::MatrixBase<p_t> &p)
+                  const Eigen::MatrixBase<x_t>& x,
+                  const Eigen::MatrixBase<u_t>& u,
+                  const Eigen::MatrixBase<p_t>& p)
     {
-        return controlProblem.template inequality_constraints_impl<scalar_t>(x, u, p);
+        return controlProblem.inequality_constraints_impl(x, u, p);
     }
 
     struct InitialInequalityConstraints {};
     template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NG0>
     function_impl(InitialInequalityConstraints,
-                  const Eigen::MatrixBase<x_t> &x0,
-                  const Eigen::MatrixBase<u_t> &u0,
-                  const Eigen::MatrixBase<p_t> &p)
+                  const Eigen::MatrixBase<x_t>& x0,
+                  const Eigen::MatrixBase<u_t>& u0,
+                  const Eigen::MatrixBase<p_t>& p)
     {
-        return controlProblem.template inequality_constraints0_impl<scalar_t>(x0, u0, p);
+        return controlProblem.inequality_constraints0_impl(x0, u0, p);
     }
 
     struct FinalInequalityConstraints {};
     template<typename x_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NGF>
     function_impl(FinalInequalityConstraints,
-                  const Eigen::MatrixBase<x_t> &xf,
-                  const Eigen::MatrixBase<p_t> &p)
+                  const Eigen::MatrixBase<x_t>& xf,
+                  const Eigen::MatrixBase<p_t>& p)
     {
-        return controlProblem.template inequality_constraintsf_impl<scalar_t>(xf, p);
+        return controlProblem.inequality_constraintsf_impl(xf, p);
     }
 
     /* Objective */
     struct StageCost {};
     template<typename x_t, typename u_t, typename p_t,
             typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
-    EIGEN_STRONG_INLINE scalar_t
+    EIGEN_STRONG_INLINE auto
     function_impl(StageCost,
-                  const Eigen::MatrixBase<x_t> &x,
-                  const Eigen::MatrixBase<u_t> &u,
-                  const Eigen::MatrixBase<p_t> &p)
+                  const Eigen::MatrixBase<x_t>& x,
+                  const Eigen::MatrixBase<u_t>& u,
+                  const Eigen::MatrixBase<p_t>& p)
     {
-        return h * controlProblem.template lagrange_term_impl<scalar_t>(x, u, p);
+        return controlProblem.lagrange_term_impl(x, u, p);
     }
 
     struct MayerCost {};
     template<typename x_t, typename p_t, typename tf_t,
             typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
-    EIGEN_STRONG_INLINE scalar_t
+    EIGEN_STRONG_INLINE auto
     function_impl(MayerCost,
-                  const Eigen::MatrixBase<x_t> &xf,
-                  const Eigen::MatrixBase<p_t> &p,
-                  const Eigen::MatrixBase<tf_t> &tf)
+                  const Eigen::MatrixBase<x_t>& xf,
+                  const Eigen::MatrixBase<p_t>& p,
+                  const Eigen::MatrixBase<tf_t>& tf)
     {
-        return controlProblem.template mayer_term_impl<scalar_t>(xf, p, tf(0));
+        return controlProblem.mayer_term_impl(xf, p, tf(0));
     }
 
     template<int Option = ControlProblem::Options>
@@ -163,12 +163,12 @@ protected:
         /* Loop through grid points */
         for (unsigned i = 0; i < N; i++)
         {
-            optProblem.add_obj(this->function(StageCost{}, X_var[i], U_var[i], p_var)); // TODO eno4: Allow expressions here
-            optProblem.add_constr(X_var[i + 1] == this->function(DiscreteDynamics{}, X_var[i], U_var[i], p_var, get_tf_var()));
+            optProblem.add_obj(h * this->expression(StageCost{}, X_var[i], U_var[i], p_var));
+            optProblem.add_constr(X_var[i + 1] == this->expression(DiscreteDynamics{}, X_var[i], U_var[i], p_var, get_tf_var()));
         }
 
         /* Last grid point */
-        optProblem.add_obj(this->function(MayerCost{}, X_var[N], p_var, get_tf_var()));
+        optProblem.add_obj(this->expression(MayerCost{}, X_var[N], p_var, get_tf_var()));
 
         /* Box constraints */
         for (unsigned i = 0; i < N; i++)
@@ -188,12 +188,12 @@ protected:
         optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
 
         /* Inequality constraints */
-        optProblem.add_constr(controlProblem.g0_lb <= this->function(InitialInequalityConstraints{}, X_var[0], U_var[0], p_var) <= controlProblem.g0_ub);
+        optProblem.add_constr(controlProblem.g0_lb <= this->expression(InitialInequalityConstraints{}, X_var[0], U_var[0], p_var) <= controlProblem.g0_ub);
         for (unsigned i = 1; i < N; i++)
         {
-            optProblem.add_constr(controlProblem.g_lb <= this->function(InequalityConstraints{}, X_var[i], U_var[i], p_var) <= controlProblem.g_ub);
+            optProblem.add_constr(controlProblem.g_lb <= this->expression(InequalityConstraints{}, X_var[i], U_var[i], p_var) <= controlProblem.g_ub);
         }
-        optProblem.add_constr(controlProblem.gf_lb <= this->function(FinalInequalityConstraints{}, X_var[N], p_var) <= controlProblem.gf_ub);
+        optProblem.add_constr(controlProblem.gf_lb <= this->expression(FinalInequalityConstraints{}, X_var[N], p_var) <= controlProblem.gf_ub);
     }
 
 public:
@@ -324,8 +324,8 @@ public:
 
 protected: /* Helpers for resampling */
     template<int DerivedNT1, int DerivedNT2, int DerivedNX>
-    Eigen::Matrix<Scalar, DerivedNX + 1, -1> resample_trajectory_linear(const Eigen::Vector<Scalar, DerivedNT1> &T_opt,
-                                                                        const Eigen::Matrix<Scalar, DerivedNX, DerivedNT2> &X_opt,
+    Eigen::Matrix<Scalar, DerivedNX + 1, -1> resample_trajectory_linear(const Eigen::Vector<Scalar, DerivedNT1>& T_opt,
+                                                                        const Eigen::Matrix<Scalar, DerivedNX, DerivedNT2>& X_opt,
                                                                         Scalar Ts_max) const
     {
         static_assert(DerivedNT1 == DerivedNT2, "T and X must be of same length.");
@@ -373,8 +373,8 @@ protected: /* Helpers for resampling */
         return TXn;
     }
     template<int DerivedNT1, int DerivedNT2, int DerivedNX>
-    Eigen::Matrix<Scalar, DerivedNX + 1, -1> resample_trajectory_hold(const Eigen::Vector<Scalar, DerivedNT1> &T_opt,
-                                                                      const Eigen::Matrix<Scalar, DerivedNX, DerivedNT2> &X_opt,
+    Eigen::Matrix<Scalar, DerivedNX + 1, -1> resample_trajectory_hold(const Eigen::Vector<Scalar, DerivedNT1>& T_opt,
+                                                                      const Eigen::Matrix<Scalar, DerivedNX, DerivedNT2>& X_opt,
                                                                       Scalar Ts_max) const
     {
         static_assert(DerivedNT1 == DerivedNT2, "T and X must be of same length.");

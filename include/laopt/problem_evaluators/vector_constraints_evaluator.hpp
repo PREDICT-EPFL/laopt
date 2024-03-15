@@ -1,6 +1,7 @@
 #ifndef LAOPT_VECTOR_CONSTRAINTS_EVALUATOR_HPP
 #define LAOPT_VECTOR_CONSTRAINTS_EVALUATOR_HPP
 
+#include "laopt/utility.hpp"
 #include "laopt/problem_dispatch_types.hpp"
 #include "laopt/problem_vector_function.hpp"
 #include "laopt/problem_weighted_sum_function.hpp"
@@ -29,7 +30,7 @@ protected:
         auto out_indices = Eigen::seqN(row_offset, Eigen::fix<n_outputs>);
         row_offset += n_outputs;
 
-        constraints.value(out_indices) = ExprEvaluator<Derived>::function(const_expr.derived());
+        constraints.value(out_indices) = to_matrix_type(ExprEvaluator<Derived>::function(const_expr.derived()));
         constraints.assign_lower_bound(out_indices, ExprEvaluator<Derived>::lower_bound(const_expr.derived()));
         constraints.assign_upper_bound(out_indices, ExprEvaluator<Derived>::upper_bound(const_expr.derived()));
     }

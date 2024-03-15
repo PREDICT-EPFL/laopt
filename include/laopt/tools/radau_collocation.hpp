@@ -285,7 +285,7 @@ protected:
                   const Eigen::MatrixBase<p_t> &p,
                   const Eigen::MatrixBase<tf_t> &tf)
     {
-        return tf(0) * controlProblem.template dynamics_impl<scalar_t>(x, u, p);
+        return tf(0) * controlProblem.dynamics_impl(x, u, p);
     }
 
     struct DifferentialApproximation {
@@ -351,7 +351,7 @@ protected:
                   const Eigen::MatrixBase<u_t> &u,
                   const Eigen::MatrixBase<p_t> &p)
     {
-        return controlProblem.template inequality_constraints_impl<scalar_t>(x, u, p);
+        return controlProblem.inequality_constraints_impl(x, u, p);
     }
 
     struct InitialInequalityConstraints {};
@@ -362,7 +362,7 @@ protected:
                   const Eigen::MatrixBase<u_t> &u0,
                   const Eigen::MatrixBase<p_t> &p)
     {
-        return controlProblem.template inequality_constraints0_impl<scalar_t>(x0, u0, p);
+        return controlProblem.inequality_constraints0_impl(x0, u0, p);
     }
 
     struct FinalInequalityConstraints {};
@@ -372,7 +372,7 @@ protected:
                   const Eigen::MatrixBase<x_t> &xf,
                   const Eigen::MatrixBase<p_t> &p)
     {
-        return controlProblem.template inequality_constraintsf_impl<scalar_t>(xf, p);
+        return controlProblem.inequality_constraintsf_impl(xf, p);
     }
 
     /* Objective */
@@ -385,7 +385,7 @@ protected:
                   const Eigen::MatrixBase<U_t> &u,
                   const Eigen::MatrixBase<p_t> &p)
     {
-        return controlProblem.template lagrange_term_impl<scalar_t>(x, u, p);
+        return controlProblem.lagrange_term_impl(x, u, p);
     }
 
     struct MayerCost {};
@@ -397,7 +397,7 @@ protected:
                   const Eigen::MatrixBase<p_t> &p,
                   const Eigen::MatrixBase<tf_t> &tf)
     {
-        return controlProblem.template mayer_term_impl<scalar_t>(x, p, tf(0));
+        return controlProblem.mayer_term_impl(x, p, tf(0));
     }
 
     template<int Option = ControlProblem::Options>
@@ -445,16 +445,16 @@ protected:
 
                 /* Add contribution of this node to integral approximation of this segment */
                 optProblem.add_obj(h_seg / 2.0 * int_mat(int_mat.rows() - 1, j_node)
-                                   * this->function(LagrangeCost{}, get_x(XU_var, k), get_u(XU_var, k), p_var));
+                                   * this->expression(LagrangeCost{}, get_x(XU_var, k), get_u(XU_var, k), p_var));
 
                 /* Add differential constraint at each node */
-                optProblem.add_constr(this->function(DifferentialApproximation{}, X_seg_diff, j_node) ==
-                                      this->function(ContinuousDynamics{}, get_x(XU_var, k), get_u(XU_var, k), p_var, get_tf_var()));
+                optProblem.add_constr(this->expression(DifferentialApproximation{}, X_seg_diff, j_node) ==
+                                      this->expression(ContinuousDynamics{}, get_x(XU_var, k), get_u(XU_var, k), p_var, get_tf_var()));
             }
         }
 
         /* Last grid point */
-        optProblem.add_obj(this->function(MayerCost{}, get_x(XU_var, N), p_var, get_tf_var()));
+        optProblem.add_obj(this->expression(MayerCost{}, get_x(XU_var, N), p_var, get_tf_var()));
 
         /* Box constraints */
         for (unsigned k = 0; k <= N; k++)
@@ -473,12 +473,12 @@ protected:
         optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
 
         /* Inequality constraints */
-        optProblem.add_constr(controlProblem.g0_lb <= this->function(InitialInequalityConstraints{},  get_x(XU_var, 0), get_u(XU_var, 0), p_var) <= controlProblem.g0_ub);
+        optProblem.add_constr(controlProblem.g0_lb <= this->expression(InitialInequalityConstraints{},  get_x(XU_var, 0), get_u(XU_var, 0), p_var) <= controlProblem.g0_ub);
         for (unsigned k = 1; k < N; k++)
         {
-            optProblem.add_constr(controlProblem.g_lb <= this->function(InequalityConstraints{}, get_x(XU_var, k), get_u(XU_var, k), p_var) <= controlProblem.g_ub);
+            optProblem.add_constr(controlProblem.g_lb <= this->expression(InequalityConstraints{}, get_x(XU_var, k), get_u(XU_var, k), p_var) <= controlProblem.g_ub);
         }
-        optProblem.add_constr(controlProblem.gf_lb <= this->function(FinalInequalityConstraints{}, get_x(XU_var, N), p_var) <= controlProblem.gf_ub);
+        optProblem.add_constr(controlProblem.gf_lb <= this->expression(FinalInequalityConstraints{}, get_x(XU_var, N), p_var) <= controlProblem.gf_ub);
         // TODO: FinalInequalityConstraints could also be on input for collocation scheme
 
         /* Set last control equal second last for easier data handling */

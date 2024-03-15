@@ -8,6 +8,7 @@
 
 #include "laopt/laopt.hpp"
 #include "laopt/tools/control_problem_base.hpp"
+#include "laopt/differentiable_functions/quadratic_cost.hpp"
 
 template<int cM = 5, int cNX = 3 * (2 * (cM - 2) + 1), int cNU = 3>
 class ChainMassOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, cNX, cNU>
@@ -27,49 +28,48 @@ public:
     const double L = 0.033; // rest length of spring
 
     const Eigen::Vector<double, 3> x0{0, 0, 0}; // fix mass (at wall)
-    State x_ref;
 
-    Eigen::DiagonalMatrix<Scalar, Base::NX> Q;
-    Eigen::DiagonalMatrix<Scalar, Base::NX> P;
-    Eigen::DiagonalMatrix<Scalar, Base::NU> R;
+    laopt::QuadraticCost<Scalar, Base::NX> state_cost;
+    laopt::QuadraticCost<Scalar, Base::NU> input_cost;
+    laopt::QuadraticCost<Scalar, Base::NX> final_state_cost;
 
     ChainMassOcp()
     {
-        x_ref.setZero();
-        x_ref(3 * (M - 2)) = 7.5;
+        state_cost.x_ref.setZero();
+        state_cost.x_ref(3 * (M - 2)) = 7.5;
 
-        Q.setZero();
-        Q.diagonal()(Eigen::seqN(3 * (M - 2), Eigen::fix<3>)).array() = 2.5;
-        Q.diagonal()(Eigen::lastN(Eigen::fix<3 * (M - 2)>)).array() = 25;
+        state_cost.Q.setZero();
+        state_cost.Q.diagonal()(Eigen::seqN(3 * (M - 2), Eigen::fix<3>)).array() = 2.5;
+        state_cost.Q.diagonal()(Eigen::lastN(Eigen::fix<3 * (M - 2)>)).array() = 25;
 
-        P.setZero();
-        P.diagonal()(Eigen::seqN(3 * (M - 2), Eigen::fix<3>)).array() = 10;
+        input_cost.Q.setZero();
+        input_cost.Q.diagonal().array() = 0.1;
 
-        R.setZero();
-        R.diagonal().array() = 0.1;
+        final_state_cost.Q.setZero();
+        final_state_cost.Q.diagonal()(Eigen::seqN(3 * (M - 2), Eigen::fix<3>)).array() = 10;
     }
 
     /* Override function implementations from base class ------------------------------ */
-    template<typename T> // T is scalar type
-    T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
-                         const Eigen::Ref<const input_t<T>> &u,
-                         const Eigen::Ref<const param_t<T>> &p)
+    template<typename X, typename U, typename P>
+    auto lagrange_term_impl(const Eigen::MatrixBase<X>& x,
+                            const Eigen::MatrixBase<U>& u,
+                            const Eigen::MatrixBase<P>& p)
     {
-        return (x_ref - x).dot(Q * (x_ref - x)) + u.dot(R * u);
+        return state_cost(x) + input_cost(u);
     }
 
-    template<typename T, typename Ttf> // T is scalar type
-    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &xf,
-                      const Eigen::Ref<const param_t<T>> &p,
-                      const Ttf &tf)
+    template<typename Xf, typename P, typename Ttf>
+    auto mayer_term_impl(const Eigen::MatrixBase<Xf>& xf,
+                         const Eigen::MatrixBase<P>& p,
+                         const Ttf& tf)
     {
-        return (x_ref - xf).dot(P * (x_ref - xf));
+        return final_state_cost(xf);
     }
 
-    template<typename T> // T is scalar type
-    state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
-                             const Eigen::Ref<const input_t<T>> &u,
-                             const Eigen::Ref<const param_t<T>> &p)
+    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
+    state_t<T> dynamics_impl(const Eigen::MatrixBase<X>& x,
+                             const Eigen::MatrixBase<U>& u,
+                             const Eigen::MatrixBase<P>& p)
     {
         // x = (x_pos((M-1)*3), x_vel((M-2)*3))
 

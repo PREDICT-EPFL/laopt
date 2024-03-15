@@ -3,6 +3,7 @@
  */
 #include <iostream>
 #include "laopt/indexed_vector.hpp"
+#include "laopt/utility.hpp"
 #include "gtest/gtest.h"
 
 /**
@@ -212,4 +213,18 @@ TEST(IndexedVectorTest, NullMap) {
     testing::internal::CaptureStdout();
     std::cout << "vec.indices() = " << vec.indices().transpose();
     EXPECT_EQ(testing::internal::GetCapturedStdout(), "vec.indices() = -1 -1 -1");
+}
+
+template<typename Derived>
+decltype(auto) cast_to_matrix_base(const Eigen::MatrixBase<Derived>& mat)
+{
+    return mat;
+}
+
+TEST(IndexedVectorTest, VariableInfo) {
+    laopt::Variable<double, 11> var;
+    static_assert(laopt::meta::variable_info<Eigen::Vector<double, 11>>::size == 0, "");
+    static_assert(laopt::meta::variable_info<decltype(var)>::size == 11, "");
+    static_assert(laopt::meta::variable_info<decltype(var.cast_base())>::size == 11, "");
+    static_assert(laopt::meta::variable_info<decltype(cast_to_matrix_base(var))>::size == 11, "");
 }

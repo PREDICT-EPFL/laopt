@@ -50,26 +50,13 @@ private:
 template<typename Function, typename Tag, typename Info, typename Capture>
 struct ExprEvaluator<FunctionCapture<Function, Tag, Info, Capture>>
 {
-private:
-    template<typename Base>
-    static EIGEN_STRONG_INLINE const Base& cast_variable_to_base(const IndexedVector<Base>& arg)
-    {
-        return arg.cast_base();
-    }
-
-    template<typename T>
-    static EIGEN_STRONG_INLINE const T& cast_variable_to_base(const T& arg)
-    {
-        return arg;
-    }
-
 public:
     static EIGEN_STRONG_INLINE auto
     function(const FunctionCapture<Function, Tag, Info, Capture>& function_capture)
     {
         return function_capture.capture([&](auto&&... vars) {
             return function_capture.func.function(Tag{},
-                                                  cast_variable_to_base(vars)...);
+                                                  vars...);
         });
     }
 

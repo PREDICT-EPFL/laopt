@@ -15,8 +15,8 @@ template<typename DerivedLhs, typename DerivedRhs>
 class EqConstraintExpr : public ConstraintExpr<EqConstraintExpr<DerivedLhs, DerivedRhs>>
 {
 public:
-    const DerivedLhs& lhs;
-    const DerivedRhs& rhs;
+    const DerivedLhs lhs;
+    const DerivedRhs rhs;
 
     using ExprType = typename std::conditional<std::is_base_of<ExprBase<DerivedLhs>, DerivedLhs>::value && std::is_base_of<ExprBase<DerivedRhs>, DerivedRhs>::value,
                                                SubExpr<DerivedLhs, DerivedRhs>,

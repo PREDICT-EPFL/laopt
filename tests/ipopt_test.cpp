@@ -60,11 +60,11 @@ struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>, la
     {
         problem.add_variable(x_var);
 
-        problem.add_obj(this->function(Cost{}, x_var));
+        problem.add_obj(this->expression(Cost{}, x_var));
 
         problem.add_constr(-1 <= x_var({0, 2, 3}) <= 1);
 
-        problem.add_constr(this->function(Equality{}, x_var) == 0);
+        problem.add_constr(this->expression(Equality{}, x_var) == 0);
     }
 };
 
@@ -154,11 +154,11 @@ struct Ipopt_example : public laopt::Differentiable<Ipopt_example<scalar_t_>, la
         problem.add_variable(x1_var);
         problem.add_variable(x2_var);
 
-        problem.add_obj(this->function(Cost{}, x1_var, x2_var));
+        problem.add_obj(this->expression(Cost{}, x1_var, x2_var));
 
         problem.add_constr(-1 <= x1_var <= 1);
 
-        problem.add_constr(this->function(Equality{}, x1_var, x2_var) == 0);
+        problem.add_constr(this->expression(Equality{}, x1_var, x2_var) == 0);
     }
 };
 
@@ -239,10 +239,10 @@ struct Prob71 : public laopt::Differentiable<Prob71<_scalar_t>, laopt::TAGGED>
     {
         problem.add_variable(x_var);
 
-        problem.add_obj(this->function(Obj{}, x_var));
+        problem.add_obj(this->expression(Obj{}, x_var));
 
         problem.add_constr(1 <= x_var <= 5);
-        problem.add_constr(Eigen::Vector<scalar_t, 2>{25, 40} <= this->function(Constraints{}, x_var) <= Eigen::Vector<scalar_t, 2>{2e9, 40});
+        problem.add_constr(Eigen::Vector<scalar_t, 2>{25, 40} <= this->expression(Constraints{}, x_var) <= Eigen::Vector<scalar_t, 2>{2e9, 40});
     }
 };
 

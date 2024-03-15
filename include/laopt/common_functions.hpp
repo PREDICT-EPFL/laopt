@@ -21,10 +21,10 @@ public:
     function_impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<Params>&... params) noexcept
     {
         using Vec = typename X::PlainObject;
-        Vec k1 = f(Tag{}, x,          params...);
-        Vec k2 = f(Tag{}, x+h*0.5*k1, params...);
-        Vec k3 = f(Tag{}, x+h*0.5*k2, params...);
-        Vec k4 = f(Tag{}, x+h*k3,     params...);
+        Vec k1 = f.function(Tag{}, x,          params...);
+        Vec k2 = f.function(Tag{}, x+h*0.5*k1, params...);
+        Vec k3 = f.function(Tag{}, x+h*0.5*k2, params...);
+        Vec k4 = f.function(Tag{}, x+h*k3,     params...);
         return x + h/6.0 * (k1 + 2.0*k2 + 2.0*k3 + k4);
     }
 };

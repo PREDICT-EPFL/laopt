@@ -11,8 +11,8 @@ template<typename ScalarType, typename Derived>
 class ScalarExpr : public ExprBase<ScalarExpr<ScalarType, Derived>>
 {
 public:
-    const ScalarType& scalar;
-    const Derived& expr;
+    const ScalarType scalar;
+    const Derived expr;
 
     static constexpr int n_inputs = Derived::n_inputs;
     static constexpr int n_outputs = Derived::n_outputs;

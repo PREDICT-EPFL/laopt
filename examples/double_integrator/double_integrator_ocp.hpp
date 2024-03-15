@@ -23,26 +23,26 @@ public:
     Eigen::Matrix<Scalar, NU, NU> R{{0.01}};
 
     /* Override function implementations from base class ------------------------------ */
-    template<typename T> // T is scalar type
-    T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
-                         const Eigen::Ref<const input_t<T>> &u,
-                         const Eigen::Ref<const param_t<T>> &p)
+    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
+    T lagrange_term_impl(const Eigen::MatrixBase<X>& x,
+                         const Eigen::MatrixBase<U>& u,
+                         const Eigen::MatrixBase<P>& p)
     {
         return (x_ref - x).dot(Q * (x_ref - x)) + u.dot(R * u);
     }
 
-    template<typename T, typename Ttf> // T is scalar type
-    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &xf,
-                      const Eigen::Ref<const param_t<T>> &p,
+    template<typename Xf, typename P, typename Ttf, typename T = typename Xf::Scalar> // T is scalar type
+    T mayer_term_impl(const Eigen::MatrixBase<Xf>& xf,
+                      const Eigen::MatrixBase<P>& p,
                       const Ttf &tf)
     {
         return (x_ref - xf).dot(Q * (x_ref - xf));
     }
 
-    template<typename T> // T is scalar type
-    state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
-                             const Eigen::Ref<const input_t<T>> &u,
-                             const Eigen::Ref<const param_t<T>> &p)
+    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
+    state_t<T> dynamics_impl(const Eigen::MatrixBase<X>& x,
+                             const Eigen::MatrixBase<U>& u,
+                             const Eigen::MatrixBase<P>& p)
     {
         state_t<T> x_dot = A * x + B * u;
         return x_dot;

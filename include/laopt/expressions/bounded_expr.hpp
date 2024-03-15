@@ -16,9 +16,9 @@ template<typename DerivedLb, typename Derived, typename DerivedUb>
 class BoundedExpr : public ConstraintExpr<BoundedExpr<DerivedLb, Derived, DerivedUb>>
 {
 public:
-    const DerivedLb& lb;
-    const Derived& expr;
-    const DerivedUb& ub;
+    const DerivedLb lb;
+    const Derived expr;
+    const DerivedUb ub;
 
     static constexpr int n_inputs = Derived::n_inputs;
     static constexpr int n_outputs = Derived::n_outputs;

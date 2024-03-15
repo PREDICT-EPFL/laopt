@@ -9,7 +9,7 @@ namespace laopt
 {
 
 template<typename Derived, int Options>
-class DifferentiableBaseEigen
+class DifferentiableImplEigen
 {
 protected:
     // Compute the jacobian using eigen autodiff
@@ -30,7 +30,7 @@ protected:
         using ADOutput = Eigen::Vector<ADScalar, Info::n_outputs>;
 
         // Convert the arguments to AD variables, and call the function
-        ADOutput out = seed_and_call(tag, make_ad<ADScalar>(args)...);
+        ADOutput out = to_matrix_type(seed_and_call(tag, make_ad<ADScalar>(args)...));
 
         // Copy out into output variables
         for(int i = 0; i < out.rows(); i++)
@@ -57,7 +57,7 @@ protected:
         using ADOutput = Eigen::Vector<ADScalar, Info::n_outputs>;
 
         // Convert the arguments to AD variables, and call the function
-        ADOutput out = seed_and_call(tag, make_ad_touchable<ADScalar>(args)...);
+        ADOutput out = to_matrix_type(seed_and_call(tag, make_ad_touchable<ADScalar>(args)...));
 
         for(int i = 0; i < out.rows(); i++)
         {
@@ -95,7 +95,7 @@ protected:
         ADOutput out;
         for (size_t i = 0; i < Info::n_inputs; i++) {
             // Convert to AD variables for the inputs and call our function for ith row of hessian
-            out = seed_and_call2(i, tag, make_ad2<outerADScalar>(args)...);
+            out = to_matrix_type(seed_and_call2(i, tag, make_ad2<outerADScalar>(args)...));
             for(size_t j = 0; j < Info::n_outputs; j++) {
                 out_hessian(Eigen::all, i) += weight(j) * out[j].derivatives()(0).derivatives();
             }
@@ -126,7 +126,7 @@ protected:
         ADOutput out;
         for (size_t i = 0; i < Info::n_inputs; i++) {
             // Convert to AD variables for the inputs and call our function for ith row of hessian
-            out = seed_and_call2(i, tag, make_ad2_touchable<outerADScalar>(args)...);
+            out = to_matrix_type(seed_and_call2(i, tag, make_ad2_touchable<outerADScalar>(args)...));
             for(size_t j = 0; j < Info::n_outputs; j++) {
                 for (int k = 0; k < out[j].derivatives()(0).derivatives().rows(); k++) {
                     if (out[j].derivatives()(0).derivatives()(k).value() != 0)
@@ -144,6 +144,19 @@ protected:
     make_ad(const IndexedVector<Base>& x) noexcept
     {
         constexpr size_t n = Base::RowsAtCompileTime;
+        Eigen::Vector<ADScalar, n> y;
+        y = x;
+        for (int i = 0; i < y.rows(); i++) {
+            y[i].derivatives().setZero();
+        }
+        return y;
+    }
+
+    template<typename ADScalar, typename T>
+    EIGEN_STRONG_INLINE typename std::enable_if<meta::has_variable_bit<T>::value, Eigen::Vector<ADScalar, T::RowsAtCompileTime>>::type
+    make_ad(const Eigen::MatrixBase<T>& x) noexcept
+    {
+        constexpr size_t n = T::RowsAtCompileTime;
         Eigen::Vector<ADScalar, n> y;
         y = x;
         for (int i = 0; i < y.rows(); i++) {
@@ -210,7 +223,7 @@ protected:
 
     template<typename T>
     EIGEN_STRONG_INLINE int
-    ad_seed(const T, int offset) noexcept
+    ad_seed(const T&, int offset) noexcept
     {
         return offset;
     }
@@ -225,6 +238,22 @@ protected:
         // y = x;
         for (size_t i = 0; i < n; i++) {
             y(i).value().value() = x.cast_base()(i);
+            y(i).value().derivatives().setZero();
+            y(i).derivatives().setZero();
+            y(i).derivatives()(0).derivatives().setZero();
+        }
+        return y;
+    }
+
+    template<typename outerADScalar, typename T>
+    EIGEN_STRONG_INLINE typename std::enable_if<meta::has_variable_bit<T>::value, Eigen::Vector<outerADScalar, T::RowsAtCompileTime>>::type
+    make_ad2(const Eigen::MatrixBase<T>& x) noexcept
+    {
+        constexpr size_t n = T::RowsAtCompileTime;
+        Eigen::Vector<outerADScalar, n> y;
+        // y = x;
+        for (size_t i = 0; i < n; i++) {
+            y(i).value().value() = x(i);
             y(i).value().derivatives().setZero();
             y(i).derivatives().setZero();
             y(i).derivatives()(0).derivatives().setZero();
@@ -296,7 +325,7 @@ protected:
 
     template<typename T>
     EIGEN_STRONG_INLINE int
-    ad_seed2(const T, int outer_index, int inner_offset) noexcept
+    ad_seed2(const T&, int outer_index, int inner_offset) noexcept
     {
         return inner_offset;
     }

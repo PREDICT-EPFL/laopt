@@ -12,8 +12,8 @@ template<typename DerivedLhs, typename DerivedRhs>
 class AddExpr : public ExprBase<AddExpr<DerivedLhs, DerivedRhs>>
 {
 public:
-    const DerivedLhs& lhs;
-    const DerivedRhs& rhs;
+    const DerivedLhs lhs;
+    const DerivedRhs rhs;
 
     static_assert(DerivedLhs::n_outputs == DerivedRhs::n_outputs, "Output dimension of expressions must be the same");
     static constexpr int n_inputs = DerivedLhs::n_inputs + DerivedRhs::n_inputs;

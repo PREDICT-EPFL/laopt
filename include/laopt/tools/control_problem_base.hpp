@@ -143,20 +143,20 @@ public:
     /*
      * Templates for problem formulation
      */
-    template<typename T> // T is scalar type
-    T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
-                         const Eigen::Ref<const input_t<T>> &u,
-                         const Eigen::Ref<const param_t<T>> &p) { return static_cast<T>(0); }
+    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
+    T lagrange_term_impl(const Eigen::MatrixBase<X>& x,
+                         const Eigen::MatrixBase<U>& u,
+                         const Eigen::MatrixBase<P>& p) { return static_cast<T>(0); }
 
-    template<typename T, typename Ttf> // T is scalar type
-    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &x,
-                      const Eigen::Ref<const param_t<T>> &p,
+    template<typename Xf, typename P, typename Ttf, typename T = typename Xf::Scalar> // T is scalar type
+    T mayer_term_impl(const Eigen::MatrixBase<Xf>& xf,
+                      const Eigen::MatrixBase<P>& p,
                       const Ttf &tf) { return static_cast<T>(0); }
 
-    template<typename T> // T is scalar type
-    state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
-                             const Eigen::Ref<const input_t<T>> &u,
-                             const Eigen::Ref<const param_t<T>> &p)
+    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
+    state_t<T> dynamics_impl(const Eigen::MatrixBase<X>& x,
+                             const Eigen::MatrixBase<U>& u,
+                             const Eigen::MatrixBase<P>& p)
     {
         std::cerr << "dynamics_impl() not implemented.\n";
         exit(EXIT_FAILURE);
@@ -164,10 +164,10 @@ public:
     }
 
     /* Inequality constraints */
-    template<typename T> // T is scalar type
-    ineq_constr_t<T> inequality_constraints_impl(const Eigen::Ref<const state_t<T>> &x,
-                                                 const Eigen::Ref<const input_t<T>> &u,
-                                                 const Eigen::Ref<const param_t<T>> &p)
+    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
+    ineq_constr_t<T> inequality_constraints_impl(const Eigen::MatrixBase<X>& x,
+                                                 const Eigen::MatrixBase<U>& u,
+                                                 const Eigen::MatrixBase<P>& p)
     {
         if (NG > 0)
         {
@@ -177,10 +177,10 @@ public:
         return {};
     }
 
-    template<typename T> // T is scalar type
-    ineq_constr0_t<T> inequality_constraints0_impl(const Eigen::Ref<const state_t<T>> &x0,
-                                                   const Eigen::Ref<const input_t<T>> &u0,
-                                                   const Eigen::Ref<const param_t<T>> &p)
+    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
+    ineq_constr0_t<T> inequality_constraints0_impl(const Eigen::MatrixBase<X>& x0,
+                                                   const Eigen::MatrixBase<U>& u0,
+                                                   const Eigen::MatrixBase<P>& p)
     {
         if (NG0 > 0)
         {
@@ -190,10 +190,10 @@ public:
         return {};
     }
 
-    template<typename T> // T is scalar type
-    ineq_constrf_t<T> inequality_constraintsf_impl(const Eigen::Ref<const state_t<T>> &xf,
+    template<typename Xf, typename P, typename T = typename Xf::Scalar> // T is scalar type
+    ineq_constrf_t<T> inequality_constraintsf_impl(const Eigen::MatrixBase<Xf>& xf,
                                                    // TODO: Add final input for more generality?
-                                                   const Eigen::Ref<const param_t<T>> &p)
+                                                   const Eigen::MatrixBase<P>& p)
     {
         if (NGF > 0)
         {

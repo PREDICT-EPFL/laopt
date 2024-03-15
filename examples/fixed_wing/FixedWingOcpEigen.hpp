@@ -79,20 +79,20 @@ public:
         return control_cost;
     }
 
-    template<typename T> // T is scalar type
-    T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
-                         const Eigen::Ref<const input_t<T>> &u,
-                         const Eigen::Ref<const param_t<T>> &p)
+    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
+    T lagrange_term_impl(const Eigen::MatrixBase<X>& x,
+                         const Eigen::MatrixBase<U>& u,
+                         const Eigen::MatrixBase<P>& p)
     {
-        return get_non_control_cost(x) + get_control_cost(u);
+        return get_non_control_cost<T>(x) + get_control_cost<T>(u);
     }
 
-    template<typename T, typename Ttf> // T is scalar type
-    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &xf,
-                      const Eigen::Ref<const param_t<T>> &p,
+    template<typename Xf, typename P, typename Ttf, typename T = typename Xf::Scalar> // T is scalar type
+    T mayer_term_impl(const Eigen::MatrixBase<Xf>& xf,
+                      const Eigen::MatrixBase<P>& p,
                       const Ttf &tf)
     {
-        T mayer = mayer_multiplier * get_non_control_cost(xf);
+        T mayer = mayer_multiplier * get_non_control_cost<T>(xf);
 //        mayer = mayer_multiplier * non_control_cost + p(0); // Time-optimal ocp
 
         // LQR terminal weight
@@ -105,10 +105,10 @@ public:
         return mayer;
     }
 
-    template<typename T> // T is scalar type
-    state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
-                             const Eigen::Ref<const input_t<T>> &u,
-                             const Eigen::Ref<const param_t<T>> &p)
+    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
+    state_t<T> dynamics_impl(const Eigen::MatrixBase<X>& x,
+                             const Eigen::MatrixBase<U>& u,
+                             const Eigen::MatrixBase<P>& p)
     {
 //         Linear(ized) dynamics
 //        xdot = A.template cast<T>() * (x - x_trim.template cast<T>()) +

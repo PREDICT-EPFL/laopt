@@ -1,15 +1,11 @@
 #ifndef LAOPT_EXPR_EVALUATOR_HPP
 #define LAOPT_EXPR_EVALUATOR_HPP
 
+#include "laopt/expressions/fwd.hpp"
 #include "laopt/indexed_vector.hpp"
-#include "laopt/common_functions.hpp"
 #include "laopt/differentiable_functions/identity.hpp"
 
 namespace laopt {
-
-// ExprEvaluator forward declaration
-template<typename Derived, typename EnableIf = void>
-struct ExprEvaluator;
 
 template<typename Derived>
 struct ExprEvaluator<IndexedVector<Derived>>
@@ -18,7 +14,7 @@ struct ExprEvaluator<IndexedVector<Derived>>
     function(const IndexedVector<Derived>& indexed_vector)
     {
         Identity id;
-        return id.function(indexed_vector.cast_base());
+        return id.function(indexed_vector);
     }
 
     template<typename OutJacobian, typename AScalar>

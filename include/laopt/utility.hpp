@@ -5,6 +5,7 @@
 #include <limits>
 #include <type_traits>
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 
 #include "laopt/indexed_vector.hpp"
 
@@ -41,32 +42,36 @@ namespace laopt
          */
 
         // Tags telling us if a return value is a scalar or an Eigen Matrix
-        struct IsScalar {};
-        struct IsMatrix {};
+        struct is_eigen_base {};
+        struct is_expr_base {};
 
-        template<class Type, bool is_eigen = std::is_base_of<Eigen::MatrixBase<Type>, Type>::value>
+        template<typename Type, typename TypeBase = typename std::conditional<std::is_base_of<Eigen::MatrixBase<Type>, Type>::value, is_eigen_base,
+                                                    typename std::conditional<std::is_base_of<ExprBase<Type>, Type>::value, is_expr_base, std::false_type>::type>::type>
         struct matrix_info;
 
-        template <class Type>
-        struct matrix_info<Type, false>
+        template <typename Type>
+        struct matrix_info<Type, std::false_type>
         {
             using Scalar = Type;
             static constexpr int RowsAtCompileTime = 1;
             static constexpr int ColsAtCompileTime = 1;
-
-            using is_matrix_t = IsScalar;
         };
 
-        template<class Type>
-        struct matrix_info<Type, true>
+        template<typename Type>
+        struct matrix_info<Type, is_eigen_base>
         {
             using Scalar = typename Type::Scalar;
             static constexpr int RowsAtCompileTime = Type::RowsAtCompileTime;
             static constexpr int ColsAtCompileTime = Type::ColsAtCompileTime;
-
-            using is_matrix_t = IsMatrix;
         };
 
+        template<class Type>
+        struct matrix_info<Type, is_expr_base>
+        {
+            using Scalar = typename Type::Scalar;
+            static constexpr int RowsAtCompileTime = Type::n_outputs;
+            static constexpr int ColsAtCompileTime = 1;
+        };
 
         /**
          * Compute the scalar type of the arguments
@@ -83,39 +88,74 @@ namespace laopt
         template<typename... Args>
         using get_scalar_t = typename get_scalar<Args...>::type;
 
-
         /**
-         * Checks if arguments contain a variable.
+         * Checks if type has VariableBit set.
          */
-        template <typename...>
-        struct contains_variable : std::true_type {};
-
-        template <typename Arg, typename... Args>
-        struct contains_variable<Arg, Args...>
-                : std::conditional<std::is_base_of<VariableBase<Arg>, Arg>::value,
-                        std::true_type,
-                        contains_variable<Args...>
-                >::type {};
-
-        template<>
-        struct contains_variable<> : std::false_type {};
+        template<typename T>
+        struct has_variable_bit
+        {
+        private:
+            template<typename U>
+            static std::integral_constant<bool, bool(U::Flags & laopt::VariableBit)> check(int);
+            template <typename>
+            static std::integral_constant<bool, false> check(long);
+        public:
+            static constexpr bool value = decltype(check<T>(0))::value;
+        };
 
         /**
          * Used to get information about variables.
          */
+        template<typename Derived, typename = typename std::conditional<std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value,
+                                                                        std::true_type, std::false_type>::type>
+        struct variable_info_base;
+
         template<typename Derived>
-        struct variable_info
+        struct variable_info_base<Derived, std::false_type>
         {
             // If it's not a variable we ignore it
             static constexpr int size = 0;
         };
-        template<typename Base>
-        struct variable_info<IndexedVector<Base>>
+
+        template<typename Derived>
+        struct variable_info_base<Eigen::MatrixBase<Derived>, std::false_type>
         {
-            static constexpr int size = IndexedVector<Base>::RowsAtCompileTime;
+            // Special case since std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value is false for
+            // Derived = Eigen::MatrixBase<...>
+            static constexpr int size = Eigen::MatrixBase<Derived>::RowsAtCompileTime * bool(Eigen::MatrixBase<Derived>::Flags & VariableBit);
         };
 
+        template<typename Derived>
+        struct variable_info_base<IndexedVector<Derived>, std::false_type>
+        {
+            static constexpr int size = IndexedVector<Derived>::RowsAtCompileTime;
+        };
+
+        template<typename Derived>
+        struct variable_info_base<Derived, std::true_type>
+        {
+            static constexpr int size = Eigen::MatrixBase<Derived>::RowsAtCompileTime * bool(Eigen::MatrixBase<Derived>::Flags & VariableBit);
+        };
+
+        template<typename Derived>
+        struct variable_info : public variable_info_base<typename std::remove_cv<typename std::remove_reference<Derived>::type>::type> {};
+
     } // end namespace meta
+
+    template<typename T>
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<T>, T>::value, Eigen::Matrix<T, 1, 1>>::type
+    to_matrix_type(const T& value)
+    {
+        Eigen::Matrix<T, 1, 1> res;
+        res(0) = value;
+        return res;
+    }
+
+    template<typename Derived>
+    const Eigen::MatrixBase<Derived>& to_matrix_type(const Eigen::MatrixBase<Derived>& value)
+    {
+        return value;
+    }
 
     /**
      * Takes a parameter pack of Eigen::Vector's and concatenates

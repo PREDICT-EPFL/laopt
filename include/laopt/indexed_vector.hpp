@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include "laopt/expressions/expr_base.hpp"
+#include "laopt/variable_map.hpp"
 
 namespace laopt {
 
@@ -27,6 +28,9 @@ class IndexedVector : public Base, public VariableBase<IndexedVector<Base>> {
 
     template<typename PlainObjectType, int MapOptions, typename StrideType>
     explicit IndexedVector(constructor_selector<Eigen::Map<PlainObjectType, MapOptions, StrideType>>) : Base(nullptr) {}
+
+    template<typename PlainObjectType, int MapOptions, typename StrideType>
+    explicit IndexedVector(constructor_selector<VariableMap<PlainObjectType, MapOptions, StrideType>>) : Base(nullptr) {}
 
     template<typename Derived>
     explicit IndexedVector(constructor_selector<Derived>) : Base() {}
@@ -183,7 +187,7 @@ public:
 };
 
 template<typename Scalar, int n>
-using Variable = IndexedVector<Eigen::Map<Eigen::Vector<Scalar, n>>>;
+using Variable = IndexedVector<laopt::VariableMap<Eigen::Vector<Scalar, n>>>;
 
 }
 

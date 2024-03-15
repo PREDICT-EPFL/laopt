@@ -71,16 +71,16 @@ public:
 };
 
 template<typename Derived, int Options>
-class DifferentiableBaseCasadi
+class DifferentiableImplCasadi
 {
 protected:
     std::size_t jacobian_tag_id_counter = 0;
     std::size_t hessian_tag_id_counter = 0;
 
-    std::vector<std::unique_ptr<casadi::Function>> casadi_jacobian_sparse;
-    std::vector<std::unique_ptr<casadi::Function>> casadi_hessian_sparse;
-    std::vector<std::unique_ptr<FastCasadiFunctionBuffer>> casadi_jacobian_buffer;
-    std::vector<std::unique_ptr<FastCasadiFunctionBuffer>> casadi_hessian_buffer;
+    std::vector<std::shared_ptr<casadi::Function>> casadi_jacobian_sparse;
+    std::vector<std::shared_ptr<casadi::Function>> casadi_hessian_sparse;
+    std::vector<std::shared_ptr<FastCasadiFunctionBuffer>> casadi_jacobian_buffer;
+    std::vector<std::shared_ptr<FastCasadiFunctionBuffer>> casadi_hessian_buffer;
 
     template<typename Tag, typename OutJacobian, typename AScalar, typename... Args, int Opts = Options>
     EIGEN_STRONG_INLINE typename std::enable_if<(has_tag_override<Tag>::type::value && has_tag_casadi<Tag>::value) ||
@@ -224,10 +224,10 @@ protected:
             std::vector<casadi::SX> casadi_vars;
             // we have to go into tuple land here to ensure make_casadi_sx is executed in order which is enforced by the brace initialization list
             std::tuple<decltype(make_casadi_sx(casadi_args, casadi_vars, args))...> func_args{make_casadi_sx(casadi_args, casadi_vars, args)...};
-            Eigen::Vector<casadi::SX, Info::n_outputs> out = call_function_from_tuple(tag, func_args);
+            Eigen::Vector<casadi::SX, Info::n_outputs> out = to_matrix_type(call_function_from_tuple(tag, func_args));
             casadi::SX casadi_out = casadi::SX::vertcat({out.data(), out.data() + Info::n_outputs});
 
-            casadi_jacobian_sparse.emplace_back(std::unique_ptr<casadi::Function>(new casadi::Function(
+            casadi_jacobian_sparse.emplace_back(std::shared_ptr<casadi::Function>(new casadi::Function(
                 "jacobian_sparse",
                 casadi_args,
                 {casadi::SX::jacobian(casadi_out, casadi::SX::vertcat(casadi_vars))})));
@@ -255,10 +255,10 @@ protected:
             Eigen::Vector<casadi::SX, Info::n_outputs> casadi_weight = make_casadi_sx(casadi_args, casadi_vars, weight);
             // we have to go into tuple land here to ensure make_casadi_sx is executed in order which is enforced by the brace initialization list
             std::tuple<decltype(make_casadi_sx(casadi_args, casadi_vars, args))...> func_args{make_casadi_sx(casadi_args, casadi_vars, args)...};
-            Eigen::Vector<casadi::SX, Info::n_outputs> out = call_function_from_tuple(tag, func_args);
+            Eigen::Vector<casadi::SX, Info::n_outputs> out = to_matrix_type(call_function_from_tuple(tag, func_args));
             casadi::SX out_weight = casadi_weight.dot(out);
 
-            casadi_hessian_sparse.emplace_back(std::unique_ptr<casadi::Function>(new casadi::Function(
+            casadi_hessian_sparse.emplace_back(std::shared_ptr<casadi::Function>(new casadi::Function(
                 "hessian_sparse",
                 casadi_args,
                 {casadi::SX::hessian(out_weight, casadi::SX::vertcat(casadi_vars))})));
@@ -288,7 +288,23 @@ protected:
     }
 
     template<typename T>
-    EIGEN_STRONG_INLINE auto
+    EIGEN_STRONG_INLINE typename std::enable_if<meta::has_variable_bit<T>::value, Eigen::Vector<casadi::SX, Eigen::MatrixBase<T>::RowsAtCompileTime>>::type
+    make_casadi_sx(std::vector<casadi::SX>& casadi_args, std::vector<casadi::SX>& casadi_vars, const Eigen::MatrixBase<T>& x) noexcept
+    {
+        constexpr size_t rows = Eigen::MatrixBase<T>::RowsAtCompileTime;
+        constexpr size_t cols = Eigen::MatrixBase<T>::ColsAtCompileTime;
+        static_assert(rows >= 0 && cols == 1, "vector based parameters can not be dynamic");
+        Eigen::Vector<casadi::SX, rows> y;
+        for (size_t i = 0; i < rows; i++) {
+            y[i] = casadi::SX::sym("arg" + std::to_string(i), 1);
+        }
+        casadi_args.push_back(casadi::SX::vertcat({y.data(), y.data() + rows}));
+        casadi_vars.push_back(casadi::SX::vertcat({y.data(), y.data() + rows}));
+        return y;
+    }
+
+    template<typename T>
+    EIGEN_STRONG_INLINE typename std::enable_if<!meta::has_variable_bit<T>::value, Eigen::Vector<casadi::SX, Eigen::MatrixBase<T>::RowsAtCompileTime>>::type
     make_casadi_sx(std::vector<casadi::SX>& casadi_args, std::vector<casadi::SX>& casadi_vars, const Eigen::MatrixBase<T>& x) noexcept
     {
         constexpr size_t rows = Eigen::MatrixBase<T>::RowsAtCompileTime;
