@@ -59,28 +59,6 @@ struct ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>
         ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_jacobian(Eigen::all, Eigen::lastN(DerivedRhs::n_inputs)), -alpha);
     }
 
-    template<typename AScalar>
-    static EIGEN_STRONG_INLINE void
-    jacobian(const SubExpr<DerivedLhs, DerivedRhs>& expr, BSMatrixSparsity&& out_jacobian, const AScalar& alpha)
-    {
-        jacobian_sparsity(expr, std::forward<BSMatrixSparsity>(out_jacobian), alpha);
-    }
-
-    template<typename SparsityNullMat, typename AScalar>
-    static EIGEN_STRONG_INLINE void
-    jacobian(const SubExpr<DerivedLhs, DerivedRhs>& expr, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>&& out_jacobian, const AScalar& alpha)
-    {
-        jacobian_sparsity(expr, std::forward<BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>>(out_jacobian), alpha);
-    }
-
-    template<typename SparsityNullMat, typename AScalar>
-    static EIGEN_STRONG_INLINE void
-    jacobian_sparsity(const SubExpr<DerivedLhs, DerivedRhs>& expr, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>&& out_jacobian, const AScalar& alpha)
-    {
-        ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_jacobian(Eigen::all, Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), alpha);
-        ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_jacobian(Eigen::all, Eigen::lastN(Eigen::fix<DerivedRhs::n_inputs>)), -alpha);
-    }
-
     template<typename Weight>
     static EIGEN_STRONG_INLINE auto
     wsum(const SubExpr<DerivedLhs, DerivedRhs>& expr, const Weight& weight)
@@ -99,28 +77,6 @@ struct ExprEvaluator<SubExpr<DerivedLhs, DerivedRhs>>
     template<typename OutHessian, typename Weight>
     static EIGEN_STRONG_INLINE void
     hessian(const SubExpr<DerivedLhs, DerivedRhs>& expr, OutHessian&& out_hessian, const Weight& weight)
-    {
-        ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_hessian(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight);
-        ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_hessian(Eigen::lastN(DerivedRhs::n_inputs), Eigen::lastN(DerivedRhs::n_inputs)), -weight);
-    }
-
-    template<typename Weight>
-    static EIGEN_STRONG_INLINE void
-    hessian(const SubExpr<DerivedLhs, DerivedRhs>& expr, BSMatrixSparsity&& out_hessian, const Weight& weight)
-    {
-        hessian_sparsity(expr, std::forward<BSMatrixSparsity>(out_hessian), weight);
-    }
-
-    template<typename SparsityNullMat, typename Weight>
-    static EIGEN_STRONG_INLINE void
-    hessian(const SubExpr<DerivedLhs, DerivedRhs>& expr, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>&& out_hessian, const Weight& weight)
-    {
-        hessian_sparsity(expr, std::forward<BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>>(out_hessian), weight);
-    }
-
-    template<typename SparsityNullMat, typename Weight>
-    static EIGEN_STRONG_INLINE void
-    hessian_sparsity(const SubExpr<DerivedLhs, DerivedRhs>& expr, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>&& out_hessian, const Weight& weight)
     {
         ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_hessian(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight);
         ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_hessian(Eigen::lastN(DerivedRhs::n_inputs), Eigen::lastN(DerivedRhs::n_inputs)), -weight);

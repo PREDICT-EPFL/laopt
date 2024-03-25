@@ -72,27 +72,6 @@ struct ExprEvaluator<ScalarExpr<ScalarType, Derived>>
         ExprEvaluator<Derived>::jacobian(expr.expr, out_jacobian, expr.scalar * alpha);
     }
 
-    template<typename AScalar>
-    static EIGEN_STRONG_INLINE void
-    jacobian(const ScalarExpr<ScalarType, Derived>& expr, BSMatrixSparsity&& out_jacobian, const AScalar& alpha)
-    {
-        jacobian_sparsity(expr, std::forward<BSMatrixSparsity>(out_jacobian), expr.scalar * alpha);
-    }
-
-    template<typename SparsityNullMat, typename AScalar>
-    static EIGEN_STRONG_INLINE void
-    jacobian(const ScalarExpr<ScalarType, Derived>& expr, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>&& out_jacobian, const AScalar& alpha)
-    {
-        jacobian_sparsity(expr, std::forward<BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>>(out_jacobian), expr.scalar * alpha);
-    }
-
-    template<typename SparsityNullMat, typename AScalar>
-    static EIGEN_STRONG_INLINE void
-    jacobian_sparsity(const ScalarExpr<ScalarType, Derived>& expr, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>&& out_jacobian, const AScalar& alpha)
-    {
-        ExprEvaluator<Derived>::jacobian(expr.expr, out_jacobian(Eigen::all, Eigen::seqN(0, Eigen::fix<Derived::n_inputs>)), expr.scalar * alpha);
-    }
-
     template<typename Weight>
     static EIGEN_STRONG_INLINE auto
     wsum(const ScalarExpr<ScalarType, Derived>& expr, const Weight& weight)
@@ -112,27 +91,6 @@ struct ExprEvaluator<ScalarExpr<ScalarType, Derived>>
     hessian(const ScalarExpr<ScalarType, Derived>& expr, OutHessian&& out_hessian, const Weight& weight)
     {
         ExprEvaluator<Derived>::hessian(expr.expr, out_hessian, expr.scalar * weight);
-    }
-
-    template<typename Weight>
-    static EIGEN_STRONG_INLINE void
-    hessian(const ScalarExpr<ScalarType, Derived>& expr, BSMatrixSparsity&& out_hessian, const Weight& weight)
-    {
-        hessian_sparsity(expr, std::forward<BSMatrixSparsity>(out_hessian), expr.scalar * weight);
-    }
-
-    template<typename SparsityNullMat, typename Weight>
-    static EIGEN_STRONG_INLINE void
-    hessian(const ScalarExpr<ScalarType, Derived>& expr, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>&& out_hessian, const Weight& weight)
-    {
-        hessian_sparsity(expr, std::forward<BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>>(out_hessian), expr.scalar * weight);
-    }
-
-    template<typename SparsityNullMat, typename Weight>
-    static EIGEN_STRONG_INLINE void
-    hessian_sparsity(const ScalarExpr<ScalarType, Derived>& expr, BSSliceSparsity<BSMatrixSparsity, SparsityNullMat>&& out_hessian, const Weight& weight)
-    {
-        ExprEvaluator<Derived>::hessian(expr.expr, out_hessian(Eigen::seqN(0, Eigen::fix<Derived::n_inputs>), Eigen::seqN(0, Eigen::fix<Derived::n_inputs>)), expr.scalar * weight);
     }
 };
 
