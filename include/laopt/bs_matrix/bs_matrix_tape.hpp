@@ -5,6 +5,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
+#include "laopt/block_sparse_matrix.hpp"
+#include "laopt/bs_matrix/bs_matrix_sparsity.hpp"
 #include "laopt/bs_matrix/coord_matrix.hpp"
 #include "laopt/bs_matrix/bs_matrix.hpp"
 #include "laopt/bs_matrix/bs_slice_base.hpp"
@@ -18,7 +20,7 @@ template<typename Child, typename NullMat>
 class BSSliceTape : public BSSliceBase<BSSliceTape<Child, NullMat>, NullMat>
 {
 private:
-    Child& child; // Pointer to the child class BSSparsity object
+    Child& child; // Pointer to the child class BSMatrixTape object
 
     template<typename, typename>
     friend class laopt::BSSliceBase;
@@ -140,23 +142,24 @@ public:
 /**
 * A tape class to capture the copy pattern.
 */
-class BSMatrixTape : public BSSliceTape<BSMatrixTape, CoordMatrix>
+template<typename scalar_t>
+class BSMatrixTape : public BSSliceTape<BSMatrixTape<scalar_t>, CoordMatrix>
 {
 private:
     template<typename, typename>
     friend class laopt::BSSliceTape;
 
-    Eigen::SparseMatrix<int> sparsity_structure; // Must have been created a-priori
+    Eigen::SparseMatrix<int> sparsity_structure;
 
     // Sequence of copy operations
     std::vector<Segment> copy_segments;
     std::vector<CopyInfo> copy_info;
 
 public:
-    explicit BSMatrixTape(const Eigen::SparseMatrix<bool>& structure)
-    : BSSliceTape<BSMatrixTape, CoordMatrix>(*this, CoordMatrix(structure.rows(), structure.cols()))
+    explicit BSMatrixTape(const BSMatrixSparsityInfo& sparsity_info)
+    : BSSliceTape<BSMatrixTape<scalar_t>, CoordMatrix>(*this, CoordMatrix(sparsity_info.sparsity_pattern.rows(), sparsity_info.sparsity_pattern.cols()))
     {
-        sparsity_structure = structure.cast<int>();
+        sparsity_structure = sparsity_info.sparsity_pattern.cast<int>();
         sparsity_structure.makeCompressed();
 
         // We set the non-zero elements to what their index into the data of a csc-sparse matrix.
@@ -167,52 +170,117 @@ public:
         }
     };
 
-    using BSSliceTape<BSMatrixTape, CoordMatrix>::operator=;
+    using BSSliceTape<BSMatrixTape<scalar_t>, CoordMatrix>::operator=;
 
     void set_zero() {}
-
-    /**
-     * Resize the matrix null_mat.
-     *
-     * Note: Invalidates all slices!
-     *
-     * Note: Sparsity structure must be set before this is called.
-     */
-    void resize(Eigen::Index rows, Eigen::Index cols)
-    {
-        this->null_mat.resize(rows, cols);
-    }
 
     /**
      * Resize the matrix by adding rows rows and cols columns
      */
     void extend(Eigen::Index rows, Eigen::Index cols)
     {
-        resize(null_mat.rows() + rows, null_mat.cols() + cols);
+        this->null_mat.resize(this->null_mat.rows() + rows, this->null_mat.cols() + cols);
     }
 
     /**
      * Create a BSMatrix from this tape
      */
-    template<typename scalar_t>
-    BSMatrix<scalar_t> makeBSMatrix()
+    BSMatrix<Eigen::SparseMatrix<scalar_t>> makeBSMatrix()
     {
-        return BSMatrix<scalar_t>(sparsity_structure.cast<bool>(), copy_segments, copy_info);
+        return BSMatrix<Eigen::SparseMatrix<scalar_t>>(generate());
     }
 
     /**
      * Generate the data required to produce a BSMatrix
      */
-    using Info = BSMatrixInfo;
+    using Info = BSMatrixInfo<Eigen::SparseMatrix<scalar_t>>;
 
     Info generate()
     {
         Info info;
 
-        info.rows = rows();
-        info.cols = cols();
+        info.rows = this->rows();
+        info.cols = this->cols();
 
-        info.sparsity_structure = sparsity_structure.cast<bool>();
+        info.sparsity_structure = sparsity_structure.cast<scalar_t>();
+        info.copy_segments = copy_segments;
+        info.copy_info = copy_info;
+
+        return info;
+    }
+};
+
+template<typename scalar_t>
+class BSBSMatrixTape : public BSSliceTape<BSBSMatrixTape<scalar_t>, CoordMatrix>
+{
+public:
+    template<typename, typename>
+    friend class laopt::BSSliceTape;
+
+    Eigen::SparseMatrix<int> sparsity_structure;
+    Eigen::BlockSparseMatrix<int> block_sparse_matrix;
+
+    // Sequence of copy operations
+    std::vector<Segment> copy_segments;
+    std::vector<CopyInfo> copy_info;
+
+public:
+    explicit BSBSMatrixTape(const BSMatrixSparsityInfo& sparsity_info)
+    : BSSliceTape<BSBSMatrixTape<scalar_t>, CoordMatrix>(*this, CoordMatrix(sparsity_info.sparsity_pattern.rows(), sparsity_info.sparsity_pattern.cols()))
+    {
+        sparsity_structure = sparsity_info.sparsity_pattern.cast<int>();
+        sparsity_structure.makeCompressed();
+
+        block_sparse_matrix.resize(sparsity_info.block_rows.rows(), sparsity_info.block_cols.rows());
+        block_sparse_matrix.setBlockLayout(sparsity_info.block_rows, sparsity_info.block_cols);
+        block_sparse_matrix = sparsity_structure;
+
+        // We set the non-zero elements to what their index into the data of a block sparse matrix.
+        // The index is stored in 1-indexing format to distinguish 0 elements in the sparse matrix
+        // and the original 0-index.
+        for (Eigen::Index i = 0; i < block_sparse_matrix.nonZeros(); i++) {
+            block_sparse_matrix.valuePtr()[i] = static_cast<int>(i + 1);
+        }
+
+        sparsity_structure = block_sparse_matrix;
+    };
+
+    using BSSliceTape<BSBSMatrixTape<scalar_t>, CoordMatrix>::operator=;
+
+    void set_zero() {}
+
+    /**
+     * Resize the matrix by adding rows rows and cols columns
+     */
+    void extend(Eigen::Index rows, Eigen::Index cols)
+    {
+        this->null_mat.resize(this->null_mat.rows() + rows, this->null_mat.cols() + cols);
+    }
+
+    /**
+     * Create a BSMatrix from this tape
+     */
+    BSMatrix<Eigen::BlockSparseMatrix<scalar_t>> makeBSMatrix()
+    {
+        return BSMatrix<Eigen::BlockSparseMatrix<scalar_t>>(generate());
+    }
+
+    /**
+     * Generate the data required to produce a BSMatrix
+     */
+    using Info = BSMatrixInfo<Eigen::BlockSparseMatrix<scalar_t>>;
+
+    Info generate()
+    {
+        Info info;
+
+        info.rows = this->rows();
+        info.cols = this->cols();
+
+        info.sparsity_structure.resize(block_sparse_matrix.blockRows(), block_sparse_matrix.blockCols());
+        info.sparsity_structure.setBlockLayout(block_sparse_matrix);
+        info.sparsity_structure = block_sparse_matrix.cast<scalar_t>();
+
         info.copy_segments = copy_segments;
         info.copy_info = copy_info;
 

@@ -47,23 +47,33 @@ template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
 using SparsityInfo = typename Sparsity<UserCode, scalar_t>::Info;
 
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
-using Tape = ProblemBase<UserCode, scalar_t, BSMatrixTape, BSMatrixDenseConstruction<scalar_t>>;
+using Tape = ProblemBase<UserCode, scalar_t, BSMatrixTape<scalar_t>, BSMatrixDenseConstruction<scalar_t>>;
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
 using TapeInfo = typename Tape<UserCode, scalar_t>::Info;
 
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
-using Problem = ProblemBase<UserCode, scalar_t, BSMatrix<scalar_t>, BSMatrixDenseDeployment<scalar_t>>;
+using BSTape = ProblemBase<UserCode, scalar_t, BSBSMatrixTape<scalar_t>, BSMatrixDenseConstruction<scalar_t>>;
+template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
+using BSTapeInfo = typename BSTape<UserCode, scalar_t>::Info;
 
+template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
+using Problem = ProblemBase<UserCode, scalar_t, BSMatrix<Eigen::SparseMatrix<scalar_t>>, BSMatrixDenseDeployment<scalar_t>>;
+template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
+using BSProblem = ProblemBase<UserCode, scalar_t, BSMatrix<Eigen::BlockSparseMatrix<scalar_t>>, BSMatrixDenseDeployment<scalar_t>>;
 
-template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
+template<typename UserCode_, typename Scalar, typename Matrix, typename Vector>
 class ProblemBase
 {
+public:
+    using UserCode = UserCode_;
+    using scalar_t = Scalar;
+    using matrix_t = Matrix;
+    using vector_t = Vector;
+
 private:
     UserCode& user_code;
 
 public:
-    using scalar_t = Scalar;
-
     WeightedSumFunction<Matrix, Vector> objective;
     VectorFunction<Matrix, Vector>      variable_bounds;
     VectorFunction<Matrix, Vector>      constraints;
@@ -201,11 +211,12 @@ public:
         return info;
     }
 
-    template<typename UserCode_, typename scalar_t_>
-    friend SparsityInfo<UserCode_> generate_sparsity(UserCode_& user_code);
-
-    template<typename UserCode_, typename scalar_t_>
-    friend TapeInfo<UserCode_> generate_tape(UserCode_& user_code, SparsityInfo<UserCode_> sparsity);
+    template<typename UserCodeTemp, typename ScalarTemp>
+    friend SparsityInfo<UserCodeTemp> generate_sparsity(UserCodeTemp& user_code);
+    template<typename UserCodeTemp, typename ScalarTemp>
+    friend TapeInfo<UserCodeTemp> generate_tape(UserCodeTemp& user_code, SparsityInfo<UserCodeTemp> sparsity);
+    template<typename UserCodeTemp, typename ScalarTemp>
+    friend BSTapeInfo<UserCodeTemp> generate_bs_tape(UserCodeTemp& user_code, SparsityInfo<UserCodeTemp> sparsity);
 
 private:
     /**
@@ -288,6 +299,24 @@ TapeInfo<UserCode> generate_tape(UserCode& user_code, SparsityInfo<UserCode> spa
     return prob.generate();
 }
 
+template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
+BSTapeInfo<UserCode> generate_bs_tape(UserCode& user_code, SparsityInfo<UserCode> sparsity)
+{
+    BSTape<UserCode, scalar_t> prob(user_code, sparsity);
+
+    Eigen::VectorX<scalar_t> var(prob.variables());
+    var.setZero();
+    prob.set_decision_variable(var);
+
+    prob.eval_constraints_no_memory(Jacobian{});
+    prob.eval_variable_bounds_no_memory();
+    prob.eval_objective_no_memory(Gradient{});
+    prob.eval_objective_no_memory(Hessian{});
+    prob.eval_lagrangian_no_memory(Hessian{});
+
+    return prob.generate();
+}
+
 /**
  * Generates tape and sparsity information for the given user code, and then creates a problem.
  */
@@ -296,6 +325,13 @@ Problem<UserCode> generate(UserCode& user_code)
 {
     TapeInfo<UserCode> tape = generate_tape(user_code, generate_sparsity(user_code));
     return Problem<UserCode>(user_code, tape);
+}
+
+template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
+BSProblem<UserCode> generate_bs(UserCode& user_code)
+{
+    BSTapeInfo<UserCode> tape = generate_bs_tape(user_code, generate_sparsity(user_code));
+    return BSProblem<UserCode>(user_code, tape);
 }
 
 /**
@@ -339,7 +375,7 @@ std::ostream& operator<<(std::ostream &o, const ProblemInfo<BSMatrixSparsity, BS
 }
 
 template <typename scalar_t>
-std::ostream& operator<<(std::ostream& o, const ProblemInfo<BSMatrixTape, BSMatrixDenseConstruction<scalar_t>>& info)
+std::ostream& operator<<(std::ostream& o, const ProblemInfo<BSMatrixTape<scalar_t>, BSMatrixDenseConstruction<scalar_t>>& info)
 {
 	o << "==== Problem Tape Information ====\n";
     o << "Variables    : " << info.objective.variables << std::endl;

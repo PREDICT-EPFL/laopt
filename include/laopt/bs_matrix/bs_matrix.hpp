@@ -66,31 +66,36 @@ inline std::ostream &operator<<(std::ostream &os, std::vector<CopyInfo> const &s
 /**
  * Information required to construct a BSMatrix
  */
+template<typename SparsityType>
 struct BSMatrixInfo
 {
     Eigen::Index rows = 0;
     Eigen::Index cols = 0;
-    Eigen::SparseMatrix<bool> sparsity_structure;
+    SparsityType sparsity_structure;
     std::vector<Segment> copy_segments;
     std::vector<CopyInfo> copy_info;
 };
 
-template<typename scalar_t>
+template<typename SparsityType_>
 class BSMatrix
 {
+public:
+    using SparsityType = SparsityType_;
+    using Scalar = typename SparsityType::Scalar;
+
 private:
-    Eigen::SparseMatrix<bool> sparsity_structure;
+    SparsityType sparsity_structure;
     const std::vector<Segment> segments;
     const std::vector<CopyInfo> copies;
     size_t copy_index; // Current index into copies
 
-    scalar_t *target = nullptr; // Where we're going to write the data
+    Scalar *target = nullptr; // Where we're going to write the data
 
     inline void reset_copy_index() { copy_index = 0; }
 
     // Execute the next copy in the sequence
     template<typename Op>
-    inline void execute_operation(Op op, const scalar_t *source)
+    inline void execute_operation(Op op, const Scalar *source)
     {
         int segment_index = copies[copy_index].segment_index;
         for (size_t i = 0; i < copies[copy_index].num_segments_to_copy; i++)
@@ -100,8 +105,8 @@ private:
             if (type == SegmentType::COPY)
             {
                 size_t index = segments[segment_index + i].index;
-                Eigen::Map<Eigen::VectorX<scalar_t>> tgt(target + index, length);
-                const Eigen::Map<const Eigen::VectorX<scalar_t>> src(source, length);
+                Eigen::Map<Eigen::VectorX<Scalar>> tgt(target + index, length);
+                const Eigen::Map<const Eigen::VectorX<Scalar>> src(source, length);
                 op(tgt, src);
             }
             source += length;
@@ -115,7 +120,7 @@ public:
      * Note: The BSMatrix owns no memory, and so set_target must be called
      * before any operations are done!
      */
-    BSMatrix(const Eigen::SparseMatrix<bool>& sparsity_structure,
+    BSMatrix(const SparsityType& sparsity_structure,
              std::vector<Segment> copy_segments,
              std::vector<CopyInfo> copy_info)
             : sparsity_structure(sparsity_structure),
@@ -123,7 +128,7 @@ public:
               copies(std::move(copy_info)),
               copy_index(0) {}
 
-    explicit BSMatrix(const BSMatrixInfo& info)
+    explicit BSMatrix(const BSMatrixInfo<SparsityType>& info)
             : sparsity_structure(info.sparsity_structure),
               segments(info.copy_segments),
               copies(info.copy_info),
@@ -133,9 +138,9 @@ public:
      * Initialize S to the right sparsity structure and set it
      * as the target
      */
-    void allocate_memory(Eigen::SparseMatrix<scalar_t>& S)
+    void allocate_memory(SparsityType& S)
     {
-        S = sparsity_structure.eval().template cast<scalar_t>();
+        S = sparsity_structure;
         set_target(S);
     }
 
@@ -143,12 +148,12 @@ public:
      * Use the given matrix as the target.
      * Must already have been initialized to the correct sparsity structure!
      */
-    void set_target(Eigen::SparseMatrix<scalar_t>& S)
+    void set_target(SparsityType& S)
     {
         target = S.valuePtr();
     }
 
-    void set_target(Eigen::Ref<Eigen::MatrixX<scalar_t>> S)
+    void set_target(Eigen::Ref<Eigen::MatrixX<Scalar>> S)
     {
         assert(S.rows() * S.cols() == sparsity_structure.nonZeros() && "Buffer size too small");
         target = S.data();
@@ -161,11 +166,11 @@ public:
     {
         if (target != nullptr)
         {
-            Eigen::Map<Eigen::VectorX<scalar_t>>(target, sparsity_structure.nonZeros()).array() = 0;
+            Eigen::Map<Eigen::VectorX<Scalar>>(target, sparsity_structure.nonZeros()).array() = 0;
         }
     }
 
-    Eigen::SparseMatrix<bool> get_sparsity_structure()
+    SparsityType get_sparsity_structure()
     {
         return sparsity_structure;
     }
@@ -189,7 +194,7 @@ public:
         return *this;
     }
 
-    inline BSMatrix& operator=(const scalar_t& scalar)
+    inline BSMatrix& operator=(const Scalar& scalar)
     {
         execute_operation([](auto& a, auto& b) { a = b; }, &scalar);
         return *this;
@@ -210,7 +215,7 @@ public:
         return *this;
     }
 
-    inline BSMatrix& operator+=(const scalar_t& scalar)
+    inline BSMatrix& operator+=(const Scalar& scalar)
     {
         execute_operation([](auto& a, auto& b) { a += b; }, &scalar);
         return *this;
@@ -231,7 +236,7 @@ public:
         return *this;
     }
 
-    inline BSMatrix& operator-=(const scalar_t& scalar)
+    inline BSMatrix& operator-=(const Scalar& scalar)
     {
         execute_operation([](auto& a, auto& b) { a -= b; }, &scalar);
         return *this;
@@ -239,28 +244,28 @@ public:
 
     // These all compile out. Not used in deployment.
     template<typename RowSlice, typename ColSlice>
-    BSMatrix<scalar_t>& operator()(const RowSlice& row_slice, const ColSlice& col_slice) { return *this; }
+    BSMatrix<SparsityType>& operator()(const RowSlice& row_slice, const ColSlice& col_slice) { return *this; }
 
     // The following three overloads are needed to handle raw Index[N] arrays.
     template<typename RowIndicesT, std::size_t RowIndicesN, typename ColIndices>
-    BSMatrix<scalar_t>& operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndices& col_indices) { return *this; }
+    BSMatrix<SparsityType>& operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndices& col_indices) { return *this; }
     template<typename RowIndices, typename ColIndicesT, std::size_t ColIndicesN>
-    BSMatrix<scalar_t>& operator()(const RowIndices& row_indices, const ColIndicesT (&col_indices)[ColIndicesN]) { return *this; }
+    BSMatrix<SparsityType>& operator()(const RowIndices& row_indices, const ColIndicesT (&col_indices)[ColIndicesN]) { return *this; }
     template<typename RowIndicesT, std::size_t RowIndicesN, typename ColIndicesT, std::size_t ColIndicesN>
-    BSMatrix<scalar_t>& operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndicesT (&col_indices)[ColIndicesN]) { return *this; }
+    BSMatrix<SparsityType>& operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndicesT (&col_indices)[ColIndicesN]) { return *this; }
 
     // Vector format
     template<typename RowSlice>
-    BSMatrix<scalar_t>& operator()(const RowSlice& row_slice) { return *this; }
+    BSMatrix<SparsityType>& operator()(const RowSlice& row_slice) { return *this; }
 
     template<typename RowIndicesT, std::size_t RowIndicesN>
-    BSMatrix<scalar_t>& operator()(const RowIndicesT (&row_indices)[RowIndicesN]) { return *this; }
+    BSMatrix<SparsityType>& operator()(const RowIndicesT (&row_indices)[RowIndicesN]) { return *this; }
 
-    BSMatrix<scalar_t>& diagonal() { return *this; }
+    BSMatrix<SparsityType>& diagonal() { return *this; }
 
-    BSMatrix<scalar_t>& row(size_t i) { return *this; }
+    BSMatrix<SparsityType>& row(size_t i) { return *this; }
 
-    BSMatrix<scalar_t>& col(size_t i) { return *this; }
+    BSMatrix<SparsityType>& col(size_t i) { return *this; }
 
     void resize(int rows, int cols) {}
 

@@ -111,11 +111,12 @@ public:
     EIGEN_STRONG_INLINE qp_solver_info_t& info() noexcept { return m_info; }
 
     /** solve with generic and box constraints*/
-    qp_solver_info_t solve(const Eigen::SparseMatrix<scalar_t>& H,
+    template<typename SparseMatrixType>
+    qp_solver_info_t solve(const SparseMatrixType& H,
                            const Eigen::Ref<const Eigen::VectorX<scalar_t>>& f,
                            const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xlb,
                            const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xub,
-                           const Eigen::SparseMatrix<scalar_t>& A,
+                           const SparseMatrixType& A,
                            const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
                            const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
     {

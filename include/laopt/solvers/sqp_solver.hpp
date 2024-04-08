@@ -85,19 +85,20 @@ class SQPBase
 {
 public:
     using scalar_t = typename Problem::scalar_t;
+    using matrix_t = typename Problem::matrix_t::SparsityType;
 
-private:
+protected:
     Problem& prob;
 
-    Eigen::VectorX<scalar_t>      m_x;            // variable primal
-    Eigen::VectorX<scalar_t>      m_lam;          // dual variable
-    Eigen::VectorX<scalar_t>      m_lam_bounds;   // dual variable for bounds
-    Eigen::VectorX<scalar_t>      m_lbx, m_ubx;   // variable bounds
-    Eigen::VectorX<scalar_t>      m_cost_grad;    // Gradient of the cost function
-    Eigen::SparseMatrix<scalar_t> m_lag_hess;     // Hessian of Lagrangian
-    Eigen::VectorX<scalar_t>      m_g;            // constraints evaluation
-    Eigen::SparseMatrix<scalar_t> m_g_jac;        // constraints Jacobian
-    Eigen::VectorX<scalar_t>      m_lbg, m_ubg;   // equality/inequality constraints evaluated
+    Eigen::VectorX<scalar_t> m_x;            // variable primal
+    Eigen::VectorX<scalar_t> m_lam;          // dual variable
+    Eigen::VectorX<scalar_t> m_lam_bounds;   // dual variable for bounds
+    Eigen::VectorX<scalar_t> m_lbx, m_ubx;   // variable bounds
+    Eigen::VectorX<scalar_t> m_cost_grad;    // Gradient of the cost function
+    matrix_t                 m_lag_hess;     // Hessian of Lagrangian
+    Eigen::VectorX<scalar_t> m_g;            // constraints evaluation
+    matrix_t                 m_g_jac;        // constraints Jacobian
+    Eigen::VectorX<scalar_t> m_lbg, m_ubg;   // equality/inequality constraints evaluated
 
     QPSolver m_qp_solver;
     sqp_settings_t<scalar_t> m_settings;
@@ -132,7 +133,6 @@ private:
     Eigen::VectorX<scalar_t> m_gershgorin_bound; // variable used to calculate hessian regularization (gershgorin circle theorem)
 
 public:
-
     explicit SQPBase(Problem& prob) :
         prob(prob),
         m_x(prob.variables()),
@@ -242,7 +242,7 @@ public:
         // update convergence criteria
         m_primal_feasibility_inf = max_constraints_violation(m_x);
         m_complementarity_inf = max_complementarity_violation(m_x, m_lam, m_lam_bounds);
-        m_stationarity_inf = max_stationarity_violation(m_x, m_lam, m_lam_bounds);
+        m_stationarity_inf = max_stationarity_violation(m_lam, m_lam_bounds);
 
         if (m_settings.verbose)
         {
@@ -339,7 +339,7 @@ public:
             // update convergence criteria
             m_primal_feasibility_inf = max_constraints_violation(m_x);
             m_complementarity_inf = max_complementarity_violation(m_x, m_lam, m_lam_bounds);
-            m_stationarity_inf = max_stationarity_violation(m_x, m_lam, m_lam_bounds);
+            m_stationarity_inf = max_stationarity_violation(m_lam, m_lam_bounds);
 
             if (m_settings.verbose)
             {
@@ -466,7 +466,7 @@ protected:
     }
 
     EIGEN_STRONG_INLINE scalar_t
-    l1_constraints_violation(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
+    l1_constraints_violation(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& x) noexcept
     {
         scalar_t c = scalar_t(0);
 
@@ -482,7 +482,7 @@ protected:
     }
 
     EIGEN_STRONG_INLINE scalar_t
-    max_constraints_violation(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
+    max_constraints_violation(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& x) noexcept
     {
         scalar_t c = scalar_t(0);
 
@@ -498,9 +498,9 @@ protected:
     }
 
     EIGEN_STRONG_INLINE scalar_t
-    max_complementarity_violation(Eigen::Ref<Eigen::VectorX<scalar_t>> x,
-                                  const Eigen::Ref<const Eigen::VectorX<scalar_t>> &dual,
-                                  const Eigen::Ref<const Eigen::VectorX<scalar_t>> &dual_bounds) noexcept
+    max_complementarity_violation(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& x,
+                                  const Eigen::Ref<const Eigen::VectorX<scalar_t>>& dual,
+                                  const Eigen::Ref<const Eigen::VectorX<scalar_t>>& dual_bounds) noexcept
     {
         scalar_t c = scalar_t(0);
 
@@ -516,9 +516,8 @@ protected:
     }
 
     EIGEN_STRONG_INLINE scalar_t
-    max_stationarity_violation(Eigen::Ref<Eigen::VectorX<scalar_t>> x,
-                               const Eigen::Ref<const Eigen::VectorX<scalar_t>> &dual,
-                               const Eigen::Ref<const Eigen::VectorX<scalar_t>> &dual_bounds) noexcept
+    max_stationarity_violation(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& dual,
+                               const Eigen::Ref<const Eigen::VectorX<scalar_t>>& dual_bounds) noexcept
     {
         return (m_cost_grad + m_g_jac.transpose() * dual + dual_bounds).cwiseAbs().maxCoeff();
     }
@@ -537,7 +536,7 @@ protected:
     }
 
     EIGEN_STRONG_INLINE void
-    hessian_regularisation(Eigen::SparseMatrix<scalar_t>& lag_hessian)
+    hessian_regularisation(matrix_t& lag_hessian)
     {
         static_cast<Derived*>(this)->hessian_regularisation_impl(lag_hessian);
     }
@@ -873,7 +872,7 @@ protected:
     }
 
     /** default regularisation: do nothing */
-    EIGEN_STRONG_INLINE void hessian_regularisation_impl(Eigen::SparseMatrix<scalar_t>& lag_hessian) noexcept
+    EIGEN_STRONG_INLINE void hessian_regularisation_impl(matrix_t& lag_hessian) noexcept
     {
         if (m_settings.regularize_hessian)
         {
@@ -881,7 +880,7 @@ protected:
 
             for (int i = 0; i < lag_hessian.outerSize(); ++i)
             {
-                for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(lag_hessian, i); it; ++it)
+                for (typename matrix_t::InnerIterator it(lag_hessian, i); it; ++it)
                 {
                     if (it.row() == it.col())
                     {
@@ -897,9 +896,15 @@ protected:
             scalar_t eig_lower_bound = m_gershgorin_bound.minCoeff();
             scalar_t eig_offset = fmax(scalar_t(0), -eig_lower_bound);
 
-            for (int i = 0; i < lag_hessian.rows(); i++)
+            for (int i = 0; i < lag_hessian.outerSize(); ++i)
             {
-                lag_hessian.coeffRef(i, i) += eig_offset;
+                for (typename matrix_t::InnerIterator it(lag_hessian, i); it; ++it)
+                {
+                    if (it.row() == it.col())
+                    {
+                        it.valueRef() += eig_offset;
+                    }
+                }
             }
         }
     }

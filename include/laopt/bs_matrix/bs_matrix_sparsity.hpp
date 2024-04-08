@@ -6,7 +6,6 @@
 
 #include "laopt/bs_matrix/coord_matrix.hpp"
 #include "laopt/bs_matrix/bs_slice_base.hpp"
-#include "laopt/bs_matrix/bs_matrix_tape.hpp"
 
 namespace laopt {
 
@@ -64,6 +63,13 @@ public:
     using BSSliceBase<BSSliceSparsity<Child, NullMat>, NullMat>::operator=;
 };
 
+struct BSMatrixSparsityInfo
+{
+    Eigen::VectorXi block_rows;
+    Eigen::VectorXi block_cols;
+    Eigen::SparseMatrix<bool> sparsity_pattern;
+};
+
 /**
  * A tape class to capture the sparsity pattern
  */
@@ -73,6 +79,8 @@ private:
     template<typename, typename>
     friend class laopt::BSSliceSparsity;
 
+    Eigen::VectorXi block_rows;
+    Eigen::VectorXi block_cols;
     Eigen::SparseMatrix<bool> sparsity_pattern;
 
 public:
@@ -88,13 +96,23 @@ public:
 
     /**
      * Resize the matrix null_mat.
-     *
-     * Note: Invalidates all slices!
      */
     void resize(Eigen::Index rows, Eigen::Index cols)
     {
+        if (rows > 0) {
+            block_rows.resize(1);
+            block_rows(0) = int(rows);
+        } else {
+            block_rows.resize(0);
+        }
+        if (cols > 0) {
+            block_cols.resize(1);
+            block_cols(0) = int(rows);
+        } else {
+            block_cols.resize(0);
+        }
         null_mat.resize(rows, cols);
-        sparsity_pattern.conservativeResize(rows, cols);
+        sparsity_pattern.resize(rows, cols);
     }
 
     /**
@@ -102,9 +120,21 @@ public:
      */
     void extend(Eigen::Index rows, Eigen::Index cols)
     {
-        resize(null_mat.rows() + rows, null_mat.cols() + cols);
+        if (rows > 0) {
+            Eigen::Index n_block_rows = block_rows.rows();
+            block_rows.conservativeResize(n_block_rows + 1);
+            block_rows(n_block_rows) = int(rows);
+        }
+        if (cols > 0) {
+            Eigen::Index n_block_cols = block_cols.rows();
+            block_cols.conservativeResize(n_block_cols + 1);
+            block_cols(n_block_cols) = int(cols);
+        }
+        Eigen::Index extended_rows = null_mat.rows() + rows;
+        Eigen::Index extended_cols = null_mat.cols() + cols;
+        null_mat.resize(extended_rows, extended_cols);
+        sparsity_pattern.conservativeResize(extended_rows, extended_cols);
     }
-
 
     /**
      * Returns sparsity pattern.
@@ -116,42 +146,15 @@ public:
     }
 
     /**
-     * Create a BSMatrixTape from this sparsity pattern
-     */
-    BSMatrixTape makeBSTape()
-    {
-        return BSMatrixTape(get_sparsity_pattern());
-    }
-
-    /**
      * Return a pattern that can be passed to a BSMatrixTape to initialize it
      */
-    using Info = Eigen::SparseMatrix<bool>;
+    using Info = BSMatrixSparsityInfo;
 
     Info generate()
     {
-        return get_sparsity_pattern();
+        return {block_rows, block_cols, sparsity_pattern};
     }
 };
-
-/**
- * Helper function to create a BSMatrix from a function
- *
- * F is a callable that takes a matrix-like object
- *
- * rows, cols = initial size of the matrix. (F can resize it)
- */
-template<typename scalar_t, typename F>
-BSMatrix<scalar_t> makeBSMatrix(F f, Eigen::Index rows = 0, Eigen::Index cols = 0)
-{
-    BSMatrixSparsity sparsity(rows, cols);
-    f(sparsity); // Extract sparsity pattern
-
-    auto tape = sparsity.makeBSTape();
-    f(tape); // Extract operation sequence
-
-    return tape.template makeBSMatrix<scalar_t>();
-}
 
 } // namespace laopt
 
