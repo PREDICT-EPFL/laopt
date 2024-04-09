@@ -95,6 +95,10 @@ public:
                 this->m_lam(i) = -m_piqp_solver.result().z(ineq_bound_i++);
                 this->m_lam(i) += m_piqp_solver.result().z(ineq_bound_i++);
             }
+            else
+            {
+                this->m_lam(i) = 0;
+            }
         }
         // copy box constraints dual variables
         this->m_lam_bounds = m_piqp_solver.result().z_ub.head(this->m_n) - m_piqp_solver.result().z_lb.head(this->m_n);

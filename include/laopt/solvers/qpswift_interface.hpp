@@ -240,6 +240,10 @@ public:
                 this->m_lam(i) = -dual_ineq_solution(ineq_bound_i++);
                 this->m_lam(i) += dual_ineq_solution(ineq_bound_i++);
             }
+            else
+            {
+                this->m_lam(i) = 0;
+            }
         }
         // copy box constraints dual variables
         for (int i = 0; i < this->m_n; i++)
@@ -260,6 +264,10 @@ public:
             {
                 this->m_lam_bounds(i) = -dual_ineq_solution(ineq_bound_i++);
                 this->m_lam_bounds(i) += dual_ineq_solution(ineq_bound_i++);
+            }
+            else
+            {
+                this->m_lam_bounds(i) = 0;
             }
         }
 

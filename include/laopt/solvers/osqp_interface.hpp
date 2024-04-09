@@ -141,6 +141,8 @@ public:
             {
                 this->m_lam_bounds(i) = dual_solution(this->m_m + bound_i);
                 bound_i++;
+            } else {
+                this->m_lam_bounds(i) = 0;
             }
         }
 

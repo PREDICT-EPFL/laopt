@@ -92,6 +92,10 @@ public:
             {
                 this->m_lam(i) = m_proxqp_solver.results.z(ineq_bound_i++);
             }
+            else
+            {
+                this->m_lam(i) = 0;
+            }
         }
         // copy box constraints dual variables
         for (int i = 0; i < this->m_n; i++)
@@ -103,6 +107,10 @@ public:
             else if (this->m_box_constraint_type[i] != constraint_t::UNBOUNDED_CONSTR)
             {
                 this->m_lam_bounds(i) = m_proxqp_solver.results.z(ineq_bound_i++);
+            }
+            else
+            {
+                this->m_lam_bounds(i) = 0
             }
         }
 
