@@ -7,6 +7,7 @@ option(WITH_OSQP "Build OSQP interface" ON)
 option(WITH_PROXQP "Build ProxQP interface" ON)
 option(WITH_QPSWIFT "Build qpSWIFT interface" ON)
 option(WITH_PIQP "Build PIQP interface" ON)
+option(WITH_HPIPM "Build HPIPM interface" ON)
 option(BUILD_BENCHMARKS "Build benchmarks" ON)
 option(BUILD_EXAMPLES "Build examples" ON)
 option(BUILD_TESTS "Build tests" ON)
@@ -34,12 +35,12 @@ if (ENABLE_SANITIZERS)
     unset(sanitizer_flags)
 endif ()
 
-# Set build configuration
-if (BUILD_RELEASE)
-    set(CMAKE_BUILD_TYPE RELEASE)
-else ()
-    set(CMAKE_BUILD_TYPE DEBUG)
-endif ()
+# Set build type to RELEASE by default
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/CMakeCache.txt)
+    if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
+        set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+    endif()
+endif()
 message(STATUS "Building ${CMAKE_BUILD_TYPE}")
 
 #### Build laOPT library with selected options ####
@@ -98,6 +99,14 @@ if (WITH_PIQP)
     add_compile_definitions(LAOPT_WITH_PIQP=1)
     find_package(piqp REQUIRED)
     list(APPEND SOLVER_LIBRARIES piqp::piqp)
+endif()
+
+# Find HPIPM
+if (WITH_HPIPM)
+    add_compile_definitions(LAOPT_WITH_HPIPM=1)
+    find_package(blasfeo REQUIRED)
+    find_package(hpipm REQUIRED)
+    list(APPEND SOLVER_LIBRARIES blasfeo hpipm)
 endif()
 
 ## Define laOPT interface library (to be linked into user code)

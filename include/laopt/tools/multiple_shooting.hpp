@@ -20,13 +20,17 @@ namespace laopt_tools {
  * 0     1     2     3    ...    N-1    N     Decision variable indices (initial condition + number of segments)
  * 0     1     2     3         N_segs-1       Segment indices of N_segs segments
  * */
-template<typename ControlProblem, unsigned N_segs, int DiffOptions = laopt::EIGEN_ALL>
-class MultipleShooting : public laopt::Differentiable<MultipleShooting<ControlProblem, N_segs, DiffOptions>, laopt::TAGGED | DiffOptions>
+template<typename ControlProblem_, unsigned N_segs, int DiffOptions = laopt::EIGEN_ALL>
+class MultipleShooting : public laopt::Differentiable<MultipleShooting<ControlProblem_, N_segs, DiffOptions>, laopt::TAGGED | DiffOptions>
 {
-    friend laopt::Differentiable<MultipleShooting<ControlProblem, N_segs, DiffOptions>, laopt::TAGGED | DiffOptions>;
+    friend laopt::Differentiable<MultipleShooting<ControlProblem_, N_segs, DiffOptions>, laopt::TAGGED | DiffOptions>;
 
     template<typename, typename, typename, typename>
     friend class laopt::ProblemBase;
+
+public:
+    using ControlProblem = ControlProblem_;
+    static const unsigned N = N_segs;
 
 protected:
     /* Mirror scalar type (from ControlProblem), define variable template with scalar type */
@@ -38,7 +42,6 @@ protected:
     ControlProblem &controlProblem;
 
     /* Create discrete problem variables */
-    static const unsigned N = N_segs; // Last index of input
     const double h{1.0 / N};
     Eigen::Vector<Scalar, N + 1> T; // Normalized time grid (0 ... 1)
     std::array<variable_t<ControlProblem::NX>, N + 1> X_var;
@@ -164,7 +167,10 @@ protected:
         for (unsigned i = 0; i < N; i++)
         {
             optProblem.add_obj(h * this->expression(StageCost{}, X_var[i], U_var[i], p_var));
-            optProblem.add_constr(X_var[i + 1] == this->expression(DiscreteDynamics{}, X_var[i], U_var[i], p_var, get_tf_var()));
+            // It's important that X_var[i + 1] is on the rhs since it gets translated to
+            // 0 = f(x,u) - x+ which ensures that the linearization has positive A and B matrices.
+            // This is an assumption for the HPIPM solver.
+            optProblem.add_constr(this->expression(DiscreteDynamics{}, X_var[i], U_var[i], p_var, get_tf_var()) == X_var[i + 1]);
         }
 
         /* Last grid point */

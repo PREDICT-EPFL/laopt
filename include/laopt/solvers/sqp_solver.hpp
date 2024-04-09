@@ -456,6 +456,13 @@ protected:
         m_lbg -= m_g;
         m_ubg -= m_g;
 
+        // replace inf values with finite values since some solver don't like them (e.g. HPIPM)
+        scalar_t max_val = std::numeric_limits<scalar_t>::max();
+        m_lbx = m_lbx.cwiseMin(max_val).cwiseMax(-max_val);
+        m_ubx = m_ubx.cwiseMin(max_val).cwiseMax(-max_val);
+        m_lbg = m_lbg.cwiseMin(max_val).cwiseMax(-max_val);
+        m_ubg = m_ubg.cwiseMin(max_val).cwiseMax(-max_val);
+
         m_qp_solver.solve(m_lag_hess, m_cost_grad, m_lbx, m_ubx, m_g_jac, m_lbg, m_ubg);
         m_info.qp_iter += m_qp_solver.info().iter;
 
