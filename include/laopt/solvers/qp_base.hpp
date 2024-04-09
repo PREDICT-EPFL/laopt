@@ -77,8 +77,8 @@ protected:
     unsigned int              m_upper_bounded_constraints;     // number of upper bounded general constraints
 
 public:
-    static constexpr scalar_t UNBOUNDED_THRESHOLD = 1e+10;
-    static constexpr scalar_t EQ_TOL = 1e-6;
+    static constexpr scalar_t UNBOUNDED_THRESHOLD = 1e+20;
+    static constexpr scalar_t EQ_TOL = 1e-10;
 
     QPBase(int n, int m) :
         m_n(n), m_m(m),
