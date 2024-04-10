@@ -20,10 +20,12 @@ public:
 
 private:
     using constraint_t = typename Base::constraint_t;
+    using constraint_changed_t = typename Base::constraint_changed_t;
 
     OSQPWorkspace* m_osqp_workspace;
     OSQPSettings* m_osqp_settings;
     OSQPData* m_osqp_data;
+    bool m_osqp_initialized;
 
     Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, c_int> m_P_osqp;
     Eigen::VectorX<scalar_t> m_q_osqp;
@@ -41,6 +43,7 @@ public:
         m_osqp_workspace = nullptr;
         m_osqp_settings = (OSQPSettings*) c_malloc(sizeof(OSQPSettings));
         m_osqp_data = (OSQPData*) c_malloc(sizeof(OSQPData));
+        m_osqp_initialized = false;
 
         if (m_osqp_data) {
             m_osqp_data->P = (csc*) c_malloc(sizeof(csc));
@@ -104,13 +107,14 @@ public:
         m_osqp_data->l = m_Alb_osqp.data();
         m_osqp_data->u = m_Aub_osqp.data();
 
-        if (!this->m_settings.reuse_pattern)
+        if (!this->m_settings.reuse_pattern || !m_osqp_initialized)
         {
             if (m_osqp_workspace != nullptr) {
                 osqp_cleanup(m_osqp_workspace);
             }
 
             osqp_setup(&m_osqp_workspace, m_osqp_data, m_osqp_settings);
+            m_osqp_initialized = true;
         }
         else
         {
@@ -189,11 +193,13 @@ private:
                         const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
                         const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
     {
-        bool constraints_type_changed = this->parse_constraints_bounds(xlb, xub, Alb, Aub);
-        if (constraints_type_changed)
+        constraint_changed_t constraints_type_change = this->parse_constraints_bounds(xlb, xub, Alb, Aub);
+        if (constraints_type_change == constraint_changed_t::BOX_ONLY_CHANGE ||
+            constraints_type_change == constraint_changed_t::CHANGE)
         {
-            // if the types of constraints have changed we can't reuse pattern
-            this->settings().reuse_pattern = false;
+            // if the types of the box constraints changed
+            // we have to reinitialize solver because of sparsity pattern change
+            m_osqp_initialized = false;
         }
 
         construct_osqp_cost(H, f);
@@ -206,7 +212,7 @@ private:
     {
         eigen_assert(H.isCompressed());
 
-        if (!this->settings().reuse_pattern)
+        if (!this->settings().reuse_pattern || !m_osqp_initialized)
         {
             int n_vars = this->m_n;
             if (this->m_settings.elastic_mode)
@@ -280,7 +286,7 @@ private:
     {
         eigen_assert(A.isCompressed());
 
-        if (!this->settings().reuse_pattern)
+        if (!this->settings().reuse_pattern || !m_osqp_initialized)
         {
             int n_vars = this->m_n;
             if (this->m_settings.elastic_mode)

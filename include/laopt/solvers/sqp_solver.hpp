@@ -161,6 +161,8 @@ public:
         m_lam.setZero();
         m_lam_bounds.setZero();
 
+        // reuse sparsity pattern for further solves
+        m_qp_solver.settings().reuse_pattern = true;
         // turn on elastic mode by default to make qp problem always feasible
         m_qp_solver.settings().elastic_mode = true;
 

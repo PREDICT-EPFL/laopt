@@ -17,6 +17,7 @@ public:
 
 private:
     using constraint_t = typename Base::constraint_t;
+    using constraint_changed_t = typename Base::constraint_changed_t;
 
     piqp::SparseSolver<Scalar, int, Mode> m_piqp_solver;
     bool m_piqp_initialized;
@@ -53,15 +54,13 @@ public:
 
         set_piqp_settings();
 
-        if (!this->m_settings.reuse_pattern)
+        if (!this->m_settings.reuse_pattern || !m_piqp_initialized)
         {
             m_piqp_solver.setup(m_P_piqp, m_c_piqp, m_A_piqp, m_b_piqp, m_G_piqp, m_h_piqp, m_x_lb_piqp, m_x_ub_piqp);
             m_piqp_initialized = true;
         }
         else
         {
-            eigen_assert(m_piqp_initialized);
-
             m_piqp_solver.update(m_P_piqp, m_c_piqp, m_A_piqp, m_b_piqp, m_G_piqp, m_h_piqp, m_x_lb_piqp, m_x_ub_piqp);
         }
 
@@ -130,21 +129,22 @@ public:
     }
 
 private:
-    /** construct the data matrices accepted by OSQP */
     EIGEN_STRONG_INLINE void
     construct_piqp_data(const Eigen::SparseMatrix<scalar_t>& H,
-                          const Eigen::Ref<const Eigen::VectorX<scalar_t>>& f,
-                          const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xlb,
-                          const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xub,
-                          const Eigen::SparseMatrix<scalar_t>& A,
-                          const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
-                          const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& f,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xlb,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xub,
+                        const Eigen::SparseMatrix<scalar_t>& A,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
     {
-        bool constraints_type_changed = this->parse_constraints_bounds(xlb, xub, Alb, Aub);
-        if (constraints_type_changed)
+        constraint_changed_t constraints_type_change = this->parse_constraints_bounds(xlb, xub, Alb, Aub);
+        if (constraints_type_change == constraint_changed_t::GEN_ONLY_CHANGE ||
+            constraints_type_change == constraint_changed_t::CHANGE)
         {
-            // if the types of constraints have changed we can't reuse pattern
-            this->settings().reuse_pattern = false;
+            // if the types of the general constraints changed
+            // we have to reinitialize solver because of sparsity pattern change
+            m_piqp_initialized = false;
         }
 
         construct_piqp_cost(H, f);
@@ -157,7 +157,7 @@ private:
     {
         eigen_assert(H.isCompressed());
 
-        if (!this->settings().reuse_pattern)
+        if (!this->settings().reuse_pattern || !m_piqp_initialized)
         {
             int n_vars = this->m_n;
             if (this->m_settings.elastic_mode)
@@ -233,7 +233,7 @@ private:
     {
         eigen_assert(A.isCompressed());
 
-        if (!this->settings().reuse_pattern)
+        if (!this->settings().reuse_pattern | !m_piqp_initialized)
         {
             int n_vars = this->m_n;
             if (this->m_settings.elastic_mode)

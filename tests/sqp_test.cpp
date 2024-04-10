@@ -91,25 +91,28 @@ static void generic_sqp_test()
     solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT;
     solver.settings().verbose = true;
 
-    // Set the initial primal variable
-    my_problem.x_var << 0.5, 1.5, 0.0, 0.0;
+    // initial and re-solve
+    for (int i = 0; i < 2; i++) {
+        // Set the initial primal variable
+        my_problem.x_var << 0.5, 1.5, 0.0, 0.0;
 
-    solver.solve();
+        solver.solve();
 
-    EXPECT_NEAR(my_problem.x_var(0), 0, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(1), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(2), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(3), -1, 1e-4);
+        EXPECT_NEAR(my_problem.x_var(0), 0, 1e-4);
+        EXPECT_NEAR(my_problem.x_var(1), 1, 1e-4);
+        EXPECT_NEAR(my_problem.x_var(2), 1, 1e-4);
+        EXPECT_NEAR(my_problem.x_var(3), -1, 1e-4);
 
-    EXPECT_NEAR(solver.primal()(0), 0, 1e-4);
-    EXPECT_NEAR(solver.primal()(1), 1, 1e-4);
-    EXPECT_NEAR(solver.primal()(2), 1, 1e-4);
-    EXPECT_NEAR(solver.primal()(3), -1, 1e-4);
-    EXPECT_NEAR(solver.dual()(0), 2, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(0), 0, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(1), 0, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(2), 1, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(3), -1, 1e-4);
+        EXPECT_NEAR(solver.primal()(0), 0, 1e-4);
+        EXPECT_NEAR(solver.primal()(1), 1, 1e-4);
+        EXPECT_NEAR(solver.primal()(2), 1, 1e-4);
+        EXPECT_NEAR(solver.primal()(3), -1, 1e-4);
+        EXPECT_NEAR(solver.dual()(0), 2, 1e-4);
+        EXPECT_NEAR(solver.dual_bounds()(0), 0, 1e-4);
+        EXPECT_NEAR(solver.dual_bounds()(1), 0, 1e-4);
+        EXPECT_NEAR(solver.dual_bounds()(2), 1, 1e-4);
+        EXPECT_NEAR(solver.dual_bounds()(3), -1, 1e-4);
+    }
 }
 
 #ifdef LAOPT_WITH_OSQP
