@@ -88,7 +88,14 @@ public:
             m_qp_ipm_arg_memory = std::unique_ptr<char[]>(new char[qp_ipm_arg_size]);
             d_ocp_qp_ipm_arg_create(&m_dim, &m_qp_ipm_arg, m_qp_ipm_arg_memory.get());
             d_ocp_qp_ipm_arg_set_default(BALANCE, &m_qp_ipm_arg);
+        }
 
+        set_hpipm_settings();
+
+        if (!this->settings().reuse_pattern ||
+            !m_hpipm_initialized ||
+            m_qp_ipm_arg.iter_max > m_qp_ipm_arg.stat_max)
+        {
             hpipm_size_t qp_ipm_ws_size = d_ocp_qp_ipm_ws_memsize(&m_dim, &m_qp_ipm_arg);
             m_qp_ipm_ws_memory = std::unique_ptr<char[]>(new char[qp_ipm_ws_size]);
             d_ocp_qp_ipm_ws_create(&m_dim, &m_qp_ipm_arg, &m_qp_ipm_ws, m_qp_ipm_ws_memory.get());
@@ -805,6 +812,15 @@ private:
             }
         }
         offset += m_ngf;
+    }
+
+    void set_hpipm_settings() noexcept
+    {
+        d_ocp_qp_ipm_arg_set_tol_stat(&this->m_settings.eps_abs, &m_qp_ipm_arg);
+        d_ocp_qp_ipm_arg_set_tol_eq(&this->m_settings.eps_abs, &m_qp_ipm_arg);
+        d_ocp_qp_ipm_arg_set_tol_ineq(&this->m_settings.eps_abs, &m_qp_ipm_arg);
+        d_ocp_qp_ipm_arg_set_tol_comp(&this->m_settings.eps_abs, &m_qp_ipm_arg);
+        d_ocp_qp_ipm_arg_set_iter_max(&this->m_settings.max_iter, &m_qp_ipm_arg);
     }
 };
 
