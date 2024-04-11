@@ -100,6 +100,7 @@ public:
             m_qp_ipm_ws_memory = std::unique_ptr<char[]>(new char[qp_ipm_ws_size]);
             d_ocp_qp_ipm_ws_create(&m_dim, &m_qp_ipm_arg, &m_qp_ipm_ws, m_qp_ipm_ws_memory.get());
         }
+        m_hpipm_initialized = true;
 
         int hpipm_status;
         d_ocp_qp_ipm_solve(&m_qp, &m_qp_sol, &m_qp_ipm_arg, &m_qp_ipm_ws);
