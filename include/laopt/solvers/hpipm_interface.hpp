@@ -838,7 +838,7 @@ class SQPSolver<Problem, HPIPMSolver> : public SQPBase<SQPSolver<Problem, HPIPMS
 {
     using Base = SQPBase<SQPSolver<Problem, HPIPMSolver>, Problem, HPIPMSolver>;
     using UserCode = typename Problem::UserCode;
-    static_assert(is_fixed_end_time_multiple_shooting<UserCode>::value, "HPIPM only works with the laopt_tools::MultipleShooting");
+    static_assert(is_fixed_end_time_multiple_shooting<UserCode>::value, "HPIPM only works with laopt_tools::MultipleShooting");
 
     using ControlProblem = typename UserCode::ControlProblem;
     static_assert(ControlProblem::NP == 0, "HPIPM doesn't support parameters");
