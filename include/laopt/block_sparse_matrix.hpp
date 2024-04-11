@@ -590,7 +590,9 @@ public:
 
   template <typename OtherScalar, int OtherBlockAtCompileTime>
   inline void setBlockLayout(const BlockSparseMatrix<OtherScalar, OtherBlockAtCompileTime, Options, StorageIndex>& other) {
+#ifndef EIGEN_NO_DEBUG
       typedef BlockSparseMatrix<OtherScalar, OtherBlockAtCompileTime, Options, StorageOptions> Other;
+#endif
       eigen_assert(IsColMajor == Other::IsColMajor && "CHECK THE NUMBER OF ROW OR COLUMN BLOCKS");
       eigen_assert(m_blockSize == Dynamic && other.m_blockSize == Dynamic && "MATRIX NEEDS TO BE VARIABLE SIZE");
       eigen_assert(m_innerBSize == other.m_innerBSize && "CHECK THE NUMBER OF ROW OR COLUMN BLOCKS");
