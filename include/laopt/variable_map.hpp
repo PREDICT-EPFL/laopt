@@ -3,7 +3,7 @@
 
 namespace laopt {
 
-const unsigned int VariableBit = 0x800;
+struct VariableKind {};
 
 template <typename MatrixType, int MapOptions = Eigen::Unaligned, typename StrideType = Eigen::Stride<0, 0>>
 class VariableMap;
@@ -16,9 +16,7 @@ namespace internal {
 
 template <typename PlainObjectType, int MapOptions, typename StrideType>
 struct traits<laopt::VariableMap<PlainObjectType, MapOptions, StrideType>> : public traits<Map<PlainObjectType, MapOptions, StrideType>> {
-    enum {
-        Flags = traits<Map<PlainObjectType, MapOptions, StrideType>>::Flags | laopt::VariableBit
-    };
+    using LAOptKind = laopt::VariableKind;
 };
 
 } // namespace internal

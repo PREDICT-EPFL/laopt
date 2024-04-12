@@ -89,56 +89,48 @@ namespace laopt
         using get_scalar_t = typename get_scalar<Args...>::type;
 
         /**
-         * Checks if type has VariableBit set.
+         * Checks if type is a variable.
          */
         template<typename T>
-        struct has_variable_bit
-        {
-        private:
-            template<typename U>
-            static std::integral_constant<bool, bool(U::Flags & laopt::VariableBit)> check(int);
-            template <typename>
-            static std::integral_constant<bool, false> check(long);
-        public:
-            static constexpr bool value = decltype(check<T>(0))::value;
-        };
+        static auto is_variable_test(int) -> typename std::is_same<typename Eigen::internal::traits<T>::LAOptKind, VariableKind>::type;
+        template<typename T>
+        static auto is_variable_test(long) -> std::false_type;
+
+        template<typename T, typename = typename std::conditional<std::is_base_of<Eigen::MatrixBase<T>, T>::value, std::true_type, std::false_type>::type>
+        struct is_variable_base;
+        template<typename T>
+        struct is_variable_base<T, std::false_type> : std::false_type {};
+        template<typename T>
+        // Special case since std::is_base_of<Eigen::MatrixBase<T>, T>::value is false for
+        // T = Eigen::MatrixBase<...>
+        struct is_variable_base<Eigen::MatrixBase<T>, std::false_type> : decltype(is_variable_test<T>(0)) {};
+        template<typename T>
+        struct is_variable_base<IndexedVector<T>, std::false_type> : std::true_type {};
+        template<typename T>
+        struct is_variable_base<T, std::true_type> : decltype(is_variable_test<T>(0)) {};
+
+        template<typename T>
+        struct is_variable : is_variable_base<typename Eigen::internal::remove_all<T>::type> {};
 
         /**
          * Used to get information about variables.
          */
-        template<typename Derived, typename = typename std::conditional<std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value,
-                                                                        std::true_type, std::false_type>::type>
+        template<typename T, bool>
         struct variable_info_base;
-
-        template<typename Derived>
-        struct variable_info_base<Derived, std::false_type>
+        template<typename T>
+        struct variable_info_base<T, false>
         {
             // If it's not a variable we ignore it
             static constexpr int size = 0;
         };
-
-        template<typename Derived>
-        struct variable_info_base<Eigen::MatrixBase<Derived>, std::false_type>
+        template<typename T>
+        struct variable_info_base<T, true>
         {
-            // Special case since std::is_base_of<Eigen::MatrixBase<Derived>, Derived>::value is false for
-            // Derived = Eigen::MatrixBase<...>
-            static constexpr int size = Eigen::MatrixBase<Derived>::RowsAtCompileTime * bool(Eigen::MatrixBase<Derived>::Flags & VariableBit);
+            static constexpr int size = Eigen::internal::remove_all<T>::type::RowsAtCompileTime;
         };
 
-        template<typename Derived>
-        struct variable_info_base<IndexedVector<Derived>, std::false_type>
-        {
-            static constexpr int size = IndexedVector<Derived>::RowsAtCompileTime;
-        };
-
-        template<typename Derived>
-        struct variable_info_base<Derived, std::true_type>
-        {
-            static constexpr int size = Eigen::MatrixBase<Derived>::RowsAtCompileTime * bool(Eigen::MatrixBase<Derived>::Flags & VariableBit);
-        };
-
-        template<typename Derived>
-        struct variable_info : public variable_info_base<typename std::remove_cv<typename std::remove_reference<Derived>::type>::type> {};
+        template<typename T>
+        struct variable_info : public variable_info_base<T, is_variable<T>::value> {};
 
     } // end namespace meta
 

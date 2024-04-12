@@ -288,7 +288,7 @@ protected:
     }
 
     template<typename T>
-    EIGEN_STRONG_INLINE typename std::enable_if<meta::has_variable_bit<T>::value, Eigen::Vector<casadi::SX, Eigen::MatrixBase<T>::RowsAtCompileTime>>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<meta::is_variable<T>::value, Eigen::Vector<casadi::SX, Eigen::MatrixBase<T>::RowsAtCompileTime>>::type
     make_casadi_sx(std::vector<casadi::SX>& casadi_args, std::vector<casadi::SX>& casadi_vars, const Eigen::MatrixBase<T>& x) noexcept
     {
         constexpr size_t rows = Eigen::MatrixBase<T>::RowsAtCompileTime;
@@ -304,7 +304,7 @@ protected:
     }
 
     template<typename T>
-    EIGEN_STRONG_INLINE typename std::enable_if<!meta::has_variable_bit<T>::value, Eigen::Vector<casadi::SX, Eigen::MatrixBase<T>::RowsAtCompileTime>>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<!meta::is_variable<T>::value, Eigen::Vector<casadi::SX, Eigen::MatrixBase<T>::RowsAtCompileTime>>::type
     make_casadi_sx(std::vector<casadi::SX>& casadi_args, std::vector<casadi::SX>& casadi_vars, const Eigen::MatrixBase<T>& x) noexcept
     {
         constexpr size_t rows = Eigen::MatrixBase<T>::RowsAtCompileTime;

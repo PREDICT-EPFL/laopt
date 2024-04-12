@@ -153,7 +153,7 @@ protected:
     }
 
     template<typename ADScalar, typename T>
-    EIGEN_STRONG_INLINE typename std::enable_if<meta::has_variable_bit<T>::value, Eigen::Vector<ADScalar, T::RowsAtCompileTime>>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<meta::is_variable<T>::value, Eigen::Vector<ADScalar, T::RowsAtCompileTime>>::type
     make_ad(const Eigen::MatrixBase<T>& x) noexcept
     {
         constexpr size_t n = T::RowsAtCompileTime;
@@ -246,7 +246,7 @@ protected:
     }
 
     template<typename outerADScalar, typename T>
-    EIGEN_STRONG_INLINE typename std::enable_if<meta::has_variable_bit<T>::value, Eigen::Vector<outerADScalar, T::RowsAtCompileTime>>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<meta::is_variable<T>::value, Eigen::Vector<outerADScalar, T::RowsAtCompileTime>>::type
     make_ad2(const Eigen::MatrixBase<T>& x) noexcept
     {
         constexpr size_t n = T::RowsAtCompileTime;

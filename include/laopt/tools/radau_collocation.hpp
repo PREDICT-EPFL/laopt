@@ -377,9 +377,8 @@ protected:
 
     /* Objective */
     struct LagrangeCost {};
-    template<typename X_t, typename U_t, typename p_t,
-            typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
-    EIGEN_STRONG_INLINE scalar_t
+    template<typename X_t, typename U_t, typename p_t>
+    EIGEN_STRONG_INLINE auto
     function_impl(LagrangeCost,
                   const Eigen::MatrixBase<X_t> &x,
                   const Eigen::MatrixBase<U_t> &u,
@@ -389,9 +388,8 @@ protected:
     }
 
     struct MayerCost {};
-    template<typename x_t, typename p_t, typename tf_t,
-            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
-    EIGEN_STRONG_INLINE scalar_t
+    template<typename x_t, typename p_t, typename tf_t>
+    EIGEN_STRONG_INLINE auto
     function_impl(MayerCost,
                   const Eigen::MatrixBase<x_t> &x,
                   const Eigen::MatrixBase<p_t> &p,
