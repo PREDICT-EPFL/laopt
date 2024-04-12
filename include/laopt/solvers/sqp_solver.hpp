@@ -248,17 +248,36 @@ public:
 
         if (m_settings.verbose)
         {
-            printf("iter    objective     primal_inf    comp_inf      stat_inf      alpha       watchdog   qp_iter\n");
+            printf("iter    objective     primal_inf    comp_inf      stat_inf      alpha       qp_iter");
+            if (m_settings.max_watchdog_steps > 0)
+            {
+                printf("   watchdog");
+            }
+            if (m_qp_solver.settings().elastic_mode) {
+                printf("   elastic");
+            }
+            printf("\n");
+
             prob.set_decision_variable(m_x);
-            printf("%4d   % .5e   %.5e   %.5e   %.5e   %.3e       %4d   %7d\n",
+
+            printf("%4d   % .5e   %.5e   %.5e   %.5e   %.3e   %7d",
                    m_info.iter,
                    prob.eval_objective(),
                    m_primal_feasibility_inf,
                    m_complementarity_inf,
                    m_stationarity_inf,
                    alpha,
-                   m_watchdog_step,
                    0);
+            if (m_settings.max_watchdog_steps > 0)
+            {
+                printf("   %4d", m_watchdog_step);
+            }
+            if (m_qp_solver.settings().elastic_mode) {
+                printf("   %.5f", m_qp_solver.elastic_var_solution());
+            }
+            printf("\n");
+
+
         }
 
         if (termination_criteria()) {
@@ -291,9 +310,6 @@ public:
                     m_qp_solver.settings().elastic_weight_l2 = fmax(m_settings.elastic_min_penalty, m_qp_solver.settings().elastic_weight_l2 * m_settings.elastic_decrease);
                 }
             }
-
-            // reuse sparsity pattern for further solves
-            m_qp_solver.settings().reuse_pattern = true;
 
             if (m_settings.verbose && m_qp_solver.info().status == qp_status_t::MAX_ITER_REACHED)
             {
@@ -346,15 +362,22 @@ public:
             if (m_settings.verbose)
             {
                 prob.set_decision_variable(m_x);
-                printf("%4d   % .5e   %.5e   %.5e   %.5e   %.3e       %4d   %7d\n",
+                printf("%4d   % .5e   %.5e   %.5e   %.5e   %.3e   %7d",
                        m_info.iter,
                        prob.eval_objective(),
                        m_primal_feasibility_inf,
                        m_complementarity_inf,
                        m_stationarity_inf,
                        alpha,
-                       m_watchdog_step,
                        m_qp_solver.info().iter);
+                if (m_settings.max_watchdog_steps > 0)
+                {
+                    printf("   %4d", m_watchdog_step);
+                }
+                if (m_qp_solver.settings().elastic_mode) {
+                    printf("   %.5f", m_qp_solver.elastic_var_solution());
+                }
+                printf("\n");
             }
 
             if (termination_criteria()) {
