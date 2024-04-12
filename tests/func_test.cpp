@@ -331,11 +331,11 @@ TYPED_TEST(FunctionTest, BSMatrixJacobain) {
     Eigen::VectorX<scalar_t> value_buffer(construct_value.rows());
     laopt::BSMatrixDenseDeployment<scalar_t> value(value_buffer);
 
-    auto jacobian_tape = sparsity_jacobian.makeBSTape();
+    laopt::BSMatrixTape<scalar_t> jacobian_tape(sparsity_jacobian.generate());
     value.resize(10,1);
     f(value, jacobian_tape); // Extract operation sequence
 
-    auto BS_jacobian = jacobian_tape.template makeBSMatrix<scalar_t>();
+    auto BS_jacobian = jacobian_tape.makeBSMatrix();
 
     Eigen::SparseMatrix<scalar_t> S_jacobian;
     BS_jacobian.allocate_memory(S_jacobian);
