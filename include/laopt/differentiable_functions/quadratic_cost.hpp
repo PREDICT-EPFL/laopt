@@ -35,7 +35,7 @@ public:
                   const AScalar& alpha,
                   const Eigen::MatrixBase<X>& x) noexcept
     {
-        jac(Eigen::all, Eigen::seqN(Eigen::fix<0>, Eigen::fix<X::RowsAtCompileTime>)) += alpha * 2 * Q * (x - x_ref);
+        jac += alpha * 2 * Q * (x - x_ref);
     }
 
     template <typename Weight, typename X, typename scalar_t = typename Eigen::MatrixBase<Weight>::Scalar>
@@ -52,7 +52,7 @@ public:
                   const Eigen::MatrixBase<Weight>& weight,
                   const Eigen::MatrixBase<X>& x) noexcept
     {
-        out_gradient(Eigen::seqN(Eigen::fix<0>, Eigen::fix<X::RowsAtCompileTime>)) += weight(0) * 2 * Q * (x - x_ref);
+        out_gradient += weight(0) * 2 * Q * (x - x_ref);
     }
 
     template <typename Weight, typename OutHessian, typename X>
@@ -61,8 +61,7 @@ public:
                  const Eigen::MatrixBase<Weight>& weight,
                  const Eigen::MatrixBase<X>& x) noexcept
     {
-        out_hessian(Eigen::seqN(Eigen::fix<0>, Eigen::fix<X::RowsAtCompileTime>),
-                    Eigen::seqN(Eigen::fix<0>, Eigen::fix<X::RowsAtCompileTime>)) += weight(0) * 2 * Q;
+        out_hessian += weight(0) * 2 * Q;
     }
 };
 
