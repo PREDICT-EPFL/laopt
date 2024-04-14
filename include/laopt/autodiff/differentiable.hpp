@@ -228,7 +228,7 @@ private:
 
 public:
     template<typename Tag, typename... Args>
-    EIGEN_STRONG_INLINE Derived&
+    EIGEN_STRONG_INLINE auto
     operator()(const Tag& tag, const Args&... args) noexcept
     {
         return call_function_impl_capture(tag, args...);
