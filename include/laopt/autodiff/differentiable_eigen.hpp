@@ -32,11 +32,17 @@ protected:
         // Convert the arguments to AD variables, and call the function
         ADOutput out = to_matrix_type(seed_and_call(tag, make_ad<ADScalar>(args)...));
 
-        // Copy out into output variables
+        // First we copy the jacobian into a temporary to have the correct memory
+        // layout (column major). This can massively reduce tape size.
+        // To don't have compiler errors, the number of rows must be non-zero,
+        // which has no runtime overhead since the function is never called in this case.
+        Eigen::Matrix<Scalar, Info::n_outputs == 0 ? 1 : Info::n_outputs, Info::n_inputs> tmp;
         for(int i = 0; i < out.rows(); i++)
         {
-            out_jacobian(i, Eigen::all) += alpha * out[i].derivatives().transpose();
+            tmp(i, Eigen::all) = out[i].derivatives().transpose();
         }
+        // Copy into output variables
+        out_jacobian += alpha * tmp;
     }
 
     // Compute sparsity pattern of the jacobian using eigen autodiff
