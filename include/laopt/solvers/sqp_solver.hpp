@@ -130,7 +130,7 @@ protected:
     int m_current_filter_elements = 0;
     Eigen::Matrix<scalar_t, 2, max_filter_elements> m_filter_list; // list of elements
 
-    Eigen::VectorX<scalar_t> m_gershgorin_bound; // variable used to calculate hessian regularization (gershgorin circle theorem)
+    Eigen::VectorX<scalar_t> m_tmp_variables; // temporary work vector of size variables
 
 public:
     explicit SQPBase(Problem& prob) :
@@ -155,7 +155,7 @@ public:
         m_p_merit_decrease(prob.variables()),
         m_lam_qp_merit_decrease(prob.constraints.rows()),
         m_lam_bounds_qp_merit_decrease(prob.variables()),
-        m_gershgorin_bound(prob.variables())
+        m_tmp_variables(prob.variables())
     {
         m_x.setZero();
         m_lam.setZero();
@@ -551,7 +551,8 @@ protected:
     max_stationarity_violation(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& dual,
                                const Eigen::Ref<const Eigen::VectorX<scalar_t>>& dual_bounds) noexcept
     {
-        return (m_cost_grad + m_g_jac.transpose() * dual + dual_bounds).cwiseAbs().maxCoeff();
+        m_tmp_variables.noalias() = m_g_jac.transpose() * dual;
+        return (m_cost_grad + m_tmp_variables + dual_bounds).cwiseAbs().maxCoeff();
     }
 
     /** step size selection: line search / filter / trust region */
@@ -906,9 +907,12 @@ protected:
     /** default regularisation: do nothing */
     EIGEN_STRONG_INLINE void hessian_regularisation_impl(matrix_t& lag_hessian) noexcept
     {
+        // gershgorin_bound is a reference to the temporary work variable
+        Eigen::VectorX<scalar_t>& gershgorin_bound = m_tmp_variables;
+
         if (m_settings.regularize_hessian)
         {
-            m_gershgorin_bound.setZero();
+            gershgorin_bound.setZero();
 
             for (int i = 0; i < lag_hessian.outerSize(); ++i)
             {
@@ -916,16 +920,16 @@ protected:
                 {
                     if (it.row() == it.col())
                     {
-                        m_gershgorin_bound(it.row()) += it.value();
+                        gershgorin_bound(it.row()) += it.value();
                     }
                     else
                     {
-                        m_gershgorin_bound(it.row()) -= fabs(it.value());
+                        gershgorin_bound(it.row()) -= fabs(it.value());
                     }
                 }
             }
 
-            scalar_t eig_lower_bound = m_gershgorin_bound.minCoeff();
+            scalar_t eig_lower_bound = gershgorin_bound.minCoeff();
             scalar_t eig_offset = fmax(scalar_t(0), -eig_lower_bound);
 
             for (int i = 0; i < lag_hessian.outerSize(); ++i)
