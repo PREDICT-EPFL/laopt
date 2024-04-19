@@ -14,6 +14,20 @@
 #include <numeric>
 
 namespace Eigen {
+
+struct BlockSparse {};
+
+struct BlockSparseShape {
+    static std::string debugName() { return "BlockSparseShape"; }
+};
+
+namespace internal {
+
+// evaluator based on block and normal iterators to access coefficients.
+struct BlockIteratorBased {};
+
+}  // end namespace internal
+
 /** \ingroup SparseCore_Module
  *
  * \class BlockSparseMatrix
@@ -56,37 +70,107 @@ namespace Eigen {
 template <typename Scalar_, int BlockAtCompileTime_ = Dynamic, int Options_ = ColMajor, typename StorageIndex_ = int>
 class BlockSparseMatrix;
 
-//template <typename BlockSparseMatrixT>
-//class BlockSparseMatrixView;
+template <typename BlockSparseMatrixT>
+class BlockSparseMatrixView;
+
+template <typename BlockSparseMatrixType, typename VectorType>
+class BlockVectorView;
+
+template <typename BlockSparseMatrixType, typename VectorType>
+class BlockVectorReturn;
 
 namespace internal {
+
 template <typename Scalar_, int BlockAtCompileTime_, int Options_, typename Index_>
-struct traits<BlockSparseMatrix<Scalar_, BlockAtCompileTime_, Options_, Index_> > {
-  typedef Scalar_ Scalar;
-  typedef Index_ StorageIndex;
-  typedef Sparse StorageKind;
-  typedef MatrixXpr XprKind;
-  enum {
-    RowsAtCompileTime = Dynamic,
-    ColsAtCompileTime = Dynamic,
-    MaxRowsAtCompileTime = Dynamic,
-    MaxColsAtCompileTime = Dynamic,
-    BlockSize = BlockAtCompileTime_,
-    Options = Options_,
-    Flags = Options_ | NestByRefBit | LvalueBit,
-    SupportedAccessPatterns = InnerRandomAccessPattern
-  };
+struct traits<BlockSparseMatrix<Scalar_, BlockAtCompileTime_, Options_, Index_>> {
+    typedef Scalar_ Scalar;
+    typedef Matrix<Scalar, BlockAtCompileTime_, BlockAtCompileTime_, Options_ & RowMajorBit ? RowMajor : ColMajor> BlockScalar;
+    typedef Index_ StorageIndex;
+    typedef BlockSparse StorageKind;
+    typedef MatrixXpr XprKind;
+    enum {
+        RowsAtCompileTime = Dynamic,
+        ColsAtCompileTime = Dynamic,
+        MaxRowsAtCompileTime = Dynamic,
+        MaxColsAtCompileTime = Dynamic,
+        BlockSize = BlockAtCompileTime_,
+        Options = Options_,
+        Flags = Options_ | NestByRefBit | LvalueBit,
+        SupportedAccessPatterns = InnerRandomAccessPattern
+    };
 };
 
-//template <typename BlockSparseMatrixT>
-//struct traits<BlockSparseMatrixView<BlockSparseMatrixT> > {
-//  typedef Ref<
-//      Matrix<typename BlockSparseMatrixT::Scalar, BlockSparseMatrixT::BlockSize, BlockSparseMatrixT::BlockSize> >
-//      Scalar;
-//  typedef Ref<
-//      Matrix<typename BlockSparseMatrixT::RealScalar, BlockSparseMatrixT::BlockSize, BlockSparseMatrixT::BlockSize> >
-//      RealScalar;
-//};
+template <typename BlockSparseMatrixType>
+struct traits<BlockSparseMatrixView<BlockSparseMatrixType>> : traits<BlockSparseMatrixType> {
+    typedef Ref<typename traits<BlockSparseMatrixType>::BlockScalar> Scalar;
+    typedef Sparse StorageKind;
+};
+
+template <typename BlockSparseMatrixType, typename VectorType>
+struct traits<BlockVectorView<BlockSparseMatrixType, VectorType>> : traits<VectorType> {
+    typedef Ref<const Matrix<typename BlockSparseMatrixType::Scalar,
+            (traits<VectorType>::RowsAtCompileTime == 1) ? 1 : traits<BlockSparseMatrixType>::BlockSize,
+            (traits<VectorType>::ColsAtCompileTime == 1) ? 1 : traits<BlockSparseMatrixType>::BlockSize>> Scalar;
+};
+
+template <typename BlockSparseMatrixType, typename VectorType>
+struct traits<BlockVectorReturn<BlockSparseMatrixType, VectorType>> : traits<VectorType> {
+    typedef Ref<Matrix<typename traits<VectorType>::Scalar, traits<VectorType>::RowsAtCompileTime, traits<VectorType>::ColsAtCompileTime> > Scalar;
+};
+
+template <typename T>
+struct eval<T, BlockSparse> : sparse_eval<T, traits<T>::RowsAtCompileTime, traits<T>::ColsAtCompileTime, traits<T>::Flags> {
+};
+
+template <typename T>
+struct plain_matrix_type<T, BlockSparse> {
+    typedef typename traits<T>::Scalar Scalar_;
+    typedef typename traits<T>::StorageIndex StorageIndex_;
+    enum { Options_ = ((evaluator<T>::Flags & RowMajorBit) == RowMajorBit) ? RowMajor : ColMajor };
+
+public:
+    typedef SparseMatrix<Scalar_, Options_, StorageIndex_> type;
+};
+
+template <typename T>
+struct plain_object_eval<T, BlockSparse>
+    : sparse_eval<T, traits<T>::RowsAtCompileTime, traits<T>::ColsAtCompileTime, evaluator<T>::Flags> {};
+
+template <typename Decomposition, typename RhsType>
+struct solve_traits<Decomposition, RhsType, BlockSparse> {
+    typedef typename sparse_eval<RhsType, RhsType::RowsAtCompileTime, RhsType::ColsAtCompileTime,
+            traits<RhsType>::Flags>::type PlainObject;
+};
+
+template <typename Derived>
+struct generic_xpr_base<Derived, MatrixXpr, BlockSparse> {
+    typedef SparseMatrixBase<Derived> type;
+};
+
+template <typename Scalar, int BlockAtCompileTime, int Options, typename Index>
+struct evaluator_traits<BlockSparseMatrix<Scalar, BlockAtCompileTime, Options, Index>> {
+    typedef typename storage_kind_to_evaluator_kind<typename BlockSparseMatrix<Scalar, BlockAtCompileTime, Options, Index>::StorageKind>::Kind Kind;
+    typedef BlockSparseShape Shape;
+};
+
+template <>
+struct storage_kind_to_evaluator_kind<BlockSparse> {
+    typedef BlockIteratorBased Kind;
+};
+
+template <>
+struct storage_kind_to_shape<BlockSparse> {
+    typedef BlockSparseShape Shape;
+};
+
+template <>
+struct AssignmentKind<BlockSparseShape, SparseShape> {
+    typedef Sparse2Sparse Kind;
+};
+template <>
+struct AssignmentKind<SparseShape, BlockSparseShape> {
+    typedef Sparse2Sparse Kind;
+};
 
 // Function object to sort a triplet list
 template <typename Iterator, bool IsColMajor>
@@ -101,151 +185,200 @@ struct TripletComp {
 };
 }  // end namespace internal
 
-///* Proxy to view the block sparse matrix as a regular sparse matrix */
-//template <typename BlockSparseMatrixT>
-//class BlockSparseMatrixView : public SparseMatrixBase<BlockSparseMatrixT> {
-// public:
-//  typedef Ref<typename BlockSparseMatrixT::BlockScalar> Scalar;
-//  typedef Ref<typename BlockSparseMatrixT::BlockRealScalar> RealScalar;
-//  typedef typename BlockSparseMatrixT::Index Index;
-//  typedef BlockSparseMatrixT Nested;
-//  enum {
-//    Flags = BlockSparseMatrixT::Options,
-//    Options = BlockSparseMatrixT::Options,
-//    RowsAtCompileTime = BlockSparseMatrixT::RowsAtCompileTime,
-//    ColsAtCompileTime = BlockSparseMatrixT::ColsAtCompileTime,
-//    MaxColsAtCompileTime = BlockSparseMatrixT::MaxColsAtCompileTime,
-//    MaxRowsAtCompileTime = BlockSparseMatrixT::MaxRowsAtCompileTime
-//  };
-//
-// public:
-//  BlockSparseMatrixView(const BlockSparseMatrixT& spblockmat) : m_spblockmat(spblockmat) {}
-//
-//  Index outerSize() const { return (Flags & RowMajorBit) == 1 ? this->rows() : this->cols(); }
-//  Index cols() const { return m_spblockmat.blockCols(); }
-//  Index rows() const { return m_spblockmat.blockRows(); }
-//  Scalar coeff(Index row, Index col) { return m_spblockmat.coeff(row, col); }
-//  Scalar coeffRef(Index row, Index col) { return m_spblockmat.coeffRef(row, col); }
-//  // Wrapper to iterate over all blocks
-//  class InnerIterator : public BlockSparseMatrixT::BlockInnerIterator {
-//   public:
-//    InnerIterator(const BlockSparseMatrixView& mat, Index outer)
-//        : BlockSparseMatrixT::BlockInnerIterator(mat.m_spblockmat, outer) {}
-//  };
-//
-// protected:
-//  const BlockSparseMatrixT& m_spblockmat;
-//};
-//
-//// Proxy to view a regular vector as a block vector
-//template <typename BlockSparseMatrixT, typename VectorType>
-//class BlockVectorView {
-// public:
-//  enum {
-//    BlockSize = BlockSparseMatrixT::BlockSize,
-//    ColsAtCompileTime = VectorType::ColsAtCompileTime,
-//    RowsAtCompileTime = VectorType::RowsAtCompileTime,
-//    Flags = VectorType::Flags
-//  };
-//  typedef Ref<const Matrix<typename BlockSparseMatrixT::Scalar, (RowsAtCompileTime == 1) ? 1 : BlockSize,
-//                           (ColsAtCompileTime == 1) ? 1 : BlockSize> >
-//      Scalar;
-//  typedef typename BlockSparseMatrixT::Index Index;
-//
-// public:
-//  BlockVectorView(const BlockSparseMatrixT& spblockmat, const VectorType& vec) : m_spblockmat(spblockmat), m_vec(vec) {}
-//  inline Index cols() const { return m_vec.cols(); }
-//  inline Index size() const { return m_spblockmat.blockRows(); }
-//  inline Scalar coeff(Index bi) const {
-//    Index startRow = m_spblockmat.blockRowsIndex(bi);
-//    Index rowSize = m_spblockmat.blockRowsIndex(bi + 1) - startRow;
-//    return m_vec.middleRows(startRow, rowSize);
-//  }
-//  inline Scalar coeff(Index bi, Index j) const {
-//    Index startRow = m_spblockmat.blockRowsIndex(bi);
-//    Index rowSize = m_spblockmat.blockRowsIndex(bi + 1) - startRow;
-//    return m_vec.block(startRow, j, rowSize, 1);
-//  }
-//
-// protected:
-//  const BlockSparseMatrixT& m_spblockmat;
-//  const VectorType& m_vec;
-//};
-//
-//template <typename VectorType, typename Index>
-//class BlockVectorReturn;
-//
-//// Proxy to view a regular vector as a block vector
-//template <typename BlockSparseMatrixT, typename VectorType>
-//class BlockVectorReturn {
-// public:
-//  enum {
-//    ColsAtCompileTime = VectorType::ColsAtCompileTime,
-//    RowsAtCompileTime = VectorType::RowsAtCompileTime,
-//    Flags = VectorType::Flags
-//  };
-//  typedef Ref<Matrix<typename VectorType::Scalar, RowsAtCompileTime, ColsAtCompileTime> > Scalar;
-//  typedef typename BlockSparseMatrixT::Index Index;
-//
-// public:
-//  BlockVectorReturn(const BlockSparseMatrixT& spblockmat, VectorType& vec) : m_spblockmat(spblockmat), m_vec(vec) {}
-//  inline Index size() const { return m_spblockmat.blockRows(); }
-//  inline Scalar coeffRef(Index bi) {
-//    Index startRow = m_spblockmat.blockRowsIndex(bi);
-//    Index rowSize = m_spblockmat.blockRowsIndex(bi + 1) - startRow;
-//    return m_vec.middleRows(startRow, rowSize);
-//  }
-//  inline Scalar coeffRef(Index bi, Index j) {
-//    Index startRow = m_spblockmat.blockRowsIndex(bi);
-//    Index rowSize = m_spblockmat.blockRowsIndex(bi + 1) - startRow;
-//    return m_vec.block(startRow, j, rowSize, 1);
-//  }
-//
-// protected:
-//  const BlockSparseMatrixT& m_spblockmat;
-//  VectorType& m_vec;
-//};
+/* Proxy to view the block sparse matrix as a regular sparse matrix */
+template <typename BlockSparseMatrixType>
+class BlockSparseMatrixView : public SparseMatrixBase<BlockSparseMatrixView<BlockSparseMatrixType>> {
+  typedef SparseMatrixBase<BlockSparseMatrixView<BlockSparseMatrixType>> Base;
 
-//// Block version of the sparse dense product
-//template <typename Lhs, typename Rhs>
-//class BlockSparseTimeDenseProduct;
-//
-//namespace internal {
-//
-//template <typename BlockSparseMatrixT, typename VecType>
-//struct traits<BlockSparseTimeDenseProduct<BlockSparseMatrixT, VecType> > {
-//  typedef Dense StorageKind;
-//  typedef MatrixXpr XprKind;
-//  typedef typename BlockSparseMatrixT::Scalar Scalar;
-//  typedef typename BlockSparseMatrixT::Index Index;
-//  enum {
-//    RowsAtCompileTime = Dynamic,
-//    ColsAtCompileTime = Dynamic,
-//    MaxRowsAtCompileTime = Dynamic,
-//    MaxColsAtCompileTime = Dynamic,
-//    Flags = 0,
-//    CoeffReadCost = internal::traits<BlockSparseMatrixT>::CoeffReadCost
-//  };
-//};
-//}  // end namespace internal
-//
-//template <typename Lhs, typename Rhs>
-//class BlockSparseTimeDenseProduct : public ProductBase<BlockSparseTimeDenseProduct<Lhs, Rhs>, Lhs, Rhs> {
-// public:
-//  EIGEN_PRODUCT_PUBLIC_INTERFACE(BlockSparseTimeDenseProduct)
-//
-//  BlockSparseTimeDenseProduct(const Lhs& lhs, const Rhs& rhs) : Base(lhs, rhs) {}
-//
-//  template <typename Dest>
-//  void scaleAndAddTo(Dest& dest, const typename Rhs::Scalar& alpha) const {
-//    BlockVectorReturn<Lhs, Dest> tmpDest(m_lhs, dest);
-//    internal::sparse_time_dense_product(BlockSparseMatrixView<Lhs>(m_lhs), BlockVectorView<Lhs, Rhs>(m_lhs, m_rhs),
-//                                        tmpDest, alpha);
-//  }
-//
-// private:
-//  BlockSparseTimeDenseProduct& operator=(const BlockSparseTimeDenseProduct&);
-//};
+ public:
+  EIGEN_SPARSE_PUBLIC_INTERFACE(BlockSparseMatrixView);
+  typedef typename internal::remove_all<BlockSparseMatrixType>::type NestedExpression;
+
+  BlockSparseMatrixView(const BlockSparseMatrixType& spblockmat) : m_spblockmat(spblockmat) {}
+
+  Index outerSize() const { return (Flags & RowMajorBit) == 1 ? this->rows() : this->cols(); }
+  Index cols() const { return m_spblockmat.blockCols(); }
+  Index rows() const { return m_spblockmat.blockRows(); }
+  Scalar coeff(Index row, Index col) { return m_spblockmat.coeff(row, col); }
+  Scalar coeffRef(Index row, Index col) { return m_spblockmat.coeffRef(row, col); }
+
+  const NestedExpression& nestedExpression() const { return m_spblockmat; }
+  NestedExpression& nestedExpression() { return m_spblockmat; }
+
+ protected:
+  const BlockSparseMatrixType& m_spblockmat;
+};
+
+// Proxy to view a regular vector as a block vector
+template <typename BlockSparseMatrixType, typename VectorType>
+class BlockVectorView : public MatrixBase<BlockVectorView<BlockSparseMatrixType, VectorType>> {
+  typedef MatrixBase<BlockVectorView<BlockSparseMatrixType, VectorType>> Base;
+ public:
+  EIGEN_GENERIC_PUBLIC_INTERFACE(BlockVectorView);
+
+  BlockVectorView(const BlockSparseMatrixType& spblockmat, const VectorType& vec) : m_spblockmat(spblockmat), m_vec(vec) {}
+  inline Index cols() const { return m_vec.cols(); }
+  inline Index rows() const { return m_spblockmat.blockRows(); }
+  inline Scalar coeff(Index bi) const {
+    Index startRow = m_spblockmat.blockColsIndex(bi);
+    Index rowSize = m_spblockmat.blockColsIndex(bi + 1) - startRow;
+    return m_vec.middleRows(startRow, rowSize);
+  }
+  inline Scalar coeff(Index bi, Index j) const {
+    Index startRow = m_spblockmat.blockColsIndex(bi);
+    Index rowSize = m_spblockmat.blockColsIndex(bi + 1) - startRow;
+    return m_vec.block(startRow, j, rowSize, 1);
+  }
+
+ protected:
+  const BlockSparseMatrixType& m_spblockmat;
+  const VectorType& m_vec;
+};
+
+// Proxy to view a regular vector as a block vector
+template <typename BlockSparseMatrixType, typename VectorType>
+class BlockVectorReturn : public MatrixBase<BlockVectorReturn<BlockSparseMatrixType, VectorType>> {
+  typedef MatrixBase<BlockVectorReturn<BlockSparseMatrixType, VectorType>> Base;
+
+ public:
+  EIGEN_GENERIC_PUBLIC_INTERFACE(BlockVectorReturn);
+
+  BlockVectorReturn(const BlockSparseMatrixType& spblockmat, VectorType& vec) : m_spblockmat(spblockmat), m_vec(vec) {}
+  inline Index size() const { return m_spblockmat.blockRows(); }
+  inline Scalar coeffRef(Index bi) {
+    Index startRow = m_spblockmat.blockRowsIndex(bi);
+    Index rowSize = m_spblockmat.blockRowsIndex(bi + 1) - startRow;
+    return m_vec.middleRows(startRow, rowSize);
+  }
+  inline Scalar coeffRef(Index bi, Index j) {
+    Index startRow = m_spblockmat.blockRowsIndex(bi);
+    Index rowSize = m_spblockmat.blockRowsIndex(bi + 1) - startRow;
+    return m_vec.block(startRow, j, rowSize, 1);
+  }
+
+ protected:
+  const BlockSparseMatrixType& m_spblockmat;
+  VectorType& m_vec;
+};
+
+namespace internal {
+
+template <typename SparseLhsType, typename DenseRhsType, typename DenseResType, typename AlphaType,
+          int LhsStorageOrder = ((SparseLhsType::Flags & RowMajorBit) == RowMajorBit) ? RowMajor : ColMajor,
+          bool ColPerCol = ((DenseRhsType::Flags & RowMajorBit) == 0) || DenseRhsType::ColsAtCompileTime == 1>
+struct block_sparse_time_dense_product_impl;
+
+template<typename SparseLhsType, typename DenseRhsType, typename DenseResType, typename AlphaType>
+struct block_sparse_time_dense_product_impl<SparseLhsType,DenseRhsType,DenseResType, AlphaType, RowMajor, true>
+{
+    typedef typename internal::remove_all<SparseLhsType>::type Lhs;
+    typedef typename internal::remove_all<DenseRhsType>::type Rhs;
+    typedef typename internal::remove_all<DenseResType>::type Res;
+    typedef evaluator<Lhs> LhsEval;
+    typedef typename evaluator<Lhs>::InnerIterator LhsInnerIterator;
+
+    static void run(const SparseLhsType& lhs, const DenseRhsType& rhs, DenseResType& res, const AlphaType& alpha)
+    {
+        LhsEval lhsEval(lhs);
+        Index n = lhs.outerSize();
+        for (Index col = 0; col < rhs.cols(); col++) {
+            for (Index i = 0; i < n; ++i) {
+                for (LhsInnerIterator it(lhsEval, i); it; ++it) {
+                    res.coeffRef(i, col).noalias() += alpha * it.value() * rhs.coeff(it.index(), col);
+                }
+            }
+        }
+    }
+};
+
+template <typename SparseLhsType, typename DenseRhsType, typename DenseResType, typename AlphaType>
+struct block_sparse_time_dense_product_impl<SparseLhsType, DenseRhsType, DenseResType, AlphaType, ColMajor, true>
+{
+    typedef typename internal::remove_all<SparseLhsType>::type Lhs;
+    typedef typename internal::remove_all<DenseRhsType>::type Rhs;
+    typedef typename internal::remove_all<DenseResType>::type Res;
+    typedef evaluator<Lhs> LhsEval;
+    typedef typename LhsEval::InnerIterator LhsInnerIterator;
+
+    static void run(const SparseLhsType& lhs, const DenseRhsType& rhs, DenseResType& res, const AlphaType& alpha) {
+        LhsEval lhsEval(lhs);
+        for (Index c = 0; c < rhs.cols(); ++c) {
+            for (Index j = 0; j < lhs.outerSize(); ++j) {
+                typename ScalarBinaryOpTraits<AlphaType, typename Rhs::Scalar>::ReturnType rhs_j(alpha * rhs.coeff(j, c));
+                for (LhsInnerIterator it(lhsEval, j); it; ++it) {
+                    res.coeffRef(it.index(), c).noalias() += it.value() * rhs_j;
+                }
+            }
+        }
+    }
+};
+
+template <typename SparseLhsType, typename DenseRhsType, typename DenseResType, typename AlphaType>
+struct block_sparse_time_dense_product_impl<SparseLhsType, DenseRhsType, DenseResType, AlphaType, RowMajor, false>
+{
+    typedef typename internal::remove_all<SparseLhsType>::type Lhs;
+    typedef typename internal::remove_all<DenseRhsType>::type Rhs;
+    typedef typename internal::remove_all<DenseResType>::type Res;
+    typedef evaluator<Lhs> LhsEval;
+    typedef typename LhsEval::InnerIterator LhsInnerIterator;
+
+    static void run(const SparseLhsType& lhs, const DenseRhsType& rhs, DenseResType& res, const AlphaType& alpha) {
+        LhsEval lhsEval(lhs);
+        Index n = lhs.rows();
+        for (Index i = 0; i < n; ++i) {
+            for (LhsInnerIterator it(lhsEval, i); it; ++it) {
+                res.row(i).noalias() += alpha * it.value() * rhs.row(it.index());
+            }
+        }
+    }
+};
+
+template <typename SparseLhsType, typename DenseRhsType, typename DenseResType, typename AlphaType>
+struct block_sparse_time_dense_product_impl<SparseLhsType, DenseRhsType, DenseResType, AlphaType, ColMajor, false>
+{
+    typedef typename internal::remove_all<SparseLhsType>::type Lhs;
+    typedef typename internal::remove_all<DenseRhsType>::type Rhs;
+    typedef typename internal::remove_all<DenseResType>::type Res;
+    typedef evaluator<Lhs> LhsEval;
+    typedef typename LhsEval::InnerIterator LhsInnerIterator;
+
+    static void run(const SparseLhsType& lhs, const DenseRhsType& rhs, DenseResType& res, const AlphaType& alpha) {
+        LhsEval lhsEval(lhs);
+        for (Index j = 0; j < lhs.outerSize(); ++j) {
+            for (LhsInnerIterator it(lhsEval, j); it; ++it) {
+                res.row(it.index()).noalias() += alpha * it.value() * rhs.row(j);
+            }
+        }
+    }
+};
+
+template <typename SparseLhsType, typename DenseRhsType, typename DenseResType, typename AlphaType>
+inline void block_sparse_time_dense_product(const SparseLhsType& lhs, const DenseRhsType& rhs, DenseResType& res,
+                                            const AlphaType& alpha) {
+    block_sparse_time_dense_product_impl<SparseLhsType, DenseRhsType, DenseResType, AlphaType>::run(lhs, rhs, res, alpha);
+}
+
+template <typename Lhs, typename Rhs, int ProductType>
+struct generic_product_impl<Lhs, Rhs, BlockSparseShape, DenseShape, ProductType>
+        : generic_product_impl_base<Lhs, Rhs, generic_product_impl<Lhs, Rhs, BlockSparseShape, DenseShape, ProductType>> {
+    typedef typename Product<Lhs, Rhs>::Scalar Scalar;
+
+    template <typename Dest>
+    static void scaleAndAddTo(Dest& dst, const Lhs& lhs, const Rhs& rhs, const Scalar& alpha) {
+        typedef typename nested_eval<Lhs, ((Rhs::Flags & RowMajorBit) == 0) ? 1 : Rhs::ColsAtCompileTime>::type LhsNested;
+        typedef typename nested_eval<Rhs, ((Lhs::Flags & RowMajorBit) == 0) ? 1 : Dynamic>::type RhsNested;
+        typedef std::remove_reference_t<LhsNested> LhsNested_;
+        typedef std::remove_reference_t<RhsNested> RhsNested_;
+        LhsNested lhsNested(lhs);
+        RhsNested rhsNested(rhs);
+        BlockVectorReturn<LhsNested_, Dest> tmpDest(lhsNested, dst);
+        block_sparse_time_dense_product(BlockSparseMatrixView<LhsNested_>(lhsNested),
+                                        BlockVectorView<LhsNested_, RhsNested_>(lhsNested, rhsNested),
+                                        tmpDest, alpha);
+    }
+};
+
+} // namespace internal
 
 template <typename Scalar_, int BlockAtCompileTime_, int Options_, typename StorageIndex_>
 class BlockSparseMatrix : public SparseMatrixBase<BlockSparseMatrix<Scalar_, BlockAtCompileTime_, Options_, StorageIndex_>> {
@@ -264,7 +397,6 @@ public:
   };
 
   typedef Matrix<Scalar, BlockAtCompileTime_, BlockAtCompileTime_, IsColMajor ? ColMajor : RowMajor> BlockScalar;
-  typedef Matrix<RealScalar, BlockAtCompileTime_, BlockAtCompileTime_, IsColMajor ? ColMajor : RowMajor> BlockRealScalar;
 
  public:
   // Default constructor
@@ -934,7 +1066,7 @@ class BlockSparseMatrix<Scalar_, BlockAtCompileTime_, Options_, StorageIndex_>::
     return *this;
   }
 
-  inline const Map<const BlockScalar> value() const {
+  inline Map<const BlockScalar> value() const {
     return Map<const BlockScalar>(&(m_mat.m_values[m_mat.blockPtr(m_id)]), blockRows(), blockCols());
   }
   inline Map<BlockScalar> valueRef() {
@@ -1020,6 +1152,7 @@ struct evaluator<BlockSparseMatrix<Scalar_, BlockAtCompileTime_, Options_, Stora
     typedef BlockSparseMatrix<Scalar_, BlockAtCompileTime_, Options_, StorageIndex_> Derived;
     typedef typename Derived::Scalar Scalar;
     typedef typename Derived::InnerIterator InnerIterator;
+    typedef typename Derived::BlockInnerIterator BlockInnerIterator;
 
     enum { CoeffReadCost = NumTraits<Scalar>::ReadCost, Flags = Derived::Flags };
 
@@ -1035,7 +1168,142 @@ protected:
     const Derived* m_matrix;
 };
 
-} // end namespace internal
+template <typename BlockSparseMatrixType>
+struct evaluator<BlockSparseMatrixView<BlockSparseMatrixType>>
+        : evaluator_base<BlockSparseMatrixView<BlockSparseMatrixType>> {
+
+    typedef BlockSparseMatrixView<BlockSparseMatrixType> XprType;
+    typedef typename evaluator<BlockSparseMatrixType>::BlockInnerIterator EvalIterator;
+
+    class InnerIterator : public EvalIterator {
+    public:
+        EIGEN_STRONG_INLINE InnerIterator(const evaluator& sve, Index outer) : EvalIterator(sve.m_argImpl, outer) {}
+    };
+
+    enum { CoeffReadCost = evaluator<BlockSparseMatrixType>::CoeffReadCost, Flags = XprType::Flags };
+
+    explicit evaluator(const XprType& xpr) : m_argImpl(xpr.nestedExpression()) {}
+
+protected:
+    evaluator<BlockSparseMatrixType> m_argImpl;
+};
+
+template <typename MatrixType>
+class BlockSparseTransposeImpl : public SparseMatrixBase<Transpose<MatrixType>> {
+    typedef SparseMatrixBase<Transpose<MatrixType>> Base;
+
+public:
+    using Base::derived;
+    typedef typename Base::Scalar Scalar;
+    typedef typename Base::StorageIndex StorageIndex;
+
+    inline Index nonZeros() const { return derived().nestedExpression().nonZeros(); }
+
+    inline const Scalar* valuePtr() const { return derived().nestedExpression().valuePtr(); }
+    inline const StorageIndex* innerIndexPtr() const { return derived().nestedExpression().innerIndexPtr(); }
+    inline const StorageIndex* outerIndexPtr() const { return derived().nestedExpression().outerIndexPtr(); }
+    inline const StorageIndex* innerNonZeroPtr() const { return derived().nestedExpression().innerNonZeroPtr(); }
+
+    inline Scalar* valuePtr() { return derived().nestedExpression().valuePtr(); }
+    inline StorageIndex* innerIndexPtr() { return derived().nestedExpression().innerIndexPtr(); }
+    inline StorageIndex* outerIndexPtr() { return derived().nestedExpression().outerIndexPtr(); }
+    inline StorageIndex* innerNonZeroPtr() { return derived().nestedExpression().innerNonZeroPtr(); }
+
+    inline Index blockRows() const { return derived().nestedExpression().blockCols(); }
+    inline Index blockCols() const { return derived().nestedExpression().blockRows(); }
+    inline Index blockRowsIndex(Index bi) const { return derived().nestedExpression().blockColsIndex(bi); }
+    inline Index blockColsIndex(Index bj) const { return derived().nestedExpression().blockRowsIndex(bj); }
+};
+} // namespace internal
+
+template <typename MatrixType>
+class TransposeImpl<MatrixType, BlockSparse> : public internal::BlockSparseTransposeImpl<MatrixType> {
+protected:
+    typedef internal::BlockSparseTransposeImpl<MatrixType> Base;
+};
+
+namespace internal {
+
+template <typename ArgType>
+struct unary_evaluator<Transpose<ArgType>, BlockIteratorBased>
+        : public unary_evaluator<Transpose<ArgType>, IteratorBased> {
+    typedef unary_evaluator<Transpose<ArgType>, IteratorBased> Base;
+    typedef typename evaluator<ArgType>::BlockInnerIterator EvalIterator;
+
+    using Base::Base;
+
+    class BlockInnerIterator : public EvalIterator {
+    public:
+        EIGEN_STRONG_INLINE BlockInnerIterator(const unary_evaluator& unaryOp, Index outer)
+                : EvalIterator(unaryOp.m_argImpl, outer) {}
+
+        inline Index row() const { return EvalIterator::col(); }
+        inline Index col() const { return EvalIterator::row(); }
+
+        inline Transpose<Map<const typename ArgType::BlockScalar>> value() const {
+            return EvalIterator::value().transpose();
+        }
+        inline Transpose<Map<typename ArgType::BlockScalar>> valueRef() {
+            return EvalIterator::valueRef().transpose();
+        }
+
+        inline Index blockRows() const { return EvalIterator::blockCols(); }
+        inline Index blockCols() const { EvalIterator::blockRows(); }
+    };
+};
+
+template <typename UnaryOp, typename ArgType>
+struct unary_evaluator<CwiseUnaryOp<UnaryOp, ArgType>, BlockIteratorBased>
+        : public unary_evaluator<CwiseUnaryOp<UnaryOp, ArgType>, IteratorBased> {
+    typedef unary_evaluator<CwiseUnaryOp<UnaryOp, ArgType>, IteratorBased> Base;
+    typedef CwiseUnaryOp<UnaryOp, ArgType> XprType;
+    typedef typename evaluator<ArgType>::BlockInnerIterator EvalIterator;
+
+    using Base::Base;
+
+    class BlockInnerIterator : public EvalIterator {
+    protected:
+        typedef typename XprType::Scalar Scalar;
+    public:
+        EIGEN_STRONG_INLINE BlockInnerIterator(const unary_evaluator& unaryOp, Index outer)
+            : EvalIterator(unaryOp.m_argImpl, outer), m_functor(unaryOp.m_functor) {}
+
+        EIGEN_STRONG_INLINE Scalar value() const { return m_functor(EvalIterator::value()); }
+
+    protected:
+        const UnaryOp m_functor;
+
+    private:
+        Scalar& valueRef();
+    };
+};
+
+template <typename ViewOp, typename ArgType>
+struct unary_evaluator<CwiseUnaryView<ViewOp, ArgType>, BlockIteratorBased>
+        : public unary_evaluator<CwiseUnaryView<ViewOp, ArgType>, IteratorBased> {
+    typedef unary_evaluator<CwiseUnaryView<ViewOp, ArgType>, IteratorBased> Base;
+    typedef CwiseUnaryView<ViewOp, ArgType> XprType;
+    typedef typename evaluator<ArgType>::BlockInnerIterator EvalIterator;
+
+    using Base::Base;
+
+    class BlockInnerIterator : public EvalIterator {
+    protected:
+        typedef typename XprType::Scalar Scalar;
+
+    public:
+        EIGEN_STRONG_INLINE BlockInnerIterator(const unary_evaluator& unaryOp, Index outer)
+            : EvalIterator(unaryOp.m_argImpl, outer), m_functor(unaryOp.m_functor) {}
+
+        EIGEN_STRONG_INLINE Scalar value() const { return m_functor(EvalIterator::value()); }
+        EIGEN_STRONG_INLINE Scalar& valueRef() { return m_functor(EvalIterator::valueRef()); }
+
+    protected:
+        const ViewOp m_functor;
+    };
+};
+
+}  // end namespace internal
 
 }  // end namespace Eigen
 
