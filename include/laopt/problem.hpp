@@ -13,7 +13,6 @@
 #include "laopt/problem_evaluators/variable_bounds_evaluator.hpp"
 #include "laopt/problem_evaluators/vector_constraints_evaluator.hpp"
 #include "laopt/problem_evaluators/weighted_sum_constraints_evaluator.hpp"
-#include "laopt/indexed_vector.hpp"
 
 namespace laopt
 {

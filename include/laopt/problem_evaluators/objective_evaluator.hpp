@@ -27,7 +27,7 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value>::type
     add_obj_impl(const ExprBase<Derived>& expr)
     {
-        static constexpr int n_outputs = Derived::n_outputs;
+        static constexpr int n_outputs = Derived::RowsAtCompileTime;
 
         Eigen::Vector<scalar_t, n_outputs> weights = Eigen::Vector<scalar_t, n_outputs>::Constant(obj_factor);
 
@@ -38,23 +38,21 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Gradient>::value>::type
     add_obj_impl(const ExprBase<Derived>& expr)
     {
-        static constexpr int n_outputs = Derived::n_outputs;
+        static constexpr int n_outputs = Derived::RowsAtCompileTime;
 
         Eigen::Vector<scalar_t, n_outputs> weights = Eigen::Vector<scalar_t, n_outputs>::Constant(obj_factor);
 
-        ExprEvaluator<Derived>::gradient(expr.derived(), objective.gradient(expr.derived().indices()), weights);
+        ExprEvaluator<Derived>::gradient(expr.derived(), objective.gradient, weights);
     }
 
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Hessian>::value>::type
     add_obj_impl(const ExprBase<Derived>& expr)
     {
-        static constexpr int n_outputs = Derived::n_outputs;
+        static constexpr int n_outputs = Derived::RowsAtCompileTime;
 
         Eigen::Vector<scalar_t, n_outputs> weights = Eigen::Vector<scalar_t, n_outputs>::Constant(obj_factor);
-        auto in_indices = expr.derived().indices();
-
-        ExprEvaluator<Derived>::hessian(expr.derived(), objective.hessian(in_indices, in_indices), weights);
+        ExprEvaluator<Derived>::hessian(expr.derived(), objective.hessian, weights);
     }
 };
 

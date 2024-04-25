@@ -14,16 +14,13 @@ public:
     const ScalarType scalar;
     const Derived expr;
 
-    static constexpr int n_inputs = Derived::n_inputs;
-    static constexpr int n_outputs = Derived::n_outputs;
+    enum {
+        RowsAtCompileTime = Derived::RowsAtCompileTime,
+        ColsAtCompileTime = 1
+    };
     using Scalar = typename Derived::Scalar;
 
     explicit ScalarExpr(const ScalarType& scalar, const Derived& expr) : scalar(scalar), expr(expr) {}
-
-    EIGEN_STRONG_INLINE const Eigen::Vector<int, n_inputs> indices() const
-    {
-        return expr.indices();
-    }
 };
 
 template<typename ScalarType, typename Derived>
@@ -40,20 +37,18 @@ operator*(const ExprBase<Derived>& expr, const ScalarType& scalar)
     return ScalarExpr<ScalarType, Derived>(scalar, expr.derived());
 }
 
-// we need this special case to be not ambiguous with Eigen
 template<typename ScalarType, typename Derived>
-typename std::enable_if<std::is_arithmetic<ScalarType>::value, ScalarExpr<ScalarType, IndexedVector<Derived>>>::type
-operator*(const ScalarType& scalar, const IndexedVector<Derived>& expr)
+typename std::enable_if<std::is_arithmetic<ScalarType>::value && is_variable<Derived>::value, ScalarExpr<ScalarType, Derived>>::type
+operator*(const ScalarType& scalar, const Derived& expr)
 {
-    return ScalarExpr<ScalarType, IndexedVector<Derived>>(scalar, expr);
+    return ScalarExpr<ScalarType, Derived>(scalar, expr);
 }
 
-// we need this special case to be not ambiguous with Eigen
 template<typename ScalarType, typename Derived>
-typename std::enable_if<std::is_arithmetic<ScalarType>::value, ScalarExpr<ScalarType, IndexedVector<Derived>>>::type
-operator*(const IndexedVector<Derived>& expr, const ScalarType& scalar)
+typename std::enable_if<std::is_arithmetic<ScalarType>::value && is_variable<Derived>::value, ScalarExpr<ScalarType, Derived>>::type
+operator*(const Derived& expr, const ScalarType& scalar)
 {
-    return ScalarExpr<ScalarType, IndexedVector<Derived>>(scalar, expr);
+    return ScalarExpr<ScalarType, Derived>(scalar, expr);
 }
 
 template<typename ScalarType, typename Derived>

@@ -25,7 +25,7 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value && !is_variable_constraint_expr<Derived>::value>::type
     add_constr_impl(const ConstraintExpr<Derived>& const_expr)
     {
-        static constexpr int n_outputs = Derived::n_outputs;
+        static constexpr int n_outputs = Derived::RowsAtCompileTime;
 
         auto out_indices = Eigen::seqN(row_offset, Eigen::fix<n_outputs>);
         row_offset += n_outputs;
@@ -39,12 +39,12 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Jacobian>::value && !is_variable_constraint_expr<Derived>::value>::type
     add_constr_impl(const ConstraintExpr<Derived>& const_expr)
     {
-        static constexpr int n_outputs = Derived::n_outputs;
+        static constexpr int n_outputs = Derived::RowsAtCompileTime;
 
         auto out_indices = Eigen::seqN(row_offset, Eigen::fix<n_outputs>);
         row_offset += n_outputs;
 
-        ExprEvaluator<Derived>::jacobian(const_expr.derived(), constraints.jacobian(out_indices, const_expr.derived().indices()), 1);
+        ExprEvaluator<Derived>::jacobian(const_expr.derived(), constraints.jacobian(out_indices, Eigen::all), 1);
     }
 
     template<typename Derived>

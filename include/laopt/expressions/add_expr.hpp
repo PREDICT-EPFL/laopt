@@ -4,7 +4,6 @@
 #include <Eigen/Dense>
 #include "laopt/expressions/expr_base.hpp"
 #include "laopt/expressions/expr_evaluator.hpp"
-#include "laopt/indexed_vector.hpp"
 
 namespace laopt {
 
@@ -15,17 +14,14 @@ public:
     const DerivedLhs lhs;
     const DerivedRhs rhs;
 
-    static_assert(DerivedLhs::n_outputs == DerivedRhs::n_outputs, "Output dimension of expressions must be the same");
-    static constexpr int n_inputs = DerivedLhs::n_inputs + DerivedRhs::n_inputs;
-    static constexpr int n_outputs = DerivedLhs::n_outputs;
+    static_assert(DerivedLhs::RowsAtCompileTime == DerivedRhs::RowsAtCompileTime, "Output dimension of expressions must be the same");
+    enum {
+        RowsAtCompileTime = DerivedLhs::RowsAtCompileTime,
+        ColsAtCompileTime = 1
+    };
     using Scalar = typename DerivedLhs::Scalar;
 
     explicit AddExpr(const DerivedLhs& lhs, const DerivedRhs& rhs) : lhs(lhs), rhs(rhs) {}
-
-    EIGEN_STRONG_INLINE const Eigen::Vector<int, n_inputs> indices() const
-    {
-        return concatenate_indices(lhs.indices(), rhs.indices());
-    }
 };
 
 template<typename DerivedLhs, typename DerivedRhs>
@@ -34,11 +30,25 @@ AddExpr<DerivedLhs, DerivedRhs> operator+(const ExprBase<DerivedLhs>& lhs, const
     return AddExpr<DerivedLhs, DerivedRhs>(lhs.derived(), rhs.derived());
 }
 
-// we need this special case to be not ambiguous with Eigen
 template<typename DerivedLhs, typename DerivedRhs>
-AddExpr<IndexedVector<DerivedLhs>, IndexedVector<DerivedRhs>> operator+(const IndexedVector<DerivedLhs>& lhs, const IndexedVector<DerivedRhs>& rhs)
+typename std::enable_if<is_variable<DerivedRhs>::value, AddExpr<DerivedLhs, DerivedRhs>>::type
+operator+(const ExprBase<DerivedLhs>& lhs, const DerivedRhs& rhs)
 {
-    return AddExpr<IndexedVector<DerivedLhs>, IndexedVector<DerivedRhs>>(lhs, rhs);
+    return AddExpr<DerivedLhs, DerivedRhs>(lhs.derived(), rhs);
+}
+
+template<typename DerivedLhs, typename DerivedRhs>
+typename std::enable_if<is_variable<DerivedLhs>::value, AddExpr<DerivedLhs, DerivedRhs>>::type
+operator+(const DerivedLhs& lhs, const ExprBase<DerivedRhs>& rhs)
+{
+    return AddExpr<DerivedLhs, DerivedRhs>(lhs, rhs.derived());
+}
+
+template<typename DerivedLhs, typename DerivedRhs>
+typename std::enable_if<is_variable<DerivedLhs>::value && is_variable<DerivedRhs>::value, AddExpr<DerivedLhs, DerivedRhs>>::type
+operator+(const DerivedLhs& lhs, const DerivedRhs& rhs)
+{
+    return AddExpr<DerivedLhs, DerivedRhs>(lhs, rhs);
 }
 
 template<typename DerivedLhs, typename DerivedRhs>
@@ -54,8 +64,8 @@ struct ExprEvaluator<AddExpr<DerivedLhs, DerivedRhs>>
     static EIGEN_STRONG_INLINE void
     jacobian(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutJacobian&& out_jacobian, const AScalar& alpha)
     {
-        ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_jacobian(Eigen::all, Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), alpha);
-        ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_jacobian(Eigen::all, Eigen::lastN(Eigen::fix<DerivedRhs::n_inputs>)), alpha);
+        ExprEvaluator<DerivedLhs>::jacobian(expr.lhs, out_jacobian, alpha);
+        ExprEvaluator<DerivedRhs>::jacobian(expr.rhs, out_jacobian, alpha);
     }
 
     template<typename Weight>
@@ -69,16 +79,16 @@ struct ExprEvaluator<AddExpr<DerivedLhs, DerivedRhs>>
     static EIGEN_STRONG_INLINE void
     gradient(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutGradient&& out_gradient, const Weight& weight)
     {
-        ExprEvaluator<DerivedLhs>::gradient(expr.lhs, out_gradient(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight);
-        ExprEvaluator<DerivedRhs>::gradient(expr.rhs, out_gradient(Eigen::lastN(Eigen::fix<DerivedRhs::n_inputs>)), weight);
+        ExprEvaluator<DerivedLhs>::gradient(expr.lhs, out_gradient, weight);
+        ExprEvaluator<DerivedRhs>::gradient(expr.rhs, out_gradient, weight);
     }
 
     template<typename OutHessian, typename Weight>
     static EIGEN_STRONG_INLINE void
     hessian(const AddExpr<DerivedLhs, DerivedRhs>& expr, OutHessian&& out_hessian, const Weight& weight)
     {
-        ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_hessian(Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>), Eigen::seqN(0, Eigen::fix<DerivedLhs::n_inputs>)), weight);
-        ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_hessian(Eigen::lastN(DerivedRhs::n_inputs), Eigen::lastN(DerivedRhs::n_inputs)), weight);
+        ExprEvaluator<DerivedLhs>::hessian(expr.lhs, out_hessian, weight);
+        ExprEvaluator<DerivedRhs>::hessian(expr.rhs, out_hessian, weight);
     }
 };
 

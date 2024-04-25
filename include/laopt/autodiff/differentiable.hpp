@@ -5,7 +5,7 @@
 
 #include "laopt/utility.hpp"
 #include "laopt/expressions/fwd.hpp"
-#include "laopt/indexed_vector.hpp"
+#include "laopt/variable_map.hpp"
 #include "laopt/autodiff/differentiable_options.hpp"
 #include "laopt/autodiff/differentiable_eigen.hpp"
 #include "laopt/autodiff/differentiable_casadi.hpp"
@@ -187,7 +187,7 @@ public:
 
         using scalar_t = typename meta::matrix_info<return_t>::Scalar;
 
-        static constexpr int n_inputs = meta::sum_template<meta::variable_info<Vars>::size...>();
+        static constexpr int n_inputs = meta::sum_template<variable_info<Vars>::size...>();
         static constexpr int n_outputs = meta::matrix_info<return_t>::RowsAtCompileTime;
 
         using jacobian_t = Eigen::Matrix<scalar_t, n_outputs, n_inputs>;
@@ -247,6 +247,9 @@ public:
     function(const Tag& tag, const Args&... args) noexcept
     {
         using F = FuncInfo<Tag, Args...>;
+        using return_t = typename F::return_t;
+        static_assert(!std::is_base_of<Eigen::EigenBase<return_t>, return_t>::value || std::is_base_of<Eigen::PlainObjectBase<return_t>, return_t>::value,
+                      "Your function_impl is returning a Eigen expression. Make sure the return type is a PlainObject type (e.g. .eval() the expression).");
         return call_function_impl_expr(typename F::is_return_expr(), tag, args...);
     }
 
@@ -381,7 +384,7 @@ public:
 
         using scalar_t = typename meta::matrix_info<return_t>::Scalar;
 
-        static constexpr int n_inputs = meta::sum_template<meta::variable_info<Vars>::size...>();
+        static constexpr int n_inputs = meta::sum_template<variable_info<Vars>::size...>();
         static constexpr int n_outputs = meta::matrix_info<return_t>::RowsAtCompileTime;
 
         using jacobian_t = Eigen::Matrix<scalar_t, n_outputs, n_inputs>;
@@ -442,6 +445,9 @@ public:
     function(const Args&... args) noexcept
     {
         using F = FuncInfo<DefaultTag, Args...>;
+        using return_t = typename F::return_t;
+        static_assert(!std::is_base_of<Eigen::EigenBase<return_t>, return_t>::value || std::is_base_of<Eigen::PlainObjectBase<return_t>, return_t>::value,
+                      "Your function_impl is returning a Eigen expression. Make sure the return type is a PlainObject type (e.g. .eval() the expression).");
         return call_function_impl_expr(typename F::is_return_expr(), args...);
     }
 

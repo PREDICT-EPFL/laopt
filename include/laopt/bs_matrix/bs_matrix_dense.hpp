@@ -62,6 +62,20 @@ public:
         return *this;
     }
 
+    template<typename MDerived>
+    BSMatrixDenseBase& operator+=(const Eigen::MatrixBase<MDerived>& mat)
+    {
+        value() += mat;
+        return *this;
+    }
+
+    template<typename MDerived>
+    BSMatrixDenseBase& operator-=(const Eigen::MatrixBase<MDerived>& mat)
+    {
+        value() -= mat;
+        return *this;
+    }
+
     template<typename RowSlice, typename ColSlice>
     inline decltype(auto) operator()(const RowSlice& row_slice, const ColSlice& col_slice)
     {

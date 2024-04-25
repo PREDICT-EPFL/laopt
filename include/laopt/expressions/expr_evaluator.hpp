@@ -2,58 +2,58 @@
 #define LAOPT_EXPR_EVALUATOR_HPP
 
 #include "laopt/expressions/fwd.hpp"
-#include "laopt/indexed_vector.hpp"
+#include "laopt/variable_map.hpp"
 #include "laopt/differentiable_functions/identity.hpp"
 
 namespace laopt {
 
-template<typename Derived>
-struct ExprEvaluator<IndexedVector<Derived>>
+template<typename MatrixType, int MapOptions, typename StrideType>
+struct ExprEvaluator<VariableMap<MatrixType, MapOptions, StrideType>>
 {
     static EIGEN_STRONG_INLINE auto
-    function(const IndexedVector<Derived>& indexed_vector)
+    function(const VariableMap<MatrixType, MapOptions, StrideType>& variable)
     {
         Identity id;
-        return id.function(indexed_vector);
+        return id.function(variable);
     }
 
     template<typename OutJacobian, typename AScalar>
     static EIGEN_STRONG_INLINE void
-    jacobian(const IndexedVector<Derived>& indexed_vector, OutJacobian&& out_jacobian, const AScalar& alpha)
+    jacobian(const VariableMap<MatrixType, MapOptions, StrideType>& variable, OutJacobian&& out_jacobian, const AScalar& alpha)
     {
         Identity id;
         id.jacobian(out_jacobian,
                     alpha,
-                    indexed_vector);
+                    variable);
     }
 
     template<typename Weight>
     static EIGEN_STRONG_INLINE auto
-    wsum(const IndexedVector<Derived>& indexed_vector, const Weight& weight)
+    wsum(const VariableMap<MatrixType, MapOptions, StrideType>& variable, const Weight& weight)
     {
         Identity id;
         return id.wsum(weight,
-                       indexed_vector);
+                       variable);
     }
 
     template<typename OutGradient, typename Weight>
     static EIGEN_STRONG_INLINE void
-    gradient(const IndexedVector<Derived>& indexed_vector, OutGradient&& out_gradient, const Weight& weight)
+    gradient(const VariableMap<MatrixType, MapOptions, StrideType>& variable, OutGradient&& out_gradient, const Weight& weight)
     {
         Identity id;
         id.gradient(out_gradient,
                     weight,
-                    indexed_vector);
+                    variable);
     }
 
     template<typename OutHessian, typename Weight>
     static EIGEN_STRONG_INLINE void
-    hessian(const IndexedVector<Derived>& indexed_vector, OutHessian&& out_hessian, const Weight& weight)
+    hessian(const VariableMap<MatrixType, MapOptions, StrideType>& variable, OutHessian&& out_hessian, const Weight& weight)
     {
         Identity id;
         id.hessian(out_hessian,
                    weight,
-                   indexed_vector);
+                   variable);
     }
 };
 

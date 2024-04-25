@@ -43,8 +43,8 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<!is_variable_constraint_expr<Derived>::value>::type
     add_constr_impl(const ConstraintExpr<Derived>&)
     {
-        constraints.extend_rows(Derived::n_outputs);
-        lagrangian.extend_rows(Derived::n_outputs);
+        constraints.extend_rows(Derived::RowsAtCompileTime);
+        lagrangian.extend_rows(Derived::RowsAtCompileTime);
     }
 
     template<typename Derived>

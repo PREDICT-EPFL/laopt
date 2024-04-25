@@ -7,20 +7,22 @@
 namespace laopt {
 
 /**
- * This helper struct has a member constant value equal to true if T is arithmetic, a Eigen matrix and not an ExprBase.
+ * This helper struct has a member constant value equal to true
+ * if T is arithmetic, a Eigen matrix and not an ExprBase or variable.
  */
 template<typename T>
 struct is_constant_non_expr : std::integral_constant<bool,
                                                      (std::is_arithmetic<T>::value ||
                                                       std::is_base_of<Eigen::MatrixBase<T>, T>::value) &&
-                                                     !std::is_base_of<ExprBase<T>, T>::value> {};
+                                                     !std::is_base_of<ExprBase<T>, T>::value &&
+                                                     !is_variable<T>::value> {};
 
 /**
  * This helper struct has a member constant value equal to true if T is an constraint expression
  * with simple IndexedVector's as expressions, i.e., it's simple variable ineq or eq constraints.
  */
 template<typename T>
-struct is_variable_constraint_expr : std::integral_constant<bool, false> {};
+struct is_variable_constraint_expr : std::false_type {};
 
 /**
  * ConstraintExpr is the base expression type of constraint expressions.

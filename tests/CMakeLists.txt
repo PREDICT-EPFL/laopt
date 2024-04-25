@@ -26,8 +26,8 @@ add_executable(bs_matrix_test bs_matrix_test.cpp)
 target_link_libraries(bs_matrix_test
         PRIVATE laopt gtest_main gtest)
 
-add_executable(indexed_vector_test indexed_vector_test.cpp)
-target_link_libraries(indexed_vector_test
+add_executable(variable_map_test variable_map_test.cpp)
+target_link_libraries(variable_map_test
         PRIVATE laopt gtest_main gtest)
 
 add_executable(tag_test tag_test.cpp)
@@ -47,7 +47,7 @@ target_link_libraries(sqp_test
 include(GoogleTest)
 gtest_discover_tests(func_test)
 gtest_discover_tests(bs_matrix_test)
-gtest_discover_tests(indexed_vector_test)
+gtest_discover_tests(variable_map_test)
 if(WITH_IPOPT)
     gtest_discover_tests(ipopt_test)
 endif()

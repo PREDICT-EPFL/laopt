@@ -145,21 +145,8 @@ protected:
     }
 
     // Take a vector input and return an AD version of the vector
-    template<typename ADScalar, typename Base>
-    EIGEN_STRONG_INLINE auto
-    make_ad(const IndexedVector<Base>& x) noexcept
-    {
-        constexpr size_t n = Base::RowsAtCompileTime;
-        Eigen::Vector<ADScalar, n> y;
-        y = x;
-        for (int i = 0; i < y.rows(); i++) {
-            y[i].derivatives().setZero();
-        }
-        return y;
-    }
-
     template<typename ADScalar, typename T>
-    EIGEN_STRONG_INLINE typename std::enable_if<meta::is_variable<T>::value, Eigen::Vector<ADScalar, T::RowsAtCompileTime>>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<is_variable<T>::value, Eigen::Vector<ADScalar, T::RowsAtCompileTime>>::type
     make_ad(const Eigen::MatrixBase<T>& x) noexcept
     {
         constexpr size_t n = T::RowsAtCompileTime;
@@ -178,20 +165,8 @@ protected:
         return x;
     }
 
-    template<typename ADScalar, typename Base>
-    EIGEN_STRONG_INLINE auto
-    make_ad_touchable(const IndexedVector<Base>& x) noexcept
-    {
-        constexpr size_t n = Base::RowsAtCompileTime;
-        Eigen::Vector<ADScalar, n> y;
-        for (int i = 0; i < y.rows(); i++) {
-            y[i].value() = 1;
-        }
-        return y;
-    }
-
     template<typename ADScalar, typename T>
-    EIGEN_STRONG_INLINE typename std::enable_if<meta::is_variable<T>::value, Eigen::Vector<ADScalar, T::RowsAtCompileTime>>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<is_variable<T>::value, Eigen::Vector<ADScalar, T::RowsAtCompileTime>>::type
     make_ad_touchable(const Eigen::MatrixBase<T>& x) noexcept
     {
         constexpr size_t n = T::RowsAtCompileTime;
@@ -246,24 +221,8 @@ protected:
     }
 
     // Take a vector input and return an AD version of the vector
-    template<typename outerADScalar, typename Base>
-    EIGEN_STRONG_INLINE auto
-    make_ad2(const IndexedVector<Base>& x) noexcept
-    {
-        constexpr size_t n = Base::RowsAtCompileTime;
-        Eigen::Vector<outerADScalar, n> y;
-        // y = x;
-        for (size_t i = 0; i < n; i++) {
-            y(i).value().value() = x.cast_base()(i);
-            y(i).value().derivatives().setZero();
-            y(i).derivatives().setZero();
-            y(i).derivatives()(0).derivatives().setZero();
-        }
-        return y;
-    }
-
     template<typename outerADScalar, typename T>
-    EIGEN_STRONG_INLINE typename std::enable_if<meta::is_variable<T>::value, Eigen::Vector<outerADScalar, T::RowsAtCompileTime>>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<is_variable<T>::value, Eigen::Vector<outerADScalar, T::RowsAtCompileTime>>::type
     make_ad2(const Eigen::MatrixBase<T>& x) noexcept
     {
         constexpr size_t n = T::RowsAtCompileTime;
@@ -285,21 +244,8 @@ protected:
         return x;
     }
 
-    template<typename outerADScalar, typename Base>
-    EIGEN_STRONG_INLINE auto
-    make_ad2_touchable(const IndexedVector<Base>& x) noexcept
-    {
-        constexpr size_t n = Base::RowsAtCompileTime;
-        Eigen::Vector<outerADScalar, n> y;
-        // y = x;
-        for (size_t i = 0; i < n; i++) {
-            y(i).value().value() = 1;
-        }
-        return y;
-    }
-
     template<typename outerADScalar, typename T>
-    EIGEN_STRONG_INLINE typename std::enable_if<meta::is_variable<T>::value, Eigen::Vector<outerADScalar, T::RowsAtCompileTime>>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<is_variable<T>::value, Eigen::Vector<outerADScalar, T::RowsAtCompileTime>>::type
     make_ad2_touchable(const Eigen::MatrixBase<T>& x) noexcept
     {
         constexpr size_t n = T::RowsAtCompileTime;

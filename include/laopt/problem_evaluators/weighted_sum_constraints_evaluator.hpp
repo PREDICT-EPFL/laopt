@@ -24,7 +24,7 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Eval>::value && !is_variable_constraint_expr<Derived>::value>::type
     add_constr_impl(const ConstraintExpr<Derived>& const_expr)
     {
-        static constexpr int n_outputs = Derived::n_outputs;
+        static constexpr int n_outputs = Derived::RowsAtCompileTime;
 
         auto out_indices = Eigen::seqN(row_offset, Eigen::fix<n_outputs>);
         row_offset += n_outputs;
@@ -36,25 +36,24 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Gradient>::value && !is_variable_constraint_expr<Derived>::value>::type
     add_constr_impl(const ConstraintExpr<Derived>& const_expr)
     {
-        static constexpr int n_outputs = Derived::n_outputs;
+        static constexpr int n_outputs = Derived::RowsAtCompileTime;
 
         auto out_indices = Eigen::seqN(row_offset, Eigen::fix<n_outputs>);
         row_offset += n_outputs;
 
-        ExprEvaluator<Derived>::gradient(const_expr.derived(), constraints.gradient(const_expr.derived().indices()), constraints.weights(out_indices));
+        ExprEvaluator<Derived>::gradient(const_expr.derived(), constraints.gradient, constraints.weights(out_indices));
     }
 
     template<typename Derived, typename LocalDType = DType>
     EIGEN_STRONG_INLINE typename std::enable_if<std::is_same<LocalDType, Hessian>::value && !is_variable_constraint_expr<Derived>::value>::type
     add_constr_impl(const ConstraintExpr<Derived>& const_expr)
     {
-        static constexpr int n_outputs = Derived::n_outputs;
+        static constexpr int n_outputs = Derived::RowsAtCompileTime;
 
         auto out_indices = Eigen::seqN(row_offset, Eigen::fix<n_outputs>);
-        auto in_indices = const_expr.derived().indices();
         row_offset += n_outputs;
 
-        ExprEvaluator<Derived>::hessian(const_expr.derived(), constraints.hessian(in_indices, in_indices), constraints.weights(out_indices));
+        ExprEvaluator<Derived>::hessian(const_expr.derived(), constraints.hessian, constraints.weights(out_indices));
     }
 
     template<typename Derived>

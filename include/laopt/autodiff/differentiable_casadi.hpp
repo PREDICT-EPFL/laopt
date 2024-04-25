@@ -272,23 +272,8 @@ protected:
         }
     }
 
-    template<typename Base>
-    EIGEN_STRONG_INLINE auto
-    make_casadi_sx(std::vector<casadi::SX>& casadi_args, std::vector<casadi::SX>& casadi_vars, const IndexedVector<Base>& x) noexcept
-    {
-        constexpr size_t n = Base::RowsAtCompileTime;
-        Eigen::Vector<casadi::SX, n> y;
-        for (size_t i = 0; i < n; i++) {
-            casadi::SX sym = casadi::SX::sym("var" + std::to_string(i), 1);
-            y[i] = sym;
-        }
-        casadi_args.push_back(casadi::SX::vertcat({y.data(), y.data() + n}));
-        casadi_vars.push_back(casadi::SX::vertcat({y.data(), y.data() + n}));
-        return y;
-    }
-
     template<typename T>
-    EIGEN_STRONG_INLINE typename std::enable_if<meta::is_variable<T>::value, Eigen::Vector<casadi::SX, Eigen::MatrixBase<T>::RowsAtCompileTime>>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<is_variable<T>::value, Eigen::Vector<casadi::SX, Eigen::MatrixBase<T>::RowsAtCompileTime>>::type
     make_casadi_sx(std::vector<casadi::SX>& casadi_args, std::vector<casadi::SX>& casadi_vars, const Eigen::MatrixBase<T>& x) noexcept
     {
         constexpr size_t rows = Eigen::MatrixBase<T>::RowsAtCompileTime;
@@ -304,7 +289,7 @@ protected:
     }
 
     template<typename T>
-    EIGEN_STRONG_INLINE typename std::enable_if<!meta::is_variable<T>::value, Eigen::Vector<casadi::SX, Eigen::MatrixBase<T>::RowsAtCompileTime>>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<!is_variable<T>::value, Eigen::Vector<casadi::SX, Eigen::MatrixBase<T>::RowsAtCompileTime>>::type
     make_casadi_sx(std::vector<casadi::SX>& casadi_args, std::vector<casadi::SX>& casadi_vars, const Eigen::MatrixBase<T>& x) noexcept
     {
         constexpr size_t rows = Eigen::MatrixBase<T>::RowsAtCompileTime;
@@ -325,24 +310,6 @@ protected:
         casadi::SX sym = casadi::SX::sym("arg", 1);
         casadi_args.push_back(sym);
         return sym;
-    }
-
-    template<typename Base>
-    EIGEN_STRONG_INLINE typename std::enable_if<(Base::Flags & Eigen::DirectAccessBit) != 0, int>::type
-    set_casadi_buffer(int offset, FastCasadiFunctionBuffer& buffer, const IndexedVector<Base>& x) noexcept
-    {
-        constexpr size_t n = Base::RowsAtCompileTime;
-        buffer.set_arg(offset, x.cast_base().data(), n);
-        return offset + 1;
-    }
-
-    template<typename Base>
-    EIGEN_STRONG_INLINE typename std::enable_if<(Base::Flags & Eigen::DirectAccessBit) == 0, int>::type
-    set_casadi_buffer(int offset, FastCasadiFunctionBuffer& buffer, const IndexedVector<Base>& x) noexcept
-    {
-        // x is non-continuous in memory
-        buffer.set_arg_buffer(offset, x.cast_base());
-        return offset + 1;
     }
 
     template<typename T>

@@ -10,7 +10,7 @@
 #include "laopt/autodiff/differentiable_functor.hpp"
 #include "laopt/common_functions.hpp"
 
-#include "laopt/indexed_vector.hpp"
+#include "laopt/variable_map.hpp"
 
 #include "laopt/expressions/expr_base.hpp"
 #include "laopt/expressions/scalar_expr.hpp"
