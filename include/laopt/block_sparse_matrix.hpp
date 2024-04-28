@@ -171,6 +171,19 @@ template <>
 struct AssignmentKind<SparseShape, BlockSparseShape> {
     typedef Sparse2Sparse Kind;
 };
+template <>
+struct AssignmentKind<DenseShape, BlockSparseShape> {
+    typedef Sparse2Dense Kind;
+};
+
+template <typename Functor>
+struct cwise_promote_storage_type<BlockSparse, Sparse, Functor> {
+    typedef Sparse ret;
+};
+template <typename Functor>
+struct cwise_promote_storage_type<Sparse, BlockSparse, Functor> {
+    typedef Sparse ret;
+};
 
 // Function object to sort a triplet list
 template <typename Iterator, bool IsColMajor>
@@ -1223,6 +1236,27 @@ protected:
 };
 
 namespace internal {
+
+template <typename BinaryOp, typename Lhs, typename Rhs>
+struct binary_evaluator<CwiseBinaryOp<BinaryOp, Lhs, Rhs>, BlockIteratorBased, BlockIteratorBased>
+        : binary_evaluator<CwiseBinaryOp<BinaryOp, Lhs, Rhs>, IteratorBased, IteratorBased> {
+    typedef binary_evaluator<CwiseBinaryOp<BinaryOp, Lhs, Rhs>, IteratorBased, IteratorBased> Base;
+    using Base::Base;
+};
+
+template <typename BinaryOp, typename Lhs, typename Rhs, typename OtherIterator>
+struct binary_evaluator<CwiseBinaryOp<BinaryOp, Lhs, Rhs>, BlockIteratorBased, OtherIterator>
+        : binary_evaluator<CwiseBinaryOp<BinaryOp, Lhs, Rhs>, IteratorBased, OtherIterator> {
+    typedef binary_evaluator<CwiseBinaryOp<BinaryOp, Lhs, Rhs>, IteratorBased, OtherIterator> Base;
+    using Base::Base;
+};
+
+template <typename BinaryOp, typename Lhs, typename Rhs, typename OtherIterator>
+struct binary_evaluator<CwiseBinaryOp<BinaryOp, Lhs, Rhs>, OtherIterator, BlockIteratorBased>
+        : binary_evaluator<CwiseBinaryOp<BinaryOp, Lhs, Rhs>, OtherIterator, IteratorBased> {
+    typedef binary_evaluator<CwiseBinaryOp<BinaryOp, Lhs, Rhs>, OtherIterator, IteratorBased> Base;
+    using Base::Base;
+};
 
 template <typename ArgType>
 struct unary_evaluator<Transpose<ArgType>, BlockIteratorBased>
