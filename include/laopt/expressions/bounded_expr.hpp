@@ -16,9 +16,9 @@ template<typename DerivedLb, typename Derived, typename DerivedUb>
 class BoundedExpr : public ConstraintExpr<BoundedExpr<DerivedLb, Derived, DerivedUb>>
 {
 public:
-    const DerivedLb lb;
-    const Derived expr;
-    const DerivedUb ub;
+    const DerivedLb& lb;
+    const Derived& expr;
+    const DerivedUb& ub;
 
     enum {
         RowsAtCompileTime = Derived::RowsAtCompileTime,

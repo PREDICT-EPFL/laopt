@@ -159,7 +159,7 @@ protected:
     }
 
     template<typename ADScalar, typename T>
-    EIGEN_STRONG_INLINE const T&
+    EIGEN_STRONG_INLINE typename std::enable_if<!is_variable<T>::value, const T&>::type
     make_ad(const T& x) noexcept
     {
         return x;
@@ -178,7 +178,7 @@ protected:
     }
 
     template<typename ADScalar, typename T>
-    EIGEN_STRONG_INLINE const T&
+    EIGEN_STRONG_INLINE typename std::enable_if<!is_variable<T>::value, const T&>::type
     make_ad_touchable(const T& x) noexcept
     {
         return x;
@@ -238,7 +238,7 @@ protected:
     }
 
     template<typename outerADScalar, typename T>
-    EIGEN_STRONG_INLINE const T&
+    EIGEN_STRONG_INLINE typename std::enable_if<!is_variable<T>::value, const T&>::type
     make_ad2(const T& x) noexcept
     {
         return x;
@@ -246,7 +246,7 @@ protected:
 
     template<typename outerADScalar, typename T>
     EIGEN_STRONG_INLINE typename std::enable_if<is_variable<T>::value, Eigen::Vector<outerADScalar, T::RowsAtCompileTime>>::type
-    make_ad2_touchable(const Eigen::MatrixBase<T>& x) noexcept
+    make_ad2_touchable(const T& x) noexcept
     {
         constexpr size_t n = T::RowsAtCompileTime;
         Eigen::Vector<outerADScalar, n> y;
@@ -258,7 +258,7 @@ protected:
     }
 
     template<typename outerADScalar, typename T>
-    EIGEN_STRONG_INLINE const T&
+    EIGEN_STRONG_INLINE typename std::enable_if<!is_variable<T>::value, const T&>::type
     make_ad2_touchable(const T& x) noexcept
     {
         return x;

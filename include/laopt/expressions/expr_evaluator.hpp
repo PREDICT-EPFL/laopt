@@ -7,11 +7,11 @@
 
 namespace laopt {
 
-template<typename MatrixType, int MapOptions, typename StrideType>
-struct ExprEvaluator<VariableMap<MatrixType, MapOptions, StrideType>>
+template<typename T>
+struct ExprEvaluator<T, typename std::enable_if<is_variable<T>::value>::type>
 {
     static EIGEN_STRONG_INLINE auto
-    function(const VariableMap<MatrixType, MapOptions, StrideType>& variable)
+    function(const T& variable)
     {
         Identity id;
         return id.function(variable);
@@ -19,7 +19,7 @@ struct ExprEvaluator<VariableMap<MatrixType, MapOptions, StrideType>>
 
     template<typename OutJacobian, typename AScalar>
     static EIGEN_STRONG_INLINE void
-    jacobian(const VariableMap<MatrixType, MapOptions, StrideType>& variable, OutJacobian&& out_jacobian, const AScalar& alpha)
+    jacobian(const T& variable, OutJacobian&& out_jacobian, const AScalar& alpha)
     {
         Identity id;
         id.jacobian(out_jacobian,
@@ -29,7 +29,7 @@ struct ExprEvaluator<VariableMap<MatrixType, MapOptions, StrideType>>
 
     template<typename Weight>
     static EIGEN_STRONG_INLINE auto
-    wsum(const VariableMap<MatrixType, MapOptions, StrideType>& variable, const Weight& weight)
+    wsum(const T& variable, const Weight& weight)
     {
         Identity id;
         return id.wsum(weight,
@@ -38,7 +38,7 @@ struct ExprEvaluator<VariableMap<MatrixType, MapOptions, StrideType>>
 
     template<typename OutGradient, typename Weight>
     static EIGEN_STRONG_INLINE void
-    gradient(const VariableMap<MatrixType, MapOptions, StrideType>& variable, OutGradient&& out_gradient, const Weight& weight)
+    gradient(const T& variable, OutGradient&& out_gradient, const Weight& weight)
     {
         Identity id;
         id.gradient(out_gradient,
@@ -48,7 +48,7 @@ struct ExprEvaluator<VariableMap<MatrixType, MapOptions, StrideType>>
 
     template<typename OutHessian, typename Weight>
     static EIGEN_STRONG_INLINE void
-    hessian(const VariableMap<MatrixType, MapOptions, StrideType>& variable, OutHessian&& out_hessian, const Weight& weight)
+    hessian(const T& variable, OutHessian&& out_hessian, const Weight& weight)
     {
         Identity id;
         id.hessian(out_hessian,

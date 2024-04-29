@@ -69,13 +69,13 @@ struct ScalarFunction : public laopt::Differentiable<ScalarFunction<scalar_t, Op
 };
 
 template<typename scalar_t, int Options>
-struct ScalarFunctionWrapper : public laopt::Differentiable<ScalarFunctionWrapper<scalar_t, Options>>
+struct ScalarFunctionWrapperSwap : public laopt::Differentiable<ScalarFunctionWrapperSwap<scalar_t, Options>>
 {
     ScalarFunction<scalar_t, Options> scalar_function;
 
-    template<typename X, typename U>
+    template<typename U, typename X>
     EIGEN_STRONG_INLINE auto
-    function_impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u) noexcept
+    function_impl(const Eigen::MatrixBase<U>& u, const Eigen::MatrixBase<X>& x) noexcept
     {
         return scalar_function(x, u);
     }
@@ -118,10 +118,10 @@ TYPED_TEST(FunctionTest, VectorFunction)
     using scalar_t = double;
     VectorFunction<scalar_t, TypeParam::Options> test;
 
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 2>> x;
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 1>> u;
-    x << 2, 1;
-    u << 3;
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 2, 1;
+    Eigen::Vector<scalar_t, 1> u_data; u_data << 3;
+    laopt::Variable<scalar_t, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<scalar_t, 1> u(u_data.data()); u.index_offset() = 2;
 
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 3> jacobian;
@@ -147,10 +147,10 @@ TYPED_TEST(FunctionTest, VectorFunctionParameter)
     VectorFunctionParameter<scalar_t, TypeParam::Options> test;
 
     scalar_t p = 5;
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 2>> x;
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 1>> u;
-    x << 2, 1;
-    u << 3;
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 2, 1;
+    Eigen::Vector<scalar_t, 1> u_data; u_data << 3;
+    laopt::Variable<scalar_t, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<scalar_t, 1> u(u_data.data()); u.index_offset() = 2;
 
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 3> jacobian;
@@ -174,14 +174,14 @@ TYPED_TEST(FunctionTest, ScalarFunction)
 {
     using scalar_t = double;
 
-    using Arg1 = laopt::IndexedVector<Eigen::Vector<scalar_t, 2>>;
-    using Arg2 = laopt::IndexedVector<Eigen::Vector<scalar_t, 1>>;
+    using Arg1 = laopt::Variable<scalar_t, 2>;
+    using Arg2 = laopt::Variable<scalar_t, 1>;
 
     ScalarFunction<scalar_t, TypeParam::Options> f;
-    Arg1 x;
-    Arg2 u;
-    x << 1, 2;
-    u << 3;
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 1, 2;
+    Eigen::Vector<scalar_t, 1> u_data; u_data << 3;
+    Arg1 x(x_data.data()); x.index_offset() = 0;
+    Arg2 u(u_data.data()); u.index_offset() = 2;
     Eigen::Vector<scalar_t, 1> weight;
     weight << 1;
 
@@ -206,7 +206,7 @@ TYPED_TEST(FunctionTest, ScalarFunction)
     EXPECT_EQ(hessian, hessian_g);
 }
 
-TYPED_TEST(FunctionTest, ScalarFunctionWrapper)
+TYPED_TEST(FunctionTest, ScalarFunctionWrapperSwap)
 {
     using scalar_t = double;
 
@@ -216,30 +216,30 @@ TYPED_TEST(FunctionTest, ScalarFunctionWrapper)
     using Arg1 = laopt::Variable<scalar_t, 2>;
     using Arg2 = laopt::Variable<scalar_t, 1>;
 
-    ScalarFunctionWrapper<scalar_t, TypeParam::Options> f;
-    Arg1 x(arg1_data.data());
-    Arg2 u(arg2_data.data());
+    ScalarFunctionWrapperSwap<scalar_t, TypeParam::Options> f;
+    Arg1 x(arg1_data.data()); x.index_offset() = 0;
+    Arg2 u(arg2_data.data()); u.index_offset() = 2;
     x << 1, 2;
     u << 3;
     Eigen::Vector<scalar_t, 1> weight;
     weight << 1;
 
-    using info = typename ScalarFunctionWrapper<scalar_t, TypeParam::Options>::template FuncInfo<laopt::DefaultTag, Arg1, Arg2>;
+    using info = typename ScalarFunctionWrapperSwap<scalar_t, TypeParam::Options>::template FuncInfo<laopt::DefaultTag, Arg2, Arg1>;
     typename info::scalar_t value;
     typename info::gradient_t gradient;
     typename info::hessian_t hessian;
 
-    value = f.wsum(weight, x, u);
+    value = f.wsum(weight, u, x);
     EXPECT_EQ(value, 23);
 
     gradient.setZero();
-    f.gradient(gradient, weight, x, u);
+    f.gradient(gradient, weight, u, x);
     Eigen::Vector<scalar_t, 3> gradient_g;
     gradient_g << 2, 4, 12;
     EXPECT_EQ(gradient, gradient_g);
 
     hessian.setZero();
-    f.hessian(hessian, weight, x, u);
+    f.hessian(hessian, weight, u, x);
     Eigen::Matrix<scalar_t, 3, 3> hessian_g;
     hessian_g << 2, 0, 0, 0, 2, 0, 0, 0, 4;
     EXPECT_EQ(hessian, hessian_g);
@@ -272,11 +272,10 @@ TYPED_TEST(FunctionTest, RK4) {
     using dsys_t = laopt::common_functions::RK4<sys_t<scalar_t, TypeParam::Options>, scalar_t>;
     dsys_t dsys(sys, 0.1);
 
-    // Compute the discrete-time system and its jacobian
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 2>> x;
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 1>> u;
-    x << 1,2;
-    u << 3;
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 1, 2;
+    Eigen::Vector<scalar_t, 1> u_data; u_data << 3;
+    laopt::Variable<scalar_t, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<scalar_t, 1> u(u_data.data()); u.index_offset() = 2;
 
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 3> jacobian;
@@ -306,10 +305,10 @@ TYPED_TEST(FunctionTest, BSMatrixJacobain) {
     using scalar_t = double;
     VectorFunction<scalar_t, TypeParam::Options> test;
 
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 2>> x;
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 1>> u;
-    x << 1,2;
-    u << 3;
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 1, 2;
+    Eigen::Vector<scalar_t, 1> u_data; u_data << 3;
+    laopt::Variable<scalar_t, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<scalar_t, 1> u(u_data.data()); u.index_offset() = 2;
 
     // Function to run
     auto f = [&](auto& value, auto& jacobian)
@@ -361,8 +360,8 @@ TEST(FunctionTest, Identity) {
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 2> jacobian;
 
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 2>> x;
-    x << 1, 2;
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 1, 2;
+    laopt::Variable<scalar_t, 2> x(x_data.data()); x.index_offset() = 0;
 
     value = id.function(x);
 
@@ -406,13 +405,11 @@ TYPED_TEST(FunctionTest, WeightedSum)
 
     wsum_func_t<scalar_t, TypeParam::Options> func;
 
-    laopt::IndexedVector<Eigen::Vector<scalar_t,2>> x;
-    laopt::IndexedVector<Eigen::Vector<scalar_t,2>> z;
-    Eigen::Vector<scalar_t,2> weight;
-
-    x << 1,2;
-    z << 3,4;
-    weight << 1,1;
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 1, 2;
+    Eigen::Vector<scalar_t, 2> z_data; z_data << 3, 4;
+    laopt::Variable<scalar_t, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<scalar_t, 2> z(z_data.data()); z.index_offset() = 2;
+    Eigen::Vector<scalar_t, 2> weight; weight << 1,1;
 
     scalar_t value;
     Eigen::Vector<scalar_t,4> gradient;

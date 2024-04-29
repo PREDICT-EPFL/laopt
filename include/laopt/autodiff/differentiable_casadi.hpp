@@ -304,7 +304,7 @@ protected:
     }
 
     template<typename T>
-    EIGEN_STRONG_INLINE typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<T>, T>::value, casadi::SX>::type
+    EIGEN_STRONG_INLINE typename std::enable_if<!is_variable<T>::value && !std::is_base_of<Eigen::MatrixBase<T>, T>::value, casadi::SX>::type
     make_casadi_sx(std::vector<casadi::SX>& casadi_args, std::vector<casadi::SX>& casadi_vars, const T& x) noexcept
     {
         casadi::SX sym = casadi::SX::sym("arg", 1);

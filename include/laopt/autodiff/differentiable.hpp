@@ -128,6 +128,70 @@ protected:
         static_cast<Derived*>(this)->jacobian(tag, jacobian, 1, args...);
         out_gradient += jacobian.transpose() * weight;
     }
+
+    template<typename T>
+    EIGEN_STRONG_INLINE typename std::enable_if<is_variable<T>::value, Eigen::Vector<typename T::Scalar, T::RowsAtCompileTime>>::type
+    eval_arg(const Eigen::MatrixBase<T>& x) noexcept
+    {
+        return Eigen::Vector<typename T::Scalar, T::RowsAtCompileTime>(x);
+    }
+
+    template<typename T>
+    EIGEN_STRONG_INLINE typename std::enable_if<!is_variable<T>::value, const T&>::type
+    eval_arg(const T& x) noexcept
+    {
+        return x;
+    }
+
+    template<typename OrigArg, typename T>
+    EIGEN_STRONG_INLINE typename std::enable_if<is_variable<OrigArg>::value, laopt::VariableMap<T>>::type
+    arg_to_variable(T&& x) noexcept
+    {
+        static_assert(std::is_same<T, Eigen::Vector<typename OrigArg::Scalar, OrigArg::RowsAtCompileTime>>::value, "wrong type");
+        return laopt::VariableMap<T>(x.data());
+    }
+
+    template<typename OrigArg, typename T>
+    EIGEN_STRONG_INLINE typename std::enable_if<!is_variable<OrigArg>::value, const T&>::type
+    arg_to_variable(const T& x) noexcept
+    {
+        return x;
+    }
+
+    template<typename T>
+    EIGEN_STRONG_INLINE typename std::enable_if<is_variable<T>::value, int>::type
+    set_arg_offset(T& x, int offset) noexcept
+    {
+        x.index_offset() = offset;
+        return offset + T::RowsAtCompileTime;
+    }
+
+    template<typename T>
+    EIGEN_STRONG_INLINE typename std::enable_if<!is_variable<T>::value, int>::type
+    set_arg_offset(const T& x, int offset) noexcept
+    {
+        return offset;
+    }
+
+    template<typename Func, typename... Args>
+    EIGEN_STRONG_INLINE void set_variable_offset_and_call(const Func& func, Args&&... args)
+    {
+        // set correct offsets
+        int offset = 0;
+        (void) std::initializer_list<int>{
+            (
+                offset = set_arg_offset(args, offset),
+                0
+            )...
+        };
+        func(args...);
+    }
+
+    template<typename Func, typename... Args>
+    EIGEN_STRONG_INLINE void reset_args_and_call(const Func& func, const Args&... args)
+    {
+        set_variable_offset_and_call(func, arg_to_variable<Args>(eval_arg(args))...);
+    }
 };
 
 template<typename T, typename... Args>
@@ -167,18 +231,33 @@ class Differentiable<Derived, Options, true> : public DifferentiableBase<Derived
 {
 public:
 
-    template<typename Tag, typename... Vars>
+    template<typename Tag, typename... Args>
     struct FuncInfo
     {
     private:
         template<typename Derived_ = Derived>
-        static auto get_raw_return_t(int) -> decltype(std::declval<Derived_>().function_impl(Tag{}, std::declval<Vars>()...));
+        static auto get_raw_return_t(int) -> decltype(std::declval<Derived_>().function_impl(Tag{}, std::declval<Args>()...));
         template<typename Derived_ = Derived>
         static auto get_raw_return_t(long) -> std::false_type;
         template<typename raw_return_t>
         static auto get_expr_return_t(int) -> decltype(ExprEvaluator<raw_return_t>::function(std::declval<raw_return_t>()));
         template<typename raw_return_t>
         static auto get_expr_return_t(long) -> raw_return_t;
+
+        // We only consider IndexedVectors for AD. All other types don't contribute.
+        template<typename T>
+        EIGEN_STRONG_INLINE Eigen::Vector<int, T::RowsAtCompileTime>
+        static get_indices(const T& var, std::true_type)
+        {
+            return variable_indices(var);
+        }
+
+        template<typename T>
+        EIGEN_STRONG_INLINE Eigen::Vector<int, 0>
+        static get_indices(const T& var, std::false_type)
+        {
+            return {};
+        }
 
     public:
         using raw_return_t = decltype(get_raw_return_t<>(0));
@@ -187,7 +266,7 @@ public:
 
         using scalar_t = typename meta::matrix_info<return_t>::Scalar;
 
-        static constexpr int n_inputs = meta::sum_template<variable_info<Vars>::size...>();
+        static constexpr int n_inputs = meta::sum_template<variable_info<Args>::size...>();
         static constexpr int n_outputs = meta::matrix_info<return_t>::RowsAtCompileTime;
 
         using jacobian_t = Eigen::Matrix<scalar_t, n_outputs, n_inputs>;
@@ -195,10 +274,15 @@ public:
         using hessian_t = Eigen::Matrix<scalar_t, n_inputs, n_inputs>;
 
         static_assert(n_outputs >= 0 && n_inputs >= 0, "The function cannot have a dynamic size.");
+
+        EIGEN_STRONG_INLINE Eigen::Vector<int, FuncInfo<Tag, Args...>::n_inputs>
+        static indices(const Args&... args)
+        {
+            return concatenate_indices(get_indices(args, is_variable<decltype(args)>{})...);
+        }
     };
 
 private:
-
     template<typename Tag, typename... Args>
     EIGEN_STRONG_INLINE auto
     call_function_impl_expr(std::true_type, const Tag& tag, const Args&... args) noexcept
@@ -258,7 +342,10 @@ public:
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, Tag, OutJacobian&, AScalar, Args...>() == true, void>::type
     jacobian(const Tag& tag, OutJacobian&& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        static_cast<Derived*>(this)->jacobian_impl(tag, out_jacobian, alpha, args...);
+        auto&& out_jacobian_ = out_jacobian(Eigen::all, FuncInfo<Tag, Args...>::indices(args...));
+        this->reset_args_and_call([&](auto&&... reset_args) {
+            static_cast<Derived*>(this)->jacobian_impl(tag, out_jacobian_, alpha, reset_args...);
+        }, args...);
     }
 
     // delegate to differentiable jacobian code
@@ -276,7 +363,10 @@ public:
                                                 && FuncInfo<Tag, Args...>::is_return_expr::value == false, void>::type
     jacobian(const Tag& tag, OutJacobian&& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        this->jacobian_impl_autodiff(tag, out_jacobian, alpha, args...);
+        auto&& out_jacobian_ = out_jacobian(Eigen::all, FuncInfo<Tag, Args...>::indices(args...));
+        this->reset_args_and_call([&](auto&&... reset_args) {
+            this->jacobian_impl_autodiff(tag, out_jacobian_, alpha, reset_args...);
+        }, args...);
     }
 
     // user specified wsum code
@@ -310,7 +400,10 @@ public:
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, Tag, OutGradient&, Eigen::MatrixBase<Weight>, Args...>() == true, void>::type
     gradient(const Tag& tag, OutGradient&& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
-        static_cast<Derived*>(this)->gradient_impl(tag, out_gradient, weight, args...);
+        auto&& out_gradient_ = out_gradient(FuncInfo<Tag, Args...>::indices(args...));
+        this->reset_args_and_call([&](auto&&... reset_args) {
+            static_cast<Derived*>(this)->gradient_impl(tag, out_gradient_, weight, reset_args...);
+        }, args...);
     }
 
     // delegate to differentiable gradient code
@@ -328,7 +421,10 @@ public:
                                                 && FuncInfo<Tag, Args...>::is_return_expr::value == false, void>::type
     gradient(const Tag& tag, OutGradient&& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
-        this->gradient_impl_autodiff(tag, out_gradient, weight, args...);
+        auto&& out_gradient_ = out_gradient(FuncInfo<Tag, Args...>::indices(args...));
+        this->reset_args_and_call([&](auto&&... reset_args) {
+            this->gradient_impl_autodiff(tag, out_gradient_, weight, reset_args...);
+        }, args...);
     }
 
     // user specified hessian code
@@ -336,7 +432,11 @@ public:
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, Tag, OutHessian&, Eigen::MatrixBase<Weight>, Args...>() == true, void>::type
     hessian(const Tag& tag, OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
-        static_cast<Derived*>(this)->hessian_impl(tag, out_hessian, weight, args...);
+        auto&& ind = FuncInfo<Tag, Args...>::indices(args...);
+        auto&& out_hessian_ = out_hessian(ind, ind);
+        this->reset_args_and_call([&](auto&&... reset_args) {
+            static_cast<Derived*>(this)->hessian_impl(tag, out_hessian_, weight, reset_args...);
+        }, args...);
     }
 
     // delegate to differentiable hessian code
@@ -354,7 +454,11 @@ public:
                                                 && FuncInfo<Tag, Args...>::is_return_expr::value == false, void>::type
     hessian(const Tag& tag, OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
-        this->hessian_impl_autodiff(tag, out_hessian, weight, args...);
+        auto&& ind = FuncInfo<Tag, Args...>::indices(args...);
+        auto&& out_hessian_ = out_hessian(ind, ind);
+        this->reset_args_and_call([&](auto&&... reset_args) {
+            this->hessian_impl_autodiff(tag, out_hessian_, weight, reset_args...);
+        }, args...);
     }
 };
 
@@ -364,18 +468,33 @@ class Differentiable<Derived, Options, false> : public DifferentiableBase<Derive
 {
 public:
 
-    template<typename Tag, typename... Vars>
+    template<typename Tag, typename... Args>
     struct FuncInfo
     {
     private:
         template<typename Derived_ = Derived>
-        static auto get_raw_return_t(int) -> decltype(std::declval<Derived_>().function_impl(std::declval<Vars>()...));
+        static auto get_raw_return_t(int) -> decltype(std::declval<Derived_>().function_impl(std::declval<Args>()...));
         template<typename Derived_ = Derived>
         static auto get_raw_return_t(long) -> std::false_type;
         template<typename raw_return_t>
         static auto get_expr_return_t(int) -> decltype(ExprEvaluator<raw_return_t>::function(std::declval<raw_return_t>()));
         template<typename raw_return_t>
         static auto get_expr_return_t(long) -> raw_return_t;
+
+        // We only consider IndexedVectors for AD. All other types don't contribute.
+        template<typename T>
+        EIGEN_STRONG_INLINE Eigen::Vector<int, T::RowsAtCompileTime>
+        static get_indices(const T& var, std::true_type)
+        {
+            return variable_indices(var);
+        }
+
+        template<typename T>
+        EIGEN_STRONG_INLINE Eigen::Vector<int, 0>
+        static get_indices(const T& var, std::false_type)
+        {
+            return {};
+        }
 
     public:
         using raw_return_t = decltype(get_raw_return_t<>(0));
@@ -384,7 +503,7 @@ public:
 
         using scalar_t = typename meta::matrix_info<return_t>::Scalar;
 
-        static constexpr int n_inputs = meta::sum_template<variable_info<Vars>::size...>();
+        static constexpr int n_inputs = meta::sum_template<variable_info<Args>::size...>();
         static constexpr int n_outputs = meta::matrix_info<return_t>::RowsAtCompileTime;
 
         using jacobian_t = Eigen::Matrix<scalar_t, n_outputs, n_inputs>;
@@ -392,10 +511,15 @@ public:
         using hessian_t = Eigen::Matrix<scalar_t, n_inputs, n_inputs>;
 
         static_assert(n_outputs >= 0 && n_inputs >= 0, "The function cannot have a dynamic size.");
+
+        EIGEN_STRONG_INLINE Eigen::Vector<int, FuncInfo<Tag, Args...>::n_inputs>
+        static indices(const Args&... args)
+        {
+            return concatenate_indices(get_indices(args, is_variable<decltype(args)>{})...);
+        }
     };
 
 private:
-
     template<typename... Args>
     EIGEN_STRONG_INLINE auto
     call_function_impl_expr(std::true_type, const Args&... args) noexcept
@@ -464,7 +588,10 @@ public:
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, OutJacobian&, AScalar, Args...>() == true, void>::type
     jacobian(OutJacobian&& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        static_cast<Derived*>(this)->jacobian_impl(out_jacobian, alpha, args...);
+        auto&& out_jacobian_ = out_jacobian(Eigen::all, FuncInfo<DefaultTag, Args...>::indices(args...));
+        this->reset_args_and_call([&](auto&&... reset_args) {
+            static_cast<Derived*>(this)->jacobian_impl(out_jacobian_, alpha, reset_args...);
+        }, args...);
     }
 
     // delegate to differentiable jacobian code
@@ -482,7 +609,10 @@ public:
                                                 && FuncInfo<DefaultTag, Args...>::is_return_expr::value == false, void>::type
     jacobian(OutJacobian&& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        this->jacobian_impl_autodiff(DefaultTag{}, out_jacobian, alpha, args...);
+        auto&& out_jacobian_ = out_jacobian(Eigen::all, FuncInfo<DefaultTag, Args...>::indices(args...));
+        this->reset_args_and_call([&](auto&&... reset_args) {
+            this->jacobian_impl_autodiff(DefaultTag{}, out_jacobian_, alpha, reset_args...);
+        }, args...);
     }
 
     // define DefaultTag for jacobian
@@ -532,7 +662,10 @@ public:
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_gradient<Derived, OutGradient&, Eigen::MatrixBase<Weight>, Args...>() == true, void>::type
     gradient(OutGradient&& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
-        static_cast<Derived*>(this)->gradient_impl(out_gradient, weight, args...);
+        auto&& out_gradient_ = out_gradient(FuncInfo<DefaultTag, Args...>::indices(args...));
+        this->reset_args_and_call([&](auto&&... reset_args) {
+            static_cast<Derived*>(this)->gradient_impl(out_gradient_, weight, reset_args...);
+        }, args...);
     }
 
     // delegate to differentiable gradient code
@@ -550,7 +683,10 @@ public:
                                                 && FuncInfo<DefaultTag, Args...>::is_return_expr::value == false, void>::type
     gradient(OutGradient&& out_gradient, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
-        this->gradient_impl_autodiff(DefaultTag{}, out_gradient, weight, args...);
+        auto&& out_gradient_ = out_gradient(FuncInfo<DefaultTag, Args...>::indices(args...));
+        this->reset_args_and_call([&](auto&&... reset_args) {
+            this->gradient_impl_autodiff(DefaultTag{}, out_gradient_, weight, reset_args...);
+        }, args...);
     }
 
     // define DefaultTag for gradient
@@ -566,7 +702,11 @@ public:
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_hessian<Derived, OutHessian&, Eigen::MatrixBase<Weight>, Args...>() == true, void>::type
     hessian(OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
-        static_cast<Derived*>(this)->hessian_impl(out_hessian, weight, args...);
+        auto&& ind = FuncInfo<DefaultTag, Args...>::indices(args...);
+        auto&& out_hessian_ = out_hessian(ind, ind);
+        this->reset_args_and_call([&](auto&&... reset_args) {
+            static_cast<Derived*>(this)->hessian_impl(out_hessian_, weight, reset_args...);
+        }, args...);
     }
 
     // delegate to differentiable hessian code
@@ -584,7 +724,11 @@ public:
                                                 && FuncInfo<DefaultTag, Args...>::is_return_expr::value == false, void>::type
     hessian(OutHessian&& out_hessian, const Eigen::MatrixBase<Weight>& weight, const Args&... args) noexcept
     {
-        this->hessian_impl_autodiff(DefaultTag{}, out_hessian, weight, args...);
+        auto&& ind = FuncInfo<DefaultTag, Args...>::indices(args...);
+        auto&& out_hessian_ = out_hessian(ind, ind);
+        this->reset_args_and_call([&](auto&&... reset_args) {
+            this->hessian_impl_autodiff(DefaultTag{}, out_hessian_, weight, reset_args...);
+        }, args...);
     }
 
     // define DefaultTag for hessian

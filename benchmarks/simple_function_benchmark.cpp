@@ -39,8 +39,10 @@ template<int Options>
 static void laopt_jacobian(benchmark::State& state)
 {
     LAOptTestFunction<Options> test_function;
-    laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
-    laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
+    Eigen::Vector<double, 2> x_data{1, 1};
+    Eigen::Vector<double, 1> u_data{1};
+    laopt::Variable<double, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<double, 1> u(u_data.data()); u.index_offset() = 2;
     Eigen::Matrix<double, 2, 3> jacobian;
 
     test_function.jacobian(jacobian, 1, x, u);
@@ -69,8 +71,10 @@ static void BM_LAOPT_JACOBIAN_CASADI_NO_JIT(benchmark::State& state)
 static void BM_LAOPT_WSUM(benchmark::State& state)
 {
     LAOptTestFunction<laopt::EIGEN_ALL> test_function;
-    laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
-    laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
+    Eigen::Vector<double, 2> x_data{1, 1};
+    Eigen::Vector<double, 1> u_data{1};
+    laopt::Variable<double, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<double, 1> u(u_data.data()); u.index_offset() = 2;
     Eigen::Vector<double, 2> weight{1, 1};
     double value;
 
@@ -85,8 +89,10 @@ template<int Options>
 static void laopt_gradient(benchmark::State& state)
 {
     LAOptTestFunction<Options> test_function;
-    laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
-    laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
+    Eigen::Vector<double, 2> x_data{1, 1};
+    Eigen::Vector<double, 1> u_data{1};
+    laopt::Variable<double, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<double, 1> u(u_data.data()); u.index_offset() = 2;
     Eigen::Vector<double, 2> weight{1, 1};
     Eigen::Vector<double, 3> gradient;
 
@@ -117,8 +123,10 @@ template<int Options>
 static void laopt_hessian(benchmark::State& state)
 {
     LAOptTestFunction<Options> test_function;
-    laopt::IndexedVector<Eigen::Vector<double, 2>> x{1, 1};
-    laopt::IndexedVector<Eigen::Vector<double, 1>> u{1};
+    Eigen::Vector<double, 2> x_data{1, 1};
+    Eigen::Vector<double, 1> u_data{1};
+    laopt::Variable<double, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<double, 1> u(u_data.data()); u.index_offset() = 2;
     Eigen::Vector<double, 2> weight{1, 1};
     Eigen::Matrix<double, 3, 3> hessian;
 

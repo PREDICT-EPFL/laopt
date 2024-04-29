@@ -72,10 +72,12 @@ int main()
 
     User user;
 
-    laopt::IndexedVector<User::state_t<double>> x;
-    laopt::IndexedVector<User::input_t<double>> u;
-    x << 1, 2;
-    u << 3;
+    User::state_t<double> x_data; x_data << 1, 2;
+    User::input_t<double> u_data; u_data << 3;
+
+    laopt::VariableMap<User::state_t<double>> x(x_data.data()); x.index_offset() = 0;
+    laopt::VariableMap<User::input_t<double>> u(u_data.data()); u.index_offset() = 2;
+
     User::state_t<double> val;
     Eigen::Matrix<double, 2, 3> J;
     Eigen::Vector<double, 3> p;
@@ -86,6 +88,7 @@ int main()
     std::cout << "user(Sys, x,u) = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING Jacobian FOR SYS ===" << std::endl;
+    J.setZero();
     user.jacobian(User::Sys{}, J, 1, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
 
@@ -94,6 +97,7 @@ int main()
     std::cout << "user(Sys, x,u) = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING Jacobian FOR SYS FUNCTOR ===" << std::endl;
+    J.setZero();
     user.sys.jacobian(J, 1, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
 
@@ -102,6 +106,7 @@ int main()
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING custom Jacobian on SYSX ===" << std::endl;
+    J.setZero();
     user.jacobian(User::SysX{}, J, 1, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
 
@@ -110,6 +115,7 @@ int main()
     std::cout << "user(SysRK4, x,u) = " << val.transpose() << std::endl;
 
     std::cout << "\n=== CALLING Jacobian FOR SYSRK4 ===" << std::endl;
+    J.setZero();
     user.jacobian(User::SysRK4{}, J, 1, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
 
@@ -121,6 +127,7 @@ int main()
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "--- Jacobian" << std::endl;
+    J.setZero();
     rk4_sys.jacobian(J, 1, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
 
@@ -133,6 +140,7 @@ int main()
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "--- Jacobian" << std::endl;
+    J.setZero();
     rk4_rk4_rk4_sys.jacobian(J, 1, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
 
@@ -142,12 +150,12 @@ int main()
     std::cout << "wsum = " << user.wsum(User::NLSys{}, w, x, u) << std::endl;
 
     Eigen::Vector<double, 3> grad;
-    grad.array() = 0;
+    grad.setZero();
     user.gradient(User::NLSys{}, grad, w, x, u);
     std::cout << "grad = " << grad.transpose() << std::endl;
 
     Eigen::Matrix<double, 3, 3> H;
-    H.array() = 0;
+    H.setZero();
     user.hessian(User::NLSys{}, H, w, x, u);
     std::cout << "hessian = \n" << H << std::endl;
 

@@ -186,8 +186,8 @@ TEST(IpoptTest, IpoptExample)
 
     solver.solve();
 
-    EXPECT_NEAR(my_problem.x1_var, 1, 1e-4);
-    EXPECT_NEAR(my_problem.x2_var, 0, 1e-4);
+    EXPECT_NEAR(my_problem.x1_var(0), 1, 1e-4);
+    EXPECT_NEAR(my_problem.x2_var(0), 0, 1e-4);
 }
 
 /*
