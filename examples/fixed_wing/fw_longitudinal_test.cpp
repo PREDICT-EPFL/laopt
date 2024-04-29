@@ -76,7 +76,7 @@ int main()
     if (true)
     {
         const int N = 20;
-        using Transcription = laopt_tools::MultipleShooting<Ocp, N, laopt::EIGEN_ALL>;
+        using Transcription = laopt_tools::MultipleShooting<Ocp, N, laopt::ERK4, laopt::EIGEN_ALL>;
 
         /* Define specific Tape and laOPT problem types for the resulting NLP */
         using Tape = laopt::TapeInfo<Transcription>;

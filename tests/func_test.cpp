@@ -1,10 +1,7 @@
-/**
- * Unit test for the construction and computation of LAMPC common_functions.
- */
-
 #include <iostream>
 
 #include "laopt/laopt.hpp"
+#include "laopt/differentiable_functions/integrators.hpp"
 
 #include "test_utils.hpp"
 #include "gtest/gtest.h"
@@ -269,7 +266,7 @@ struct sys_t : public laopt::Differentiable<sys_t<scalar_t, Options>, Options>
 TYPED_TEST(FunctionTest, RK4) {
     using scalar_t = double;
     sys_t<scalar_t, TypeParam::Options> sys;
-    using dsys_t = laopt::common_functions::RK4<sys_t<scalar_t, TypeParam::Options>, scalar_t>;
+    using dsys_t = laopt::ERK4<sys_t<scalar_t, TypeParam::Options>, scalar_t, laopt::DefaultTag, TypeParam::Options>;
     dsys_t dsys(sys, 0.1);
 
     Eigen::Vector<scalar_t, 2> x_data; x_data << 1, 2;
@@ -281,7 +278,7 @@ TYPED_TEST(FunctionTest, RK4) {
     Eigen::Matrix<scalar_t, 2, 3> jacobian;
 
     // Eval only - doesn't compute jacobian
-    value = dsys.function(x, u);
+    value = dsys.integrator.function(x, u);
 
     Eigen::Vector<scalar_t, 2> val;
     val << 1.215, 2.3;
@@ -289,7 +286,7 @@ TYPED_TEST(FunctionTest, RK4) {
 
     // Compute jacobian and evaluation
     jacobian.setZero();
-    dsys.jacobian(jacobian, 1, x, u);
+    dsys.integrator.jacobian(jacobian, 1, x, u);
 
     Eigen::Matrix<scalar_t, 2, 3> jac;
     jac << 1, 0.1, 0.005, 0, 1, 0.1;

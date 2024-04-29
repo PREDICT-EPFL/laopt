@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include "laopt/laopt.hpp"
+#include "laopt/differentiable_functions/integrators.hpp"
 
 template<typename scalar_t>
 struct User : public laopt::Differentiable<User<scalar_t>, laopt::TAGGED>
@@ -44,10 +45,10 @@ struct User : public laopt::Differentiable<User<scalar_t>, laopt::TAGGED>
     // Example of using RK4 in a user function
     struct SysRK4 {};
     template<typename X, typename U, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
-    EIGEN_STRONG_INLINE state_t<Scalar>
+    EIGEN_STRONG_INLINE auto
     function_impl(SysRK4, const Eigen::MatrixBase<X> &x, const Eigen::MatrixBase<U> &u) noexcept
     {
-        return rk4_sys.function(x, u);
+        return rk4_sys.integrator(x, u);
     }
 
     struct NLSys {};
@@ -58,7 +59,7 @@ struct User : public laopt::Differentiable<User<scalar_t>, laopt::TAGGED>
         return x(0) * u(0) * (A * x + B * u);
     }
 
-    laopt::common_functions::RK4<User<scalar_t>, double, Sys> rk4_sys;
+    laopt::ERK4<User<scalar_t>, double, Sys> rk4_sys;
     laopt::Functor<User<scalar_t>, Sys> sys;
 
     User() : rk4_sys(*this, 0.2), sys(*this) {}
@@ -120,28 +121,15 @@ int main()
     std::cout << "Jacobian = \n" << J << std::endl;
 
     std::cout << "\n=== TESTING RK4 ===" << std::endl;
-    laopt::common_functions::RK4<User, double, User::Sys> rk4_sys(user, 0.2);
+    laopt::ERK4<User, double, User::Sys> rk4_sys(user, 0.2);
 
     std::cout << "--- Evaluation" << std::endl;
-    val = rk4_sys.function(x, u);
+    val = rk4_sys.integrator.function(x, u);
     std::cout << "val = " << val.transpose() << std::endl;
 
     std::cout << "--- Jacobian" << std::endl;
     J.setZero();
-    rk4_sys.jacobian(J, 1, x, u);
-    std::cout << "Jacobian = \n" << J << std::endl;
-
-    std::cout << "\n=== TESTING RK4 + RK4 + RK4 ===" << std::endl;
-    laopt::common_functions::RK4<laopt::common_functions::RK4<User, double, User::Sys>, double> rk4_rk4_sys(rk4_sys, 0.3);
-    laopt::common_functions::RK4<laopt::common_functions::RK4<laopt::common_functions::RK4<User, double, User::Sys>, double>, double> rk4_rk4_rk4_sys(rk4_rk4_sys, 0.4);
-
-    std::cout << "--- Evaluation" << std::endl;
-    val = rk4_rk4_rk4_sys.function(x, u);
-    std::cout << "val = " << val.transpose() << std::endl;
-
-    std::cout << "--- Jacobian" << std::endl;
-    J.setZero();
-    rk4_rk4_rk4_sys.jacobian(J, 1, x, u);
+    rk4_sys.integrator.jacobian(J, 1, x, u);
     std::cout << "Jacobian = \n" << J << std::endl;
 
     std::cout << "\n=== TESTING Weighted sum ===" << std::endl;

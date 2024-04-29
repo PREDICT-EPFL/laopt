@@ -1,6 +1,7 @@
 #include <benchmark/benchmark.h>
 
 #include "laopt/laopt.hpp"
+#include "laopt/differentiable_functions/integrators.hpp"
 #include "casadi/casadi.hpp"
 
 #include "chain_mass_benchmark_casadi_codegen.h"
@@ -67,7 +68,7 @@ template<int n_mass>
 static void BM_LAOPT_FUNCTION_EIGEN(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
+    laopt::ERK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
 
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
     Eigen::Vector<double, LAOptChainMass<n_mass>::NU> u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
@@ -75,7 +76,7 @@ static void BM_LAOPT_FUNCTION_EIGEN(benchmark::State& state)
 
     for (auto _: state)
     {
-        value = chain_mass_d.function(x, u);
+        value = chain_mass_d.integrator.function(x, u);
         benchmark::DoNotOptimize(value);
     }
 }
@@ -84,7 +85,7 @@ template<int n_mass, int Options>
 static void laopt_jacobian(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double, laopt::DefaultTag, Options> chain_mass_d(chain_mass, 0.2);
+    laopt::ERK4<LAOptChainMass<n_mass>, double, laopt::DefaultTag, Options> chain_mass_d(chain_mass, 0.2);
 
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> x_data;
     x_data = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
@@ -94,10 +95,10 @@ static void laopt_jacobian(benchmark::State& state)
     laopt::Variable<double, LAOptChainMass<n_mass>::NU> u(u_data.data()); u.index_offset() = LAOptChainMass<n_mass>::NX;
     Eigen::Matrix<double, LAOptChainMass<n_mass>::NX, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> jacobian;
 
-    chain_mass_d.jacobian(jacobian, 1, x, u);
+    chain_mass_d.integrator.jacobian(jacobian, 1, x, u);
     for (auto _: state)
     {
-        chain_mass_d.jacobian(jacobian, 1, x, u);
+        chain_mass_d.integrator.jacobian(jacobian, 1, x, u);
         benchmark::DoNotOptimize(jacobian);
     }
 }
@@ -124,7 +125,7 @@ template<int n_mass>
 static void BM_LAOPT_WSUM_EIGEN(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
+    laopt::ERK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
 
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> x_data;
     x_data = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
@@ -137,7 +138,7 @@ static void BM_LAOPT_WSUM_EIGEN(benchmark::State& state)
 
     for (auto _: state)
     {
-        value = chain_mass_d.wsum(weight, x, u);
+        value = chain_mass_d.integrator.wsum(weight, x, u);
         benchmark::DoNotOptimize(value);
     }
 }
@@ -146,7 +147,7 @@ template<int n_mass, int Options>
 static void laopt_gradient(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double, laopt::DefaultTag, Options> chain_mass_d(chain_mass, 0.2);
+    laopt::ERK4<LAOptChainMass<n_mass>, double, laopt::DefaultTag, Options> chain_mass_d(chain_mass, 0.2);
 
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> x_data;
     x_data = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
@@ -157,10 +158,10 @@ static void laopt_gradient(benchmark::State& state)
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> weight = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> gradient;
 
-    chain_mass_d.gradient(gradient, weight, x, u);
+    chain_mass_d.integrator.gradient(gradient, weight, x, u);
     for (auto _: state)
     {
-        chain_mass_d.gradient(gradient, weight, x, u);
+        chain_mass_d.integrator.gradient(gradient, weight, x, u);
         benchmark::DoNotOptimize(gradient);
     }
 }
@@ -187,7 +188,7 @@ template<int n_mass, int Options>
 static void laopt_hessian(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double, laopt::DefaultTag, Options> chain_mass_d(chain_mass, 0.2);
+    laopt::ERK4<LAOptChainMass<n_mass>, double, laopt::DefaultTag, Options> chain_mass_d(chain_mass, 0.2);
 
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> x_data;
     x_data = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
@@ -198,10 +199,10 @@ static void laopt_hessian(benchmark::State& state)
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> weight = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
     Eigen::Matrix<double, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> hessian;
 
-    chain_mass_d.hessian(hessian, weight, x, u);
+    chain_mass_d.integrator.hessian(hessian, weight, x, u);
     for (auto _: state)
     {
-        chain_mass_d.hessian(hessian, weight, x, u);
+        chain_mass_d.integrator.hessian(hessian, weight, x, u);
         benchmark::DoNotOptimize(hessian);
     }
 }

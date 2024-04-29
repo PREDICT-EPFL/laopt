@@ -828,8 +828,8 @@ private:
 template<typename T>
 struct is_fixed_end_time_multiple_shooting : std::false_type {};
 
-template<typename ControlProblem, unsigned N_segs, int DiffOptions>
-struct is_fixed_end_time_multiple_shooting<laopt_tools::MultipleShooting<ControlProblem, N_segs, DiffOptions>> : std::true_type
+template<typename ControlProblem, unsigned N_segs, template<typename, typename, typename, int> class Integrator, int DiffOptions>
+struct is_fixed_end_time_multiple_shooting<laopt_tools::MultipleShooting<ControlProblem, N_segs, Integrator, DiffOptions>> : std::true_type
 {
     static_assert((ControlProblem::Options & laopt_tools::FreeEndTime) == 0, "Multiple shooting transcription must be fixed end time");
 };

@@ -8,6 +8,7 @@
 #include <Eigen/Dense>
 #include "laopt/laopt.hpp"
 #include "laopt/tools/constants.hpp"
+#include "laopt/differentiable_functions/integrators.hpp"
 
 namespace laopt_tools {
 
@@ -20,21 +21,25 @@ namespace laopt_tools {
  * 0     1     2     3    ...    N-1    N     Decision variable indices (initial condition + number of segments)
  * 0     1     2     3         N_segs-1       Segment indices of N_segs segments
  * */
-template<typename ControlProblem_, unsigned N_segs, int DiffOptions = laopt::EIGEN_ALL>
-class MultipleShooting : public laopt::Differentiable<MultipleShooting<ControlProblem_, N_segs, DiffOptions>, laopt::TAGGED | DiffOptions>
+template<typename ControlProblem_,
+         unsigned N_segs,
+         template<typename, typename, typename, int> class Integrator_ = laopt::ERK4,
+         int DiffOptions = laopt::EIGEN_ALL>
+class MultipleShooting : public laopt::Differentiable<MultipleShooting<ControlProblem_, N_segs, Integrator_, DiffOptions>, laopt::TAGGED | DiffOptions>
 {
-    friend laopt::Differentiable<MultipleShooting<ControlProblem_, N_segs, DiffOptions>, laopt::TAGGED | DiffOptions>;
+    friend laopt::Differentiable<MultipleShooting<ControlProblem_, N_segs, Integrator_, DiffOptions>, laopt::TAGGED | DiffOptions>;
 
     template<typename, typename, typename, typename>
     friend class laopt::ProblemBase;
 
 public:
     using ControlProblem = ControlProblem_;
+    using Scalar = typename ControlProblem::Scalar;
+    template<typename Tag>
+    using Integrator = Integrator_<MultipleShooting<ControlProblem, N_segs, Integrator_, DiffOptions>, Scalar, Tag, DiffOptions & ~laopt::TAGGED>;
     static const unsigned N = N_segs;
 
 protected:
-    /* Mirror scalar type (from ControlProblem), define variable template with scalar type */
-    using Scalar = typename ControlProblem::Scalar;
     template<int n>
     using variable_t = laopt::Variable<Scalar, n>;
 
@@ -49,23 +54,35 @@ protected:
     variable_t<1> tf_var;
     variable_t<ControlProblem::NP> p_var;
 
-    /* Dynamic constraints */
-    struct DiscreteDynamics {};
+    /* Continuous dynamics */
+    struct ContinuousDynamics {};
     template<typename x_t, typename u_t, typename p_t, typename tf_t,
             typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NX>
-    function_impl(DiscreteDynamics,
+    function_impl(ContinuousDynamics,
                   const Eigen::MatrixBase<x_t>& x,
                   const Eigen::MatrixBase<u_t>& u,
                   const Eigen::MatrixBase<p_t>& p,
                   const Eigen::MatrixBase<tf_t>& tf)
     {
-        using state_t = typename x_t::PlainObject;
-        state_t k1 = tf(0) * controlProblem.dynamics_impl(x, u, p);
-        state_t k2 = tf(0) * controlProblem.dynamics_impl(x + h * 0.5 * k1, u, p);
-        state_t k3 = tf(0) * controlProblem.dynamics_impl(x + h * 0.5 * k2, u, p);
-        state_t k4 = tf(0) * controlProblem.dynamics_impl(x + h * k3, u, p);
-        return x + h / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
+        return tf(0) * controlProblem.dynamics_impl(x, u, p);
+    }
+
+    Integrator<ContinuousDynamics> integrator{*this, h};
+
+    /* Discrete dynamics */
+    struct IntegratedDynamics {};
+    template<typename xp_t, typename x_t, typename u_t, typename p_t, typename tf_t,
+            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    EIGEN_STRONG_INLINE auto
+    function_impl(IntegratedDynamics,
+                  const Eigen::MatrixBase<xp_t>& xp,
+                  const Eigen::MatrixBase<x_t>& x,
+                  const Eigen::MatrixBase<u_t>& u,
+                  const Eigen::MatrixBase<p_t>& p,
+                  const Eigen::MatrixBase<tf_t>& tf)
+    {
+        return integrator(xp, x, u, p, tf);
     }
 
     /* Inequality constraints */
@@ -167,10 +184,9 @@ protected:
         for (unsigned i = 0; i < N; i++)
         {
             optProblem.add_obj(h * this->expression(StageCost{}, X_var[i], U_var[i], p_var));
-            // It's important that X_var[i + 1] is on the rhs since it gets translated to
-            // 0 = f(x,u) - x+ which ensures that the linearization has positive A and B matrices.
+            // We assume 0 = f(x,u) - x+ which ensures that the linearization has positive A and B matrices.
             // This is an assumption for the HPIPM solver.
-            optProblem.add_constr(this->expression(DiscreteDynamics{}, X_var[i], U_var[i], p_var, get_tf_var()) == X_var[i + 1]);
+            optProblem.add_constr(this->expression(IntegratedDynamics{}, X_var[i + 1], X_var[i], U_var[i], p_var, get_tf_var()) == 0);
         }
 
         /* Last grid point */

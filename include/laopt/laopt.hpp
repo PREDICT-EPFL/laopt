@@ -8,7 +8,6 @@
 
 #include "laopt/autodiff/differentiable.hpp"
 #include "laopt/autodiff/differentiable_functor.hpp"
-#include "laopt/common_functions.hpp"
 
 #include "laopt/variable_map.hpp"
 
