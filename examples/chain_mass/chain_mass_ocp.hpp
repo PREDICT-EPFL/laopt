@@ -29,9 +29,9 @@ public:
 
     const Eigen::Vector<double, 3> x0{0, 0, 0}; // fix mass (at wall)
 
-    laopt::QuadraticCost<Scalar, Base::NX> state_cost;
-    laopt::QuadraticCost<Scalar, Base::NU> input_cost;
-    laopt::QuadraticCost<Scalar, Base::NX> final_state_cost;
+    laopt::QuadraticCost<Eigen::DiagonalMatrix<Scalar, Base::NX>> state_cost;
+    laopt::QuadraticCost<Eigen::DiagonalMatrix<Scalar, Base::NU>> input_cost;
+    laopt::QuadraticCost<Eigen::DiagonalMatrix<Scalar, Base::NX>> final_state_cost;
 
     ChainMassOcp()
     {

@@ -5,22 +5,16 @@
 
 namespace laopt {
 
-enum QuadraticCostOpt
-{
-    Diagonal = 0x0,
-    Full     = 0x1
-};
-
-template<typename Scalar, int NX, int Options = Diagonal>
-class QuadraticCost : public Differentiable<QuadraticCost<Scalar, NX, Options>>
+template<typename MatrixType>
+class QuadraticCost : public Differentiable<QuadraticCost<MatrixType>>
 {
 public:
-    template<int Dim>
-    using MatrixType = typename std::conditional<(Options & Full) != 0, Eigen::Matrix<Scalar, Dim, Dim>, Eigen::DiagonalMatrix<Scalar, Dim>>::type;
+    static_assert(MatrixType::RowsAtCompileTime == MatrixType::ColsAtCompileTime, "Matrix type is not quadratic");
+    static_assert(MatrixType::RowsAtCompileTime >= 0 && MatrixType::ColsAtCompileTime >= 0, "Matrix type can't be dynamic");
+    using VectorType = Eigen::Vector<typename MatrixType::Scalar, MatrixType::RowsAtCompileTime>;
 
-    MatrixType<NX> Q;
-
-    Eigen::Vector<Scalar, NX> x_ref = Eigen::Vector<Scalar, NX>::Zero();
+    MatrixType Q;
+    VectorType x_ref = VectorType::Zero();
 
     template<typename X, typename scalar_t = typename Eigen::MatrixBase<X>::Scalar>
     EIGEN_STRONG_INLINE scalar_t
