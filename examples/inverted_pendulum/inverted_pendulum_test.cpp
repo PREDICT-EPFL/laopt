@@ -7,7 +7,7 @@
 #include "laopt/tools/multiple_shooting.hpp"
 #include "laopt/tools/radau_collocation.hpp"
 #ifdef LAOPT_WITH_IPOPT
-#include "laopt/ipopt_interface/ipopt_wrapper.hpp"
+#include "laopt/solvers/ipopt_interface.hpp"
 #endif
 #include "laopt/solvers/sqp_solver.hpp"
 #ifdef LAOPT_WITH_PIQP
@@ -88,7 +88,7 @@ int main()
         {
             std::cout << "Multiple Shooting - Ipopt\n";
 
-            using Solver = laopt::IpoptWrapper<OptProblem>;
+            using Solver = laopt::IpoptSolver<OptProblem>;
             Solver solver(opt_problem);
 
             solve_and_print(transcription, opt_problem, solver);
@@ -131,7 +131,7 @@ int main()
         {
             std::cout << "Radau Collocation - Ipopt\n";
 
-            using Solver = laopt::IpoptWrapper<OptProblem>;
+            using Solver = laopt::IpoptSolver<OptProblem>;
             Solver solver(opt_problem);
 
             solve_and_print(transcription, opt_problem, solver);

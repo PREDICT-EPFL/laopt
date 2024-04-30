@@ -4,7 +4,7 @@
 
 #include <iostream>
 #include "laopt/laopt.hpp"
-#include "laopt/ipopt_interface/ipopt_wrapper.hpp"
+#include "laopt/solvers/ipopt_interface.hpp"
 
 #include "test_utils.hpp"
 #include "gtest/gtest.h"
@@ -83,7 +83,7 @@ TEST(IpoptTest, SimpleExample)
     using Problem = laopt::Problem<UserCode>;
     Problem prob(my_problem, tape);
 
-    laopt::IpoptWrapper<Problem> solver(prob);
+    laopt::IpoptSolver<Problem> solver(prob);
 
     // Set the initial primal variable
     my_problem.x_var << 0.5, 1.5, 0.0, 0.0;
@@ -178,7 +178,7 @@ TEST(IpoptTest, IpoptExample)
     using Problem = laopt::Problem<UserCode>;
     Problem prob(my_problem, tape);
 
-    laopt::IpoptWrapper<Problem> solver(prob);
+    laopt::IpoptSolver<Problem> solver(prob);
 
     // Set the initial primal variable
     my_problem.x1_var << 0.5;
@@ -354,7 +354,7 @@ TEST(IpoptTest, Prob71)
     using Problem = laopt::Problem<Prob71<scalar_t>>;
     Problem prob = laopt::generate(prob71);
 
-    laopt::IpoptWrapper<Problem> solver(prob);
+    laopt::IpoptSolver<Problem> solver(prob);
 
     prob71.x_var << 1, 5, 5, 1;
 

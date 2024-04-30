@@ -2,6 +2,7 @@
 #define LAOPT_IPOPT_INTERFACE_HPP
 
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 
 #include "IpIpoptApplication.hpp"
 #include "IpTNLP.hpp"
@@ -10,7 +11,7 @@ namespace laopt
 {
 
 template<typename UserProblem>
-class Solver_IPOpt: public Ipopt::TNLP
+class IpoptProblem: public Ipopt::TNLP
 {
 public:
     using scalar_t = typename UserProblem::scalar_t;
@@ -29,7 +30,7 @@ public:
     Eigen::VectorX<scalar_t> dual;
 
     /* Constructor. */
-	explicit Solver_IPOpt(UserProblem& prob) :
+	explicit IpoptProblem(UserProblem& prob) :
         prob(prob),
         primal(prob.variables()),
         dual_bounds(prob.variables()),
@@ -322,6 +323,86 @@ public:
         dual_bounds += Eigen::Map<const Eigen::VectorX<Ipopt::Number>>(z_U, n);
 		dual = Eigen::Map<const Eigen::VectorX<Ipopt::Number>>(lambda, m);
 	}
+};
+
+template<typename OptProblem>
+class IpoptSolver
+{
+public:
+    using IpoptProblem = laopt::IpoptProblem<OptProblem>;
+
+    explicit IpoptSolver(OptProblem &opt_problem)
+    {
+        /* Create IPOPT problem and link decision variables to OptProblem */
+        ipopt_problem = new IpoptProblem(opt_problem);
+
+        /* Create IPOPT application, setup, and initialize */
+        ipopt_application = IpoptApplicationFactory();
+
+        set_banner_message(true); // IPOPT default
+        set_print_level(0);
+        set_tol(1e-8);      // IPOPT default
+        set_max_iter(3000); // IPOPT default
+
+        Ipopt::ApplicationReturnStatus ipopt_status = ipopt_application->Initialize();
+        if (ipopt_status != Ipopt::Solve_Succeeded) { std::cout << "\n*** IpoptSolver: Error during initialization!\n\n"; }
+    }
+
+    IpoptSolver(OptProblem &opt_problem, const Ipopt::OptionsList &options) : IpoptSolver(opt_problem)
+    {
+        ipopt_application->Options() = Ipopt::SmartPtr<Ipopt::OptionsList>(new Ipopt::OptionsList(options));
+    }
+
+    /* Offer access to IPOPT options */
+    Ipopt::SmartPtr<Ipopt::OptionsList> Options() { return ipopt_application->Options(); }
+    void set_tol(double tol) { ipopt_application->Options()->SetNumericValue("tol", tol); }
+    void set_max_iter(int max_iter) { ipopt_application->Options()->SetIntegerValue("max_iter", max_iter); }
+    void set_banner_message(bool active) { ipopt_application->Options()->SetBoolValue("sb", !active); }
+    void set_print_level(int print_level) { ipopt_application->Options()->SetIntegerValue("print_level", print_level); }
+    void set_print_time(bool active) { ipopt_application->Options()->SetBoolValue("print_time", active); }
+
+    Ipopt::ApplicationReturnStatus solve() const
+    {
+        using namespace Ipopt;
+
+        ApplicationReturnStatus ipopt_status = ipopt_application->OptimizeTNLP(ipopt_problem);
+        if (ipopt_status != Ipopt::Solve_Succeeded)
+        {
+            std::cout << "\n*** IpoptSolver: Error during solution!\n"
+                         "Error " << ipopt_status << ": " << ipopt_status_text(ipopt_status) << '\n';
+        }
+        return ipopt_status;
+    }
+    static std::string ipopt_status_text(Ipopt::ApplicationReturnStatus ipopt_status)
+    {
+        using namespace Ipopt;
+        switch(ipopt_status)
+        {
+            case Solve_Succeeded: return "Solve_Succeed";
+            case Infeasible_Problem_Detected: return "Infeasible_Problem_Detected";
+            case Maximum_Iterations_Exceeded: return "Maximum_Iterations_Exceeded";
+            case Restoration_Failed: return "Restoration_Failed";
+            case Invalid_Problem_Definition: return "Invalid_Problem_Definition";
+            case Invalid_Number_Detected: return "Invalid_Number_Detected";
+            default: return "[Non-typical Ipopt Error]";
+        }
+    }
+
+    using Scalar = typename OptProblem::scalar_t;
+
+    /* Setters */
+    void set_initial_primal(const Eigen::VectorX<Scalar> &init_primal) { ipopt_problem->primal = init_primal; }
+    void set_initial_dual(const Eigen::VectorX<Scalar> &init_dual) { ipopt_problem->dual = init_dual; }
+    void set_initial_dual_bounds(const Eigen::VectorX<Scalar> &init_dual_bounds) { ipopt_problem->dual_bounds = init_dual_bounds; }
+
+    /* Getters */
+    const Eigen::VectorX<Scalar> &primal() const { return ipopt_problem->primal; }
+    const Eigen::VectorX<Scalar> &dual() const { return ipopt_problem->dual; }
+    const Eigen::VectorX<Scalar> &dual_bounds() const { return ipopt_problem->dual_bounds; }
+
+protected:
+    Ipopt::SmartPtr<IpoptProblem> ipopt_problem;
+    Ipopt::SmartPtr<Ipopt::IpoptApplication> ipopt_application;
 };
 
 }

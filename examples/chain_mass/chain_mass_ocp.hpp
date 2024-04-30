@@ -37,6 +37,8 @@ public:
     {
         state_cost.x_ref.setZero();
         state_cost.x_ref(3 * (M - 2)) = 7.5;
+        final_state_cost.x_ref.setZero();
+        final_state_cost.x_ref(3 * (M - 2)) = 7.5;
 
         state_cost.Q.setZero();
         state_cost.Q.diagonal()(Eigen::seqN(3 * (M - 2), Eigen::fix<3>)).array() = 2.5;
