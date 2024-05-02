@@ -88,7 +88,7 @@ protected:
     /* Inequality constraints */
     struct InequalityConstraints {};
     template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
-    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NG>
+    EIGEN_STRONG_INLINE auto
     function_impl(InequalityConstraints,
                   const Eigen::MatrixBase<x_t>& x,
                   const Eigen::MatrixBase<u_t>& u,
@@ -99,7 +99,7 @@ protected:
 
     struct InitialInequalityConstraints {};
     template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
-    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NG0>
+    EIGEN_STRONG_INLINE auto
     function_impl(InitialInequalityConstraints,
                   const Eigen::MatrixBase<x_t>& x0,
                   const Eigen::MatrixBase<u_t>& u0,
@@ -110,7 +110,7 @@ protected:
 
     struct FinalInequalityConstraints {};
     template<typename x_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
-    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NGF>
+    EIGEN_STRONG_INLINE auto
     function_impl(FinalInequalityConstraints,
                   const Eigen::MatrixBase<x_t>& xf,
                   const Eigen::MatrixBase<p_t>& p)
@@ -307,7 +307,8 @@ public:
     Eigen::Vector<Scalar, ControlProblem::NU> get_u_at(const Scalar &t) const
     {
         const double tf = get_tf_opt();
-        if (t == tf) { return U_var[N]; }
+        if (t >= tf) { return U_var[N - 1]; }
+        else if (t <= controlProblem.t0) { return U_var[0]; }
         else
         {
             const Scalar T_eval = (t - controlProblem.t0) / (tf - controlProblem.t0);
