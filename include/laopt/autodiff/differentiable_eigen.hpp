@@ -2,6 +2,7 @@
 #define LAOPT_DIFFERENTIABLE_EIGEN_HPP
 
 #include <Eigen/Dense>
+#include "laopt/bs_matrix/bs_matrix_sparsity.hpp"
 #include "laopt/autodiff/autodiff_scalar.hpp"
 #include "laopt/autodiff/differentiable_options.hpp"
 

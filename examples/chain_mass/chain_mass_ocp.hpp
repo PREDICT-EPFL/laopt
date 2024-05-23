@@ -35,20 +35,20 @@ public:
 
     ChainMassOcp()
     {
-        state_cost.x_ref.setZero();
-        state_cost.x_ref(3 * (M - 2)) = 7.5;
-        final_state_cost.x_ref.setZero();
-        final_state_cost.x_ref(3 * (M - 2)) = 7.5;
+        state_cost.q.setZero();
+        state_cost.q(3 * (M - 2)) = -7.5;
+        final_state_cost.q.setZero();
+        final_state_cost.q(3 * (M - 2)) = -7.5;
 
-        state_cost.Q.setZero();
-        state_cost.Q.diagonal()(Eigen::seqN(3 * (M - 2), Eigen::fix<3>)).array() = 2.5;
-        state_cost.Q.diagonal()(Eigen::lastN(Eigen::fix<3 * (M - 2)>)).array() = 25;
+        state_cost.P.setZero();
+        state_cost.P.diagonal()(Eigen::seqN(3 * (M - 2), Eigen::fix<3>)).array() = 2.5;
+        state_cost.P.diagonal()(Eigen::lastN(Eigen::fix<3 * (M - 2)>)).array() = 25;
 
-        input_cost.Q.setZero();
-        input_cost.Q.diagonal().array() = 0.1;
+        input_cost.P.setZero();
+        input_cost.P.diagonal().array() = 0.1;
 
-        final_state_cost.Q.setZero();
-        final_state_cost.Q.diagonal()(Eigen::seqN(3 * (M - 2), Eigen::fix<3>)).array() = 10;
+        final_state_cost.P.setZero();
+        final_state_cost.P.diagonal()(Eigen::seqN(3 * (M - 2), Eigen::fix<3>)).array() = 10;
     }
 
     /* Override function implementations from base class ------------------------------ */
