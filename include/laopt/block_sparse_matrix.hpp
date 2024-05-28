@@ -1282,7 +1282,7 @@ struct unary_evaluator<Transpose<ArgType>, BlockIteratorBased>
         }
 
         inline Index blockRows() const { return EvalIterator::blockCols(); }
-        inline Index blockCols() const { EvalIterator::blockRows(); }
+        inline Index blockCols() const { return EvalIterator::blockRows(); }
     };
 };
 
