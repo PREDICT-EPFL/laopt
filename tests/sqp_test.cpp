@@ -77,7 +77,7 @@ static void generic_sqp_test()
     using scalar_t = double;
 
     using UserCode = SimpleExample<scalar_t>;
-    UserCode my_problem;
+    std::shared_ptr<UserCode> my_problem = std::make_shared<UserCode>();
     auto sparsity = laopt::generate_sparsity(my_problem);
     auto tape = laopt::generate_tape(my_problem, sparsity);
 
@@ -85,7 +85,7 @@ static void generic_sqp_test()
     std::cout << tape << std::endl;
 
     using Problem = laopt::Problem<UserCode>;
-    Problem prob(my_problem, tape);
+    std::shared_ptr<Problem> prob = std::make_shared<Problem>(my_problem, tape);
 
     laopt::SQPSolver<Problem, Solver<Problem::scalar_t>> solver(prob);
     solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT;
@@ -94,14 +94,14 @@ static void generic_sqp_test()
     // initial and re-solve
     for (int i = 0; i < 2; i++) {
         // Set the initial primal variable
-        my_problem.x_var << 0.5, 1.5, 0.0, 0.0;
+        my_problem->x_var << 0.5, 1.5, 0.0, 0.0;
 
         solver.solve();
 
-        EXPECT_NEAR(my_problem.x_var(0), 0, 1e-4);
-        EXPECT_NEAR(my_problem.x_var(1), 1, 1e-4);
-        EXPECT_NEAR(my_problem.x_var(2), 1, 1e-4);
-        EXPECT_NEAR(my_problem.x_var(3), -1, 1e-4);
+        EXPECT_NEAR(my_problem->x_var(0), 0, 1e-4);
+        EXPECT_NEAR(my_problem->x_var(1), 1, 1e-4);
+        EXPECT_NEAR(my_problem->x_var(2), 1, 1e-4);
+        EXPECT_NEAR(my_problem->x_var(3), -1, 1e-4);
 
         EXPECT_NEAR(solver.primal()(0), 0, 1e-4);
         EXPECT_NEAR(solver.primal()(1), 1, 1e-4);

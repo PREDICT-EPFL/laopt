@@ -24,24 +24,24 @@ int main()
     using Ocp = InvertedPendulumOcp;
 
     /* Construct OCP and set OCP-specific properties */
-    Ocp ocp;
+    std::shared_ptr<Ocp> ocp = std::make_shared<Ocp>();
 
-    ocp.tf_ub = 2;
-    ocp.tf_lb = 1.5;
-    ocp.w_tf = 3;
+    ocp->tf_ub = 2;
+    ocp->tf_lb = 1.5;
+    ocp->w_tf = 3;
 
-    ocp.angle_ref = 0.0 * M_PI / 180.0;
+    ocp->angle_ref = 0.0 * M_PI / 180.0;
     // ref_offset
-    ocp.opt_params_ub.ref_offset << 1;
-    ocp.opt_params_lb.ref_offset << 0;
+    ocp->opt_params_ub.ref_offset << 1;
+    ocp->opt_params_lb.ref_offset << 0;
     // us
-    ocp.opt_params_ub.us << 1;
-    ocp.opt_params_lb.us << -1;
+    ocp->opt_params_ub.us << 1;
+    ocp->opt_params_lb.us << -1;
 
-    ocp.u_ub << 3;
-    ocp.u_lb << -3;
+    ocp->u_ub << 3;
+    ocp->u_lb << -3;
 
-    ocp.set_x0({M_PI, 0});
+    ocp->set_x0({M_PI, 0});
 
     /* Resampling test parameters */
     const double Ts_max = 0.02;
@@ -63,7 +63,7 @@ int main()
         print_sampled_solution(transcription, Ts_max, t_test);
 
         /// Access optimization parameters by struct
-        Ocp::OptParam opt_params = transcription.get_opt_params();
+        Ocp::OptParam opt_params = transcription->get_opt_params();
         std::cout << "opt_params: ref_offset: " << opt_params.ref_offset << ", us: " << opt_params.us << "\n\n";
     };
 
@@ -78,11 +78,11 @@ int main()
         using OptProblem = laopt::Problem<Transcription>;
 
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
-        Transcription transcription(ocp);
+        std::shared_ptr<Transcription> transcription = std::make_shared<Transcription>(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
 
         /* Construct laOPT problem for transcribed OCP using according tape */
-        OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
+        std::shared_ptr<OptProblem> opt_problem = std::make_shared<OptProblem>(transcription, tape); // Tape is optional here and could also be generated internally
 
 #ifdef LAOPT_WITH_IPOPT
         {
@@ -121,11 +121,11 @@ int main()
         using OptProblem = laopt::Problem<Transcription>;
 
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
-        Transcription transcription(ocp);
+        std::shared_ptr<Transcription> transcription = std::make_shared<Transcription>(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
 
         /* Construct laOPT problem for transcribed OCP using according tape */
-        OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
+        std::shared_ptr<OptProblem> opt_problem = std::make_shared<OptProblem>(transcription, tape); // Tape is optional here and could also be generated internally
 
 #ifdef LAOPT_WITH_IPOPT
         {

@@ -5,18 +5,18 @@
 #include <iomanip>
 
 template<typename Transcription, typename OptProblem, typename Duration>
-void print_solution(const Transcription &transcription, OptProblem &opt_problem,
+void print_solution(const std::shared_ptr<Transcription>& transcription, const std::shared_ptr<OptProblem>& opt_problem,
                     const Duration &duration_us, const Duration &duration2_us)
 {
     /* Print out the solution */
     std::cout << "\n";
     std::cout << std::setprecision(4) << std::defaultfloat;
 
-    const Eigen::VectorXd T_opt = transcription.get_T_opt();
-    const Eigen::MatrixXd X_opt = transcription.get_X_opt();
-    const Eigen::MatrixXd U_opt = transcription.get_U_opt();
-    const Eigen::MatrixXd p_opt = transcription.get_p_opt();
-    double obj_eval = opt_problem.eval_objective();
+    const Eigen::VectorXd T_opt = transcription->get_T_opt();
+    const Eigen::MatrixXd X_opt = transcription->get_X_opt();
+    const Eigen::MatrixXd U_opt = transcription->get_U_opt();
+    const Eigen::MatrixXd p_opt = transcription->get_p_opt();
+    double obj_eval = opt_problem->eval_objective();
 
     std::cout << "Comp. time (warm): " << duration_us / 1e3 << " (" << duration2_us / 1e3 << ") ms, tf = "
               << T_opt(T_opt.size() - 1) << " s, obj = " << obj_eval << "\n";
@@ -31,13 +31,13 @@ void print_solution(const Transcription &transcription, OptProblem &opt_problem,
 }
 
 template<typename Transcription, typename Scalar>
-void print_sampled_solution(const Transcription &transcription,
+void print_sampled_solution(const std::shared_ptr<Transcription>& transcription,
                             const Scalar &Ts_max = 0.01, const Scalar &t_test = 0.166)
 {
-    const Eigen::MatrixXd TXn = transcription.get_TX_resampled(Ts_max);
-    const Eigen::MatrixXd TUn = transcription.get_TU_resampled(Ts_max);
-    const Eigen::VectorXd x_test = transcription.get_x_at(t_test);
-    const Eigen::VectorXd u_test = transcription.get_u_at(t_test);
+    const Eigen::MatrixXd TXn = transcription->get_TX_resampled(Ts_max);
+    const Eigen::MatrixXd TUn = transcription->get_TU_resampled(Ts_max);
+    const Eigen::VectorXd x_test = transcription->get_x_at(t_test);
+    const Eigen::VectorXd u_test = transcription->get_u_at(t_test);
 
     std::cout << "Resampling at " << TXn(0, 1) - TXn(0, 0) << " s  (" << Ts_max << " max)\n";
     std::cout << "MATLAB-copyable output:\n";

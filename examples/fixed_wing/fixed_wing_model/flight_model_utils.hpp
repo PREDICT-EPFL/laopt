@@ -16,7 +16,6 @@ enum StateRepresentation
 
 double get_value(const YAML::Node &node, const std::string &name)
 {
-    bool property_found{false};
     double property_value = 0.0;
     for (YAML::const_iterator it = node.begin(); it != node.end(); ++it)
     {
@@ -50,7 +49,6 @@ double get_value(const YAML::Node &node, const std::string &name)
         }
     }
     std::cout << "Error: YAML does not contain " << name << "\n";
-    assert(property_found);
     return property_value;
 }
 

@@ -24,19 +24,19 @@ int main()
     using Ocp = DoubleIntegratorOcp;
 
     /* Construct OCP and set OCP-specific properties */
-    Ocp ocp;
+    std::shared_ptr<Ocp> ocp = std::make_shared<Ocp>();
 
-    ocp.set_tf(1.2);
+    ocp->set_tf(1.2);
 
-    ocp.u_ub << 10;
-    ocp.u_lb << -3;
+    ocp->u_ub << 10;
+    ocp->u_lb << -3;
 
-    ocp.x_ref << 1, 0;
+    ocp->x_ref << 1, 0;
 
-    ocp.set_x0({0.1, 0.2});               // for demonstration, last setting counts
-    ocp.x0_lb = ocp.x0_ub = {0.1, 0.2};   // for demonstration, last setting counts
-    ocp.x0_ub << 0.1, 0.2;                // for demonstration, last setting counts
-    ocp.x0_lb << -0.1, -0.2;
+    ocp->set_x0({0.1, 0.2});               // for demonstration, last setting counts
+    ocp->x0_lb = ocp->x0_ub = {0.1, 0.2};  // for demonstration, last setting counts
+    ocp->x0_ub << 0.1, 0.2;                // for demonstration, last setting counts
+    ocp->x0_lb << -0.1, -0.2;
 
     /* Resampling test parameters */
     const double Ts_max = 0.02;
@@ -69,11 +69,11 @@ int main()
         using OptProblem = laopt::Problem<Transcription>;
 
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
-        Transcription transcription(ocp);
+        std::shared_ptr<Transcription> transcription = std::make_shared<Transcription>(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
 
         /* Construct laOPT problem for transcribed OCP using according tape */
-        OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
+        std::shared_ptr<OptProblem> opt_problem = std::make_shared<OptProblem>(transcription, tape); // Tape is optional here and could also be generated internally
 
 #ifdef LAOPT_WITH_IPOPT
         {
@@ -113,11 +113,11 @@ int main()
         using OptProblem = laopt::Problem<Transcription>;
 
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
-        Transcription transcription(ocp);
+        std::shared_ptr<Transcription> transcription = std::make_shared<Transcription>(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
 
         /* Construct laOPT problem for transcribed OCP using according tape */
-        OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
+        std::shared_ptr<OptProblem> opt_problem = std::make_shared<OptProblem>(transcription, tape); // Tape is optional here and could also be generated internally
 
 #ifdef LAOPT_WITH_IPOPT
         {

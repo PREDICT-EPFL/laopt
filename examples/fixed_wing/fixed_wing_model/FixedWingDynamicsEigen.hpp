@@ -651,7 +651,6 @@ public:
         using vec4_t = Eigen::Vector<scalar_t, 4>;
         using vec3_t = Eigen::Vector<scalar_t, 3>;
         using Quat = Eigen::Quaternion<Scalar>;
-        using Vec4 = Eigen::Vector<Scalar, 4>;
         using Vec3 = Eigen::Vector<Scalar, 3>;
 
         /* Aircraft Inertia Matrix */

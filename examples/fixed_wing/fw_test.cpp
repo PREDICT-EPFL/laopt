@@ -24,25 +24,25 @@ int main()
     using Ocp = fixed_wing_ocp::FixedWingFlightOCP;
 
     /* Construct and setup OCP */
-    Ocp ocp;
-    ocp.model.load_params_from_yaml("eg4_xflr-Pvw-YR.yaml");
+    std::shared_ptr<Ocp> ocp = std::make_shared<Ocp>();
+    ocp->model.load_params_from_yaml("eg4_xflr-Pvw-YR.yaml");
 
-    ocp.objectives[fixed_wing_ocp::TrackVa] = true;
-    ocp.objectives[fixed_wing_ocp::MinimizeControl] = true;
+    ocp->objectives[fixed_wing_ocp::TrackVa] = true;
+    ocp->objectives[fixed_wing_ocp::MinimizeControl] = true;
 
-    ocp.set_tf(1.5);
+    ocp->set_tf(1.5);
 
-    ocp.Va_ref = 12.0;
+    ocp->Va_ref = 12.0;
 
-    ocp.mayer_multiplier = 10;
-    ocp.W_Va_err = 1;
-    ocp.R.diagonal() << 0.1, 1, 1, 1;
+    ocp->mayer_multiplier = 10;
+    ocp->W_Va_err = 1;
+    ocp->R.diagonal() << 0.1, 1, 1, 1;
 
-    ocp.u_ub << 0.8 * ocp.model.u_physical_ubound;
-    ocp.u_lb << 0.8 * ocp.model.u_physical_lbound;
+    ocp->u_ub << 0.8 * ocp->model.u_physical_ubound;
+    ocp->u_lb << 0.8 * ocp->model.u_physical_lbound;
 
     /* Set initial state */
-    ocp.set_x0(ocp.model.get_default_initial_state());
+    ocp->set_x0(ocp->model.get_default_initial_state());
 
     /* Resampling test parameters */
     const double Ts_max = 0.02;
@@ -50,18 +50,18 @@ int main()
 
     auto solve_and_print = [&](auto& transcription, auto& opt_problem, auto& solver)
     {
-        using Transcription = typename std::remove_reference<decltype(transcription)>::type;
+        using Transcription = typename std::remove_reference<decltype(transcription)>::type::element_type;
 
         /* Set initial guess for state trajectory */
         typename Transcription::StateTrajectory X_guess;
         for (int i = 0; i < Transcription::StateTrajectory::ColsAtCompileTime; i++)
         {
-            X_guess.col(i) = ocp.model.get_default_initial_state();
-            X_guess(6, i) = i * 0.5 * (ocp.tf_lb + ocp.tf_ub) / Transcription::StateTrajectory::ColsAtCompileTime *
-                            ocp.model.get_default_initial_state()(0);
+            X_guess.col(i) = ocp->model.get_default_initial_state();
+            X_guess(6, i) = i * 0.5 * (ocp->tf_lb + ocp->tf_ub) / Transcription::StateTrajectory::ColsAtCompileTime *
+                            ocp->model.get_default_initial_state()(0);
         }
-        transcription.set_X_guess(X_guess);
-        std::cout << "X_guess = \n" << transcription.get_X_opt() << "\n";
+        transcription->set_X_guess(X_guess);
+        std::cout << "X_guess = \n" << transcription->get_X_opt() << "\n";
 
         const steady_clock::time_point t_start = steady_clock::now();
         solver.solve();
@@ -88,11 +88,11 @@ int main()
         using OptProblem = laopt::Problem<Transcription>;
 
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
-        Transcription transcription(ocp);
+        std::shared_ptr<Transcription> transcription = std::make_shared<Transcription>(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
 
         /* Construct laOPT problem for transcribed OCP using according tape */
-        OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
+        std::shared_ptr<OptProblem> opt_problem = std::make_shared<OptProblem>(transcription, tape); // Tape is optional here and could also be generated internally
 
 #ifdef LAOPT_WITH_IPOPT
         {
@@ -131,11 +131,11 @@ int main()
         using OptProblem = laopt::Problem<Transcription>;
 
         /* Construct transcription for OCP, optionally generate/store tape for that combination */
-        Transcription transcription(ocp);
+        std::shared_ptr<Transcription> transcription = std::make_shared<Transcription>(ocp);
         Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
 
         /* Construct laOPT problem for transcribed OCP using according tape */
-        OptProblem opt_problem(transcription, tape); // Tape is optional here and could also be generated internally
+        std::shared_ptr<OptProblem> opt_problem = std::make_shared<OptProblem>(transcription, tape); // Tape is optional here and could also be generated internally
 
 #ifdef LAOPT_WITH_IPOPT
         {
