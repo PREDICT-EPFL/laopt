@@ -14,7 +14,7 @@ public:
     const DerivedLhs lhs;
     const DerivedRhs rhs;
 
-    static_assert(DerivedLhs::RowsAtCompileTime == DerivedRhs::RowsAtCompileTime, "Output dimension of expressions must be the same");
+    static_assert((int) DerivedLhs::RowsAtCompileTime == (int) DerivedRhs::RowsAtCompileTime, "Output dimension of expressions must be the same");
     enum {
         RowsAtCompileTime = DerivedLhs::RowsAtCompileTime,
         ColsAtCompileTime = 1
