@@ -400,7 +400,6 @@ public:
     const Eigen::VectorX<Scalar> &dual() const { return ipopt_problem->dual; }
     const Eigen::VectorX<Scalar> &dual_bounds() const { return ipopt_problem->dual_bounds; }
 
-protected:
     Ipopt::SmartPtr<IpoptProblem> ipopt_problem;
     Ipopt::SmartPtr<Ipopt::IpoptApplication> ipopt_application;
 };
