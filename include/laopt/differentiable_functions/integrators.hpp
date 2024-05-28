@@ -220,6 +220,25 @@ public:
     }
 };
 
+// Implicit trapezoidal method
+template<typename F, typename Scalar, typename Tag = DefaultTag, int Options = TAGLESS>
+class ImplicitTrapezoidal : public Differentiable<ImplicitTrapezoidal<F, Scalar, Tag, Options>, Options>
+{
+protected:
+    F& f;
+    Scalar h;
+
+public:
+    explicit ImplicitTrapezoidal(F& f, const Scalar& step_size) : f(f), h(step_size) {}
+
+    template<typename XP, typename X, typename... Params>
+    EIGEN_STRONG_INLINE typename X::PlainObject
+    function_impl(const Eigen::MatrixBase<XP>& xp, const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<Params>&... params) noexcept
+    {
+        return x + 0.5 * h * (f.function(Tag{}, x, params...) + f.function(Tag{}, xp, params...)) - xp;
+    }
+};
+
 } // namespace laopt
 
 #endif //LAOPT_INTEGRATORS_HPP
