@@ -6,6 +6,7 @@
 
 #include "IpIpoptApplication.hpp"
 #include "IpTNLP.hpp"
+#include "IpSolveStatistics.hpp"
 
 namespace laopt
 {
