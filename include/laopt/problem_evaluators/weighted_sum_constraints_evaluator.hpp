@@ -8,16 +8,16 @@
 namespace laopt
 {
 
-template<typename DType, typename Matrix, typename Vector>
-class WeightedSumConstraintsEvaluator : public OptProblem<WeightedSumConstraintsEvaluator<DType, Matrix, Vector>>
+template<typename DType, typename MatrixType, typename VectorType>
+class WeightedSumConstraintsEvaluator : public OptProblem<WeightedSumConstraintsEvaluator<DType, MatrixType, VectorType>>
 {
-    friend OptProblem<WeightedSumConstraintsEvaluator<DType, Matrix, Vector>>;
+    friend OptProblem<WeightedSumConstraintsEvaluator<DType, MatrixType, VectorType>>;
 
-    WeightedSumFunction<Matrix, Vector>& constraints;
+    WeightedSumFunction<MatrixType, VectorType>& constraints;
     int row_offset;
 
 public:
-    explicit WeightedSumConstraintsEvaluator(WeightedSumFunction<Matrix, Vector>& constraints) : constraints(constraints), row_offset(0) {}
+    explicit WeightedSumConstraintsEvaluator(WeightedSumFunction<MatrixType, VectorType>& constraints) : constraints(constraints), row_offset(0) {}
 
 protected:
     template<typename Derived, typename LocalDType = DType>

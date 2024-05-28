@@ -8,15 +8,15 @@
 namespace laopt
 {
 
-template<typename Matrix, typename Vector>
-class VariableBoundsEvaluator : public OptProblem<VariableBoundsEvaluator<Matrix, Vector>>
+template<typename MatrixType, typename VectorType>
+class VariableBoundsEvaluator : public OptProblem<VariableBoundsEvaluator<MatrixType, VectorType>>
 {
-    friend OptProblem<VariableBoundsEvaluator<Matrix, Vector>>;
+    friend OptProblem<VariableBoundsEvaluator<MatrixType, VectorType>>;
 
-    VectorFunction<Matrix, Vector>& variable_bounds;
+    VectorFunction<MatrixType, VectorType>& variable_bounds;
 
 public:
-    explicit VariableBoundsEvaluator(VectorFunction<Matrix, Vector>& variable_bounds) : variable_bounds(variable_bounds) {}
+    explicit VariableBoundsEvaluator(VectorFunction<MatrixType, VectorType>& variable_bounds) : variable_bounds(variable_bounds) {}
 
 protected:
     template<typename DerivedLhs, typename DerivedRhs>

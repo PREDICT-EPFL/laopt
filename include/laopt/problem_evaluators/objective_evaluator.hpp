@@ -8,18 +8,18 @@
 namespace laopt
 {
 
-template<typename DType, typename Matrix, typename Vector>
-class ObjectiveEvaluator : public OptProblem<ObjectiveEvaluator<DType, Matrix, Vector>>
+template<typename DType, typename MatrixType, typename VectorType>
+class ObjectiveEvaluator : public OptProblem<ObjectiveEvaluator<DType, MatrixType, VectorType>>
 {
-    friend OptProblem<ObjectiveEvaluator<DType, Matrix, Vector>>;
+    friend OptProblem<ObjectiveEvaluator<DType, MatrixType, VectorType>>;
 
-    using scalar_t = typename Vector::scalar_t;
+    using scalar_t = typename VectorType::scalar_t;
 
-    WeightedSumFunction<Matrix, Vector>& objective;
+    WeightedSumFunction<MatrixType, VectorType>& objective;
     const scalar_t obj_factor;
 
 public:
-    explicit ObjectiveEvaluator(WeightedSumFunction<Matrix, Vector>& objective, const scalar_t obj_factor = static_cast<scalar_t>(1)) :
+    explicit ObjectiveEvaluator(WeightedSumFunction<MatrixType, VectorType>& objective, const scalar_t obj_factor = static_cast<scalar_t>(1)) :
         objective(objective), obj_factor(obj_factor) {}
 
 protected:

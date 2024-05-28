@@ -7,21 +7,21 @@
 namespace laopt
 {
 
-template<typename Matrix, typename Vector>
-class ProblemSizeEvaluator : public OptProblem<ProblemSizeEvaluator<Matrix, Vector>>
+template<typename MatrixType, typename VectorType>
+class ProblemSizeEvaluator : public OptProblem<ProblemSizeEvaluator<MatrixType, VectorType>>
 {
-    friend OptProblem<ProblemSizeEvaluator<Matrix, Vector>>;
+    friend OptProblem<ProblemSizeEvaluator<MatrixType, VectorType>>;
 
-    VectorFunction<Matrix, Vector>& variable_bounds;
-    WeightedSumFunction<Matrix, Vector>& objective;
-    VectorFunction<Matrix, Vector>& constraints;
-    WeightedSumFunction<Matrix, Vector>& lagrangian;
+    VectorFunction<MatrixType, VectorType>& variable_bounds;
+    WeightedSumFunction<MatrixType, VectorType>& objective;
+    VectorFunction<MatrixType, VectorType>& constraints;
+    WeightedSumFunction<MatrixType, VectorType>& lagrangian;
 
 public:
-    explicit ProblemSizeEvaluator(VectorFunction<Matrix, Vector>& variable_bounds,
-                                  WeightedSumFunction<Matrix, Vector>& objective,
-                                  VectorFunction<Matrix, Vector>& constraints,
-                                  WeightedSumFunction<Matrix, Vector>& lagrangian) :
+    explicit ProblemSizeEvaluator(VectorFunction<MatrixType, VectorType>& variable_bounds,
+                                  WeightedSumFunction<MatrixType, VectorType>& objective,
+                                  VectorFunction<MatrixType, VectorType>& constraints,
+                                  WeightedSumFunction<MatrixType, VectorType>& lagrangian) :
           variable_bounds(variable_bounds),
           objective(objective),
           constraints(constraints),

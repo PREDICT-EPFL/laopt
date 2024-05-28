@@ -9,13 +9,13 @@ namespace laopt
  *
  * Either sparsity or tape information, depending on Matrix and Vector
  */
-template<typename Matrix, typename Vector>
+template<typename MatrixType, typename VectorType>
 struct WeightedSumFunctionInfo
 {
     int rows, variables;
-    typename Matrix::Info hessian;
-    typename Vector::Info gradient;
-    typename Vector::Info weights;
+    typename MatrixType::Info hessian;
+    typename VectorType::Info gradient;
+    typename VectorType::Info weights;
 };
 
 template<typename scalar_t>
@@ -24,19 +24,19 @@ struct WeightedSumFunctionMemory;
 /**
  * A scalar function of the form f(x) = sum wi fi(x), with a sparse hessian.
  */
-template<typename Matrix, typename Vector>
+template<typename MatrixType, typename VectorType>
 class WeightedSumFunction
 {
     int m_rows;
     int m_variables;
 
 public:
-    using scalar_t = typename Vector::scalar_t;
+    using scalar_t = typename VectorType::scalar_t;
 
-    Vector weights;
+    VectorType weights;
     scalar_t value;
-    Vector gradient;
-    Matrix hessian;
+    VectorType gradient;
+    MatrixType hessian;
 
     /**
      * Sparsity discovery constructor
@@ -51,8 +51,8 @@ public:
     /**
      * Constructor for tape recording or deployment
      */
-    template<typename TMatrix, typename TVector>
-    explicit WeightedSumFunction(const WeightedSumFunctionInfo<TMatrix, TVector>& info) :
+    template<typename OtherMatrixType, typename OtherVectorType>
+    explicit WeightedSumFunction(const WeightedSumFunctionInfo<OtherMatrixType, OtherVectorType>& info) :
         m_rows(info.rows), m_variables(info.variables),
         weights(info.weights), gradient(info.gradient), hessian(info.hessian) {}
 
@@ -79,9 +79,9 @@ public:
         gradient.extend(variables, 0);
     }
 
-    WeightedSumFunctionInfo<Matrix,Vector> generate()
+    WeightedSumFunctionInfo<MatrixType, VectorType> generate()
     {
-        WeightedSumFunctionInfo<Matrix,Vector> info;
+        WeightedSumFunctionInfo<MatrixType, VectorType> info;
 
         info.rows = weights.rows();
         info.variables = hessian.cols();
@@ -108,8 +108,8 @@ struct WeightedSumFunctionMemory
     // Pointer to the valuePtr of the hessian
     Eigen::Map<Eigen::VectorX<scalar_t>> hessian_buffer;
 
-    template<typename Matrix, typename Vector>
-    explicit WeightedSumFunctionMemory(WeightedSumFunction<Matrix, Vector>& w) :
+    template<typename MatrixType, typename VectorType>
+    explicit WeightedSumFunctionMemory(WeightedSumFunction<MatrixType, VectorType>& w) :
             gradient(w.variables()),
             weights(w.rows()),
             hessian_buffer(nullptr, 0)

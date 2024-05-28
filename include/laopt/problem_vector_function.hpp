@@ -9,14 +9,14 @@ namespace laopt
  *
  * Either sparsity or tape information, depending on Matrix and Vector type
  */
-template<typename Matrix, typename Vector>
+template<typename MatrixType, typename VectorType>
 struct VectorFunctionInfo
 {
     int rows, variables;
-    typename Matrix::Info jacobian;
-    typename Vector::Info value;
-    typename Vector::Info lb;
-    typename Vector::Info ub;
+    typename MatrixType::Info jacobian;
+    typename VectorType::Info value;
+    typename VectorType::Info lb;
+    typename VectorType::Info ub;
 };
 
 template<typename scalar_t>
@@ -25,18 +25,18 @@ struct VectorFunctionMemory;
 /**
  * A vector-valued function with a sparse jacobian.
  */
-template<typename Matrix, typename Vector>
+template<typename MatrixType, typename VectorType>
 class VectorFunction
 {
     int m_rows;
     int m_variables;
 
 public:
-    using scalar_t = typename Vector::scalar_t;
+    using scalar_t = typename VectorType::scalar_t;
 
-    Vector value;
-    Matrix jacobian;
-    Vector lb, ub;
+    VectorType value;
+    MatrixType jacobian;
+    VectorType lb, ub;
 
     VectorFunction() : m_rows(0), m_variables(0)
     {
@@ -49,8 +49,8 @@ public:
     /**
      * Constructor for tape recording or deployment
      */
-    template<typename TMatrix, typename TVector>
-    explicit VectorFunction(const VectorFunctionInfo<TMatrix, TVector>& info) :
+    template<typename OtherMatrixType, typename OtherVectorType>
+    explicit VectorFunction(const VectorFunctionInfo<OtherMatrixType, OtherVectorType>& info) :
         m_rows(info.rows), m_variables(info.variables),
         value(info.value), jacobian(info.jacobian), lb(info.lb), ub(info.ub) {}
 
@@ -103,9 +103,9 @@ public:
         ub(indices).array() = ub_;
     }
 
-    VectorFunctionInfo<Matrix,Vector> generate()
+    VectorFunctionInfo<MatrixType, VectorType> generate()
     {
-        VectorFunctionInfo<Matrix,Vector> info;
+        VectorFunctionInfo<MatrixType, VectorType> info;
 
         info.rows = jacobian.rows();
         info.variables = jacobian.cols();
@@ -133,8 +133,8 @@ struct VectorFunctionMemory {
     // Pointer to the valuePtr of the jacobian
     Eigen::Map<Eigen::VectorX<scalar_t>> jacobian_buffer;
 
-    template<typename Matrix, typename Vector>
-    explicit VectorFunctionMemory(VectorFunction<Matrix, Vector> &f) :
+    template<typename MatrixType, typename VectorType>
+    explicit VectorFunctionMemory(VectorFunction<MatrixType, VectorType>& f) :
             value(f.rows(), 1),
             lb(f.rows(), 1),
             ub(f.rows(), 1),

@@ -44,7 +44,7 @@ protected:
     using variable_t = laopt::Variable<Scalar, n>;
 
     /* Instance of end user's ControlProblem */
-    ControlProblem &controlProblem;
+    std::shared_ptr<ControlProblem> controlProblem;
 
     /* Create discrete problem variables */
     const double h{1.0 / N};
@@ -65,7 +65,7 @@ protected:
                   const Eigen::MatrixBase<p_t>& p,
                   const Eigen::MatrixBase<tf_t>& tf)
     {
-        return tf(0) * controlProblem.dynamics_impl(x, u, p);
+        return tf(0) * controlProblem->dynamics_impl(x, u, p);
     }
 
     Integrator<ContinuousDynamics> integrator{*this, h};
@@ -94,7 +94,7 @@ protected:
                   const Eigen::MatrixBase<u_t>& u,
                   const Eigen::MatrixBase<p_t>& p)
     {
-        return controlProblem.inequality_constraints_impl(x, u, p);
+        return controlProblem->inequality_constraints_impl(x, u, p);
     }
 
     struct InitialInequalityConstraints {};
@@ -105,7 +105,7 @@ protected:
                   const Eigen::MatrixBase<u_t>& u0,
                   const Eigen::MatrixBase<p_t>& p)
     {
-        return controlProblem.inequality_constraints0_impl(x0, u0, p);
+        return controlProblem->inequality_constraints0_impl(x0, u0, p);
     }
 
     struct FinalInequalityConstraints {};
@@ -115,7 +115,7 @@ protected:
                   const Eigen::MatrixBase<x_t>& xf,
                   const Eigen::MatrixBase<p_t>& p)
     {
-        return controlProblem.inequality_constraintsf_impl(xf, p);
+        return controlProblem->inequality_constraintsf_impl(xf, p);
     }
 
     /* Objective */
@@ -128,7 +128,7 @@ protected:
                   const Eigen::MatrixBase<u_t>& u,
                   const Eigen::MatrixBase<p_t>& p)
     {
-        return controlProblem.lagrange_term_impl(x, u, p);
+        return controlProblem->lagrange_term_impl(x, u, p);
     }
 
     struct MayerCost {};
@@ -140,20 +140,20 @@ protected:
                   const Eigen::MatrixBase<p_t>& p,
                   const Eigen::MatrixBase<tf_t>& tf)
     {
-        return controlProblem.mayer_term_impl(xf, p, tf(0));
+        return controlProblem->mayer_term_impl(xf, p, tf(0));
     }
 
     template<int Option = ControlProblem::Options>
     inline typename std::enable_if<(Option & FreeEndTime) == 0, Eigen::Vector<Scalar, 1>>::type
     get_tf_var() const
     {
-        if (controlProblem.tf_lb != controlProblem.tf_ub)
+        if (controlProblem->tf_lb != controlProblem->tf_ub)
         {
             std::cerr << "MultipleShooting<FixedEndTime>: final time bounds need to be identical (tf_lb == tf_ub)\n";
             exit(EXIT_FAILURE);
         }
         Eigen::Vector<Scalar, 1> tf;
-        tf(0) = controlProblem.tf_lb;
+        tf(0) = controlProblem->tf_lb;
         return tf;
     }
 
@@ -195,31 +195,31 @@ protected:
         /* Box constraints */
         for (unsigned i = 0; i < N; i++)
         {
-            optProblem.add_constr(controlProblem.x_lb <= X_var[i] <= controlProblem.x_ub);
-            optProblem.add_constr(controlProblem.u_lb <= U_var[i] <= controlProblem.u_ub);
+            optProblem.add_constr(controlProblem->x_lb <= X_var[i] <= controlProblem->x_ub);
+            optProblem.add_constr(controlProblem->u_lb <= U_var[i] <= controlProblem->u_ub);
         }
-        optProblem.add_constr(controlProblem.x_lb <= X_var[N] <= controlProblem.x_ub);
+        optProblem.add_constr(controlProblem->x_lb <= X_var[N] <= controlProblem->x_ub);
 
         /* Boundary constraints */
-        optProblem.add_constr(controlProblem.x0_lb <= X_var[0] <= controlProblem.x0_ub);
-        optProblem.add_constr(controlProblem.xf_lb <= X_var[N] <= controlProblem.xf_ub);
+        optProblem.add_constr(controlProblem->x0_lb <= X_var[0] <= controlProblem->x0_ub);
+        optProblem.add_constr(controlProblem->xf_lb <= X_var[N] <= controlProblem->xf_ub);
         if (ControlProblem::Options & FreeEndTime)
         {
-            optProblem.add_constr(controlProblem.tf_lb <= tf_var <= controlProblem.tf_ub);
+            optProblem.add_constr(controlProblem->tf_lb <= tf_var <= controlProblem->tf_ub);
         }
-        optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
+        optProblem.add_constr(controlProblem->opt_params_lb.vector() <= p_var <= controlProblem->opt_params_ub.vector());
 
         /* Inequality constraints */
-        optProblem.add_constr(controlProblem.g0_lb <= this->expression(InitialInequalityConstraints{}, X_var[0], U_var[0], p_var) <= controlProblem.g0_ub);
+        optProblem.add_constr(controlProblem->g0_lb <= this->expression(InitialInequalityConstraints{}, X_var[0], U_var[0], p_var) <= controlProblem->g0_ub);
         for (unsigned i = 1; i < N; i++)
         {
-            optProblem.add_constr(controlProblem.g_lb <= this->expression(InequalityConstraints{}, X_var[i], U_var[i], p_var) <= controlProblem.g_ub);
+            optProblem.add_constr(controlProblem->g_lb <= this->expression(InequalityConstraints{}, X_var[i], U_var[i], p_var) <= controlProblem->g_ub);
         }
-        optProblem.add_constr(controlProblem.gf_lb <= this->expression(FinalInequalityConstraints{}, X_var[N], p_var) <= controlProblem.gf_ub);
+        optProblem.add_constr(controlProblem->gf_lb <= this->expression(FinalInequalityConstraints{}, X_var[N], p_var) <= controlProblem->gf_ub);
     }
 
 public:
-    explicit MultipleShooting(ControlProblem &ctrlProblem_) :
+    explicit MultipleShooting(const std::shared_ptr<ControlProblem>& ctrlProblem_) :
             controlProblem(ctrlProblem_)
     {
         /* Construct trajectory time grid on [0, 1] */
@@ -260,7 +260,7 @@ public:
     }
     TimeTrajectory get_T_opt() const
     {
-        return TimeTrajectory::Constant(controlProblem.t0) + (get_tf_opt() - controlProblem.t0) * T;
+        return TimeTrajectory::Constant(controlProblem->t0) + (get_tf_opt() - controlProblem->t0) * T;
     }
     StateTrajectory get_X_opt() const
     {
@@ -291,7 +291,7 @@ public:
         else
         {
             /* Interpolate between discrete states */
-            const Scalar T_eval = (t - controlProblem.t0) / (tf - controlProblem.t0);
+            const Scalar T_eval = (t - controlProblem->t0) / (tf - controlProblem->t0);
             // on [0 ... 1]|traj;
 
             /* Find segment to sample from */
@@ -308,10 +308,10 @@ public:
     {
         const double tf = get_tf_opt();
         if (t >= tf) { return U_var[N - 1]; }
-        else if (t <= controlProblem.t0) { return U_var[0]; }
+        else if (t <= controlProblem->t0) { return U_var[0]; }
         else
         {
-            const Scalar T_eval = (t - controlProblem.t0) / (tf - controlProblem.t0);
+            const Scalar T_eval = (t - controlProblem->t0) / (tf - controlProblem->t0);
             return U_var[std::floor(T_eval / h)];
         }
     }
@@ -334,7 +334,7 @@ public:
     {
         std::cout << std::setprecision(4) << std::defaultfloat;
         std::cout << "Diagnostics: Multiple Shooting with N_segs = " << N_segs << "\n";
-        controlProblem.print_diagnostics();
+        controlProblem->print_diagnostics();
         const Eigen::VectorXd T_opt = get_T_opt();
         const Eigen::MatrixXd X_opt = get_X_opt();
         const Eigen::MatrixXd U_opt = get_U_opt();
@@ -390,8 +390,8 @@ protected: /* Helpers for resampling */
 
             /* Transform time by absolute horizon range (except  */
             TXn(0, seqN(k_seg_start, n_per_seg)) =
-                    Eigen::MatrixX<Scalar>::Constant(1, n_per_seg, controlProblem.t0) +
-                    (get_tf_opt() - controlProblem.t0) * TXn(0, seqN(k_seg_start, n_per_seg));
+                    Eigen::MatrixX<Scalar>::Constant(1, n_per_seg, controlProblem->t0) +
+                    (get_tf_opt() - controlProblem->t0) * TXn(0, seqN(k_seg_start, n_per_seg));
         }
         return TXn;
     }
@@ -436,8 +436,8 @@ protected: /* Helpers for resampling */
 
             /* Transform time by absolute horizon range (except  */
             TXn(0, seqN(k_seg_start, n_per_seg)) =
-                    Eigen::MatrixX<Scalar>::Constant(1, n_per_seg, controlProblem.t0) +
-                    (get_tf_opt() - controlProblem.t0) * TXn(0, seqN(k_seg_start, n_per_seg));
+                    Eigen::MatrixX<Scalar>::Constant(1, n_per_seg, controlProblem->t0) +
+                    (get_tf_opt() - controlProblem->t0) * TXn(0, seqN(k_seg_start, n_per_seg));
         }
         return TXn;
     }

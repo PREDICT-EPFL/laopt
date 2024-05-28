@@ -9,16 +9,16 @@
 namespace laopt
 {
 
-template<typename DType, typename Matrix, typename Vector>
-class VectorConstraintsEvaluator : public OptProblem<VectorConstraintsEvaluator<DType, Matrix, Vector>>
+template<typename DType, typename MatrixType, typename VectorType>
+class VectorConstraintsEvaluator : public OptProblem<VectorConstraintsEvaluator<DType, MatrixType, VectorType>>
 {
-    friend OptProblem<VectorConstraintsEvaluator<DType, Matrix, Vector>>;
+    friend OptProblem<VectorConstraintsEvaluator<DType, MatrixType, VectorType>>;
 
-    VectorFunction<Matrix, Vector>& constraints;
+    VectorFunction<MatrixType, VectorType>& constraints;
     int row_offset;
 
 public:
-    explicit VectorConstraintsEvaluator(VectorFunction<Matrix, Vector>& constraints) : constraints(constraints), row_offset(0) {}
+    explicit VectorConstraintsEvaluator(VectorFunction<MatrixType, VectorType>& constraints) : constraints(constraints), row_offset(0) {}
 
 protected:
     template<typename Derived, typename LocalDType = DType>

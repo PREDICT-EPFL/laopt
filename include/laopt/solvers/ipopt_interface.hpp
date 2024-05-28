@@ -17,7 +17,7 @@ public:
     using scalar_t = typename UserProblem::scalar_t;
 
 private:
-    UserProblem& prob;
+    std::shared_ptr<UserProblem> prob;
 
 	// IPOPT only wants the lower triangular part of the hessian
 	// So we need to keep a full buffer for the computation
@@ -30,21 +30,21 @@ public:
     Eigen::VectorX<scalar_t> dual;
 
     /* Constructor. */
-	explicit IpoptProblem(UserProblem& prob) :
+	explicit IpoptProblem(const std::shared_ptr<UserProblem>& prob) :
         prob(prob),
-        primal(prob.variables()),
-        dual_bounds(prob.variables()),
-        dual(prob.constraints.rows())
+        primal(prob->variables()),
+        dual_bounds(prob->variables()),
+        dual(prob->constraints.rows())
 	{
         // Default to zero if user doesn't set
         primal.setZero();
         dual.setZero();
         dual_bounds.setZero();
 
-		prob.lagrangian.hessian.allocate_memory(lag_hessian);
+		prob->lagrangian.hessian.allocate_memory(lag_hessian);
 
         // set memory of decision variables
-        prob.set_decision_variable(primal);
+        prob->set_decision_variable(primal);
 	}
 
 	bool get_nlp_info(
@@ -55,16 +55,16 @@ public:
        IndexStyleEnum& index_style
 	) override
 	{
-		n = prob.variables();
-		m = prob.constraints.rows();
+		n = prob->variables();
+		m = prob->constraints.rows();
 
 		// nonzeros in the jacobian of the constraints
-		nnz_jac_g = prob.constraints.jacobian.get_sparsity_structure().nonZeros();
+		nnz_jac_g = prob->constraints.jacobian.get_sparsity_structure().nonZeros();
 
 		// nonzeros in the lower-triangular part of the hessian of the lagrangian
 		// Iterate over the non-zeros, counting only those in the lower triangular part
 		int nnz = 0;
-		auto S = prob.lagrangian.hessian.get_sparsity_structure();
+		auto S = prob->lagrangian.hessian.get_sparsity_structure();
 		for (int col = 0; col < S.outerSize(); ++col)
         {
             for (typename Eigen::SparseMatrix<typename decltype(S)::Scalar>::InnerIterator it(S, col); it; ++it)
@@ -92,16 +92,16 @@ public:
 	) override
 	{
 		// Compute bounds on the variables
-		prob.eval_variable_bounds(Eigen::Map<Eigen::VectorX<scalar_t>>(x_l, n),
+		prob->eval_variable_bounds(Eigen::Map<Eigen::VectorX<scalar_t>>(x_l, n),
 								  Eigen::Map<Eigen::VectorX<scalar_t>>(x_u, n));
 
 		// Compute the constraints with a temporary variable so that we can get the bounds
-		assert(m == prob.constraints.rows() && "Number of constraints does not match ipopt's number of constraints");
+		assert(m == prob->constraints.rows() && "Number of constraints does not match ipopt's number of constraints");
 		Eigen::VectorX<scalar_t> con(m);
 		Eigen::Map<Eigen::VectorX<scalar_t>> lb(g_l, m);
 		Eigen::Map<Eigen::VectorX<scalar_t>> ub(g_u, m);
 
-		prob.eval_constraints(con, lb, ub);
+		prob->eval_constraints(con, lb, ub);
 
 		return true;
 	}
@@ -146,9 +146,9 @@ public:
 	{
 		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Ipopt::Number*>(x), n);
 
-        prob.set_decision_variable(var);
-		obj_value = prob.eval_objective();
-        prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
+        prob->set_decision_variable(var);
+		obj_value = prob->eval_objective();
+        prob->set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
 
         return true;
 	}
@@ -163,9 +163,9 @@ public:
 		Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Ipopt::Number*>(x), n);
 		Eigen::Map<Eigen::VectorX<scalar_t>> grad(grad_f, n);
 
-        prob.set_decision_variable(var);
-		prob.eval_objective_gradient(grad);
-        prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
+        prob->set_decision_variable(var);
+		prob->eval_objective_gradient(grad);
+        prob->set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
 
         return true;
 	}
@@ -183,9 +183,9 @@ public:
 		Eigen::VectorX<scalar_t> lb(m);
 		Eigen::VectorX<scalar_t> ub(m);
 
-        prob.set_decision_variable(var);
-		prob.eval_constraints(constraints, lb, ub);
-        prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
+        prob->set_decision_variable(var);
+		prob->eval_constraints(constraints, lb, ub);
+        prob->set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
 
         return true;
 	}
@@ -201,12 +201,12 @@ public:
 	   Ipopt::Number*       values
 	) override
 	{
-		assert(nele_jac == prob.constraints.jacobian.get_sparsity_structure().nonZeros() && "Number of nonzeros is wrong for the jacobian");
+		assert(nele_jac == prob->constraints.jacobian.get_sparsity_structure().nonZeros() && "Number of nonzeros is wrong for the jacobian");
 
 		if (values == nullptr)
 		{
 			// return the structure of the jacobian of the constraints
-			auto S = prob.constraints.jacobian.get_sparsity_structure();
+			auto S = prob->constraints.jacobian.get_sparsity_structure();
 			int i = 0;
 			for (int col = 0; col < S.outerSize(); ++col)
             {
@@ -226,9 +226,9 @@ public:
 			Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Ipopt::Number*>(x), n);
 			Eigen::Map<Eigen::VectorX<scalar_t>> jacobian_buffer(values, nele_jac); // Jacobian non-zeros
 
-            prob.set_decision_variable(var);
-			prob.eval_constraints_jacobian(jacobian_buffer);
-            prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
+            prob->set_decision_variable(var);
+			prob->eval_constraints_jacobian(jacobian_buffer);
+            prob->set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
 	   }
 
 	   return true;
@@ -256,7 +256,7 @@ public:
 			// Return the structure of the hessian of the lagrangian.
 			// This is a symmetric matrix, fill the lower left triangle only.
 
-			auto S = prob.lagrangian.hessian.get_sparsity_structure();
+			auto S = prob->lagrangian.hessian.get_sparsity_structure();
 			int i = 0;
 			for (int col = 0; col < S.outerSize(); ++col)
             {
@@ -277,15 +277,15 @@ public:
 		{
 			// return the values of the hessian of the lagrangian in the same order as the sparsity was defined
 			Eigen::Map<Eigen::VectorX<scalar_t>> var(const_cast<Ipopt::Number*>(x), n);
-            Eigen::Map<Eigen::VectorX<scalar_t>> dual_var(const_cast<Ipopt::Number*>(lambda), prob.constraints.rows());
+            Eigen::Map<Eigen::VectorX<scalar_t>> dual_var(const_cast<Ipopt::Number*>(lambda), prob->constraints.rows());
 
-            prob.set_decision_variable(var);
+            prob->set_decision_variable(var);
             Eigen::Map<Eigen::VectorX<scalar_t>> hessian_buffer(lag_hessian.valuePtr(), lag_hessian.nonZeros());
-            prob.eval_lagrangian_hessian(obj_factor, dual_var, hessian_buffer);
-            prob.set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
+            prob->eval_lagrangian_hessian(obj_factor, dual_var, hessian_buffer);
+            prob->set_decision_variable(primal); // set memory back to internal primal variable since var might be deallocated
 
 			// Copy the lower triangular part into the ipopt buffer
-			// auto S = prob.lagrangian.hessian.sparsity_structure;
+			// auto S = prob->lagrangian.hessian.sparsity_structure;
 			auto S = lag_hessian;
 			int i = 0;
 			for (int col = 0; col < S.outerSize(); ++col)
@@ -331,7 +331,7 @@ class IpoptSolver
 public:
     using IpoptProblem = laopt::IpoptProblem<OptProblem>;
 
-    explicit IpoptSolver(OptProblem &opt_problem)
+    explicit IpoptSolver(const std::shared_ptr<OptProblem> &opt_problem)
     {
         /* Create IPOPT problem and link decision variables to OptProblem */
         ipopt_problem = new IpoptProblem(opt_problem);
