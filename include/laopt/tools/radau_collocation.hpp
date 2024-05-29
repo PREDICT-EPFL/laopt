@@ -377,25 +377,36 @@ protected:
 
     /* Objective */
     struct LagrangeCost {};
-    template<typename X_t, typename U_t, typename p_t>
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t>
     EIGEN_STRONG_INLINE auto
     function_impl(LagrangeCost,
-                  const Eigen::MatrixBase<X_t> &x,
-                  const Eigen::MatrixBase<U_t> &u,
-                  const Eigen::MatrixBase<p_t> &p)
+                  const Eigen::MatrixBase<x_t> &x,
+                  const Eigen::MatrixBase<u_t> &u,
+                  const Eigen::MatrixBase<p_t> &p,
+                  const Eigen::MatrixBase<t0_t> &t0,
+                  const Eigen::MatrixBase<tf_t> &tf,
+                  const Scalar& tau)
     {
-        return controlProblem->lagrange_term_impl(x, u, p);
+        return controlProblem->lagrange_term_impl(x, u, p, t0, tf, tau);
     }
 
     struct MayerCost {};
-    template<typename x_t, typename p_t, typename tf_t>
+    template<typename x_t, typename p_t, typename t0_t, typename tf_t>
     EIGEN_STRONG_INLINE auto
     function_impl(MayerCost,
                   const Eigen::MatrixBase<x_t> &x,
                   const Eigen::MatrixBase<p_t> &p,
+                  const Eigen::MatrixBase<t0_t> &t0,
                   const Eigen::MatrixBase<tf_t> &tf)
     {
-        return controlProblem->mayer_term_impl(x, p, tf(0));
+        return controlProblem->mayer_term_impl(x, p, t0, tf);
+    }
+
+    Eigen::Vector<Scalar, 1> get_t0_var() const
+    {
+        Eigen::Vector<Scalar, 1> t0;
+        t0(0) = controlProblem->t0;
+        return t0;
     }
 
     template<int Option = ControlProblem::Options>
@@ -443,7 +454,8 @@ protected:
 
                 /* Add contribution of this node to integral approximation of this segment */
                 optProblem.add_obj(h_seg / 2.0 * int_mat(int_mat.rows() - 1, j_node)
-                                   * this->expression(LagrangeCost{}, get_x(XU_var, k), get_u(XU_var, k), p_var));
+                                   * this->expression(LagrangeCost{}, get_x(XU_var, k), get_u(XU_var, k), p_var,
+                                                                      get_t0_var(), get_tf_var(), T(k)));
 
                 /* Add differential constraint at each node */
                 optProblem.add_constr(this->expression(DifferentialApproximation{}, X_seg_diff, j_node) ==
@@ -452,7 +464,7 @@ protected:
         }
 
         /* Last grid point */
-        optProblem.add_obj(this->expression(MayerCost{}, get_x(XU_var, N), p_var, get_tf_var()));
+        optProblem.add_obj(this->expression(MayerCost{}, get_x(XU_var, N), p_var, get_t0_var(), get_tf_var()));
 
         /* Box constraints */
         for (unsigned k = 0; k <= N; k++)
@@ -468,7 +480,7 @@ protected:
         {
             optProblem.add_constr(controlProblem->tf_lb <= tf_var <= controlProblem->tf_ub);
         }
-        optProblem.add_constr(controlProblem->opt_params_lb.vector() <= p_var <= controlProblem->opt_params_ub.vector());
+        optProblem.add_constr(controlProblem->p_lb <= p_var <= controlProblem->p_ub);
 
         /* Inequality constraints */
         optProblem.add_constr(controlProblem->g0_lb <= this->expression(InitialInequalityConstraints{},  get_x(XU_var, 0), get_u(XU_var, 0), p_var) <= controlProblem->g0_ub);
@@ -555,12 +567,6 @@ public:
         return U_opt;
     }
     Param get_p_opt() const { return Param(p_var); }
-    typename ControlProblem::OptParam get_opt_params() const
-    {
-        typename ControlProblem::OptParam opt_param;
-        opt_param.set_vector(get_p_opt());
-        return opt_param;
-    }
 
     Eigen::Vector<Scalar, NX> get_x_at(const Scalar &t) const
     {

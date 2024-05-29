@@ -77,28 +77,9 @@ public:
     /* Final time bounds */
     Scalar tf_lb{1}, tf_ub{1};
 
-    /* Additional decision variables (optimized parameters) */
-    class OptParamBase
-    {
-    public:
-        /* Method allows to extract a reference to a (writeable) length LEN segment of the parameter vector.
-         * This way, the user can create a struct for convenient handling of parameter bounds and evaluation */
-        template<unsigned LEN>
-        Eigen::Ref<Eigen::Vector<Scalar, LEN>>
-        get_parameter(unsigned index) { return m_param_vector.template segment<LEN>(index); }
-
-        /* Methods to write and read parameter vector */
-        void set_vector(const Param &param) { m_param_vector = param; }
-        const Param &vector() const { return m_param_vector; }
-
-        /* Eigen Reference type to (sub) vector that the user can use in the child class */
-        template<unsigned LEN>
-        using VecRef = Eigen::Ref<Eigen::Vector<Scalar, LEN>>;
-    private:
-        Param m_param_vector = Param::Zero();
-    };
-    struct OptParam : OptParamBase {};     // Placeholder in case child class
-    OptParam opt_params_lb, opt_params_ub; // does not define them
+    /* Additional decision variables (optimized parameters) bound */
+    Param p_lb = Param::Constant(std::numeric_limits<Scalar>::infinity());
+    Param p_ub = -p_lb;
 
     /* Convenience setters for zero-range bounds */
     void set_x0(const State &x0) { x0_lb = x0_ub = x0; }
@@ -143,20 +124,27 @@ public:
     /*
      * Templates for problem formulation
      */
-    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
-    T lagrange_term_impl(const Eigen::MatrixBase<X>& x,
-                         const Eigen::MatrixBase<U>& u,
-                         const Eigen::MatrixBase<P>& p) { return static_cast<T>(0); }
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    T lagrange_term_impl(const Eigen::MatrixBase<x_t>& x,
+                         const Eigen::MatrixBase<u_t>& u,
+                         const Eigen::MatrixBase<p_t>& p,
+                         const Eigen::MatrixBase<t0_t>& t0,
+                         const Eigen::MatrixBase<tf_t>& tf,
+                         const Scalar& tau) { return static_cast<T>(0); }
 
-    template<typename Xf, typename P, typename Ttf, typename T = typename Xf::Scalar> // T is scalar type
-    T mayer_term_impl(const Eigen::MatrixBase<Xf>& xf,
-                      const Eigen::MatrixBase<P>& p,
-                      const Ttf &tf) { return static_cast<T>(0); }
+    template<typename x_tf, typename p_t, typename t0_t, typename tf_t,
+            typename T = typename x_tf::Scalar> // T is scalar type
+    T mayer_term_impl(const Eigen::MatrixBase<x_tf>& xf,
+                      const Eigen::MatrixBase<p_t>& p,
+                      const Eigen::MatrixBase<t0_t>& t0,
+                      const Eigen::MatrixBase<tf_t>& tf) { return static_cast<T>(0); }
 
-    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
-    state_t<T> dynamics_impl(const Eigen::MatrixBase<X>& x,
-                             const Eigen::MatrixBase<U>& u,
-                             const Eigen::MatrixBase<P>& p)
+    template<typename x_t, typename u_t, typename p_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x,
+                             const Eigen::MatrixBase<u_t>& u,
+                             const Eigen::MatrixBase<p_t>& p)
     {
         std::cerr << "dynamics_impl() not implemented.\n";
         exit(EXIT_FAILURE);
@@ -164,10 +152,11 @@ public:
     }
 
     /* Inequality constraints */
-    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
-    ineq_constr_t<T> inequality_constraints_impl(const Eigen::MatrixBase<X>& x,
-                                                 const Eigen::MatrixBase<U>& u,
-                                                 const Eigen::MatrixBase<P>& p)
+    template<typename x_t, typename u_t, typename p_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    ineq_constr_t<T> inequality_constraints_impl(const Eigen::MatrixBase<x_t>& x,
+                                                 const Eigen::MatrixBase<u_t>& u,
+                                                 const Eigen::MatrixBase<p_t>& p)
     {
         if (NG > 0)
         {
@@ -177,10 +166,11 @@ public:
         return {};
     }
 
-    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
-    ineq_constr0_t<T> inequality_constraints0_impl(const Eigen::MatrixBase<X>& x0,
-                                                   const Eigen::MatrixBase<U>& u0,
-                                                   const Eigen::MatrixBase<P>& p)
+    template<typename x_t, typename u_t, typename p_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    ineq_constr0_t<T> inequality_constraints0_impl(const Eigen::MatrixBase<x_t>& x0,
+                                                   const Eigen::MatrixBase<u_t>& u0,
+                                                   const Eigen::MatrixBase<p_t>& p)
     {
         if (NG0 > 0)
         {
@@ -190,10 +180,10 @@ public:
         return {};
     }
 
-    template<typename Xf, typename P, typename T = typename Xf::Scalar> // T is scalar type
-    ineq_constrf_t<T> inequality_constraintsf_impl(const Eigen::MatrixBase<Xf>& xf,
-                                                   // TODO: Add final input for more generality?
-                                                   const Eigen::MatrixBase<P>& p)
+    template<typename x_tf, typename p_t, typename
+            T = typename x_tf::Scalar> // T is scalar type
+    ineq_constrf_t<T> inequality_constraintsf_impl(const Eigen::MatrixBase<x_tf>& xf,
+                                                   const Eigen::MatrixBase<p_t>& p)
     {
         if (NGF > 0)
         {
@@ -202,8 +192,6 @@ public:
         }
         return {};
     }
-
-    // TODO: Add template for box constraints on particular times (first and last of the trajectory)
 };
 
 } // namespace laopt_tools

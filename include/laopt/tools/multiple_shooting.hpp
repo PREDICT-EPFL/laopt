@@ -87,7 +87,8 @@ protected:
 
     /* Inequality constraints */
     struct InequalityConstraints {};
-    template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename u_t, typename p_t,
+            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE auto
     function_impl(InequalityConstraints,
                   const Eigen::MatrixBase<x_t>& x,
@@ -98,7 +99,8 @@ protected:
     }
 
     struct InitialInequalityConstraints {};
-    template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename u_t, typename p_t,
+            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE auto
     function_impl(InitialInequalityConstraints,
                   const Eigen::MatrixBase<x_t>& x0,
@@ -109,7 +111,8 @@ protected:
     }
 
     struct FinalInequalityConstraints {};
-    template<typename x_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename p_t,
+            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE auto
     function_impl(FinalInequalityConstraints,
                   const Eigen::MatrixBase<x_t>& xf,
@@ -119,32 +122,43 @@ protected:
     }
 
     /* Objective */
-    struct StageCost {};
-    template<typename x_t, typename u_t, typename p_t,
+    struct LagrangeCost {};
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t,
             typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE auto
-    function_impl(StageCost,
+    function_impl(LagrangeCost,
                   const Eigen::MatrixBase<x_t>& x,
                   const Eigen::MatrixBase<u_t>& u,
-                  const Eigen::MatrixBase<p_t>& p)
+                  const Eigen::MatrixBase<p_t>& p,
+                  const Eigen::MatrixBase<t0_t>& t0,
+                  const Eigen::MatrixBase<tf_t>& tf,
+                  const Scalar& tau)
     {
-        return controlProblem->lagrange_term_impl(x, u, p);
+        return controlProblem->lagrange_term_impl(x, u, p, t0, tf, tau);
     }
 
     struct MayerCost {};
-    template<typename x_t, typename p_t, typename tf_t,
+    template<typename x_t, typename p_t, typename t0_t, typename tf_t,
             typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE auto
     function_impl(MayerCost,
                   const Eigen::MatrixBase<x_t>& xf,
                   const Eigen::MatrixBase<p_t>& p,
+                  const Eigen::MatrixBase<t0_t>& t0,
                   const Eigen::MatrixBase<tf_t>& tf)
     {
-        return controlProblem->mayer_term_impl(xf, p, tf(0));
+        return controlProblem->mayer_term_impl(xf, p, t0, tf);
+    }
+
+    Eigen::Vector<Scalar, 1> get_t0_var() const
+    {
+        Eigen::Vector<Scalar, 1> t0;
+        t0(0) = controlProblem->t0;
+        return t0;
     }
 
     template<int Option = ControlProblem::Options>
-    inline typename std::enable_if<(Option & FreeEndTime) == 0, Eigen::Vector<Scalar, 1>>::type
+    typename std::enable_if<(Option & FreeEndTime) == 0, Eigen::Vector<Scalar, 1>>::type
     get_tf_var() const
     {
         if (controlProblem->tf_lb != controlProblem->tf_ub)
@@ -158,7 +172,7 @@ protected:
     }
 
     template<int Option = ControlProblem::Options>
-    inline typename std::enable_if<(Option & FreeEndTime) != 0, const variable_t<1>&>::type
+    typename std::enable_if<(Option & FreeEndTime) != 0, const variable_t<1>&>::type
     get_tf_var() const
     {
         return tf_var;
@@ -183,14 +197,14 @@ protected:
         /* Loop through grid points */
         for (unsigned i = 0; i < N; i++)
         {
-            optProblem.add_obj(h * this->expression(StageCost{}, X_var[i], U_var[i], p_var));
+            optProblem.add_obj(h * this->expression(LagrangeCost{}, X_var[i], U_var[i], p_var, get_t0_var(), get_tf_var(), Scalar(i) / N_segs));
             // We assume 0 = f(x,u) - x+ which ensures that the linearization has positive A and B matrices.
             // This is an assumption for the HPIPM solver.
             optProblem.add_constr(this->expression(IntegratedDynamics{}, X_var[i + 1], X_var[i], U_var[i], p_var, get_tf_var()) == 0);
         }
 
         /* Last grid point */
-        optProblem.add_obj(this->expression(MayerCost{}, X_var[N], p_var, get_tf_var()));
+        optProblem.add_obj(this->expression(MayerCost{}, X_var[N], p_var, get_t0_var(), get_tf_var()));
 
         /* Box constraints */
         for (unsigned i = 0; i < N; i++)
@@ -207,7 +221,7 @@ protected:
         {
             optProblem.add_constr(controlProblem->tf_lb <= tf_var <= controlProblem->tf_ub);
         }
-        optProblem.add_constr(controlProblem->opt_params_lb.vector() <= p_var <= controlProblem->opt_params_ub.vector());
+        optProblem.add_constr(controlProblem->p_lb <= p_var <= controlProblem->p_ub);
 
         /* Inequality constraints */
         optProblem.add_constr(controlProblem->g0_lb <= this->expression(InitialInequalityConstraints{}, X_var[0], U_var[0], p_var) <= controlProblem->g0_ub);
@@ -235,23 +249,23 @@ public:
     using InputTrajectory = Eigen::Matrix<Scalar, ControlProblem::NU, N>;
 
     /* Set functions */
-    void set_X_guess(const State &x_guess)
+    void set_X_guess(const State& x_guess)
     {
         for (unsigned i = 0; i < X_var.size(); i++) { X_var.at(i) << x_guess; }
     }
-    void set_X_guess(const StateTrajectory &X_guess)
+    void set_X_guess(const StateTrajectory& X_guess)
     {
         for (unsigned i = 0; i < X_var.size(); i++) { X_var.at(i) << X_guess.col(i); }
     }
-    void set_U_guess(const Input &u_guess)
+    void set_U_guess(const Input& u_guess)
     {
         for (unsigned i = 0; i < U_var.size(); i++) { U_var.at(i) << u_guess; }
     }
-    void set_U_guess(const InputTrajectory &U_guess)
+    void set_U_guess(const InputTrajectory& U_guess)
     {
         for (unsigned i = 0; i < U_var.size(); i++) { U_var.at(i) << U_guess.col(i); }
     }
-    void set_p_guess(const Param &p_guess) { p_var = p_guess; }
+    void set_p_guess(const Param& p_guess) { p_var = p_guess; }
 
     /* Get functions */
     double get_tf_opt() const
@@ -277,14 +291,8 @@ public:
         return U_opt;
     }
     Param get_p_opt() const { return Param(p_var); }
-    typename ControlProblem::OptParam get_opt_params() const
-    {
-        typename ControlProblem::OptParam opt_param;
-        opt_param.set_vector(get_p_opt());
-        return opt_param;
-    }
 
-    Eigen::Vector<Scalar, ControlProblem::NX> get_x_at(const Scalar &t) const
+    Eigen::Vector<Scalar, ControlProblem::NX> get_x_at(const Scalar& t) const
     {
         const double tf = get_tf_opt();
         if (t == tf) { return X_var[N]; }
@@ -304,7 +312,7 @@ public:
             return xL + tau_eval * (xU - xL);
         }
     }
-    Eigen::Vector<Scalar, ControlProblem::NU> get_u_at(const Scalar &t) const
+    Eigen::Vector<Scalar, ControlProblem::NU> get_u_at(const Scalar& t) const
     {
         const double tf = get_tf_opt();
         if (t >= tf) { return U_var[N - 1]; }
@@ -316,11 +324,11 @@ public:
         }
     }
 
-    Eigen::MatrixX<Scalar> get_TX_resampled(const Scalar &Ts_max) const
+    Eigen::MatrixX<Scalar> get_TX_resampled(const Scalar& Ts_max) const
     {
         return resample_trajectory_linear(get_T_opt(), get_X_opt(), Ts_max);
     }
-    Eigen::MatrixX<Scalar> get_TU_resampled(const Scalar &Ts_max) const
+    Eigen::MatrixX<Scalar> get_TU_resampled(const Scalar& Ts_max) const
     {
         /* Duplicate last input to match time grid, then resample */
         Eigen::Matrix<Scalar, ControlProblem::NU, N + 1> U_opt;
