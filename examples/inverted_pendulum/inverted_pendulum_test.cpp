@@ -31,12 +31,9 @@ int main()
     ocp->w_tf = 3;
 
     ocp->angle_ref = 0.0 * M_PI / 180.0;
-    // ref_offset
-    ocp->opt_params_ub.ref_offset << 1;
-    ocp->opt_params_lb.ref_offset << 0;
-    // us
-    ocp->opt_params_ub.us << 1;
-    ocp->opt_params_lb.us << -1;
+    // ref_offset, us
+    ocp->p_ub << 1, 1;
+    ocp->p_lb << 0, -1;
 
     ocp->u_ub << 3;
     ocp->u_lb << -3;
@@ -63,8 +60,8 @@ int main()
         print_sampled_solution(transcription, Ts_max, t_test);
 
         /// Access optimization parameters by struct
-        Ocp::OptParam opt_params = transcription->get_opt_params();
-        std::cout << "opt_params: ref_offset: " << opt_params.ref_offset << ", us: " << opt_params.us << "\n\n";
+        Ocp::Param opt_params = transcription->get_p_opt();
+        std::cout << "opt_params: ref_offset: " << opt_params(0) << ", us: " << opt_params(1) << "\n\n";
     };
 
     /* Solve with Multiple Shooting transcription */

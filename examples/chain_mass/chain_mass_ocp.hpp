@@ -52,26 +52,33 @@ public:
     }
 
     /* Override function implementations from base class ------------------------------ */
-    template<typename X, typename U, typename P>
-    auto lagrange_term_impl(const Eigen::MatrixBase<X>& x,
-                            const Eigen::MatrixBase<U>& u,
-                            const Eigen::MatrixBase<P>& p)
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    auto lagrange_term_impl(const Eigen::MatrixBase<x_t>& x,
+                            const Eigen::MatrixBase<u_t>& u,
+                            const Eigen::MatrixBase<p_t>& p,
+                            const Eigen::MatrixBase<t0_t>& t0,
+                            const Eigen::MatrixBase<tf_t>& tf,
+                            const Scalar& tau)
     {
         return state_cost(x) + input_cost(u);
     }
 
-    template<typename Xf, typename P, typename Ttf>
-    auto mayer_term_impl(const Eigen::MatrixBase<Xf>& xf,
-                         const Eigen::MatrixBase<P>& p,
-                         const Ttf& tf)
+    template<typename xf_t, typename p_t, typename t0_t, typename tf_t,
+            typename T = typename xf_t::Scalar> // T is scalar type
+    auto mayer_term_impl(const Eigen::MatrixBase<xf_t>& xf,
+                         const Eigen::MatrixBase<p_t>& p,
+                         const Eigen::MatrixBase<t0_t>& t0,
+                         const Eigen::MatrixBase<tf_t>& tf)
     {
         return final_state_cost(xf);
     }
 
-    template<typename X, typename U, typename P, typename T = typename X::Scalar> // T is scalar type
-    state_t<T> dynamics_impl(const Eigen::MatrixBase<X>& x,
-                             const Eigen::MatrixBase<U>& u,
-                             const Eigen::MatrixBase<P>& p)
+    template<typename x_t, typename u_t, typename p_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x,
+                             const Eigen::MatrixBase<u_t>& u,
+                             const Eigen::MatrixBase<p_t>& p)
     {
         // x = (x_pos((M-1)*3), x_vel((M-2)*3))
 
