@@ -11,5 +11,5 @@ git checkout "$QPSWIFT_VERSION"
 mkdir build
 cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j2
-sudo make install
+cmake --build . --config Release -- -j2
+sudo cmake --install . --config Release

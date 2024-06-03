@@ -3,7 +3,7 @@
 
 #include "laopt/utility.hpp"
 #include "laopt/solvers/qp_base.hpp"
-#include "qpSWIFT/qpSWIFT.h"
+#include "qpSWIFT.h"
 
 // TODO: Handle conflicting macros better
 #undef Int
