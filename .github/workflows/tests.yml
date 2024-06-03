@@ -77,7 +77,7 @@ jobs:
       - name: Build laopt
         shell: bash -l {0}
         working-directory: build
-        run: cmake --build . --config $CMAKE_BUILD_TYPE -- -j2
+        run: cmake --build . --config $CMAKE_BUILD_TYPE -- -j1
 
       - name: Test laopt
         shell: bash -l {0}
