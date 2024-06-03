@@ -5,6 +5,7 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
     cmake_policy(SET CMP0135 NEW)
 endif()
 
+# Google Benchmark
 include(FetchContent)
 FetchContent_Declare(
         benchmark
@@ -16,6 +17,11 @@ if(NOT benchmark_POPULATED)
     FetchContent_Populate(benchmark)
     add_subdirectory(${benchmark_SOURCE_DIR} ${benchmark_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
+
+add_library(laopt-benchmark INTERFACE)
+target_compile_options(laopt-benchmark INTERFACE ${compiler_flags})
+target_link_options(laopt-benchmark INTERFACE ${compiler_flags})
+target_link_libraries(laopt-benchmark INTERFACE laopt benchmark::benchmark)
 
 add_executable(simple_function_benchmark simple_function_benchmark.cpp simple_function_benchmark_casadi_codegen.cpp)
 target_link_libraries(simple_function_benchmark PRIVATE laopt benchmark::benchmark)

@@ -1,0 +1,95 @@
+name: Build and Run Tests
+
+on:
+  push:
+    branches:
+      - '*'
+  pull_request:
+    branches:
+      - '*'
+
+env:
+  CMAKE_BUILD_TYPE: ON
+  ENABLE_SANITIZERS: ON
+
+jobs:
+  build_and_run_tests:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          channels: conda-forge
+          python-version: "3.10"
+          activate-environment: laopt
+
+      - name: Install dependencies (conda)
+        shell: bash -l {0}
+        run: |
+          # Workaround for https://github.com/conda-incubator/setup-miniconda/issues/186
+          conda config --remove channels defaults
+          # Compiler infrastructure
+          mamba install cmake compilers make pkg-config
+          # Dependencies
+          mamba install eigen ipopt casadi osqp proxsuite piqp
+
+      - name: Setup working directories
+        shell: bash -l {0}
+        run: |
+          mkdir -p build_external
+          mkdir -p build
+
+      - name: Install QPSwift
+        shell: bash -l {0}
+        working-directory: build_external
+        run: bash  ../ci/shared/install_qpswift.sh
+
+      - name: Install blasfeo
+        shell: bash -l {0}
+        working-directory: build_external
+        run: bash  ../ci/shared/install_blasfeo.sh
+
+      - name: Install hpipm
+        shell: bash -l {0}
+        working-directory: build_external
+        run: bash  ../ci/shared/install_hpipm.sh
+
+      - name: Configure laopt
+        shell: bash -l {0}
+        working-directory: build
+        run: |
+          cmake .. -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
+                   -DENABLE_SANITIZERS=$ENABLE_SANITIZERS \
+                   -DWITH_CASADI=ON \
+                   -DWITH_IPOPT=ON \
+                   -DWITH_OSQP=ON \
+                   -DWITH_PROXQP=ON \
+                   -DWITH_QPSWIFT=ON \
+                   -DWITH_PIQP=ON \
+                   -DWITH_HPIPM=ON
+
+      - name: Build laopt
+        shell: bash -l {0}
+        working-directory: build
+        run: cmake --build . --config $CMAKE_BUILD_TYPE -- -j2
+
+      - name: Test laopt
+        shell: bash -l {0}
+        working-directory: build
+        run: ctest -C $CMAKE_BUILD_TYPE --test-dir tests --verbose
+
+      - name: Run examples
+        shell: bash -l {0}
+        working-directory: build
+        run: |
+          ./examples/chain_mass_example
+          ./examples/double_integrator_example
+          ./examples/fixed_wing_example
+          ./examples/fixed_wing_longitudinal_example
+          ./examples/inverted_pendulum_example

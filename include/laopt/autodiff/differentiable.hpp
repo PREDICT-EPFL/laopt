@@ -8,7 +8,9 @@
 #include "laopt/variable_map.hpp"
 #include "laopt/autodiff/differentiable_options.hpp"
 #include "laopt/autodiff/differentiable_eigen.hpp"
+#ifdef LAOPT_WITH_CASADI
 #include "laopt/autodiff/differentiable_casadi.hpp"
+#endif
 
 namespace laopt
 {
@@ -17,8 +19,10 @@ template<typename Derived>
 class DifferentiableBase {};
 
 template<typename Derived, int Options>
-class DifferentiableImpl : public DifferentiableImplEigen<Derived, Options>,
-                           public DifferentiableImplCasadi<Derived, Options>
+class DifferentiableImpl : public DifferentiableImplEigen<Derived, Options>
+#ifdef LAOPT_WITH_CASADI
+        , public DifferentiableImplCasadi<Derived, Options>
+#endif
 {
 protected:
     using DifferentiableImplEigen<Derived, Options>::jacobian_impl_autodiff_eval;
@@ -26,10 +30,14 @@ protected:
     using DifferentiableImplEigen<Derived, Options>::hessian_impl_autodiff_eval;
     using DifferentiableImplEigen<Derived, Options>::hessian_impl_autodiff_sparsity;
 
+#ifdef LAOPT_WITH_CASADI
     using DifferentiableImplCasadi<Derived, Options>::jacobian_impl_autodiff_eval;
     using DifferentiableImplCasadi<Derived, Options>::jacobian_impl_autodiff_sparsity;
     using DifferentiableImplCasadi<Derived, Options>::hessian_impl_autodiff_eval;
     using DifferentiableImplCasadi<Derived, Options>::hessian_impl_autodiff_sparsity;
+#else
+    static_assert((CASADI_ALL & Options) == 0, "Casadi support is not enabled, build laOPT with WITH_CASADI=ON");
+#endif
 
     template<typename Tag, typename OutJacobian, typename AScalar, typename... Args>
     EIGEN_STRONG_INLINE void

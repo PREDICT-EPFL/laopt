@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.5)
-project(lampc_test)
 
 # Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
 if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
@@ -14,39 +13,41 @@ FetchContent_Declare(
 )
 # For Windows: Prevent overriding the parent project's compiler/linker settings
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+FetchContent_GetProperties(googletest)
+if(NOT googletest_POPULATED)
+    FetchContent_Populate(googletest)
+    add_subdirectory(${googletest_SOURCE_DIR} ${googletest_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
 
 enable_testing()
 
+add_library(laopt-test INTERFACE)
+target_compile_options(laopt-test INTERFACE ${compiler_flags})
+target_link_options(laopt-test INTERFACE ${compiler_flags})
+target_link_libraries(laopt-test INTERFACE laopt gtest_main gtest)
+
 add_executable(func_test func_test.cpp)
-target_link_libraries(func_test
-        PRIVATE laopt gtest_main gtest)
+target_link_libraries(func_test PRIVATE laopt-test)
 
 add_executable(bs_matrix_test bs_matrix_test.cpp)
-target_link_libraries(bs_matrix_test
-        PRIVATE laopt gtest_main gtest)
+target_link_libraries(bs_matrix_test PRIVATE laopt-test)
 
 add_executable(differentiable_functions_test differentiable_functions_test.cpp)
-target_link_libraries(differentiable_functions_test
-        PRIVATE laopt gtest_main gtest)
+target_link_libraries(differentiable_functions_test PRIVATE laopt-test)
 
 add_executable(variable_map_test variable_map_test.cpp)
-target_link_libraries(variable_map_test
-        PRIVATE laopt gtest_main gtest)
+target_link_libraries(variable_map_test PRIVATE laopt-test)
 
 add_executable(tag_test tag_test.cpp)
-target_link_libraries(tag_test
-        PRIVATE laopt)
+target_link_libraries(tag_test PRIVATE laopt-test)
 
 if(WITH_IPOPT)
     add_executable(ipopt_test ipopt_test.cpp)
-    target_link_libraries(ipopt_test
-            PRIVATE laopt ${Ipopt_LIBRARIES} gtest_main gtest)
+    target_link_libraries(ipopt_test PRIVATE laopt-test)
 endif()
 
 add_executable(sqp_test sqp_test.cpp)
-target_link_libraries(sqp_test
-        PRIVATE laopt gtest_main gtest)
+target_link_libraries(sqp_test PRIVATE laopt-test)
 
 include(GoogleTest)
 gtest_discover_tests(func_test)
