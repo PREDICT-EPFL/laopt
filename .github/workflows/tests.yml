@@ -93,8 +93,8 @@ jobs:
         shell: bash -l {0}
         working-directory: build
         run: |
-          ./examples/chain_mass_example
-          ./examples/double_integrator_example
-          ./examples/fixed_wing_example
-          ./examples/fixed_wing_longitudinal_example
-          ./examples/inverted_pendulum_example
+          ./examples/chain_mass/chain_mass_example
+          ./examples/double_integrator/double_integrator_example
+          ./examples/fixed_wing/fixed_wing_example
+          ./examples/fixed_wing/fixed_wing_longitudinal_example
+          ./examples/inverted_pendulum/inverted_pendulum_example
