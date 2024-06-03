@@ -37,7 +37,7 @@ jobs:
           # Compiler infrastructure
           mamba install cmake compilers make pkg-config
           # Dependencies
-          mamba install eigen ipopt casadi osqp proxsuite piqp
+          mamba install eigen ipopt casadi osqp proxsuite piqp yaml-cpp
 
       - name: Setup working directories
         shell: bash -l {0}

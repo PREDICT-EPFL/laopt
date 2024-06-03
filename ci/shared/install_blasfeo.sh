@@ -1,12 +1,9 @@
 #!/bin/bash
 
-QPSWIFT_VERSION=${QPSWIFT_VERSION:-v0.0.2};
+echo "Installing blasfeo..."
 
-echo "Installing QPSwift..."
-
-git clone --recursive https://github.com/qpSWIFT/qpSWIFT.git qpswift
-cd qpswift
-git checkout "$QPSWIFT_VERSION"
+git clone --recursive https://github.com/giaf/blasfeo blasfeo
+cd blasfeo
 
 mkdir build
 cd build
