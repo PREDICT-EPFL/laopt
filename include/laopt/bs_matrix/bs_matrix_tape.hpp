@@ -120,16 +120,16 @@ private:
                 next_contiguous++;
                 segments.back().length++;
             } else if (i == -1) {
-                segments.push_back(Segment{.type = SegmentType::SKIP, .index=0, .length=1});
+                segments.push_back(Segment{SegmentType::SKIP, 0, 1});
                 next_contiguous = -1;
             } else {
                 assert(i >= 0 && "index is negative");
-                segments.push_back(Segment{.type = SegmentType::COPY, .index=static_cast<size_t>(i), .length=1});
+                segments.push_back(Segment{SegmentType::COPY,static_cast<size_t>(i), 1});
                 next_contiguous = i + 1;
             }
         }
 
-        child.copy_info.push_back(CopyInfo{.segment_index=child.copy_segments.size(), .num_segments_to_copy=segments.size()});
+        child.copy_info.push_back(CopyInfo{child.copy_segments.size(), segments.size()});
         child.copy_segments.insert(child.copy_segments.end(), segments.begin(), segments.end());
     }
 
