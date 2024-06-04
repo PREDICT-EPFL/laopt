@@ -843,7 +843,7 @@ struct is_bs_problem<BSProblem<UserCode, scalar_t>> : std::true_type {};
 template<typename Problem>
 class SQPSolver<Problem, HPIPMSolver> : public SQPBase<SQPSolver<Problem, HPIPMSolver>, Problem, HPIPMSolver>
 {
-    using SQPBase = SQPBase<SQPSolver<Problem, HPIPMSolver>, Problem, HPIPMSolver>;
+    using Base = SQPBase<SQPSolver<Problem, HPIPMSolver>, Problem, HPIPMSolver>;
     using UserCode = typename Problem::UserCode;
     static_assert(is_bs_problem<Problem>::value, "HPIPM requires a block sparse problem (BSProblem)");
     static_assert(is_fixed_end_time_multiple_shooting<UserCode>::value, "HPIPM only works with laopt_tools::MultipleShooting");
@@ -852,7 +852,7 @@ class SQPSolver<Problem, HPIPMSolver> : public SQPBase<SQPSolver<Problem, HPIPMS
     static_assert(ControlProblem::NP == 0, "HPIPM doesn't support parameters");
 
 public:
-    explicit SQPSolver(const std::shared_ptr<Problem>& prob) : SQPBase(prob)
+    explicit SQPSolver(const std::shared_ptr<Problem>& prob) : Base(prob)
     {
         this->m_qp_solver.set_problem_dims(UserCode::N, ControlProblem::NX, ControlProblem::NU,
                                            ControlProblem::NG, ControlProblem::NG0, ControlProblem::NGF);
