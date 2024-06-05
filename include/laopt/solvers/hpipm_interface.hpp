@@ -6,6 +6,7 @@
 #include "laopt/solvers/sqp_solver.hpp"
 #include "laopt/tools/multiple_shooting.hpp"
 
+#include "blasfeo_d_aux.h"
 #include "hpipm_d_ocp_qp.h"
 #include "hpipm_d_ocp_qp_ipm.h"
 #include "hpipm_d_ocp_qp_dim.h"
@@ -101,6 +102,17 @@ public:
             d_ocp_qp_ipm_ws_create(&m_dim, &m_qp_ipm_arg, &m_qp_ipm_ws, m_qp_ipm_ws_memory.get());
         }
         m_hpipm_initialized = true;
+
+        // zero primal solution
+        int ii;
+        int N = m_qp.dim->N;
+        int *nx = m_qp.dim->nx;
+        int *nu = m_qp.dim->nu;
+        int *ns = m_qp.dim->ns;
+        for(ii=0; ii <= N; ii++)
+        {
+            blasfeo_dvecse(nu[ii] + nx[ii] + 2 * ns[ii], 0.0, m_qp_sol.ux + ii, 0);
+        }
 
         int hpipm_status;
         d_ocp_qp_ipm_solve(&m_qp, &m_qp_sol, &m_qp_ipm_arg, &m_qp_ipm_ws);
