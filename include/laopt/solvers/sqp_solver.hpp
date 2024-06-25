@@ -519,8 +519,10 @@ protected:
         scalar_t c = scalar_t(0);
 
         // lbg <= g <= ubg
-        c = fmax(c, (m_lbg - m_g).maxCoeff());
-        c = fmax(c, (m_g - m_ubg).maxCoeff());
+        if (m_g.size() > 0) {
+            c = fmax(c, (m_lbg - m_g).maxCoeff());
+            c = fmax(c, (m_g - m_ubg).maxCoeff());
+        }
 
         // l <= x <= u
         c = fmax(c, (m_lbx - x).maxCoeff());
@@ -537,8 +539,10 @@ protected:
         scalar_t c = scalar_t(0);
 
         // lbg <= g <= ubg
-        c = fmax(c, (m_lbg - m_g).cwiseMax(0.0).cwiseProduct(dual).maxCoeff());
-        c = fmax(c, (m_g - m_ubg).cwiseMax(0.0).cwiseProduct(dual).maxCoeff());
+        if (m_g.size() > 0) {
+            c = fmax(c, (m_lbg - m_g).cwiseMax(0.0).cwiseProduct(dual).maxCoeff());
+            c = fmax(c, (m_g - m_ubg).cwiseMax(0.0).cwiseProduct(dual).maxCoeff());
+        }
 
         // l <= x <= u
         c = fmax(c, (m_lbx - x).cwiseMax(0.0).cwiseProduct(dual_bounds).maxCoeff());
