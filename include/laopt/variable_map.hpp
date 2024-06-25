@@ -159,6 +159,9 @@ struct is_variable_base<VariableMap<PlainObjectType, MapOptions, StrideType>> : 
 template<typename Derived, int BlockRows, int BlockCols, bool InnerPanel>
 struct is_variable_base<Eigen::Block<Derived, BlockRows, BlockCols, InnerPanel>> : is_variable_base<Derived> {};
 
+template<typename VectorType, int Size>
+struct is_variable_base<Eigen::VectorBlock<VectorType, Size>> : is_variable_base<VectorType> {};
+
 template<typename Derived, typename RowIndices, typename ColIndices>
 struct is_variable_base<Eigen::IndexedView<Derived, RowIndices, ColIndices>> : is_variable_base<Derived> {};
 
