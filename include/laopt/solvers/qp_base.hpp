@@ -155,7 +155,7 @@ protected:
                              const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
     {
         eigen_assert((xlb.array() <= xub.array()).any());
-        if (Alb.size() > 0) eigen_assert((Alb.array() <= Aub.array()).any());
+        eigen_assert((Alb.size() == 0) || (Alb.array() <= Aub.array()).any());
 
         bool box_changed = false;
         bool gen_changed = false;
