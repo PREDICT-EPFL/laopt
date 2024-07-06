@@ -319,16 +319,18 @@ public:
             {
                 std::cerr << "[SQPSolver::solve] QP problem was infeasible. Continue using suboptimal solution." << std::endl;
             }
+            if (m_settings.verbose && m_qp_solver.info().status == qp_status_t::MIN_STEP)
+            {
+                std::cerr << "[SQPSolver::solve] QP problem has reached minimum step length. Continue using suboptimal solution." << std::endl;
+            }
 
             if (!(m_qp_solver.info().status == qp_status_t::SOLVED ||
                   m_qp_solver.info().status == qp_status_t::MAX_ITER_REACHED ||
-                  m_qp_solver.info().status == qp_status_t::INFEASIBLE))
+                  m_qp_solver.info().status == qp_status_t::INFEASIBLE ||
+                  m_qp_solver.info().status == qp_status_t::MIN_STEP))
             {
                 switch (m_qp_solver.info().status)
                 {
-                    case qp_status_t::INFEASIBLE:
-                        m_info.status = sqp_status_t::INFEASIBLE;
-                        break;
                     case qp_status_t::NON_CONVEX:
                         m_info.status = sqp_status_t::NON_CONVEX_QP;
                         break;

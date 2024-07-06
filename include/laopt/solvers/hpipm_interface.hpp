@@ -125,11 +125,14 @@ public:
         // update status
         switch (hpipm_status)
         {
-            case 0:
+            case SUCCESS:
                 this->m_info.status = qp_status_t::SOLVED;
                 break;
-            case 1:
+            case MAX_ITER:
                 this->m_info.status = qp_status_t::MAX_ITER_REACHED;
+                break;
+            case MIN_STEP:
+                this->m_info.status = qp_status_t::MIN_STEP;
                 break;
             default:
                 this->m_info.status = qp_status_t::UNSOLVED;

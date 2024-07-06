@@ -34,6 +34,7 @@ enum struct qp_status_t {
     MAX_ITER_REACHED = -1,
     INFEASIBLE = -2,
     NON_CONVEX = -3,
+    MIN_STEP = -4,
     UNSOLVED = -9,
     INVALID_SETTINGS = -10
 };
