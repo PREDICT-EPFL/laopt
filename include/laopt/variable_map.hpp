@@ -153,32 +153,32 @@ namespace laopt {
 template<typename T>
 struct is_variable_base : std::false_type {};
 
+template<typename T>
+struct is_variable : is_variable_base<typename Eigen::internal::remove_all<T>::type> {};
+
 template<typename PlainObjectType, int MapOptions, typename StrideType>
 struct is_variable_base<VariableMap<PlainObjectType, MapOptions, StrideType>> : std::true_type {};
 
 template<typename Derived, int BlockRows, int BlockCols, bool InnerPanel>
-struct is_variable_base<Eigen::Block<Derived, BlockRows, BlockCols, InnerPanel>> : is_variable_base<Derived> {};
+struct is_variable_base<Eigen::Block<Derived, BlockRows, BlockCols, InnerPanel>> : is_variable<Derived> {};
 
 template<typename VectorType, int Size>
-struct is_variable_base<Eigen::VectorBlock<VectorType, Size>> : is_variable_base<VectorType> {};
+struct is_variable_base<Eigen::VectorBlock<VectorType, Size>> : is_variable<VectorType> {};
 
 template<typename Derived, typename RowIndices, typename ColIndices>
-struct is_variable_base<Eigen::IndexedView<Derived, RowIndices, ColIndices>> : is_variable_base<Derived> {};
+struct is_variable_base<Eigen::IndexedView<Derived, RowIndices, ColIndices>> : is_variable<Derived> {};
 
 template<typename Derived>
-struct is_variable_base<Eigen::MapBase<Derived>> : is_variable_base<Derived> {};
+struct is_variable_base<Eigen::MapBase<Derived>> : is_variable<Derived> {};
 
 template<typename Derived>
-struct is_variable_base<Eigen::MatrixBase<Derived>> : is_variable_base<Derived> {};
+struct is_variable_base<Eigen::MatrixBase<Derived>> : is_variable<Derived> {};
 
 template<typename Derived>
-struct is_variable_base<Eigen::DenseBase<Derived>> : is_variable_base<Derived> {};
+struct is_variable_base<Eigen::DenseBase<Derived>> : is_variable<Derived> {};
 
 template<typename Derived>
-struct is_variable_base<Eigen::EigenBase<Derived>> : is_variable_base<Derived> {};
-
-template<typename T>
-struct is_variable : is_variable_base<typename Eigen::internal::remove_all<T>::type> {};
+struct is_variable_base<Eigen::EigenBase<Derived>> : is_variable<Derived> {};
 
 
 template<typename T, bool>
