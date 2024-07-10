@@ -550,8 +550,8 @@ public:
   template <typename Derived>
   inline BlockSparseMatrix& operator=(const SparseMatrixBase<Derived>& spmat) {
     eigen_assert((m_innerBSize != 0 && m_outerBSize != 0) && "Trying to assign to a zero-size matrix, call resize() first");
-    eigen_assert((Derived::IsRowMajor != IsColMajor) && "Wrong storage order");
-    typedef SparseMatrix<bool, IsColMajor ? ColMajor : RowMajorBit, typename Derived::StorageIndex> MatrixPatternType;
+    eigen_assert(((bool) Derived::IsRowMajor != (bool) IsColMajor) && "Wrong storage order");
+    typedef SparseMatrix<bool, (bool) IsColMajor ? ColMajor : RowMajorBit, typename Derived::StorageIndex> MatrixPatternType;
     typedef internal::evaluator<Derived> EvaluatorType;
 
     EvaluatorType evaluator(spmat.derived());
@@ -738,7 +738,7 @@ public:
 #ifndef EIGEN_NO_DEBUG
       typedef BlockSparseMatrix<OtherScalar, OtherBlockAtCompileTime, Options, StorageOptions> Other;
 #endif
-      eigen_assert(IsColMajor == Other::IsColMajor && "CHECK THE NUMBER OF ROW OR COLUMN BLOCKS");
+      eigen_assert((bool) IsColMajor == (bool) Other::IsColMajor && "CHECK THE NUMBER OF ROW OR COLUMN BLOCKS");
       eigen_assert(m_blockSize == Dynamic && other.m_blockSize == Dynamic && "MATRIX NEEDS TO BE VARIABLE SIZE");
       eigen_assert(m_innerBSize == other.m_innerBSize && "CHECK THE NUMBER OF ROW OR COLUMN BLOCKS");
       eigen_assert(m_outerBSize == other.m_outerBSize && "CHECK THE NUMBER OF ROW OR COLUMN BLOCKS");

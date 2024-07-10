@@ -361,7 +361,7 @@ class AutoDiffScalar<DerivativeType, typename std::enable_if<!has_scalar_der_typ
     : public AutoDiffScalarBase<DerivativeType>
 {
 public:
-    using Base = class AutoDiffScalarBase<DerivativeType>;
+    using Base = AutoDiffScalarBase<DerivativeType>;
     using Base::Base;
     using Base::operator=;
 };
