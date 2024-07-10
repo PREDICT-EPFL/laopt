@@ -37,19 +37,19 @@ operator*(const ExprBase<Derived>& expr, const ScalarType& scalar)
     return ScalarExpr<ScalarType, Derived>(scalar, expr.derived());
 }
 
-template<typename ScalarType, typename Derived>
-typename std::enable_if<std::is_arithmetic<ScalarType>::value && is_variable<Derived>::value, ScalarExpr<ScalarType, Derived>>::type
-operator*(const ScalarType& scalar, const Derived& expr)
-{
-    return ScalarExpr<ScalarType, Derived>(scalar, expr);
-}
-
-template<typename ScalarType, typename Derived>
-typename std::enable_if<std::is_arithmetic<ScalarType>::value && is_variable<Derived>::value, ScalarExpr<ScalarType, Derived>>::type
-operator*(const Derived& expr, const ScalarType& scalar)
-{
-    return ScalarExpr<ScalarType, Derived>(scalar, expr);
-}
+//template<typename ScalarType, typename Derived>
+//typename std::enable_if<std::is_arithmetic<ScalarType>::value && is_variable<Derived>::value, ScalarExpr<ScalarType, Derived>>::type
+//operator*(const ScalarType& scalar, const Derived& expr)
+//{
+//    return ScalarExpr<ScalarType, Derived>(scalar, expr);
+//}
+//
+//template<typename ScalarType, typename Derived>
+//typename std::enable_if<std::is_arithmetic<ScalarType>::value && is_variable<Derived>::value, ScalarExpr<ScalarType, Derived>>::type
+//operator*(const Derived& expr, const ScalarType& scalar)
+//{
+//    return ScalarExpr<ScalarType, Derived>(scalar, expr);
+//}
 
 template<typename ScalarType, typename Derived>
 struct ExprEvaluator<ScalarExpr<ScalarType, Derived>>

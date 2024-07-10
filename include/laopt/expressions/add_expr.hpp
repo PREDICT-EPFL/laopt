@@ -44,12 +44,12 @@ operator+(const DerivedLhs& lhs, const ExprBase<DerivedRhs>& rhs)
     return AddExpr<DerivedLhs, DerivedRhs>(lhs, rhs.derived());
 }
 
-template<typename DerivedLhs, typename DerivedRhs>
-typename std::enable_if<is_variable<DerivedLhs>::value && is_variable<DerivedRhs>::value, AddExpr<DerivedLhs, DerivedRhs>>::type
-operator+(const DerivedLhs& lhs, const DerivedRhs& rhs)
-{
-    return AddExpr<DerivedLhs, DerivedRhs>(lhs, rhs);
-}
+//template<typename DerivedLhs, typename DerivedRhs>
+//typename std::enable_if<is_variable<DerivedLhs>::value && is_variable<DerivedRhs>::value, AddExpr<DerivedLhs, DerivedRhs>>::type
+//operator+(const DerivedLhs& lhs, const DerivedRhs& rhs)
+//{
+//    return AddExpr<DerivedLhs, DerivedRhs>(lhs, rhs);
+//}
 
 template<typename DerivedLhs, typename DerivedRhs>
 struct ExprEvaluator<AddExpr<DerivedLhs, DerivedRhs>>
