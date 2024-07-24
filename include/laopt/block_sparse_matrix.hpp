@@ -551,7 +551,7 @@ public:
   inline BlockSparseMatrix& operator=(const SparseMatrixBase<Derived>& spmat) {
     eigen_assert((m_innerBSize != 0 && m_outerBSize != 0) && "Trying to assign to a zero-size matrix, call resize() first");
     eigen_assert(((bool) Derived::IsRowMajor != (bool) IsColMajor) && "Wrong storage order");
-    typedef SparseMatrix<bool, (bool) IsColMajor ? ColMajor : RowMajorBit, typename Derived::StorageIndex> MatrixPatternType;
+    typedef SparseMatrix<bool, (bool) IsColMajor ? (int) ColMajor : RowMajorBit, typename Derived::StorageIndex> MatrixPatternType;
     typedef internal::evaluator<Derived> EvaluatorType;
 
     EvaluatorType evaluator(spmat.derived());
