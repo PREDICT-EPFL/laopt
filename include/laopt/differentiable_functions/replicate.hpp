@@ -21,7 +21,7 @@ public:
     jacobian_impl(OutJacobian& jac, const AScalar& alpha, const Eigen::MatrixBase<X>& x) noexcept
     {
         for (int i = 0; i < N; i++) {
-            jac(Eigen::seqN(i * X::RowsAtCompileTime, Eigen::fix<X::RowsAtCompileTime>), Eigen::all).diagonal() += X::Constant(alpha);
+            jac(Eigen::seqN(i * X::RowsAtCompileTime, Eigen::fix<X::RowsAtCompileTime>), Eigen::indexing::all).diagonal() += X::Constant(alpha);
         }
     }
 

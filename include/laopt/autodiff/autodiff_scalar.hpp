@@ -129,7 +129,7 @@ public:
     template<typename OtherDerType>
     AutoDiffScalarBase(const AutoDiffScalar<OtherDerType>& other
 #ifndef EIGEN_PARSED_BY_DOXYGEN
-        , typename Eigen::internal::enable_if<
+        , typename std::enable_if<
         Eigen::internal::is_same<Scalar, typename Eigen::internal::traits<typename Eigen::internal::remove_all<OtherDerType>::type>::Scalar>::value
         && Eigen::internal::is_convertible<OtherDerType, DerType>::value, void*>::type = 0
 #endif

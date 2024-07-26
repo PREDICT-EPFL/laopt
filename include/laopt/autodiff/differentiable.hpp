@@ -350,7 +350,7 @@ public:
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, Tag, OutJacobian&, AScalar, Args...>() == true, void>::type
     jacobian(const Tag& tag, OutJacobian&& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        auto&& out_jacobian_ = out_jacobian(Eigen::all, FuncInfo<Tag, Args...>::indices(args...));
+        auto&& out_jacobian_ = out_jacobian(Eigen::indexing::all, FuncInfo<Tag, Args...>::indices(args...));
         this->reset_args_and_call([&](auto&&... reset_args) {
             static_cast<Derived*>(this)->jacobian_impl(tag, out_jacobian_, alpha, reset_args...);
         }, args...);
@@ -371,7 +371,7 @@ public:
                                                 && FuncInfo<Tag, Args...>::is_return_expr::value == false, void>::type
     jacobian(const Tag& tag, OutJacobian&& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        auto&& out_jacobian_ = out_jacobian(Eigen::all, FuncInfo<Tag, Args...>::indices(args...));
+        auto&& out_jacobian_ = out_jacobian(Eigen::indexing::all, FuncInfo<Tag, Args...>::indices(args...));
         this->reset_args_and_call([&](auto&&... reset_args) {
             this->jacobian_impl_autodiff(tag, out_jacobian_, alpha, reset_args...);
         }, args...);
@@ -596,7 +596,7 @@ public:
     EIGEN_STRONG_INLINE typename std::enable_if<has_user_jacobian<Derived, OutJacobian&, AScalar, Args...>() == true, void>::type
     jacobian(OutJacobian&& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        auto&& out_jacobian_ = out_jacobian(Eigen::all, FuncInfo<DefaultTag, Args...>::indices(args...));
+        auto&& out_jacobian_ = out_jacobian(Eigen::indexing::all, FuncInfo<DefaultTag, Args...>::indices(args...));
         this->reset_args_and_call([&](auto&&... reset_args) {
             static_cast<Derived*>(this)->jacobian_impl(out_jacobian_, alpha, reset_args...);
         }, args...);
@@ -617,7 +617,7 @@ public:
                                                 && FuncInfo<DefaultTag, Args...>::is_return_expr::value == false, void>::type
     jacobian(OutJacobian&& out_jacobian, const AScalar& alpha, const Args&... args) noexcept
     {
-        auto&& out_jacobian_ = out_jacobian(Eigen::all, FuncInfo<DefaultTag, Args...>::indices(args...));
+        auto&& out_jacobian_ = out_jacobian(Eigen::indexing::all, FuncInfo<DefaultTag, Args...>::indices(args...));
         this->reset_args_and_call([&](auto&&... reset_args) {
             this->jacobian_impl_autodiff(DefaultTag{}, out_jacobian_, alpha, reset_args...);
         }, args...);

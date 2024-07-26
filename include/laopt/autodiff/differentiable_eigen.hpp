@@ -40,7 +40,7 @@ protected:
         Eigen::Matrix<Scalar, Info::n_outputs == 0 ? 1 : Info::n_outputs, Info::n_inputs> tmp;
         for(int i = 0; i < out.rows(); i++)
         {
-            tmp(i, Eigen::all) = out[i].derivatives().transpose();
+            tmp(i, Eigen::indexing::all) = out[i].derivatives().transpose();
         }
         // Copy into output variables
         out_jacobian += alpha * tmp;
@@ -104,7 +104,7 @@ protected:
             // Convert to AD variables for the inputs and call our function for ith row of hessian
             out = to_matrix_type(seed_and_call2(i, tag, make_ad2<outerADScalar>(args)...));
             for(size_t j = 0; j < Info::n_outputs; j++) {
-                out_hessian(Eigen::all, i) += weight(j) * out[j].derivatives()(0).derivatives();
+                out_hessian(Eigen::indexing::all, i) += weight(j) * out[j].derivatives()(0).derivatives();
             }
         }
     }
