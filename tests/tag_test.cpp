@@ -38,8 +38,8 @@ struct User : public laopt::Differentiable<User<scalar_t>, laopt::TAGGED>
     {
         std::cout << "jacobian_impl called" << std::endl;
 
-        jac(Eigen::all, Eigen::seqN(0, Eigen::fix<nx>)) = alpha * A;
-        jac(Eigen::all, Eigen::seqN(Eigen::fix<nx>, Eigen::fix<nu>)) = alpha * B;
+        jac(Eigen::indexing::all, Eigen::seqN(0, Eigen::fix<nx>)) = alpha * A;
+        jac(Eigen::indexing::all, Eigen::seqN(Eigen::fix<nx>, Eigen::fix<nu>)) = alpha * B;
     }
 
     // Example of using RK4 in a user function
