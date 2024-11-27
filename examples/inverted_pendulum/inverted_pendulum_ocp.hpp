@@ -119,7 +119,8 @@ public:
             typename T = typename x_t::Scalar> // T is scalar type
     ineq_constr_t<T> inequality_constraints_impl(const Eigen::MatrixBase<x_t>& x,
                                                  const Eigen::MatrixBase<u_t>& u,
-                                                 const Eigen::MatrixBase<p_t>& p)
+                                                 const Eigen::MatrixBase<p_t>& p,
+                                                 const Scalar& tau)
     {
         ineq_constr_t<T> ineq_constr;
         ineq_constr(0) = (-x(0) + 0.2); // <= g_ub
