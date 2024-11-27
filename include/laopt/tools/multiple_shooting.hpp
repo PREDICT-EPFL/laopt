@@ -93,9 +93,10 @@ protected:
     function_impl(InequalityConstraints,
                   const Eigen::MatrixBase<x_t>& x,
                   const Eigen::MatrixBase<u_t>& u,
-                  const Eigen::MatrixBase<p_t>& p)
+                  const Eigen::MatrixBase<p_t>& p,
+                  const Scalar& tau)
     {
-        return controlProblem->inequality_constraints_impl(x, u, p);
+        return controlProblem->inequality_constraints_impl(x, u, p, tau);
     }
 
     struct InitialInequalityConstraints {};
@@ -227,7 +228,7 @@ protected:
         optProblem.add_constr(controlProblem->g0_lb <= this->expression(InitialInequalityConstraints{}, X_var[0], U_var[0], p_var) <= controlProblem->g0_ub);
         for (unsigned i = 1; i < N; i++)
         {
-            optProblem.add_constr(controlProblem->g_lb <= this->expression(InequalityConstraints{}, X_var[i], U_var[i], p_var) <= controlProblem->g_ub);
+            optProblem.add_constr(controlProblem->g_lb <= this->expression(InequalityConstraints{}, X_var[i], U_var[i], p_var, Scalar(i) / N_segs) <= controlProblem->g_ub);
         }
         optProblem.add_constr(controlProblem->gf_lb <= this->expression(FinalInequalityConstraints{}, X_var[N], p_var) <= controlProblem->gf_ub);
     }
@@ -239,6 +240,7 @@ public:
         /* Construct trajectory time grid on [0, 1] */
         for (unsigned i = 0; i <= N; i++) { T(i) = i * h; }
     }
+    Eigen::Vector<Scalar, N + 1>& time_grid() { return T; }
 
     using scalar_t = typename ControlProblem::Scalar; // TODO: Change in laOPT to accept Scalar
     using State = typename ControlProblem::State;
