@@ -349,7 +349,8 @@ protected:
     function_impl(InequalityConstraints,
                   const Eigen::MatrixBase<x_t> &x,
                   const Eigen::MatrixBase<u_t> &u,
-                  const Eigen::MatrixBase<p_t> &p)
+                  const Eigen::MatrixBase<p_t> &p,
+                  const Scalar &tau)
     {
         return controlProblem->inequality_constraints_impl(x, u, p);
     }
@@ -486,7 +487,7 @@ protected:
         optProblem.add_constr(controlProblem->g0_lb <= this->expression(InitialInequalityConstraints{},  get_x(XU_var, 0), get_u(XU_var, 0), p_var) <= controlProblem->g0_ub);
         for (unsigned k = 1; k < N; k++)
         {
-            optProblem.add_constr(controlProblem->g_lb <= this->expression(InequalityConstraints{}, get_x(XU_var, k), get_u(XU_var, k), p_var) <= controlProblem->g_ub);
+            optProblem.add_constr(controlProblem->g_lb <= this->expression(InequalityConstraints{}, get_x(XU_var, k), get_u(XU_var, k), p_var, T(k)) <= controlProblem->g_ub);
         }
         optProblem.add_constr(controlProblem->gf_lb <= this->expression(FinalInequalityConstraints{}, get_x(XU_var, N), p_var) <= controlProblem->gf_ub);
         // TODO: FinalInequalityConstraints could also be on input for collocation scheme

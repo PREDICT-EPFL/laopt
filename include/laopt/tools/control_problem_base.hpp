@@ -156,7 +156,8 @@ public:
             typename T = typename x_t::Scalar> // T is scalar type
     ineq_constr_t<T> inequality_constraints_impl(const Eigen::MatrixBase<x_t>& x,
                                                  const Eigen::MatrixBase<u_t>& u,
-                                                 const Eigen::MatrixBase<p_t>& p)
+                                                 const Eigen::MatrixBase<p_t>& p,
+                                                 const Scalar& tau)
     {
         if (NG > 0)
         {
