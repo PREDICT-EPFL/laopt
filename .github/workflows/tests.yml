@@ -35,7 +35,7 @@ jobs:
           # Compiler infrastructure
           mamba install cmake compilers make pkg-config
           # Dependencies
-          mamba install eigen ipopt osqp proxsuite piqp yaml-cpp
+          mamba install eigen casadi ipopt osqp proxsuite piqp libblasfeo yaml-cpp
 
       - name: Setup working directories
         shell: bash -l {0}
@@ -43,20 +43,10 @@ jobs:
           mkdir -p build_external
           mkdir -p build
 
-      - name: Install Casadi
-        shell: bash -l {0}
-        working-directory: build_external
-        run: bash  ../ci/shared/install_casadi.sh
-
       - name: Install QPSwift
         shell: bash -l {0}
         working-directory: build_external
         run: bash  ../ci/shared/install_qpswift.sh
-
-      - name: Install blasfeo
-        shell: bash -l {0}
-        working-directory: build_external
-        run: bash  ../ci/shared/install_blasfeo.sh
 
       - name: Install hpipm
         shell: bash -l {0}
