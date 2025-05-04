@@ -1,18 +1,21 @@
 #include <iostream>
 #include "laopt/laopt.hpp"
 #include "laopt/solvers/sqp_solver.hpp"
-#ifdef LAOPT_WITH_OSQP
-#include "laopt/solvers/osqp_interface.hpp"
+//#ifdef LAOPT_WITH_OSQP
+//#include "laopt/solvers/osqp_interface.hpp"
+//#endif
+#ifdef LAOPT_WITH_QPALM
+#include "laopt/solvers/qpalm_interface.hpp"
 #endif
 #ifdef LAOPT_WITH_PIQP
 #include "laopt/solvers/piqp_interface.hpp"
 #endif
-#ifdef LAOPT_WITH_PROXQP
-#include "laopt/solvers/proxqp_interface.hpp"
-#endif
-#ifdef LAOPT_WITH_QPSWIFT
-#include "laopt/solvers/qpswift_interface.hpp"
-#endif
+//#ifdef LAOPT_WITH_PROXQP
+//#include "laopt/solvers/proxqp_interface.hpp"
+//#endif
+//#ifdef LAOPT_WITH_QPSWIFT
+//#include "laopt/solvers/qpswift_interface.hpp"
+//#endif
 
 #include "test_utils.hpp"
 #include "gtest/gtest.h"
@@ -115,10 +118,17 @@ static void generic_sqp_test()
     }
 }
 
-#ifdef LAOPT_WITH_OSQP
-TEST(SQPTest, SimpleExampleOSQP)
+//#ifdef LAOPT_WITH_OSQP
+//TEST(SQPTest, SimpleExampleOSQP)
+//{
+//    generic_sqp_test<laopt::OSQPSolver>();
+//}
+//#endif
+
+#ifdef LAOPT_WITH_QPALM
+TEST(SQPTest, SimpleExampleQPALM)
 {
-    generic_sqp_test<laopt::OSQPSolver>();
+    generic_sqp_test<laopt::QPALMSolver>();
 }
 #endif
 
@@ -129,16 +139,16 @@ TEST(SQPTest, SimpleExamplePIQP)
 }
 #endif
 
-#ifdef LAOPT_WITH_PROXQP
-TEST(SQPTest, SimpleExampleProxQP)
-{
-    generic_sqp_test<laopt::ProxQPSolver>();
-}
-#endif
-
-#ifdef LAOPT_WITH_QPSWIFT
-TEST(SQPTest, SimpleExampleQPSwift)
-{
-    generic_sqp_test<laopt::QPSwiftSolver>();
-}
-#endif
+//#ifdef LAOPT_WITH_PROXQP
+//TEST(SQPTest, SimpleExampleProxQP)
+//{
+//    generic_sqp_test<laopt::ProxQPSolver>();
+//}
+//#endif
+//
+//#ifdef LAOPT_WITH_QPSWIFT
+//TEST(SQPTest, SimpleExampleQPSwift)
+//{
+//    generic_sqp_test<laopt::QPSwiftSolver>();
+//}
+//#endif

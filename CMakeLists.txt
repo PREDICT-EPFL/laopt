@@ -137,7 +137,7 @@ if (WITH_HPIPM)
 endif()
 
 target_compile_definitions(laopt INTERFACE -DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB - For both Windows and UNIX)
-target_compile_features(laopt INTERFACE cxx_std_14)
+target_compile_features(laopt INTERFACE cxx_std_17)
 
 add_library(laopt::laopt ALIAS laopt)
 

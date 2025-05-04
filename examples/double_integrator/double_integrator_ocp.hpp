@@ -23,14 +23,14 @@ public:
     Eigen::Matrix<Scalar, NU, NU> R{{0.01}};
 
     /* Override function implementations from base class ------------------------------ */
-    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t,
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
             typename T = typename x_t::Scalar> // T is scalar type
     T lagrange_term_impl(const Eigen::MatrixBase<x_t>& x,
                          const Eigen::MatrixBase<u_t>& u,
                          const Eigen::MatrixBase<p_t>& p,
                          const Eigen::MatrixBase<t0_t>& t0,
                          const Eigen::MatrixBase<tf_t>& tf,
-                         const Scalar& tau)
+                         const tau_t& tau)
     {
         return (x_ref - x).dot(Q * (x_ref - x)) + u.dot(R * u);
     }

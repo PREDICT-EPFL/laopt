@@ -72,8 +72,7 @@ protected:
 
     /* Discrete dynamics */
     struct IntegratedDynamics {};
-    template<typename xp_t, typename x_t, typename u_t, typename p_t, typename tf_t,
-            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename xp_t, typename x_t, typename u_t, typename p_t, typename tf_t>
     EIGEN_STRONG_INLINE auto
     function_impl(IntegratedDynamics,
                   const Eigen::MatrixBase<xp_t>& xp,
@@ -87,21 +86,19 @@ protected:
 
     /* Inequality constraints */
     struct InequalityConstraints {};
-    template<typename x_t, typename u_t, typename p_t,
-            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename u_t, typename p_t, typename tau_t>
     EIGEN_STRONG_INLINE auto
     function_impl(InequalityConstraints,
                   const Eigen::MatrixBase<x_t>& x,
                   const Eigen::MatrixBase<u_t>& u,
                   const Eigen::MatrixBase<p_t>& p,
-                  const Scalar& tau)
+                  const tau_t& tau)
     {
         return controlProblem->inequality_constraints_impl(x, u, p, tau);
     }
 
     struct InitialInequalityConstraints {};
-    template<typename x_t, typename u_t, typename p_t,
-            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename u_t, typename p_t>
     EIGEN_STRONG_INLINE auto
     function_impl(InitialInequalityConstraints,
                   const Eigen::MatrixBase<x_t>& x0,
@@ -112,8 +109,7 @@ protected:
     }
 
     struct FinalInequalityConstraints {};
-    template<typename x_t, typename p_t,
-            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename p_t>
     EIGEN_STRONG_INLINE auto
     function_impl(FinalInequalityConstraints,
                   const Eigen::MatrixBase<x_t>& xf,
@@ -124,8 +120,7 @@ protected:
 
     /* Objective */
     struct LagrangeCost {};
-    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t,
-            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t>
     EIGEN_STRONG_INLINE auto
     function_impl(LagrangeCost,
                   const Eigen::MatrixBase<x_t>& x,
@@ -133,14 +128,13 @@ protected:
                   const Eigen::MatrixBase<p_t>& p,
                   const Eigen::MatrixBase<t0_t>& t0,
                   const Eigen::MatrixBase<tf_t>& tf,
-                  const Scalar& tau)
+                  const tau_t& tau)
     {
         return controlProblem->lagrange_term_impl(x, u, p, t0, tf, tau);
     }
 
     struct MayerCost {};
-    template<typename x_t, typename p_t, typename t0_t, typename tf_t,
-            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename p_t, typename t0_t, typename tf_t>
     EIGEN_STRONG_INLINE auto
     function_impl(MayerCost,
                   const Eigen::MatrixBase<x_t>& xf,

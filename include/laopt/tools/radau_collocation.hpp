@@ -306,7 +306,7 @@ protected:
         return 2.0 / h_seg * dx_apr;
     }
 
-    template<typename OutJacobian, typename AScalar, typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
+    template<typename OutJacobian, typename AScalar, typename X_t>
     EIGEN_STRONG_INLINE void
     jacobian_impl(DifferentialApproximation, OutJacobian& out_jacobian, const AScalar& alpha,
                   const Eigen::MatrixBase<X_t> &X_vec, unsigned j_node)
@@ -321,8 +321,7 @@ protected:
         }
     }
 
-    template <typename Weight, typename OutGradient,
-              typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
+    template <typename Weight, typename OutGradient, typename X_t>
     EIGEN_STRONG_INLINE void
     gradient_impl(DifferentialApproximation, OutGradient& out_gradient, const Eigen::MatrixBase<Weight>& weight,
                   const Eigen::MatrixBase<X_t> &X_vec, unsigned j_node)
@@ -333,8 +332,7 @@ protected:
         }
     }
 
-    template<typename Weight, typename OutHessian,
-             typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
+    template<typename Weight, typename OutHessian, typename X_t>
     EIGEN_STRONG_INLINE void
     hessian_impl(DifferentialApproximation, OutHessian&, const Eigen::MatrixBase<Weight>& weight,
                  const Eigen::MatrixBase<X_t> &X_vec, unsigned j_node)
@@ -344,19 +342,19 @@ protected:
 
     /* Inequality constraints */
     struct InequalityConstraints {};
-    template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename u_t, typename p_t, typename tau_t>
     EIGEN_STRONG_INLINE auto
     function_impl(InequalityConstraints,
                   const Eigen::MatrixBase<x_t> &x,
                   const Eigen::MatrixBase<u_t> &u,
                   const Eigen::MatrixBase<p_t> &p,
-                  const Scalar &tau)
+                  const tau_t &tau)
     {
         return controlProblem->inequality_constraints_impl(x, u, p, tau);
     }
 
     struct InitialInequalityConstraints {};
-    template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename u_t, typename p_t>
     EIGEN_STRONG_INLINE auto
     function_impl(InitialInequalityConstraints,
                   const Eigen::MatrixBase<x_t> &x0,
@@ -367,7 +365,7 @@ protected:
     }
 
     struct FinalInequalityConstraints {};
-    template<typename x_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+    template<typename x_t, typename p_t>
     EIGEN_STRONG_INLINE auto
     function_impl(FinalInequalityConstraints,
                   const Eigen::MatrixBase<x_t> &xf,
@@ -378,7 +376,7 @@ protected:
 
     /* Objective */
     struct LagrangeCost {};
-    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t>
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t>
     EIGEN_STRONG_INLINE auto
     function_impl(LagrangeCost,
                   const Eigen::MatrixBase<x_t> &x,
@@ -386,7 +384,7 @@ protected:
                   const Eigen::MatrixBase<p_t> &p,
                   const Eigen::MatrixBase<t0_t> &t0,
                   const Eigen::MatrixBase<tf_t> &tf,
-                  const Scalar& tau)
+                  const tau_t& tau)
     {
         return controlProblem->lagrange_term_impl(x, u, p, t0, tf, tau);
     }
@@ -643,7 +641,6 @@ protected: /* Helpers for resampling */
         Eigen::Matrix<Scalar, DerivedNX + 1, -1> TXn(DerivedNX + 1, n + 1);
         TXn.setZero();
 
-        using namespace Eigen;
         for (unsigned i_seg = 0; i_seg < N_segs; i_seg++)
         {
             const unsigned i_seg_start = i_seg * D_poly;
@@ -651,7 +648,7 @@ protected: /* Helpers for resampling */
             PRINT("-------------------------- \n"
                   "i_seg: " << i_seg << ", i_seg_start: " << i_seg_start << ", k_seg_start: " << k_seg_start);
 
-            const auto X_seg = X_opt(all, seqN(i_seg_start, D_poly + 1));
+            const auto X_seg = X_opt(Eigen::indexing::all, Eigen::seqN(i_seg_start, D_poly + 1));
             PRINT("X_seg:\n" << X_seg);
 
             for (unsigned j = 0; j < n_per_seg; j++)
@@ -662,7 +659,7 @@ protected: /* Helpers for resampling */
                 PRINT("j: " << j << ", k: " << k << ", tau: " << tau_eval);
 
                 TXn(0, k) = (i_seg * h_seg + h_seg * T_eval);
-                TXn(seqN(1, DerivedNX), k) << interpolate<DerivedNX>(X_seg.template reshaped<ColMajor>(), tau_eval);
+                TXn(Eigen::seqN(1, DerivedNX), k) << interpolate<DerivedNX>(X_seg.template reshaped<Eigen::ColMajor>(), tau_eval);
             }
 
             /* In last segment, write last point */
@@ -670,14 +667,14 @@ protected: /* Helpers for resampling */
             {
                 TXn(0, n) = get_tf_opt();
                 /* Copy or extrapolate */
-                TXn(seqN(1, DerivedNX), n) << X_opt(all, last);
+                TXn(Eigen::seqN(1, DerivedNX), n) << X_opt(Eigen::indexing::all, Eigen::indexing::last);
 //                TXn(seqN(1, DerivedNX), n) << interpolate<DerivedNX>(X_seg.template reshaped<ColMajor>(), 1);
             }
 
             /* Transform time by absolute horizon range (except  */
-            TXn(0, seqN(k_seg_start, n_per_seg)) =
+            TXn(0, Eigen::seqN(k_seg_start, n_per_seg)) =
                     Eigen::MatrixX<Scalar>::Constant(1, n_per_seg, controlProblem->t0) +
-                    (get_tf_opt() - controlProblem->t0) * TXn(0, seqN(k_seg_start, n_per_seg));
+                    (get_tf_opt() - controlProblem->t0) * TXn(0, Eigen::seqN(k_seg_start, n_per_seg));
             PRINT("\n" << TXn << "\n");
         }
         return TXn;

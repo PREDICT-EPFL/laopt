@@ -65,4 +65,12 @@ struct NumTraits<casadi::Matrix<Scalar>>
 
 } // namespace Eigen
 
+namespace casadi
+{
+    inline bool operator||(const bool x, const Matrix<SXElem>& y)
+    {
+        return x || !y.is_zero();
+    }
+} // namespace casadi
+
 #endif // LAOPT_EIGEN_CASADI_SUPPORT_HPP
