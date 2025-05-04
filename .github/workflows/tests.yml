@@ -14,7 +14,7 @@ env:
 
 jobs:
   build_and_run_tests:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
@@ -23,10 +23,8 @@ jobs:
 
       - uses: conda-incubator/setup-miniconda@v3
         with:
-          miniforge-variant: Mambaforge
           miniforge-version: latest
           channels: conda-forge
-          python-version: "3.10"
           activate-environment: laopt
 
       - name: Install dependencies (conda)
