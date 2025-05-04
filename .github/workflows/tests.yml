@@ -33,9 +33,9 @@ jobs:
           # Workaround for https://github.com/conda-incubator/setup-miniconda/issues/186
           conda config --remove channels defaults
           # Compiler infrastructure
-          mamba install cmake compilers make pkg-config
+          conda install cmake=3.31.6 compilers make pkg-config
           # Dependencies
-          mamba install eigen casadi ipopt osqp proxsuite piqp libblasfeo yaml-cpp
+          conda install eigen casadi ipopt osqp proxsuite piqp libblasfeo yaml-cpp
 
       - name: Setup working directories
         shell: bash -l {0}
