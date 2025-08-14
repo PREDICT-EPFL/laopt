@@ -94,7 +94,9 @@ public:
         m_lam_bounds.setZero();
         m_box_constraint_type.setConstant(constraint_t::UNBOUNDED_CONSTR);
         m_constraint_type.setConstant(constraint_t::UNBOUNDED_CONSTR);
-    };
+    }
+
+    Derived& derived() { return static_cast<Derived&>(*this); };
 
     /** getters  / setters */
     EIGEN_STRONG_INLINE const Eigen::VectorX<scalar_t>& primal_solution() const noexcept { return m_x; }
