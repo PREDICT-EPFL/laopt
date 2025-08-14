@@ -145,7 +145,7 @@ public:
                  -cos(gam) * sin(bet), sin(gam) * sin(bet), cos(bet);
         E_inv *= 1.0 / cos(bet);
 
-        Eigen::Vector<T, 3> w_dot = J_inv * (b_M - w.template cross(J * w));
+        Eigen::Vector<T, 3> w_dot = J_inv * (b_M - w.cross(J * w));
 
         Eigen::Vector<T, 3> phi_dot = E_inv * w;
 
@@ -194,7 +194,7 @@ public:
         b_eF << sin(u(1)), -sin(u(0)) * cos(u(1)), cos(u(1));
 
         Eigen::Vector<T, 3> b_F = thrust * b_eF;
-        Eigen::Vector<T, 3> b_M = torque * b_eF + r_F.template cross(b_F);
+        Eigen::Vector<T, 3> b_M = torque * b_eF + r_F.cross(b_F);
 
         Eigen::Vector<T, 6> b_F_and_b_M;
         b_F_and_b_M << b_F, b_M;
