@@ -1,6 +1,7 @@
 #ifndef LAOPT_PROBLEM_HPP
 #define LAOPT_PROBLEM_HPP
 
+#include <memory>
 #include <numeric>
 #include <iterator>
 #include "laopt/problem_dispatch_types.hpp"
