@@ -16,8 +16,12 @@ struct OptionsWrapper
     };
 };
 
+#ifdef LAOPT_WITH_CASADI
 using tagless_options = testing::Types<OptionsWrapper<laopt::TAGLESS>,
                                        OptionsWrapper<laopt::TAGLESS | laopt::CASADI_ALL>>;
+#else
+using tagless_options = testing::Types<OptionsWrapper<laopt::TAGLESS>>;
+#endif
 
 template <typename T>
 class FunctionTest : public ::testing::Test {};
