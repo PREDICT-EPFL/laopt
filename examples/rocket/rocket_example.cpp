@@ -7,7 +7,9 @@
 
 #include "rocket_ocp.hpp"
 #include "laopt/tools/multiple_shooting.hpp"
+
 #include "laopt/solvers/ipopt_interface.hpp"
+
 #include "laopt/solvers/sqp_solver.hpp"
 #ifdef LAOPT_WITH_QPSWIFT
 #include "laopt/solvers/qpswift_interface.hpp"

@@ -302,7 +302,7 @@ public:
         using vector2_t = Eigen::Matrix<scalar_t, 2, 1>;
 
         /** State variables **/
-        scalar_t Va, alpha, wy, pitch, gamma, vx, vz;
+        scalar_t Va(1), alpha(0), wy(0), pitch(0), gamma(0), vx(1), vz;
         switch (state_representation)
         {
             case LongitudinalFlightPath:
@@ -641,6 +641,12 @@ public:
     }
 
     template<typename scalar_t>
+    Eigen::Quaternion<scalar_t> quat_inverse(const Eigen::Quaternion<scalar_t> &q) const
+    {
+        return {q.w(), -q.x(), -q.y(), -q.z()};
+    }
+
+    template<typename scalar_t>
     void dynamics(ref_t <state_t<scalar_t>> state_dot,
                   constref_t <state_t<scalar_t>> &state,
                   constref_t <control_t<scalar_t>> &control,
@@ -650,6 +656,7 @@ public:
         using quat_t = Eigen::Quaternion<scalar_t>;
         using vec4_t = Eigen::Vector<scalar_t, 4>;
         using vec3_t = Eigen::Vector<scalar_t, 3>;
+        using vec2_t = Eigen::Vector<scalar_t, 2>;
         using Quat = Eigen::Quaternion<Scalar>;
         using Vec3 = Eigen::Vector<Scalar, 3>;
 
@@ -678,7 +685,7 @@ public:
         scalar_t qy = state(11);
         scalar_t qz = state(12);
         quat_t q(qw, qx, qy, qz); // = q_nb // Quaternion initialization, not just segment!
-        quat_t q_bn = q.inverse();
+        quat_t q_bn = quat_inverse(q);
 
         scalar_t dF = control(0);
         scalar_t dE = control(1);
@@ -699,8 +706,10 @@ public:
 
         /* Aerodynamic variables (Airspeed, angle of attack, side slip angle) */
         scalar_t Va = b_va.norm();
-        scalar_t alpha = (b_va(0) > 0.0) ? static_cast<scalar_t>(atan2(b_va(2), b_va(0))) : static_cast<scalar_t>(M_PI / 2.0);
-        scalar_t beta = (Va > 0.0) ? static_cast<scalar_t>(asin(b_va(1) / Va)) : static_cast<scalar_t>(0.0);
+//        scalar_t alpha = (b_va(0) > 0.0) ? static_cast<scalar_t>(atan2(b_va(2), b_va(0))) : static_cast<scalar_t>(M_PI / 2.0);
+        scalar_t alpha = static_cast<scalar_t>(atan2(b_va(2), b_va(0)));
+        vec2_t b_va_xz(b_va(0), b_va(2));
+        scalar_t beta = static_cast<scalar_t>(atan2(b_va(1), b_va_xz.norm()));
         //std::cout << "alpha / " <<  b_va(2) / b_va(0) << ", beta / " << b_va(1) / Va << "\n";
 
         /* Measured airspeed component (pitot tube orientation dependent) */

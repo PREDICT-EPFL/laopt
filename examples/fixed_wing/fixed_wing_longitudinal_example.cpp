@@ -18,6 +18,13 @@
 
 int main()
 {
+    constexpr bool with_eigen_AD = true;
+    constexpr bool with_casadi_AD = true;
+    constexpr bool with_multiple_shooting = true;
+    constexpr bool with_radau_collocation = false;
+    constexpr bool with_ipopt = true;
+    constexpr bool with_sqp_piqp = false;
+
     using namespace std::chrono;
 
     /* Choose OCP and Transcription */
@@ -52,7 +59,7 @@ int main()
     const double Ts_max = 0.02;
     const double t_test = 0.166;
 
-    auto solve_and_print = [&](auto& transcription, auto& opt_problem, auto& solver)
+    auto solve_and_print = [&](auto &transcription, auto &opt_problem, auto &solver)
     {
         /* Set initial guess for state trajectory */
         transcription->set_X_guess(ocp->model.get_default_initial_state());
@@ -72,89 +79,195 @@ int main()
         print_sampled_solution(transcription, Ts_max, t_test);
     };
 
-    /* Solve with Multiple Shooting transcription */
-    if (true)
+    if (with_eigen_AD)
     {
-        const int N = 20;
-        using Transcription = laopt_tools::MultipleShooting<Ocp, N, laopt::ERK4, laopt::EIGEN_ALL>;
+        std::cout << "---------------------------\n"
+                     "Eigen autodiff (default)\n"
+                     "---------------------------\n";
 
-        /* Define specific Tape and laOPT problem types for the resulting NLP */
-        using Tape = laopt::TapeInfo<Transcription>;
-        using OptProblem = laopt::Problem<Transcription>;
+        /* Solve with Multiple Shooting transcription */
+        if (with_multiple_shooting)
+        {
+            const int N = 20;
+            using Transcription = laopt_tools::MultipleShooting<Ocp, N, laopt::ERK4>;
 
-        /* Construct transcription for OCP, optionally generate/store tape for that combination */
-        std::shared_ptr<Transcription> transcription = std::make_shared<Transcription>(ocp);
-        Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
+            /* Define specific Tape and laOPT problem types for the resulting NLP */
+            using Tape = laopt::TapeInfo<Transcription>;
+            using OptProblem = laopt::Problem<Transcription>;
 
-        /* Construct laOPT problem for transcribed OCP using according tape */
-        std::shared_ptr<OptProblem> opt_problem = std::make_shared<OptProblem>(transcription, tape); // Tape is optional here and could also be generated internally
+            /* Construct transcription for OCP, optionally generate/store tape for that combination */
+            std::shared_ptr<Transcription> transcription = std::make_shared<Transcription>(ocp);
+            Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
 
+            /* Construct laOPT problem for transcribed OCP using according tape */
+            std::shared_ptr<OptProblem> opt_problem = std::make_shared<OptProblem>(transcription, tape);
+
+            if (with_ipopt)
+            {
 #ifdef LAOPT_WITH_IPOPT
-        {
-            std::cout << "Multiple Shooting - Ipopt\n";
+                std::cout << "Multiple Shooting - Ipopt\n";
 
-            using Solver = laopt::IpoptSolver<OptProblem>;
-            Solver solver(opt_problem);
+                using Solver = laopt::IpoptSolver<OptProblem>;
+                Solver solver(opt_problem);
 
-            solve_and_print(transcription, opt_problem, solver);
-        }
+                solve_and_print(transcription, opt_problem, solver);
 #endif
-
+            }
+            if (with_sqp_piqp)
+            {
 #ifdef LAOPT_WITH_PIQP
+                std::cout << "Multiple Shooting - SQP (PIQP)\n";
+
+                using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
+                Solver solver(opt_problem);
+                solver.settings().verbose = true;
+//                solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
+
+                solve_and_print(transcription, opt_problem, solver);
+#endif
+            }
+        }
+
+        /* Solve with Radau Collocation transcription */
+        if (with_radau_collocation)
         {
-            std::cout << "Multiple Shooting - SQP\n";
+            const int D_poly = 4;
+            const int N_segs = 3;
+            using Transcription = laopt_tools::RadauCollocation<Ocp, N_segs, D_poly>;
 
-            using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
-            Solver solver(opt_problem);
-            solver.settings().verbose = true;
-            solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
+            /* Define specific Tape and laOPT problem types for the resulting NLP */
+            using Tape = laopt::TapeInfo<Transcription>;
+            using OptProblem = laopt::Problem<Transcription>;
 
-            solve_and_print(transcription, opt_problem, solver);
+            /* Construct transcription for OCP, optionally generate/store tape for that combination */
+            std::shared_ptr<Transcription> transcription = std::make_shared<Transcription>(ocp);
+            Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
+
+            /* Construct laOPT problem for transcribed OCP using according tape */
+            std::shared_ptr<OptProblem> opt_problem = std::make_shared<OptProblem>(transcription, tape);
+
+            if (with_ipopt)
+            {
+#ifdef LAOPT_WITH_IPOPT
+                std::cout << "Multiple Shooting - Ipopt\n";
+
+                using Solver = laopt::IpoptSolver<OptProblem>;
+                Solver solver(opt_problem);
+
+                solve_and_print(transcription, opt_problem, solver);
+#endif
+            }
+            if (with_sqp_piqp)
+            {
+#ifdef LAOPT_WITH_PIQP
+                std::cout << "Multiple Shooting - SQP (PIQP)\n";
+
+                using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
+                Solver solver(opt_problem);
+                solver.settings().verbose = true;
+//                solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
+
+                solve_and_print(transcription, opt_problem, solver);
+#endif
+            }
+        }
+    }
+
+    if (with_casadi_AD)
+    {
+#ifdef LAOPT_WITH_CASADI
+        std::cout << "---------------------------\n"
+                     "CasADi autodiff\n"
+                     "---------------------------\n";
+
+        /* Solve with Multiple Shooting transcription */
+        if (with_multiple_shooting)
+        {
+            const int N = 20;
+            using Transcription = laopt_tools::MultipleShooting<Ocp, N, laopt::ERK4, laopt::CASADI_ALL | laopt::CASADI_NO_JIT>;
+
+            /* Define specific Tape and laOPT problem types for the resulting NLP */
+            using Tape = laopt::TapeInfo<Transcription>;
+            using OptProblem = laopt::Problem<Transcription>;
+
+            /* Construct transcription for OCP, optionally generate/store tape for that combination */
+            std::shared_ptr<Transcription> transcription = std::make_shared<Transcription>(ocp);
+            Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
+
+            /* Construct laOPT problem for transcribed OCP using according tape */
+            std::shared_ptr<OptProblem> opt_problem = std::make_shared<OptProblem>(transcription, tape);
+
+            if (with_ipopt)
+            {
+#ifdef LAOPT_WITH_IPOPT
+                std::cout << "Multiple Shooting - Ipopt\n";
+
+                using Solver = laopt::IpoptSolver<OptProblem>;
+                Solver solver(opt_problem);
+
+                solve_and_print(transcription, opt_problem, solver);
+#endif
+            }
+            if (with_sqp_piqp)
+            {
+#ifdef LAOPT_WITH_PIQP
+                std::cout << "Multiple Shooting - SQP (PIQP)\n";
+
+                using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
+                Solver solver(opt_problem);
+                solver.settings().verbose = true;
+//                solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
+
+                solve_and_print(transcription, opt_problem, solver);
+#endif
+            }
+        }
+
+        /* Solve with Radau Collocation transcription */
+        if (with_radau_collocation)
+        {
+            const int D_poly = 4;
+            const int N_segs = 3;
+            using Transcription = laopt_tools::RadauCollocation<Ocp, N_segs, D_poly, laopt::CASADI_ALL | laopt::CASADI_NO_JIT>;
+
+            /* Define specific Tape and laOPT problem types for the resulting NLP */
+            using Tape = laopt::TapeInfo<Transcription>;
+            using OptProblem = laopt::Problem<Transcription>;
+
+            /* Construct transcription for OCP, optionally generate/store tape for that combination */
+            std::shared_ptr<Transcription> transcription = std::make_shared<Transcription>(ocp);
+            Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
+
+            /* Construct laOPT problem for transcribed OCP using according tape */
+            std::shared_ptr<OptProblem> opt_problem = std::make_shared<OptProblem>(transcription, tape);
+
+            if (with_ipopt)
+            {
+#ifdef LAOPT_WITH_IPOPT
+                std::cout << "Multiple Shooting - Ipopt\n";
+
+                using Solver = laopt::IpoptSolver<OptProblem>;
+                Solver solver(opt_problem);
+
+                solve_and_print(transcription, opt_problem, solver);
+#endif
+            }
+            if (with_sqp_piqp)
+            {
+#ifdef LAOPT_WITH_PIQP
+                std::cout << "Multiple Shooting - SQP (PIQP)\n";
+
+                using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
+                Solver solver(opt_problem);
+                solver.settings().verbose = true;
+//                solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
+
+                solve_and_print(transcription, opt_problem, solver);
+#endif
+            }
         }
 #endif
     }
 
-    /* Solve with Radau Collocation transcription */
-    if (true)
-    {
-        const int D_poly = 4;
-        const int N_segs = 3;
-        using Transcription = laopt_tools::RadauCollocation<Ocp, N_segs, D_poly, laopt::EIGEN_ALL>;
-
-        /* Define specific Tape and laOPT problem types for the resulting NLP */
-        using Tape = laopt::TapeInfo<Transcription>;
-        using OptProblem = laopt::Problem<Transcription>;
-
-        /* Construct transcription for OCP, optionally generate/store tape for that combination */
-        std::shared_ptr<Transcription> transcription = std::make_shared<Transcription>(ocp);
-        Tape tape = laopt::generate_tape(transcription, laopt::generate_sparsity(transcription));
-
-        /* Construct laOPT problem for transcribed OCP using according tape */
-        std::shared_ptr<OptProblem> opt_problem = std::make_shared<OptProblem>(transcription, tape); // Tape is optional here and could also be generated internally
-
-#ifdef LAOPT_WITH_IPOPT
-        {
-            std::cout << "Radau Collocation - Ipopt\n";
-
-            using Solver = laopt::IpoptSolver<OptProblem>;
-            Solver solver(opt_problem);
-
-            solve_and_print(transcription, opt_problem, solver);
-        }
-#endif
-
-#ifdef LAOPT_WITH_PIQP
-        {
-            std::cout << "Radau Collocation - SQP\n";
-
-            using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
-            Solver solver(opt_problem);
-            solver.settings().verbose = true;
-            solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
-
-            solve_and_print(transcription, opt_problem, solver);
-        }
-#endif
-    }
     return 0;
 }
