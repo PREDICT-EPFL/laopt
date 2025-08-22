@@ -56,32 +56,34 @@ protected:
 
     /* Continuous dynamics */
     struct ContinuousDynamics {};
-    template<typename x_t, typename u_t, typename p_t, typename tf_t,
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t,
             typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NX>
     function_impl(ContinuousDynamics,
                   const Eigen::MatrixBase<x_t>& x,
                   const Eigen::MatrixBase<u_t>& u,
                   const Eigen::MatrixBase<p_t>& p,
+                  const Eigen::MatrixBase<t0_t>& t0,
                   const Eigen::MatrixBase<tf_t>& tf)
     {
-        return tf(0) * controlProblem->dynamics_impl(x, u, p);
+        return (tf(0) - t0(0)) * controlProblem->dynamics_impl(x, u, p);
     }
 
     Integrator<ContinuousDynamics> integrator{*this, h};
 
     /* Discrete dynamics */
     struct IntegratedDynamics {};
-    template<typename xp_t, typename x_t, typename u_t, typename p_t, typename tf_t>
+    template<typename xp_t, typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t>
     EIGEN_STRONG_INLINE auto
     function_impl(IntegratedDynamics,
                   const Eigen::MatrixBase<xp_t>& xp,
                   const Eigen::MatrixBase<x_t>& x,
                   const Eigen::MatrixBase<u_t>& u,
                   const Eigen::MatrixBase<p_t>& p,
+                  const Eigen::MatrixBase<t0_t>& t0,
                   const Eigen::MatrixBase<tf_t>& tf)
     {
-        return integrator(xp, x, u, p, tf);
+        return integrator(xp, x, u, p, t0, tf);
     }
 
     /* Inequality constraints */
@@ -195,7 +197,7 @@ protected:
             optProblem.add_obj(h * this->expression(LagrangeCost{}, X_var[i], U_var[i], p_var, get_t0_var(), get_tf_var(), Scalar(i) / N_segs));
             // We assume 0 = f(x,u) - x+ which ensures that the linearization has positive A and B matrices.
             // This is an assumption for the HPIPM solver.
-            optProblem.add_constr(this->expression(IntegratedDynamics{}, X_var[i + 1], X_var[i], U_var[i], p_var, get_tf_var()) == 0);
+            optProblem.add_constr(this->expression(IntegratedDynamics{}, X_var[i + 1], X_var[i], U_var[i], p_var, get_t0_var(), get_tf_var()) == 0);
         }
 
         /* Last grid point */

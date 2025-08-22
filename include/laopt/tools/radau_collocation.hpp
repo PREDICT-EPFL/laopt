@@ -276,16 +276,17 @@ protected:
 protected:
     /* Dynamic constraints */
     struct ContinuousDynamics {};
-    template<typename x_t, typename u_t, typename p_t, typename tf_t,
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t,
             typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NX>
     function_impl(ContinuousDynamics,
                   const Eigen::MatrixBase<x_t> &x,
                   const Eigen::MatrixBase<u_t> &u,
                   const Eigen::MatrixBase<p_t> &p,
+                  const Eigen::MatrixBase<t0_t> &t0,
                   const Eigen::MatrixBase<tf_t> &tf)
     {
-        return tf(0) * controlProblem->dynamics_impl(x, u, p);
+        return (tf(0) - t0(0)) * controlProblem->dynamics_impl(x, u, p);
     }
 
     struct DifferentialApproximation {
@@ -458,7 +459,9 @@ protected:
 
                 /* Add differential constraint at each node */
                 optProblem.add_constr(this->expression(DifferentialApproximation{}, X_seg_diff, j_node) ==
-                                      this->expression(ContinuousDynamics{}, get_x(XU_var, k), get_u(XU_var, k), p_var, get_tf_var()));
+                                      this->expression(ContinuousDynamics{}, get_x(XU_var, k), get_u(XU_var, k), p_var,
+                                                                             get_t0_var(), get_tf_var())
+                                     );
             }
         }
 
