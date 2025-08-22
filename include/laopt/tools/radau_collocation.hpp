@@ -589,7 +589,7 @@ public:
     }
     Eigen::Vector<Scalar, NU> get_u_at(const Scalar &t) const
     {
-        const Scalar T_eval = t / (get_tf_opt() - controlProblem->t0) - controlProblem->t0; // on [0 ... 1];
+        const Scalar T_eval = (t - controlProblem->t0) / (get_tf_opt() - controlProblem->t0); // on [0 ... 1];
 
         /* Find segment to sample from */
         const unsigned i_seg = std::floor(T_eval / h_seg);
