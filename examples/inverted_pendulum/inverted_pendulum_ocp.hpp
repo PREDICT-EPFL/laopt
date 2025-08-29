@@ -74,7 +74,7 @@ public:
                       const Eigen::MatrixBase<t0_t>& t0,
                       const Eigen::MatrixBase<tf_t>& tf)
     {
-        return mayer_multiplier * get_non_control_cost<T>(xf, p) + w_tf * tf(0);
+        return mayer_multiplier * get_non_control_cost<T>(xf, p) + w_tf * (tf(0) - t0(0));
     }
 
     template<typename x_t, typename u_t, typename p_t,

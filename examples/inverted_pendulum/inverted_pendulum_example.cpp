@@ -24,8 +24,8 @@ int main()
     constexpr bool with_casadi_AD = true;
     constexpr bool with_multiple_shooting = true;
     constexpr bool with_radau_collocation = false;
-    constexpr bool with_ipopt = true;
-    constexpr bool with_sqp_piqp = false;
+    constexpr bool with_ipopt = false;
+    constexpr bool with_sqp_piqp = true;
 
     using namespace std::chrono;
 
@@ -35,8 +35,13 @@ int main()
     /* Construct OCP and set OCP-specific properties */
     std::shared_ptr<Ocp> ocp = std::make_shared<Ocp>();
 
-    ocp->tf_ub = 2;
-    ocp->tf_lb = 1.5;
+    // ocp->t0 = 0;
+    ocp->t0 = 0.8;
+    // ocp->t0 = 1.9;
+    // ocp->t0 = 2;
+
+    ocp->tf_ub = ocp->t0 + 2;
+    ocp->tf_lb = ocp->t0 + 1.5;
     ocp->w_tf = 3;
 
     ocp->angle_ref = 0.0 * M_PI / 180.0;
@@ -51,7 +56,7 @@ int main()
 
     /* Resampling test parameters */
     const double Ts_max = 0.02;
-    const double t_test = 0.166;
+    const double t_test = ocp->t0 + 0.166;
 
     auto solve_and_print = [&](auto& transcription, auto& opt_problem, auto& solver)
     {
