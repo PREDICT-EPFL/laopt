@@ -107,7 +107,16 @@ public:
     {
         assert(var.rows() == variables() && "Decision variable is the wrong size");
 
-        DecisionVariableSetter<Scalar> decision_variable_setter(var);
+        DecisionVariableSetter<Scalar> decision_variable_setter(var.data());
+        user_code->define_problem(decision_variable_setter);
+    }
+
+    /**
+     * Resets the memory of all decision variables to null
+     */
+    void unset_decision_variable()
+    {
+        DecisionVariableSetter<Scalar> decision_variable_setter(nullptr);
         user_code->define_problem(decision_variable_setter);
     }
 
@@ -280,7 +289,12 @@ SparsityInfo<UserCode> generate_sparsity(const std::shared_ptr<UserCode>& user_c
     prob.eval_objective_no_memory(Hessian{});
     prob.eval_lagrangian_no_memory(Hessian{});
 
-    return prob.generate();
+    SparsityInfo<UserCode> info = prob.generate();
+
+    // var is only temporary -> unset decision variable
+    prob.unset_decision_variable();
+
+    return info;
 }
 
 /**
@@ -301,7 +315,12 @@ TapeInfo<UserCode> generate_tape(const std::shared_ptr<UserCode>& user_code, con
     prob.eval_objective_no_memory(Hessian{});
     prob.eval_lagrangian_no_memory(Hessian{});
 
-    return prob.generate();
+    TapeInfo<UserCode> info = prob.generate();
+
+    // var is only temporary -> unset decision variable
+    prob.unset_decision_variable();
+
+    return info;
 }
 
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
@@ -325,7 +344,12 @@ BSTapeInfo<UserCode> generate_bs_tape(const std::shared_ptr<UserCode>& user_code
     prob.eval_objective_no_memory(Hessian{});
     prob.eval_lagrangian_no_memory(Hessian{});
 
-    return prob.generate();
+    BSTapeInfo<UserCode> info = prob.generate();
+
+    // var is only temporary -> unset decision variable
+    prob.unset_decision_variable();
+
+    return info;
 }
 
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>

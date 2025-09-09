@@ -272,7 +272,7 @@ public:
     }
     void set_tf_guess(const Scalar& tf_guess)
     {
-        std::cout << "set_tf_guess | tf_var: " << tf_var << ", data(): " << tf_var.data() << "\n";
+        // std::cout << "set_tf_guess | tf_var: " << tf_var << ", data(): " << tf_var.data() << "\n";
         if (tf_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
         tf_var[0] = tf_guess;
     }
