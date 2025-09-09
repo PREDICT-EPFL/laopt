@@ -15,6 +15,9 @@ namespace laopt_tools {
 #define PRINT(x) \
 //std::cout << __FUNCTION__ << ": " << x << std::endl // Comment this line in to activate PRINT function in the code
 
+#define ASSERT_EARLY_GUESS() \
+{ std::cerr << __FUNCTION__ << ": Must be called after solver instantiation. Guess has not been set.\n"; return; }
+
 /*
  * Multiple Shooting
  * |     |     |     |    ...     |     |
@@ -249,19 +252,29 @@ public:
     /* Set functions */
     void set_X_guess(const State& x_guess)
     {
+        if (X_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
         for (unsigned i = 0; i < X_var.size(); i++) { X_var.at(i) << x_guess; }
     }
     void set_X_guess(const StateTrajectory& X_guess)
     {
+        if (X_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
         for (unsigned i = 0; i < X_var.size(); i++) { X_var.at(i) << X_guess.col(i); }
     }
     void set_U_guess(const Input& u_guess)
     {
+        if (U_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
         for (unsigned i = 0; i < U_var.size(); i++) { U_var.at(i) << u_guess; }
     }
     void set_U_guess(const InputTrajectory& U_guess)
     {
+        if (U_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
         for (unsigned i = 0; i < U_var.size(); i++) { U_var.at(i) << U_guess.col(i); }
+    }
+    void set_tf_guess(const Scalar& tf_guess)
+    {
+        std::cout << "set_tf_guess | tf_var: " << tf_var << ", data(): " << tf_var.data() << "\n";
+        if (tf_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
+        tf_var[0] = tf_guess;
     }
     void set_p_guess(const Param& p_guess) { p_var = p_guess; }
 

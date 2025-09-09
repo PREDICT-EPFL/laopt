@@ -36,9 +36,9 @@ int main()
     std::shared_ptr<Ocp> ocp = std::make_shared<Ocp>();
 
     // ocp->t0 = 0;
-    ocp->t0 = 0.8;
+    // ocp->t0 = 0.8;
     // ocp->t0 = 1.9;
-    // ocp->t0 = 2;
+    ocp->t0 = 2;
 
     ocp->tf_ub = ocp->t0 + 2;
     ocp->tf_lb = ocp->t0 + 1.5;
@@ -117,10 +117,16 @@ int main()
 #ifdef LAOPT_WITH_PIQP
                 std::cout << "Multiple Shooting - SQP (PIQP)\n";
 
+                // Before solver instantiation
+                transcription->set_tf_guess(0.5 * (ocp->tf_lb + ocp->tf_ub));
+
                 using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
                 Solver solver(opt_problem);
                 solver.settings().verbose = true;
 //                solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
+
+                // After solver instantiation
+                // transcription->set_tf_guess(0.5 * (ocp->tf_lb + ocp->tf_ub));
 
                 solve_and_print(transcription, opt_problem, solver);
 #endif
