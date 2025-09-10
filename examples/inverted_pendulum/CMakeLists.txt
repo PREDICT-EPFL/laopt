@@ -3,5 +3,5 @@ cmake_minimum_required(VERSION 3.5)
 add_executable(inverted_pendulum_example inverted_pendulum_example.cpp)
 target_link_libraries(inverted_pendulum_example PRIVATE laopt-examples)
 
-add_executable(inverted_pendulum_test inverted_pendulum_test.cpp)
-target_link_libraries(inverted_pendulum_test PRIVATE laopt-examples)
+#add_executable(inverted_pendulum_test inverted_pendulum_test.cpp)
+#target_link_libraries(inverted_pendulum_test PRIVATE laopt-examples)
