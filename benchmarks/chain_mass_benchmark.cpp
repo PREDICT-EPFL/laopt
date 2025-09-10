@@ -2,11 +2,13 @@
 
 #include "laopt/laopt.hpp"
 #include "laopt/differentiable_functions/integrators.hpp"
-#include "casadi/casadi.hpp"
 
+#ifdef LAOPT_WITH_CASADI
+#include "casadi/casadi.hpp"
 #include "chain_mass_benchmark_casadi_codegen.h"
 
 using namespace casadi;
+#endif
 
 // example taken from
 // https://github.com/acados/acados/blob/master/examples/acados_python/chain_mass/export_chain_mass_model.py
@@ -108,18 +110,18 @@ static void BM_LAOPT_JACOBIAN_EIGEN(benchmark::State& state)
 {
     laopt_jacobian<n_mass, laopt::EIGEN_ALL>(state);
 }
-
+#ifdef LAOPT_WITH_CASADI
 template<int n_mass>
 static void BM_LAOPT_JACOBIAN_CASADI(benchmark::State& state)
 {
     laopt_jacobian<n_mass, laopt::CASADI_ALL>(state);
 }
-
 template<int n_mass>
 static void BM_LAOPT_JACOBIAN_CASADI_NO_JIT(benchmark::State& state)
 {
     laopt_jacobian<n_mass, laopt::CASADI_ALL | laopt::CASADI_NO_JIT>(state);
 }
+#endif
 
 template<int n_mass>
 static void BM_LAOPT_WSUM_EIGEN(benchmark::State& state)
@@ -171,18 +173,18 @@ static void BM_LAOPT_GRADIENT_EIGEN(benchmark::State& state)
 {
     laopt_gradient<n_mass, laopt::EIGEN_ALL>(state);
 }
-
+#ifdef LAOPT_WITH_CASADI
 template<int n_mass>
 static void BM_LAOPT_GRADIENT_CASADI(benchmark::State& state)
 {
     laopt_gradient<n_mass, laopt::CASADI_ALL>(state);
 }
-
 template<int n_mass>
 static void BM_LAOPT_GRADIENT_CASADI_NO_JIT(benchmark::State& state)
 {
     laopt_gradient<n_mass, laopt::CASADI_ALL | laopt::CASADI_NO_JIT>(state);
 }
+#endif
 
 template<int n_mass, int Options>
 static void laopt_hessian(benchmark::State& state)
@@ -212,19 +214,20 @@ static void BM_LAOPT_HESSIAN_EIGEN(benchmark::State& state)
 {
     laopt_hessian<n_mass, laopt::EIGEN_ALL>(state);
 }
-
+#ifdef LAOPT_WITH_CASADI
 template<int n_mass>
 static void BM_LAOPT_HESSIAN_CASADI(benchmark::State& state)
 {
     laopt_hessian<n_mass, laopt::CASADI_ALL>(state);
 }
-
 template<int n_mass>
 static void BM_LAOPT_HESSIAN_CASADI_NO_JIT(benchmark::State& state)
 {
     laopt_hessian<n_mass, laopt::CASADI_ALL | laopt::CASADI_NO_JIT>(state);
 }
+#endif
 
+#ifdef LAOPT_WITH_CASADI
 template<int n_mass = 10>
 struct CasadiSXChainMass
 {
@@ -332,7 +335,6 @@ static void BM_CASADI_SX_FUNCTION(benchmark::State& state)
         benchmark::DoNotOptimize(value);
     }
 }
-
 template<int n_mass>
 static void BM_CASADI_SX_JACOBIAN(benchmark::State& state)
 {
@@ -347,7 +349,6 @@ static void BM_CASADI_SX_JACOBIAN(benchmark::State& state)
         benchmark::DoNotOptimize(jacobian);
     }
 }
-
 template<int n_mass>
 static void BM_CASADI_SX_WSUM(benchmark::State& state)
 {
@@ -363,7 +364,6 @@ static void BM_CASADI_SX_WSUM(benchmark::State& state)
         benchmark::DoNotOptimize(wsum);
     }
 }
-
 template<int n_mass>
 static void BM_CASADI_SX_GRADIENT(benchmark::State& state)
 {
@@ -379,7 +379,6 @@ static void BM_CASADI_SX_GRADIENT(benchmark::State& state)
         benchmark::DoNotOptimize(gradient);
     }
 }
-
 template<int n_mass>
 static void BM_CASADI_SX_HESSIAN(benchmark::State& state)
 {
@@ -434,7 +433,6 @@ static void BM_CASADI_CODEGEN_FUNCTION(benchmark::State& state)
         benchmark::DoNotOptimize(res);
     }
 }
-
 static void BM_CASADI_CODEGEN_JACOBIAN(benchmark::State& state)
 {
     casadi_int sz_arg, sz_res, sz_iw, sz_w;
@@ -449,7 +447,6 @@ static void BM_CASADI_CODEGEN_JACOBIAN(benchmark::State& state)
         benchmark::DoNotOptimize(res);
     }
 }
-
 static void BM_CASADI_CODEGEN_WSUM(benchmark::State& state)
 {
     casadi_int sz_arg, sz_res, sz_iw, sz_w;
@@ -464,7 +461,6 @@ static void BM_CASADI_CODEGEN_WSUM(benchmark::State& state)
         benchmark::DoNotOptimize(res);
     }
 }
-
 static void BM_CASADI_CODEGEN_GRADIENT(benchmark::State& state)
 {
     casadi_int sz_arg, sz_res, sz_iw, sz_w;
@@ -479,7 +475,6 @@ static void BM_CASADI_CODEGEN_GRADIENT(benchmark::State& state)
         benchmark::DoNotOptimize(res);
     }
 }
-
 static void BM_CASADI_CODEGEN_HESSIAN(benchmark::State& state)
 {
     casadi_int sz_arg, sz_res, sz_iw, sz_w;
@@ -494,33 +489,43 @@ static void BM_CASADI_CODEGEN_HESSIAN(benchmark::State& state)
         benchmark::DoNotOptimize(res);
     }
 }
-
+#endif
 
 BENCHMARK_TEMPLATE(BM_LAOPT_FUNCTION_EIGEN, 5);
+#ifdef LAOPT_WITH_CASADI
 BENCHMARK_TEMPLATE(BM_CASADI_SX_FUNCTION, 5);
 BENCHMARK(BM_CASADI_CODEGEN_FUNCTION);
+#endif
 
 BENCHMARK_TEMPLATE(BM_LAOPT_JACOBIAN_EIGEN, 5);
+#ifdef LAOPT_WITH_CASADI
 BENCHMARK_TEMPLATE(BM_LAOPT_JACOBIAN_CASADI, 5);
 BENCHMARK_TEMPLATE(BM_LAOPT_JACOBIAN_CASADI_NO_JIT, 5);
 BENCHMARK_TEMPLATE(BM_CASADI_SX_JACOBIAN, 5);
 BENCHMARK(BM_CASADI_CODEGEN_JACOBIAN);
+#endif
 
 BENCHMARK_TEMPLATE(BM_LAOPT_WSUM_EIGEN, 5);
+#ifdef LAOPT_WITH_CASADI
 BENCHMARK_TEMPLATE(BM_CASADI_SX_WSUM, 5);
 BENCHMARK(BM_CASADI_CODEGEN_WSUM);
+#endif
 
 BENCHMARK_TEMPLATE(BM_LAOPT_GRADIENT_EIGEN, 5);
+#ifdef LAOPT_WITH_CASADI
 BENCHMARK_TEMPLATE(BM_LAOPT_GRADIENT_CASADI, 5);
 BENCHMARK_TEMPLATE(BM_LAOPT_GRADIENT_CASADI_NO_JIT, 5);
 BENCHMARK_TEMPLATE(BM_CASADI_SX_GRADIENT, 5);
 BENCHMARK(BM_CASADI_CODEGEN_GRADIENT);
+#endif
 
 BENCHMARK_TEMPLATE(BM_LAOPT_HESSIAN_EIGEN, 5);
+#ifdef LAOPT_WITH_CASADI
 BENCHMARK_TEMPLATE(BM_LAOPT_HESSIAN_CASADI, 5);
 BENCHMARK_TEMPLATE(BM_LAOPT_HESSIAN_CASADI_NO_JIT, 5);
 BENCHMARK_TEMPLATE(BM_CASADI_SX_HESSIAN, 5);
 BENCHMARK(BM_CASADI_CODEGEN_HESSIAN);
+#endif
 
 BENCHMARK_MAIN();
 
