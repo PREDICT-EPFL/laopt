@@ -21,7 +21,7 @@ enum struct hessian_approximation_t {
 
 template <typename Scalar>
 struct sqp_settings_t {
-    globalization_t globalization_strategy        = globalization_t::LINE_SEARCH_L1;
+    globalization_t globalization_strategy        = globalization_t::LINE_SEARCH_FILTER;
     Scalar tau                                    = 0.7;   // line search iteration decrease, 0 < tau < 1
     Scalar eta                                    = 0.25;  // line search parameter, 0 < eta < 1
     Scalar rho                                    = 0.5;   // line search parameter, 0 < rho < 1
