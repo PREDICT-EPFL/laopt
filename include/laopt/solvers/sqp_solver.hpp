@@ -105,9 +105,11 @@ protected:
     sqp_info_t m_info;
     bool m_first_solve;
 
-    Eigen::VectorX<scalar_t> m_p;             // primal search direction
-    Eigen::VectorX<scalar_t> m_lam_qp;        // dual variable solution of qp
-    Eigen::VectorX<scalar_t> m_lam_bounds_qp; // dual variable solution of qp for bounds
+    Eigen::VectorX<scalar_t> m_p;                // primal search direction
+    Eigen::VectorX<scalar_t> m_lam_qp;           // dual variable solution of qp
+    Eigen::VectorX<scalar_t> m_lam_bounds_qp;    // dual variable solution of qp for bounds
+    Eigen::VectorX<scalar_t> m_lbx_qp, m_ubx_qp; // qp variable bounds
+    Eigen::VectorX<scalar_t> m_lbg_qp, m_ubg_qp; // qp equality/inequality bounds
 
     scalar_t m_primal_feasibility_inf = 0;
     scalar_t m_complementarity_inf = 0;
@@ -147,6 +149,8 @@ public:
         m_p(prob->variables()),
         m_lam_qp(prob->constraints.rows()),
         m_lam_bounds_qp(prob->variables()),
+        m_lbx_qp(prob->variables()), m_ubx_qp(prob->variables()),
+        m_lbg_qp(prob->constraints.rows()), m_ubg_qp(prob->constraints.rows()),
         m_x_step_line_search(prob->variables()),
         m_watchdog_step(0),
         m_x_merit_decrease(prob->variables()),
@@ -220,8 +224,24 @@ public:
                 printf("constraints m = %d\n", prob->constraints.rows());
                 printf("lagrangian hessian nnz = %ld\n", m_lag_hess.nonZeros());
                 printf("constraints jacobian nnz = %ld\n", m_g_jac.nonZeros());
+                switch (m_settings.globalization_strategy) {
+                    case globalization_t::FULL_STEP:
+                        printf("globalization strategy: FULL_STEP\n");
+                        break;
+                    case globalization_t::LINE_SEARCH_L1:
+                        printf("globalization strategy: LINE_SEARCH_L1\n");
+                        break;
+                    case globalization_t::LINE_SEARCH_FILTER:
+                        printf("globalization strategy: LINE_SEARCH_FILTER\n");
+                        break;
+                    default:
+                        printf("globalization strategy: unknown\n");
+                }
             }
         }
+
+        // ensure variables are in bounds
+        project_bounds(m_x);
 
         // reset filter
         m_current_filter_elements = 0;
@@ -449,11 +469,30 @@ protected:
         prob->eval_constraints_jacobian(jacobian_buffer);
     }
 
+    EIGEN_STRONG_INLINE void project_bounds(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
+    {
+        prob->eval_variable_bounds(m_lbx, m_ubx);
+        x = x.cwiseMax(m_lbx).cwiseMin(m_ubx);
+    }
+
     EIGEN_STRONG_INLINE void linearize_problem(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
     {
         eval_objective_gradient(x);
         eval_constraints(x);
         eval_constraints_jacobian(x);
+
+        // subtract constant part from linearization to get qp bounds
+        m_lbx_qp = m_lbx - m_x;
+        m_ubx_qp = m_ubx - m_x;
+        m_lbg_qp = m_lbg - m_g;
+        m_ubg_qp = m_ubg - m_g;
+
+        // replace inf values with finite values since some solver don't like them (e.g. HPIPM)
+        scalar_t max_val = std::numeric_limits<scalar_t>::max();
+        m_lbx_qp = m_lbx_qp.cwiseMin(max_val).cwiseMax(-max_val);
+        m_ubx_qp = m_ubx_qp.cwiseMin(max_val).cwiseMax(-max_val);
+        m_lbg_qp = m_lbg_qp.cwiseMin(max_val).cwiseMax(-max_val);
+        m_ubg_qp = m_ubg_qp.cwiseMin(max_val).cwiseMax(-max_val);
     }
 
     EIGEN_STRONG_INLINE void calculate_regularized_problem_hessian(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
@@ -483,14 +522,7 @@ protected:
         m_lbg -= m_g;
         m_ubg -= m_g;
 
-        // replace inf values with finite values since some solver don't like them (e.g. HPIPM)
-        scalar_t max_val = std::numeric_limits<scalar_t>::max();
-        m_lbx = m_lbx.cwiseMin(max_val).cwiseMax(-max_val);
-        m_ubx = m_ubx.cwiseMin(max_val).cwiseMax(-max_val);
-        m_lbg = m_lbg.cwiseMin(max_val).cwiseMax(-max_val);
-        m_ubg = m_ubg.cwiseMin(max_val).cwiseMax(-max_val);
-
-        m_qp_solver.solve(m_lag_hess, m_cost_grad, m_lbx, m_ubx, m_g_jac, m_lbg, m_ubg);
+        m_qp_solver.solve(m_lag_hess, m_cost_grad, m_lbx_qp, m_ubx_qp, m_g_jac, m_lbg_qp, m_ubg_qp);
         m_info.qp_iter += m_qp_solver.info().iter;
 
         // extract primal and dual solutions
@@ -708,7 +740,7 @@ protected:
 
         scalar_t alpha = scalar_t(1.0);
         scalar_t phi_step = scalar_t(0);
-        for (int i = 1; i < m_settings.line_search_max_iter; i++)
+        for (int i = 1; i < m_settings.line_search_max_iter && alpha > m_settings.min_alpha; i++)
         {
             m_x_step_line_search = m_x + alpha * p;
 
@@ -748,7 +780,7 @@ protected:
             Dp_phi_current = m_cost_grad.dot(p) - mu * constr_l1;
 
             alpha = scalar_t(1.0);
-            for (int i = 1; i < m_settings.line_search_max_iter; i++)
+            for (int i = 1; i < m_settings.line_search_max_iter && alpha > m_settings.min_alpha; i++)
             {
                 m_x_step_line_search = m_x_merit_decrease + alpha * p;
 
@@ -796,7 +828,7 @@ protected:
         }
 
         scalar_t alpha = scalar_t(1.0);
-        for (int i = 1; i < m_settings.line_search_max_iter; i++)
+        for (int i = 1; i < m_settings.line_search_max_iter && alpha > m_settings.min_alpha; i++)
         {
             m_x_step_line_search = m_x + alpha * p;
 
