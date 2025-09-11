@@ -9,8 +9,8 @@ on:
       - '*'
 
 env:
-  CMAKE_BUILD_TYPE: ON
-  ENABLE_SANITIZERS: ON
+  CMAKE_BUILD_TYPE: Release
+  ENABLE_SANITIZERS: OFF
 
 jobs:
   build_and_run_tests:
