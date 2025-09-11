@@ -357,7 +357,7 @@ public:
                              static_cast<scalar_t>(0),
                              static_cast<scalar_t>(0));
 
-        vector3_t b_M_thrust = b_r_thrust.template cross(b_F_thrust);
+        vector3_t b_M_thrust = b_r_thrust.template cross<vector3_t>(b_F_thrust);
         scalar_t M_thrust = b_M_thrust(1);
 
         /** ---------------------------------------------------------- **/

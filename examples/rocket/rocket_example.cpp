@@ -81,14 +81,14 @@ int main()
     // using SQPSolver = laopt::SQPSolver<OptProblem, laopt::ProxQPSolver<OptProblem::scalar_t>>;
     SQPSolver sqp_solver(opt_problem);
     sqp_solver.settings().verbose = true;
-    sqp_solver.settings().globalization_strategy = laopt::globalization_t::LINE_SEARCH_L1;
+    // sqp_solver.settings().globalization_strategy = laopt::globalization_t::LINE_SEARCH_L1;
     sqp_solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
     sqp_solver.settings().max_watchdog_steps = 0;
     // sqp_solver.settings().max_iter = 1;
 
-    sqp_solver.set_initial_primal(ipopt_solver.primal());
-    sqp_solver.set_initial_dual(ipopt_solver.dual());
-    sqp_solver.set_initial_dual_bounds(ipopt_solver.dual_bounds());
+    // sqp_solver.set_initial_primal(ipopt_solver.primal());
+    // sqp_solver.set_initial_dual(ipopt_solver.dual());
+    // sqp_solver.set_initial_dual_bounds(ipopt_solver.dual_bounds());
 
     auto integrate = [&](double h, auto x0_, auto u0_)
     {

@@ -120,7 +120,6 @@ int main()
                 using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
                 Solver solver(opt_problem);
                 solver.settings().verbose = true;
-                solver.settings().globalization_strategy = laopt::globalization_t::LINE_SEARCH_FILTER;
 //                solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
 
                 // After solver instantiation
@@ -168,7 +167,6 @@ int main()
                 using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
                 Solver solver(opt_problem);
                 solver.settings().verbose = true;
-                solver.settings().globalization_strategy = laopt::globalization_t::LINE_SEARCH_FILTER;
 //                solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
 
                 // After solver instantiation
@@ -223,7 +221,6 @@ int main()
                 using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
                 Solver solver(opt_problem);
                 solver.settings().verbose = true;
-                solver.settings().globalization_strategy = laopt::globalization_t::LINE_SEARCH_FILTER;
 //                solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
 
                 solve_and_print(transcription, opt_problem, solver);
@@ -268,7 +265,6 @@ int main()
                 using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<OptProblem::scalar_t>>;
                 Solver solver(opt_problem);
                 solver.settings().verbose = true;
-                solver.settings().globalization_strategy = laopt::globalization_t::LINE_SEARCH_FILTER;
 //                solver.settings().hessian_approximation = laopt::hessian_approximation_t::GAUSS_NEWTON;
 
                 solve_and_print(transcription, opt_problem, solver);
