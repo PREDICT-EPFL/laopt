@@ -241,7 +241,7 @@ public:
         }
 
         // ensure variables are in bounds
-        project_bounds(m_x);
+        // project_bounds(m_x);
 
         // reset filter
         m_current_filter_elements = 0;
@@ -516,11 +516,13 @@ protected:
     /** prepare and solve the qp */
     EIGEN_STRONG_INLINE void solve_qp() noexcept
     {
-        // add constant part from linearization to bounds
-        m_lbx -= m_x;
-        m_ubx -= m_x;
-        m_lbg -= m_g;
-        m_ubg -= m_g;
+        // std::cout << "m_lag_hess: " << m_lag_hess << std::endl;
+        // std::cout << "m_cost_grad: " << m_cost_grad.transpose() << std::endl;
+        // std::cout << "m_lbx: " << m_lbx.transpose() << std::endl;
+        // std::cout << "m_ubx: " << m_ubx.transpose() << std::endl;
+        // std::cout << "m_g_jac: " << m_g_jac << std::endl;
+        // std::cout << "m_lbg: " << m_lbg.transpose() << std::endl;
+        // std::cout << "m_ubg: " << m_ubg.transpose() << std::endl;
 
         m_qp_solver.solve(m_lag_hess, m_cost_grad, m_lbx_qp, m_ubx_qp, m_g_jac, m_lbg_qp, m_ubg_qp);
         m_info.qp_iter += m_qp_solver.info().iter;
@@ -529,6 +531,10 @@ protected:
         m_p = m_qp_solver.primal_solution();
         m_lam_qp = m_qp_solver.dual_solution();
         m_lam_bounds_qp = m_qp_solver.dual_bounds_solution();
+
+        // std::cout << "m_p: " << m_p.transpose() << std::endl;
+        // std::cout << "m_lam_qp: " << m_lam_qp.transpose() << std::endl;
+        // std::cout << "m_lam_bounds_qp: " << m_lam_bounds_qp.transpose() << std::endl;
     }
 
     EIGEN_STRONG_INLINE scalar_t
