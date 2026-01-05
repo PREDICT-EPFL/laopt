@@ -18,7 +18,7 @@ public:
 private:
     using constraint_t = typename Base::constraint_t;
 
-    piqp::SparseSolver<Scalar, int, Mode> m_piqp_solver;
+    piqp::SparseSolver<Scalar, int> m_piqp_solver;
     bool m_piqp_initialized;
 
     Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, int> m_P_piqp;
@@ -26,11 +26,12 @@ private:
     Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, int> m_A_piqp;
     Eigen::VectorX<scalar_t> m_b_piqp;
     Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, int> m_G_piqp;
-    Eigen::VectorX<scalar_t> m_h_piqp;
+    Eigen::VectorX<scalar_t> m_h_l_piqp;
+    Eigen::VectorX<scalar_t> m_h_u_piqp;
     Eigen::VectorX<scalar_t> m_x_lb_piqp;
     Eigen::VectorX<scalar_t> m_x_ub_piqp;
 
-    Eigen::VectorX<int> m_A_to_piqp_map; // maps row in A to row in A_piqp or C_piqp
+    Eigen::VectorX<int> m_A_to_piqp_map; // maps row in A to row in A_piqp or G_piqp
 
 public:
     PIQPSolver(int n, int m) :
@@ -55,14 +56,14 @@ public:
 
         if (!this->m_settings.reuse_pattern)
         {
-            m_piqp_solver.setup(m_P_piqp, m_c_piqp, m_A_piqp, m_b_piqp, m_G_piqp, m_h_piqp, m_x_lb_piqp, m_x_ub_piqp);
+            m_piqp_solver.setup(m_P_piqp, m_c_piqp, m_A_piqp, m_b_piqp, m_G_piqp, m_h_l_piqp, m_h_u_piqp, m_x_lb_piqp, m_x_ub_piqp);
             m_piqp_initialized = true;
         }
         else
         {
             eigen_assert(m_piqp_initialized);
 
-            m_piqp_solver.update(m_P_piqp, m_c_piqp, m_A_piqp, m_b_piqp, m_G_piqp, m_h_piqp, m_x_lb_piqp, m_x_ub_piqp);
+            m_piqp_solver.update(m_P_piqp, m_c_piqp, m_A_piqp, m_b_piqp, m_G_piqp, m_h_l_piqp, m_h_u_piqp, m_x_lb_piqp, m_x_ub_piqp);
         }
 
         m_piqp_solver.solve();
@@ -84,20 +85,22 @@ public:
             }
             else if (this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
             {
-                this->m_lam(i) = -m_piqp_solver.result().z(ineq_bound_i++);
+                this->m_lam(i) = -m_piqp_solver.result().z_l(ineq_bound_i++);
             }
             else if (this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
             {
-                this->m_lam(i) = m_piqp_solver.result().z(ineq_bound_i++);
+                this->m_lam(i) = m_piqp_solver.result().z_u(ineq_bound_i++);
             }
             else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
             {
-                this->m_lam(i) = -m_piqp_solver.result().z(ineq_bound_i++);
-                this->m_lam(i) += m_piqp_solver.result().z(ineq_bound_i++);
+                // For two-sided constraints, combine the dual variables
+                // The dual variable for h_l <= Gx <= h_u is z_u - z_l (sign convention)
+                this->m_lam(i) = m_piqp_solver.result().z_u(ineq_bound_i) - m_piqp_solver.result().z_l(ineq_bound_i);
+                ineq_bound_i++;
             }
         }
         // copy box constraints dual variables
-        this->m_lam_bounds = m_piqp_solver.result().z_ub.head(this->m_n) - m_piqp_solver.result().z_lb.head(this->m_n);
+        this->m_lam_bounds = m_piqp_solver.result().z_bu.head(this->m_n) - m_piqp_solver.result().z_bl.head(this->m_n);
 
         this->m_info.iter = m_piqp_solver.result().info.iter;
 
@@ -126,7 +129,7 @@ public:
     }
 
 private:
-    /** construct the data matrices accepted by OSQP */
+    /** construct the data matrices accepted by PIQP */
     EIGEN_STRONG_INLINE void
     construct_piqp_data(const Eigen::SparseMatrix<scalar_t>& H,
                           const Eigen::Ref<const Eigen::VectorX<scalar_t>>& f,
@@ -258,20 +261,15 @@ private:
                         }
                     }
                     else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_LB_ONLY_CONSTR ||
-                             this->m_constraint_type[it.row()] == constraint_t::INEQ_UB_ONLY_CONSTR)
+                             this->m_constraint_type[it.row()] == constraint_t::INEQ_UB_ONLY_CONSTR ||
+                             this->m_constraint_type[it.row()] == constraint_t::INEQ_CONSTR)
                     {
+                        // With the new PIQP API, we only need one row per inequality constraint
+                        // even for two-sided constraints (h_l <= Gx <= h_u)
                         G_piqp_nnz(it.col()) += 1;
                         if (this->m_settings.elastic_mode)
                         {
                             G_piqp_nnz(this->m_n) += 1;
-                        }
-                    }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_CONSTR)
-                    {
-                        G_piqp_nnz(it.col()) += 2;
-                        if (this->m_settings.elastic_mode)
-                        {
-                            G_piqp_nnz(this->m_n) += 2;
                         }
                     }
                 }
@@ -287,24 +285,24 @@ private:
                     num_eq_constraints++;
                 }
                 else if (this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR ||
-                         this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
+                         this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR ||
+                         this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
                 {
+                    // Only one row per inequality constraint with the new PIQP API
                     num_ineq_constraints++;
-                }
-                else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
-                {
-                    num_ineq_constraints += 2;
                 }
             }
 
             m_b_piqp.resize(num_eq_constraints);
-            m_h_piqp.resize(num_ineq_constraints);
+            m_h_l_piqp.resize(num_ineq_constraints);
+            m_h_u_piqp.resize(num_ineq_constraints);
             m_x_lb_piqp.resize(n_vars);
             m_x_ub_piqp.resize(n_vars);
 
             // copy bounds
             int eq_bound_i = 0;
             int ineq_bound_i = 0;
+            constexpr scalar_t inf = std::numeric_limits<scalar_t>::infinity();
             for (int i = 0; i < this->m_m; i++)
             {
                 if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR)
@@ -316,21 +314,23 @@ private:
                 else if (this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
                 {
                     m_A_to_piqp_map(i) = ineq_bound_i;
-                    m_h_piqp(ineq_bound_i) = -Alb(i);
+                    m_h_l_piqp(ineq_bound_i) = Alb(i);
+                    m_h_u_piqp(ineq_bound_i) = inf;
                     ineq_bound_i++;
                 }
                 else if (this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
                 {
                     m_A_to_piqp_map(i) = ineq_bound_i;
-                    m_h_piqp(ineq_bound_i) = Aub(i);
+                    m_h_l_piqp(ineq_bound_i) = -inf;
+                    m_h_u_piqp(ineq_bound_i) = Aub(i);
                     ineq_bound_i++;
                 }
                 else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
                 {
+                    // Two-sided constraint: h_l <= Gx <= h_u
                     m_A_to_piqp_map(i) = ineq_bound_i;
-                    m_h_piqp(ineq_bound_i) = -Alb(i);
-                    ineq_bound_i++;
-                    m_h_piqp(ineq_bound_i) = Aub(i);
+                    m_h_l_piqp(ineq_bound_i) = Alb(i);
+                    m_h_u_piqp(ineq_bound_i) = Aub(i);
                     ineq_bound_i++;
                 }
             }
@@ -360,18 +360,13 @@ private:
                     {
                         m_A_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = it.value();
                     }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_LB_ONLY_CONSTR)
+                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_LB_ONLY_CONSTR ||
+                             this->m_constraint_type[it.row()] == constraint_t::INEQ_UB_ONLY_CONSTR ||
+                             this->m_constraint_type[it.row()] == constraint_t::INEQ_CONSTR)
                     {
-                        m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = -it.value();
-                    }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_UB_ONLY_CONSTR)
-                    {
+                        // With the new PIQP API, G matrix entries are used directly
+                        // (no sign flip needed, PIQP handles h_l <= Gx <= h_u)
                         m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = it.value();
-                    }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_CONSTR)
-                    {
-                        m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = -it.value();
-                        m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()) + 1, it.col()) = it.value();
                     }
                 }
             }
@@ -393,6 +388,7 @@ private:
                     }
                     else if (this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
                     {
+                        // For lower bound only: h_l <= Gx, slack relaxes h_l
                         if (Alb(i) > scalar_t(0)) {
                             slack_coeff = -Alb(i);
                         }
@@ -401,6 +397,7 @@ private:
                     }
                     else if (this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
                     {
+                        // For upper bound only: Gx <= h_u, slack relaxes h_u
                         if (Aub(i) < scalar_t(0)) {
                             slack_coeff = Aub(i);
                         }
@@ -409,16 +406,12 @@ private:
                     }
                     else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
                     {
-                        if (Alb(i) > scalar_t(0)) {
-                            slack_coeff = -Alb(i);
-                        }
-                        m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
-                        ineq_bound_i++;
-
-                        slack_coeff = 0;
-                        if (Aub(i) < scalar_t(0)) {
-                            slack_coeff = Aub(i);
-                        }
+                        // For two-sided constraint: h_l <= Gx <= h_u
+                        // Slack should help satisfy both bounds
+                        // Use a weighted combination based on bound magnitudes
+                        scalar_t lb_coeff = (Alb(i) > scalar_t(0)) ? -Alb(i) : scalar_t(0);
+                        scalar_t ub_coeff = (Aub(i) < scalar_t(0)) ? Aub(i) : scalar_t(0);
+                        slack_coeff = lb_coeff + ub_coeff;
                         m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
                         ineq_bound_i++;
                     }
@@ -433,6 +426,7 @@ private:
             // copy bounds
             int eq_bound_i = 0;
             int ineq_bound_i = 0;
+            constexpr scalar_t inf = std::numeric_limits<scalar_t>::infinity();
             for (int i = 0; i < this->m_m; i++)
             {
                 if (this->m_constraint_type[i] == constraint_t::EQ_CONSTR)
@@ -444,21 +438,22 @@ private:
                 else if (this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
                 {
                     m_A_to_piqp_map(i) = ineq_bound_i;
-                    m_h_piqp(ineq_bound_i) = -Alb(i);
+                    m_h_l_piqp(ineq_bound_i) = Alb(i);
+                    m_h_u_piqp(ineq_bound_i) = inf;
                     ineq_bound_i++;
                 }
                 else if (this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
                 {
                     m_A_to_piqp_map(i) = ineq_bound_i;
-                    m_h_piqp(ineq_bound_i) = Aub(i);
+                    m_h_l_piqp(ineq_bound_i) = -inf;
+                    m_h_u_piqp(ineq_bound_i) = Aub(i);
                     ineq_bound_i++;
                 }
                 else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
                 {
                     m_A_to_piqp_map(i) = ineq_bound_i;
-                    m_h_piqp(ineq_bound_i) = -Alb(i);
-                    ineq_bound_i++;
-                    m_h_piqp(ineq_bound_i) = Aub(i);
+                    m_h_l_piqp(ineq_bound_i) = Alb(i);
+                    m_h_u_piqp(ineq_bound_i) = Aub(i);
                     ineq_bound_i++;
                 }
             }
@@ -476,18 +471,11 @@ private:
                     {
                         m_A_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = it.value();
                     }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_LB_ONLY_CONSTR)
-                    {
-                        m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = -it.value();
-                    }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_UB_ONLY_CONSTR)
+                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_LB_ONLY_CONSTR ||
+                             this->m_constraint_type[it.row()] == constraint_t::INEQ_UB_ONLY_CONSTR ||
+                             this->m_constraint_type[it.row()] == constraint_t::INEQ_CONSTR)
                     {
                         m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = it.value();
-                    }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_CONSTR)
-                    {
-                        m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = -it.value();
-                        m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()) + 1, it.col()) = it.value();
                     }
                 }
             }
@@ -525,16 +513,9 @@ private:
                     }
                     else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
                     {
-                        if (Alb(i) > scalar_t(0)) {
-                            slack_coeff = -Alb(i);
-                        }
-                        m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
-                        ineq_bound_i++;
-
-                        slack_coeff = 0;
-                        if (Aub(i) < scalar_t(0)) {
-                            slack_coeff = Aub(i);
-                        }
+                        scalar_t lb_coeff = (Alb(i) > scalar_t(0)) ? -Alb(i) : scalar_t(0);
+                        scalar_t ub_coeff = (Aub(i) < scalar_t(0)) ? Aub(i) : scalar_t(0);
+                        slack_coeff = lb_coeff + ub_coeff;
                         m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
                         ineq_bound_i++;
                     }
