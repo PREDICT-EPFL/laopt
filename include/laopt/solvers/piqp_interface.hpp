@@ -4,15 +4,16 @@
 #include "laopt/utility.hpp"
 #include "laopt/solvers/qp_base.hpp"
 #include "piqp/piqp.hpp"
+#include <piqp/kkt_fwd.hpp>
 
 namespace laopt
 {
 
-template<typename Scalar = double, int Mode = piqp::KKTMode::KKT_FULL>
-class PIQPSolver : public QPBase<PIQPSolver<Scalar, Mode>, Scalar>
+template<typename Scalar = double>
+class PIQPSolver : public QPBase<PIQPSolver<Scalar>, Scalar>
 {
 public:
-    using Base = QPBase<PIQPSolver<Scalar, Mode>, Scalar>;
+    using Base = QPBase<PIQPSolver<Scalar>, Scalar>;
     using scalar_t = typename Base::scalar_t;
 
 private:
