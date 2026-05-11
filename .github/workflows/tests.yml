@@ -34,7 +34,7 @@ jobs:
           # Compiler infrastructure
           conda install cmake=3.31.6 compilers make pkg-config
           # Dependencies
-          conda install eigen casadi ipopt osqp proxsuite piqp libblasfeo yaml-cpp
+          conda install eigen casadi ipopt osqp proxsuite piqp yaml-cpp
 
       - name: Setup working directories
         shell: bash -l {0}
@@ -46,6 +46,11 @@ jobs:
         shell: bash -l {0}
         working-directory: build_external
         run: bash  ../ci/shared/install_qpswift.sh
+
+      - name: Install BLASFEO
+        shell: bash -l {0}
+        working-directory: build_external
+        run: bash  ../ci/shared/install_blasfeo.sh
 
       - name: Install hpipm
         shell: bash -l {0}
