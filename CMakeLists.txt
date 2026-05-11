@@ -11,6 +11,7 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 option(WITH_CASADI "Build Casadi interface" OFF)
 option(WITH_IPOPT "Build IPOPT interface" ON)
 option(WITH_OSQP "Build OSQP interface" OFF)
+option(WITH_QPALM "Build QPALM interface" OFF)
 option(WITH_PROXQP "Build ProxQP interface" OFF)
 option(WITH_QPSWIFT "Build qpSWIFT interface" OFF)
 option(WITH_PIQP "Build PIQP interface" ON)
@@ -109,6 +110,13 @@ if (WITH_OSQP)
     find_package(osqp REQUIRED)
     target_compile_definitions(laopt INTERFACE LAOPT_WITH_OSQP)
     target_link_libraries(laopt INTERFACE osqp::osqp)
+endif ()
+
+# Find QPALM
+if (WITH_QPALM)
+    find_package(QPALM REQUIRED)
+    target_compile_definitions(laopt INTERFACE LAOPT_WITH_QPALM)
+    target_link_libraries(laopt INTERFACE QPALM::qpalm)
 endif ()
 
 # Find ProxQP
