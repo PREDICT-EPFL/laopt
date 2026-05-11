@@ -1,6 +1,7 @@
 #ifndef LAOPT_BS_SLICE_BASE_HPP
 #define LAOPT_BS_SLICE_BASE_HPP
 
+#include <cassert>
 #include <Eigen/Dense>
 
 namespace laopt {

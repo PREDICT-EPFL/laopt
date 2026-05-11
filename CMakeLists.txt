@@ -1,8 +1,8 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.21)
 
 project(laopt
     VERSION 0.1.0
-    LANGUAGES CXX
+    LANGUAGES C CXX
 )
 
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
@@ -73,7 +73,11 @@ if (DEFINED EIGEN3_INCLUDE_DIRS AND NOT TARGET Eigen3::Eigen)
     add_library(Eigen3::Eigen INTERFACE IMPORTED)
     target_include_directories(Eigen3::Eigen INTERFACE ${EIGEN3_INCLUDE_DIRS})
 else ()
-    find_package(Eigen3 3.4 REQUIRED NO_MODULE)
+    find_package(Eigen3 REQUIRED NO_MODULE)
+
+    if (Eigen3_VERSION VERSION_LESS "3.4")
+        message(FATAL_ERROR "Eigen3 >= 3.4 required, found ${Eigen3_VERSION}")
+    endif ()
 endif ()
 message(STATUS "Using Eigen3 from: ${EIGEN3_INCLUDE_DIRS}")
 

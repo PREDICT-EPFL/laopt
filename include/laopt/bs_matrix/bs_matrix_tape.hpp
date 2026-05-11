@@ -2,6 +2,7 @@
 #define LAOPT_BS_MATRIX_TAPE_HPP
 
 #include <vector>
+#include <cassert>
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.21)
 
 add_executable(double_integrator_example double_integrator_example.cpp)
 target_link_libraries(double_integrator_example PRIVATE laopt-examples)
