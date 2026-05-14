@@ -1,12 +1,11 @@
 #ifndef LAOPT_OSQP_INTERFACE_HPP
 #define LAOPT_OSQP_INTERFACE_HPP
 
+#include <type_traits>
+
 #include "laopt/utility.hpp"
 #include "laopt/solvers/qp_base.hpp"
 #include "osqp.h"
-
-// TODO: Handle conflicting macros better
-#undef WARM_START
 
 namespace laopt
 {
@@ -18,18 +17,22 @@ public:
     using Base = QPBase<OSQPSolver<Scalar>, Scalar>;
     using scalar_t = typename Base::scalar_t;
 
+    static_assert(std::is_same<scalar_t, OSQPFloat>::value,
+                  "laopt::OSQPSolver scalar type must match OSQPFloat");
+
 private:
     using constraint_t = typename Base::constraint_t;
     using constraint_changed_t = typename Base::constraint_changed_t;
 
-    OSQPWorkspace* m_osqp_workspace;
-    OSQPSettings* m_osqp_settings;
-    OSQPData* m_osqp_data;
+    ::OSQPSolver* m_osqp_solver;
+    OSQPSettings m_osqp_settings;
+    OSQPCscMatrix m_P_osqp_view;
+    OSQPCscMatrix m_A_osqp_view;
     bool m_osqp_initialized;
 
-    Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, c_int> m_P_osqp;
+    Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, OSQPInt> m_P_osqp;
     Eigen::VectorX<scalar_t> m_q_osqp;
-    Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, c_int> m_A_osqp;
+    Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, OSQPInt> m_A_osqp;
     Eigen::VectorX<scalar_t> m_Alb_osqp;
     Eigen::VectorX<scalar_t> m_Aub_osqp;
     Eigen::VectorX<scalar_t> m_x_osqp;
@@ -40,36 +43,20 @@ public:
     {
         this->m_settings.max_iter = 10000;
 
-        m_osqp_workspace = nullptr;
-        m_osqp_settings = (OSQPSettings*) c_malloc(sizeof(OSQPSettings));
-        m_osqp_data = (OSQPData*) c_malloc(sizeof(OSQPData));
+        m_osqp_solver = nullptr;
+        m_P_osqp_view = {};
+        m_A_osqp_view = {};
         m_osqp_initialized = false;
 
-        if (m_osqp_data) {
-            m_osqp_data->P = (csc*) c_malloc(sizeof(csc));
-            m_osqp_data->P->nz = -1;
-            m_osqp_data->A = (csc*) c_malloc(sizeof(csc));
-            m_osqp_data->A->nz = -1;
-        }
-        if (m_osqp_settings) {
-            osqp_set_default_settings(m_osqp_settings);
-        }
+        osqp_set_default_settings(&m_osqp_settings);
 
         set_osqp_settings();
     }
 
     ~OSQPSolver()
     {
-        if (m_osqp_workspace != nullptr) {
-            osqp_cleanup(m_osqp_workspace);
-        }
-        if (m_osqp_data) {
-            if (m_osqp_data->P) c_free(m_osqp_data->P);
-            if (m_osqp_data->A) c_free(m_osqp_data->A);
-            c_free(m_osqp_data);
-        }
-        if (m_osqp_settings) {
-            c_free(m_osqp_settings);
+        if (m_osqp_solver != nullptr) {
+            osqp_cleanup(m_osqp_solver);
         }
     }
 
@@ -85,52 +72,64 @@ public:
 
         construct_osqp_data(H, f, xlb, xub, A, Alb, Aub);
 
-        m_osqp_data->n = m_P_osqp.rows();
-        m_osqp_data->m = m_A_osqp.rows();
-
-        m_osqp_data->P->m = m_P_osqp.rows();
-        m_osqp_data->P->n = m_P_osqp.cols();
-        m_osqp_data->P->nzmax = m_P_osqp.nonZeros();
-        m_osqp_data->P->x = m_P_osqp.valuePtr();
-        m_osqp_data->P->i = m_P_osqp.innerIndexPtr();
-        m_osqp_data->P->p = m_P_osqp.outerIndexPtr();
-
-        m_osqp_data->q = m_q_osqp.data();
-
-        m_osqp_data->A->m = m_A_osqp.rows();
-        m_osqp_data->A->n = m_A_osqp.cols();
-        m_osqp_data->A->nzmax = m_A_osqp.nonZeros();
-        m_osqp_data->A->x = m_A_osqp.valuePtr();
-        m_osqp_data->A->i = m_A_osqp.innerIndexPtr();
-        m_osqp_data->A->p = m_A_osqp.outerIndexPtr();
-
-        m_osqp_data->l = m_Alb_osqp.data();
-        m_osqp_data->u = m_Aub_osqp.data();
+        OSQPCscMatrix_set_data(&m_P_osqp_view,
+                               static_cast<OSQPInt>(m_P_osqp.rows()),
+                               static_cast<OSQPInt>(m_P_osqp.cols()),
+                               static_cast<OSQPInt>(m_P_osqp.nonZeros()),
+                               m_P_osqp.valuePtr(),
+                               m_P_osqp.innerIndexPtr(),
+                               m_P_osqp.outerIndexPtr());
+        OSQPCscMatrix_set_data(&m_A_osqp_view,
+                               static_cast<OSQPInt>(m_A_osqp.rows()),
+                               static_cast<OSQPInt>(m_A_osqp.cols()),
+                               static_cast<OSQPInt>(m_A_osqp.nonZeros()),
+                               m_A_osqp.valuePtr(),
+                               m_A_osqp.innerIndexPtr(),
+                               m_A_osqp.outerIndexPtr());
 
         if (!this->m_settings.reuse_pattern || !m_osqp_initialized)
         {
-            if (m_osqp_workspace != nullptr) {
-                osqp_cleanup(m_osqp_workspace);
+            if (m_osqp_solver != nullptr) {
+                osqp_cleanup(m_osqp_solver);
+                m_osqp_solver = nullptr;
             }
 
-            osqp_setup(&m_osqp_workspace, m_osqp_data, m_osqp_settings);
+            const OSQPInt exitflag = osqp_setup(&m_osqp_solver,
+                                                &m_P_osqp_view,
+                                                m_q_osqp.data(),
+                                                &m_A_osqp_view,
+                                                m_Alb_osqp.data(),
+                                                m_Aub_osqp.data(),
+                                                static_cast<OSQPInt>(m_A_osqp.rows()),
+                                                static_cast<OSQPInt>(m_P_osqp.rows()),
+                                                &m_osqp_settings);
+            if (exitflag != OSQP_NO_ERROR)
+            {
+                m_osqp_initialized = false;
+                this->m_info.status = qp_status_t::UNSOLVED;
+                return this->m_info;
+            }
             m_osqp_initialized = true;
         }
         else
         {
-            eigen_assert(m_osqp_workspace != nullptr);
+            eigen_assert(m_osqp_solver != nullptr);
 
-            osqp_update_P_A(m_osqp_workspace, m_osqp_data->P->x, OSQP_NULL, m_osqp_data->P->nzmax,
-                                              m_osqp_data->A->x, OSQP_NULL, m_osqp_data->A->nzmax);
-            osqp_update_lin_cost(m_osqp_workspace, m_osqp_data->q);
-            osqp_update_bounds(m_osqp_workspace, m_osqp_data->l, m_osqp_data->u);
+            osqp_update_data_mat(m_osqp_solver,
+                                 m_P_osqp.valuePtr(),
+                                 OSQP_NULL,
+                                 static_cast<OSQPInt>(m_P_osqp.nonZeros()),
+                                 m_A_osqp.valuePtr(),
+                                 OSQP_NULL,
+                                 static_cast<OSQPInt>(m_A_osqp.nonZeros()));
+            osqp_update_data_vec(m_osqp_solver, m_q_osqp.data(), m_Alb_osqp.data(), m_Aub_osqp.data());
         }
 
-        osqp_warm_start(m_osqp_workspace, this->m_x_osqp.data(), m_lam_osqp.data());
-        osqp_solve(m_osqp_workspace);
+        osqp_warm_start(m_osqp_solver, this->m_x_osqp.data(), m_lam_osqp.data());
+        osqp_solve(m_osqp_solver);
 
-        Eigen::Map<Eigen::Vector<c_float, -1>> primal_solution(m_osqp_workspace->solution->x, m_osqp_workspace->data->n);
-        Eigen::Map<Eigen::Vector<c_float, -1>> dual_solution(m_osqp_workspace->solution->y, m_osqp_workspace->data->m);
+        Eigen::Map<Eigen::Vector<OSQPFloat, -1>> primal_solution(m_osqp_solver->solution->x, m_P_osqp.rows());
+        Eigen::Map<Eigen::Vector<OSQPFloat, -1>> dual_solution(m_osqp_solver->solution->y, m_A_osqp.rows());
 
         this->m_x = primal_solution(Eigen::seqN(0, this->m_n));
         if (this->m_settings.elastic_mode) {
@@ -150,10 +149,10 @@ public:
             }
         }
 
-        this->m_info.iter = m_osqp_workspace->info->iter;
+        this->m_info.iter = static_cast<int>(m_osqp_solver->info->iter);
 
         // update status
-        switch (m_osqp_workspace->info->status_val)
+        switch (m_osqp_solver->info->status_val)
         {
             case OSQP_SOLVED:
             case OSQP_SOLVED_INACCURATE:
@@ -458,17 +457,14 @@ private:
 
     void set_osqp_settings() noexcept
     {
-        m_osqp_settings->eps_rel = this->m_settings.eps_rel;
-        m_osqp_settings->eps_abs = this->m_settings.eps_abs;
-        m_osqp_settings->max_iter = this->m_settings.max_iter;
-        m_osqp_settings->warm_start = true;
-        m_osqp_settings->verbose = this->m_settings.verbose;
+        m_osqp_settings.eps_rel = this->m_settings.eps_rel;
+        m_osqp_settings.eps_abs = this->m_settings.eps_abs;
+        m_osqp_settings.max_iter = static_cast<OSQPInt>(this->m_settings.max_iter);
+        m_osqp_settings.warm_starting = true;
+        m_osqp_settings.verbose = this->m_settings.verbose;
 
-        if (m_osqp_workspace != nullptr) {
-            osqp_update_eps_rel(m_osqp_workspace, this->m_settings.eps_rel);
-            osqp_update_eps_abs(m_osqp_workspace, this->m_settings.eps_abs);
-            osqp_update_max_iter(m_osqp_workspace, this->m_settings.max_iter);
-            osqp_update_verbose(m_osqp_workspace, this->m_settings.verbose);
+        if (m_osqp_solver != nullptr) {
+            osqp_update_settings(m_osqp_solver, &m_osqp_settings);
         }
     }
 
