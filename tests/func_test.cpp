@@ -126,7 +126,6 @@ TYPED_TEST(FunctionTest, VectorFunction)
 
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 3> jacobian;
-    std::array<Eigen::Matrix<scalar_t, 3, 3>, 2> hessian;
 
     value = test.function(x, u);
 
@@ -155,7 +154,6 @@ TYPED_TEST(FunctionTest, VectorFunctionParameter)
 
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 3> jacobian;
-    std::array<Eigen::Matrix<scalar_t, 3, 3>, 2> hessian;
 
     value = test.function(p, x, u);
 

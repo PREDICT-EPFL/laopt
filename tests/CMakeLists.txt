@@ -24,7 +24,7 @@ enable_testing()
 add_library(laopt-test INTERFACE)
 target_compile_options(laopt-test INTERFACE ${compiler_flags})
 target_link_options(laopt-test INTERFACE ${compiler_flags})
-target_link_libraries(laopt-test INTERFACE laopt gtest_main gtest)
+target_link_libraries(laopt-test INTERFACE gtest_main gtest laopt)
 
 add_executable(func_test func_test.cpp)
 target_link_libraries(func_test PRIVATE laopt-test)

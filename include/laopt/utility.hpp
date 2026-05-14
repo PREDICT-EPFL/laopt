@@ -88,6 +88,18 @@ namespace laopt
         template<typename... Args>
         using get_scalar_t = typename get_scalar<Args...>::type;
 
+        // Helper to extract compile-time size from ArithmeticSequence
+        template<typename T>
+        struct seq_size {
+            static constexpr int value = T::SizeAtCompileTime; // won't work for ArithmeticSequence
+        };
+
+        // Specialization for ArithmeticSequence
+        template<typename First, typename Size, typename Incr>
+        struct seq_size<Eigen::ArithmeticSequence<First, Size, Incr>> {
+            static constexpr int value = Eigen::internal::get_fixed_value<Size>::value;
+        };
+
     } // end namespace meta
 
     template<typename T>
@@ -182,16 +194,16 @@ namespace laopt
                        std::plus<Scalar>());
     }
 
-    template<typename... T, int n = meta::sum_template<T::SizeAtCompileTime...>()>
+    template<typename... T, int n = meta::sum_template<meta::seq_size<T>::value...>()>
     inline Eigen::Vector<int, n> multiSeq_to_index(T... segments)
     {
-        static_assert(is_all_positive({T::SizeAtCompileTime...}), "SIZES OF ARITHMETIC SEQUENCES MUST BE FIXED");
+        static_assert(is_all_positive({meta::seq_size<T>::value...}), "SIZES OF ARITHMETIC SEQUENCES MUST BE FIXED");
 
         Eigen::Vector<int, n> ret;
         int i = 0;
 
         auto fill_me = [&i, &ret](auto seg) {
-            for (int j = 0; j < decltype(seg)::SizeAtCompileTime; j++) {
+            for (int j = 0; j < meta::seq_size<decltype(seg)>::value; j++) {
                 ret[i++] = seg[j];
             }
         };

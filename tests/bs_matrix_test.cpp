@@ -175,7 +175,7 @@ struct SlicingProblem
     void eval(Tape& tape)
     {
         tape(Eigen::seqN(0, A.rows()), Eigen::seqN(0, A.cols())) = A;
-        tape(Eigen::seqN(Eigen::lastp1 - B.rows(), B.rows()), Eigen::seqN(Eigen::lastp1 - B.cols(), B.cols())) = B;
+        tape(Eigen::seqN(Eigen::indexing::lastp1 - B.rows(), B.rows()), Eigen::seqN(Eigen::indexing::lastp1 - B.cols(), B.cols())) = B;
     }
 
     static Eigen::MatrixX<bool> expected_sparsity()
@@ -780,9 +780,9 @@ struct SumProblem
     void eval(Tape& tape)
     {
         tape(Eigen::seqN(0, A.rows()), Eigen::seqN(0, A.cols())) = A;
-        tape(Eigen::seqN(Eigen::lastp1 - B.rows(), B.rows()), Eigen::seqN(Eigen::lastp1 - B.cols(), B.cols())) = B;
+        tape(Eigen::seqN(Eigen::indexing::lastp1 - B.rows(), B.rows()), Eigen::seqN(Eigen::indexing::lastp1 - B.cols(), B.cols())) = B;
         tape(Eigen::seqN(1, B.rows()), Eigen::seqN(2, B.cols())) += B;
-        tape(Eigen::seqN(Eigen::lastp1 - B.rows(), B.rows()), Eigen::seqN(2, B.cols())) += B;
+        tape(Eigen::seqN(Eigen::indexing::lastp1 - B.rows(), B.rows()), Eigen::seqN(2, B.cols())) += B;
         tape(Eigen::seqN(5, A.rows()), Eigen::seqN(5, A.cols())) += A;
     }
 
