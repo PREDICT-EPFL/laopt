@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.21)
 
 add_executable(inverted_pendulum_example inverted_pendulum_example.cpp)
 target_link_libraries(inverted_pendulum_example PRIVATE laopt-examples)
+laopt_target_enable_casadi(inverted_pendulum_example)
+laopt_target_enable_ipopt(inverted_pendulum_example)
+laopt_target_enable_piqp(inverted_pendulum_example)
 
 #add_executable(inverted_pendulum_test inverted_pendulum_test.cpp)
 #target_link_libraries(inverted_pendulum_test PRIVATE laopt-examples)

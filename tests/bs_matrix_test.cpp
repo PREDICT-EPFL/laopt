@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <chrono>
+#include <iomanip>
 
 #include "laopt/laopt.hpp"
 

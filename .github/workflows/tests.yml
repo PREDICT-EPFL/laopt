@@ -10,7 +10,7 @@ on:
 
 env:
   CMAKE_BUILD_TYPE: Release
-  ENABLE_SANITIZERS: OFF
+  LAOPT_ENABLE_SANITIZERS: OFF
 
 jobs:
   build_and_run_tests:
@@ -67,14 +67,14 @@ jobs:
         working-directory: build
         run: |
           cmake .. -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
-                   -DENABLE_SANITIZERS=$ENABLE_SANITIZERS \
-                   -DWITH_CASADI=ON \
-                   -DWITH_IPOPT=ON \
-                   -DWITH_OSQP=ON \
-                   -DWITH_PROXQP=ON \
-                   -DWITH_QPSWIFT=ON \
-                   -DWITH_PIQP=ON \
-                   -DWITH_HPIPM=ON
+                   -DLAOPT_ENABLE_SANITIZERS=$LAOPT_ENABLE_SANITIZERS \
+                   -DLAOPT_WITH_CASADI=ON \
+                   -DLAOPT_WITH_IPOPT=ON \
+                   -DLAOPT_WITH_OSQP=ON \
+                   -DLAOPT_WITH_PROXQP=ON \
+                   -DLAOPT_WITH_QPSWIFT=ON \
+                   -DLAOPT_WITH_PIQP=ON \
+                   -DLAOPT_WITH_HPIPM=ON
 
       - name: Build laopt
         shell: bash -l {0}
