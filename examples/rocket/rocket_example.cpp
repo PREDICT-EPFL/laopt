@@ -93,10 +93,12 @@ int main()
     auto integrate = [&](double h, auto x0_, auto u0_)
     {
         Ocp::Param p; p.setZero();
-        Ocp::State k1 = ocp->dynamics_impl(x0_, u0_, p);
-        Ocp::State k2 = ocp->dynamics_impl(x0_ + h * 0.5 * k1, u0_, p);
-        Ocp::State k3 = ocp->dynamics_impl(x0_ + h * 0.5 * k2, u0_, p);
-        Ocp::State k4 = ocp->dynamics_impl(x0_ + h * k3, u0_, p);
+        Eigen::Vector<double, 1> t0, tf; t0(0) = 0; tf(0) = 0;// Unused in dynamics
+        double tau{0}; // Unused in dynamics
+        Ocp::State k1 = ocp->dynamics_impl(x0_, u0_, p, t0, tf, tau);
+        Ocp::State k2 = ocp->dynamics_impl(x0_ + h * 0.5 * k1, u0_, p, t0, tf, tau);
+        Ocp::State k3 = ocp->dynamics_impl(x0_ + h * 0.5 * k2, u0_, p, t0, tf, tau);
+        Ocp::State k4 = ocp->dynamics_impl(x0_ + h * k3, u0_, p, t0, tf, tau);
         return static_cast<Ocp::State>(x0_ + h / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4));
     };
 

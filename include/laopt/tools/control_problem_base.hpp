@@ -152,27 +152,32 @@ public:
         return static_cast<T>(0);
     }
 
-    template<typename x_t, typename u_t, typename p_t,
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
             typename T = typename x_t::Scalar> // T is scalar type
     state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x,
                              const Eigen::MatrixBase<u_t>& u,
-                             const Eigen::MatrixBase<p_t>& p)
+                             const Eigen::MatrixBase<p_t>& p,
+                             const Eigen::MatrixBase<t0_t>& t0,
+                             const Eigen::MatrixBase<tf_t>& tf,
+                             const tau_t& tau)
     {
         std::cerr << "dynamics_impl() not implemented.\n";
-        unused(x, u, p);
+        unused(x, u, p, t0, tf, tau);
         exit(EXIT_FAILURE);
         return state_t<T>();
     }
 
     /* Inequality constraints */
-    template<typename x_t, typename u_t, typename p_t, typename tau_t,
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
             typename T = typename x_t::Scalar> // T is scalar type
     ineq_constr_t<T> inequality_constraints_impl(const Eigen::MatrixBase<x_t>& x,
                                                  const Eigen::MatrixBase<u_t>& u,
                                                  const Eigen::MatrixBase<p_t>& p,
+                                                 const Eigen::MatrixBase<t0_t>& t0,
+                                                 const Eigen::MatrixBase<tf_t>& tf,
                                                  const tau_t& tau)
     {
-        unused(x, u, p, tau);
+        unused(x, u, p, t0, tf, tau);
         if (NG > 0)
         {
             std::cerr << "control_problem_base: NG = " << NG << " but inequality_constraints_impl() not implemented.\n";
@@ -181,13 +186,14 @@ public:
         return {};
     }
 
-    template<typename x_t, typename u_t, typename p_t,
+    template<typename x_t, typename u_t, typename p_t, typename t0_t,
             typename T = typename x_t::Scalar> // T is scalar type
     ineq_constr0_t<T> inequality_constraints0_impl(const Eigen::MatrixBase<x_t>& x0,
                                                    const Eigen::MatrixBase<u_t>& u0,
-                                                   const Eigen::MatrixBase<p_t>& p)
+                                                   const Eigen::MatrixBase<p_t>& p,
+                                                   const Eigen::MatrixBase<t0_t>& t0)
     {
-        unused(x0, u0, p);
+        unused(x0, u0, p, t0);
         if (NG0 > 0)
         {
             std::cerr << "control_problem_base: NG0 = " << NG0 << " but inequality_constraints0_impl() not implemented.\n";
@@ -196,12 +202,14 @@ public:
         return {};
     }
 
-    template<typename x_tf, typename p_t, typename
-            T = typename x_tf::Scalar> // T is scalar type
+    template<typename x_tf, typename p_t, typename t0_t, typename tf_t,
+            typename T = typename x_tf::Scalar> // T is scalar type
     ineq_constrf_t<T> inequality_constraintsf_impl(const Eigen::MatrixBase<x_tf>& xf,
-                                                   const Eigen::MatrixBase<p_t>& p)
+                                                   const Eigen::MatrixBase<p_t>& p,
+                                                   const Eigen::MatrixBase<t0_t>& t0,
+                                                   const Eigen::MatrixBase<tf_t>& tf)
     {
-        unused(xf, p);
+        unused(xf, p, t0, tf);
         if (NGF > 0)
         {
             std::cerr << "control_problem_base: NGF = " << NGF << " but inequality_constraintsf_impl() not implemented.\n";

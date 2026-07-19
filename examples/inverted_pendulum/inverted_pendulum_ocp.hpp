@@ -77,11 +77,14 @@ public:
         return mayer_multiplier * get_non_control_cost<T>(xf, p) + w_tf * (tf(0) - t0(0));
     }
 
-    template<typename x_t, typename u_t, typename p_t,
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
             typename T = typename x_t::Scalar> // T is scalar type
     state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x,
                              const Eigen::MatrixBase<u_t>& u,
-                             const Eigen::MatrixBase<p_t>& p)
+                             const Eigen::MatrixBase<p_t>& p,
+                             const Eigen::MatrixBase<t0_t>& t0,
+                             const Eigen::MatrixBase<tf_t>& tf,
+                             const tau_t& tau)
     {
         // Constants
         const double g = 9.81; // gravity constant [m/s^2]
@@ -103,11 +106,12 @@ public:
         return x_dot;
     }
 
-    template<typename x_t, typename u_t, typename p_t,
+    template<typename x_t, typename u_t, typename p_t, typename t0_t,
             typename T = typename x_t::Scalar> // T is scalar type
     ineq_constr0_t<T> inequality_constraints0_impl(const Eigen::MatrixBase<x_t>& x0,
                                                    const Eigen::MatrixBase<u_t>& u0,
-                                                   const Eigen::MatrixBase<p_t>& p)
+                                                   const Eigen::MatrixBase<p_t>& p,
+                                                   const Eigen::MatrixBase<t0_t>& t0)
     {
         ineq_constr0_t<T> initial_ineq_constr;
         initial_ineq_constr(0) = (-x0(0) + 0.2); // <= g0_ub
@@ -115,11 +119,13 @@ public:
         return initial_ineq_constr;
     }
 
-    template<typename x_t, typename u_t, typename p_t, typename tau_t,
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
             typename T = typename x_t::Scalar> // T is scalar type
     ineq_constr_t<T> inequality_constraints_impl(const Eigen::MatrixBase<x_t>& x,
                                                  const Eigen::MatrixBase<u_t>& u,
                                                  const Eigen::MatrixBase<p_t>& p,
+                                                 const Eigen::MatrixBase<t0_t>& t0,
+                                                 const Eigen::MatrixBase<tf_t>& tf,
                                                  const tau_t& tau)
     {
         ineq_constr_t<T> ineq_constr;
@@ -128,10 +134,12 @@ public:
         return ineq_constr;
     }
 
-    template<typename xf_t, typename p_t,
+    template<typename xf_t, typename p_t, typename t0_t, typename tf_t,
             typename T = typename xf_t::Scalar> // T is scalar type
     ineq_constrf_t<T> inequality_constraintsf_impl(const Eigen::MatrixBase<xf_t>& xf,
-                                                   const Eigen::MatrixBase<p_t>& p)
+                                                   const Eigen::MatrixBase<p_t>& p,
+                                                   const Eigen::MatrixBase<t0_t>& t0,
+                                                   const Eigen::MatrixBase<tf_t>& tf)
     {
         ineq_constrf_t<T> final_ineq_constr;
         final_ineq_constr(0) = /* gf_lb <= */ (-xf(0) + 0.2); /* <= gf_ub */

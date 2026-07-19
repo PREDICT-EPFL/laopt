@@ -279,7 +279,7 @@ protected:
 protected:
     /* Dynamic constraints */
     struct ContinuousDynamics {};
-    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t,
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
             typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NX>
     function_impl(ContinuousDynamics,
@@ -287,9 +287,10 @@ protected:
                   const Eigen::MatrixBase<u_t> &u,
                   const Eigen::MatrixBase<p_t> &p,
                   const Eigen::MatrixBase<t0_t> &t0,
-                  const Eigen::MatrixBase<tf_t> &tf)
+                  const Eigen::MatrixBase<tf_t> &tf,
+                  const tau_t& tau)
     {
-        return (tf(0) - t0(0)) * controlProblem->dynamics_impl(x, u, p);
+        return (tf(0) - t0(0)) * controlProblem->dynamics_impl(x, u, p, t0, tf, tau);
     }
 
     struct DifferentialApproximation {
@@ -346,36 +347,41 @@ protected:
 
     /* Inequality constraints */
     struct InequalityConstraints {};
-    template<typename x_t, typename u_t, typename p_t, typename tau_t>
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t>
     EIGEN_STRONG_INLINE auto
     function_impl(InequalityConstraints,
                   const Eigen::MatrixBase<x_t> &x,
                   const Eigen::MatrixBase<u_t> &u,
                   const Eigen::MatrixBase<p_t> &p,
+                  const Eigen::MatrixBase<t0_t> &t0,
+                  const Eigen::MatrixBase<tf_t> &tf,
                   const tau_t &tau)
     {
-        return controlProblem->inequality_constraints_impl(x, u, p, tau);
+        return controlProblem->inequality_constraints_impl(x, u, p, t0, tf, tau);
     }
 
     struct InitialInequalityConstraints {};
-    template<typename x_t, typename u_t, typename p_t>
+    template<typename x_t, typename u_t, typename p_t, typename t0_t>
     EIGEN_STRONG_INLINE auto
     function_impl(InitialInequalityConstraints,
                   const Eigen::MatrixBase<x_t> &x0,
                   const Eigen::MatrixBase<u_t> &u0,
-                  const Eigen::MatrixBase<p_t> &p)
+                  const Eigen::MatrixBase<p_t> &p,
+                  const Eigen::MatrixBase<t0_t> &t0)
     {
-        return controlProblem->inequality_constraints0_impl(x0, u0, p);
+        return controlProblem->inequality_constraints0_impl(x0, u0, p, t0);
     }
 
     struct FinalInequalityConstraints {};
-    template<typename x_t, typename p_t>
+    template<typename x_t, typename p_t, typename t0_t, typename tf_t>
     EIGEN_STRONG_INLINE auto
     function_impl(FinalInequalityConstraints,
                   const Eigen::MatrixBase<x_t> &xf,
-                  const Eigen::MatrixBase<p_t> &p)
+                  const Eigen::MatrixBase<p_t> &p,
+                  const Eigen::MatrixBase<t0_t> &t0,
+                  const Eigen::MatrixBase<tf_t> &tf)
     {
-        return controlProblem->inequality_constraintsf_impl(xf, p);
+        return controlProblem->inequality_constraintsf_impl(xf, p, t0, tf);
     }
 
     /* Objective */
@@ -463,7 +469,7 @@ protected:
                 /* Add differential constraint at each node */
                 optProblem.add_constr(this->expression(DifferentialApproximation{}, X_seg_diff, j_node) ==
                                       this->expression(ContinuousDynamics{}, get_x(XU_var, k), get_u(XU_var, k), p_var,
-                                                                             get_t0_var(), get_tf_var())
+                                                                             get_t0_var(), get_tf_var(), T(k))
                                      );
             }
         }
@@ -488,12 +494,12 @@ protected:
         optProblem.add_constr(controlProblem->p_lb <= p_var <= controlProblem->p_ub);
 
         /* Inequality constraints */
-        optProblem.add_constr(controlProblem->g0_lb <= this->expression(InitialInequalityConstraints{},  get_x(XU_var, 0), get_u(XU_var, 0), p_var) <= controlProblem->g0_ub);
+        optProblem.add_constr(controlProblem->g0_lb <= this->expression(InitialInequalityConstraints{},  get_x(XU_var, 0), get_u(XU_var, 0), p_var, get_t0_var()) <= controlProblem->g0_ub);
         for (unsigned k = 1; k < N; k++)
         {
-            optProblem.add_constr(controlProblem->g_lb <= this->expression(InequalityConstraints{}, get_x(XU_var, k), get_u(XU_var, k), p_var, T(k)) <= controlProblem->g_ub);
+            optProblem.add_constr(controlProblem->g_lb <= this->expression(InequalityConstraints{}, get_x(XU_var, k), get_u(XU_var, k), p_var, get_t0_var(), get_tf_var(), T(k)) <= controlProblem->g_ub);
         }
-        optProblem.add_constr(controlProblem->gf_lb <= this->expression(FinalInequalityConstraints{}, get_x(XU_var, N), p_var) <= controlProblem->gf_ub);
+        optProblem.add_constr(controlProblem->gf_lb <= this->expression(FinalInequalityConstraints{}, get_x(XU_var, N), p_var, get_t0_var(), get_tf_var()) <= controlProblem->gf_ub);
         // TODO: FinalInequalityConstraints could also be on input for collocation scheme
 
         /* Set last control equal second last for easier data handling */

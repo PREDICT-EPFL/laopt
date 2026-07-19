@@ -120,11 +120,14 @@ public:
         return x_err.dot(P * x_err);
     }
 
-    template<typename x_t, typename u_t, typename p_t,
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
             typename T = typename x_t::Scalar> // T is scalar type
     state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x,
                              const Eigen::MatrixBase<u_t>& u,
-                             const Eigen::MatrixBase<p_t>& p)
+                             const Eigen::MatrixBase<p_t>& p,
+                             const Eigen::MatrixBase<t0_t>& t0,
+                             const Eigen::MatrixBase<tf_t>& tf,
+                             const tau_t& tau)
     {
         Eigen::Vector<T, 3> w   = x(Eigen::seqN(0, Eigen::fix<3>));
         Eigen::Vector<T, 3> phi = x(Eigen::seqN(3, Eigen::fix<3>));

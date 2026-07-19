@@ -2,6 +2,7 @@
 
 #include "inverted_pendulum_simple_ocp.hpp"
 #include "laopt/tools/multiple_shooting.hpp"
+#include "laopt/tools/radau_collocation.hpp"
 #include "laopt/solvers/ipopt_interface.hpp"
 // #include "laopt/solvers/sqp_solver.hpp"
 // #include "laopt/solvers/piqp_interface.hpp"
@@ -12,7 +13,8 @@ int main()
 
     // Construction
     using Ocp = InvertedPendulumSimpleOcp;
-    using Transcription = laopt_tools::MultipleShooting<Ocp, 20>;
+    // using Transcription = laopt_tools::MultipleShooting<Ocp, 20>;
+    using Transcription = laopt_tools::RadauCollocation<Ocp, 10, 3>;
     using OptProblem = laopt::Problem<Transcription>;
     using Solver = laopt::IpoptSolver<OptProblem>;
     // using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<>>;
@@ -39,7 +41,8 @@ int main()
     const Eigen::MatrixXd TU_resampled = transcription->get_TU_resampled( Ts );
 
     std::cout << "T_opt:\n" << T_opt.transpose() << "\n"
-              << "X_opt:\n" << X_opt << "\n";
+              << "X_opt:\n" << X_opt << "\n"
+              << "U_opt:\n" << U_opt << "\n";
 
     std::cout << "TX_resampled:\n" << TX_resampled << "\n";
     return 0;
