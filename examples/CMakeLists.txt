@@ -8,6 +8,7 @@ target_link_libraries(laopt-examples INTERFACE laopt)
 
 add_subdirectory(double_integrator)
 add_subdirectory(inverted_pendulum)
+add_subdirectory(inverted_pendulum_simple)
 add_subdirectory(chain_mass)
 add_subdirectory(fixed_wing)
 add_subdirectory(rocket)
