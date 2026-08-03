@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.21)
+
+add_executable(rocket_example rocket_example.cpp)
+target_link_libraries(rocket_example PRIVATE laopt-examples)
+laopt_target_enable_ipopt(rocket_example)
+laopt_target_enable_piqp(rocket_example)

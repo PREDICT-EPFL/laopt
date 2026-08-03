@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CASADI_VERSION=${CASADI_VERSION:-3.3.5};
+CASADI_VERSION=${CASADI_VERSION:-3.6.5};
 
 echo "Installing CASADI..."
 
@@ -10,6 +10,6 @@ git checkout "$CASADI_VERSION"
 
 mkdir build
 cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j2
-sudo make install
+cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_DEEPBIND=OFF
+cmake --build . --config Release -- -j2
+sudo cmake --install . --config Release

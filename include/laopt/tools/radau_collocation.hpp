@@ -6,14 +6,17 @@
 #include <iomanip>
 
 #include <Eigen/Dense>
-#include "unsupported/Eigen/Polynomials"
+#include <unsupported/Eigen/Polynomials>
 #include "laopt/laopt.hpp"
-#include "constants.hpp"
+#include "laopt/tools/constants.hpp"
 
 namespace laopt_tools {
 
 #define PRINT(x) \
 //std::cout << __FUNCTION__ << ": " << x << std::endl // Comment this line in to activate PRINT function in the code
+
+#define ASSERT_EARLY_GUESS() \
+{ std::cerr << "\n\n" << __FUNCTION__ << ": Must be called after solver instantiation. Guess has not been set.\n\n\n"; return; }
 
 /*
  * Radau Collocation
@@ -22,10 +25,10 @@ namespace laopt_tools {
  *  0     1    2   D_poly                                                   Node indices of D_poly+1 nodes within segment
  *  0                1                2         N_segs-1                    Segment indices of N_segs segments
  * */
-template<typename ControlProblem, unsigned N_segs, unsigned D_poly>
-class RadauCollocation : public laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly>>
+template<typename ControlProblem, unsigned N_segs, unsigned D_poly, int DiffOptions = laopt::EIGEN_ALL>
+class RadauCollocation : public laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly, DiffOptions>, laopt::TAGGED | DiffOptions>
 {
-    friend laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly>>;
+    friend laopt::Differentiable<RadauCollocation<ControlProblem, N_segs, D_poly, DiffOptions>, laopt::TAGGED | DiffOptions>;
 
     template<typename, typename, typename, typename>
     friend class laopt::ProblemBase;
@@ -98,7 +101,7 @@ protected:
     using variable_t = laopt::Variable<Scalar, n>;
 
     /* Instance of end user's ControlProblem */
-    ControlProblem &controlProblem;
+    std::shared_ptr<ControlProblem> controlProblem;
 
     /* Decision variables (same number of inputs as states for easier data handling) */
     static const unsigned N = D_poly * N_segs; // Last index of decision variables
@@ -276,19 +279,23 @@ protected:
 protected:
     /* Dynamic constraints */
     struct ContinuousDynamics {};
-    template<typename x_t, typename u_t, typename p_t, typename tf_t,
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
             typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NX>
     function_impl(ContinuousDynamics,
                   const Eigen::MatrixBase<x_t> &x,
                   const Eigen::MatrixBase<u_t> &u,
                   const Eigen::MatrixBase<p_t> &p,
-                  const Eigen::MatrixBase<tf_t> &tf)
+                  const Eigen::MatrixBase<t0_t> &t0,
+                  const Eigen::MatrixBase<tf_t> &tf,
+                  const tau_t& tau)
     {
-        return tf(0) * controlProblem.template dynamics_impl<scalar_t>(x, u, p);
+        return (tf(0) - t0(0)) * controlProblem->dynamics_impl(x, u, p, t0, tf, tau);
     }
 
-    struct DifferentialApproximation {};
+    struct DifferentialApproximation {
+        using UseEigen = std::true_type;
+    };
     template<typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NX>
     function_impl(DifferentialApproximation,
@@ -304,9 +311,9 @@ protected:
         return 2.0 / h_seg * dx_apr;
     }
 
-    template<typename OutJacobian, typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
+    template<typename OutJacobian, typename AScalar, typename X_t>
     EIGEN_STRONG_INLINE void
-    jacobian_impl(DifferentialApproximation, OutJacobian& out_jacobian,
+    jacobian_impl(DifferentialApproximation, OutJacobian& out_jacobian, const AScalar& alpha,
                   const Eigen::MatrixBase<X_t> &X_vec, unsigned j_node)
     {
         for (unsigned l = 0; l <= D_poly; l++)
@@ -314,13 +321,12 @@ protected:
             Scalar diag = 2.0 / h_seg * diff_mat(j_node, l);
             // assign diagonal values
             for (unsigned i = 0; i < NX; i++) {
-                out_jacobian(i, l * NX + i) += diag;
+                out_jacobian(i, l * NX + i) += alpha * diag;
             }
         }
     }
 
-    template <typename Weight, typename OutGradient,
-              typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
+    template <typename Weight, typename OutGradient, typename X_t>
     EIGEN_STRONG_INLINE void
     gradient_impl(DifferentialApproximation, OutGradient& out_gradient, const Eigen::MatrixBase<Weight>& weight,
                   const Eigen::MatrixBase<X_t> &X_vec, unsigned j_node)
@@ -331,8 +337,7 @@ protected:
         }
     }
 
-    template<typename Weight, typename OutHessian,
-             typename X_t, typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
+    template<typename Weight, typename OutHessian, typename X_t>
     EIGEN_STRONG_INLINE void
     hessian_impl(DifferentialApproximation, OutHessian&, const Eigen::MatrixBase<Weight>& weight,
                  const Eigen::MatrixBase<X_t> &X_vec, unsigned j_node)
@@ -342,76 +347,88 @@ protected:
 
     /* Inequality constraints */
     struct InequalityConstraints {};
-    template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
-    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NG>
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t>
+    EIGEN_STRONG_INLINE auto
     function_impl(InequalityConstraints,
                   const Eigen::MatrixBase<x_t> &x,
                   const Eigen::MatrixBase<u_t> &u,
-                  const Eigen::MatrixBase<p_t> &p)
+                  const Eigen::MatrixBase<p_t> &p,
+                  const Eigen::MatrixBase<t0_t> &t0,
+                  const Eigen::MatrixBase<tf_t> &tf,
+                  const tau_t &tau)
     {
-        return controlProblem.template inequality_constraints_impl<scalar_t>(x, u, p);
+        return controlProblem->inequality_constraints_impl(x, u, p, t0, tf, tau);
     }
 
     struct InitialInequalityConstraints {};
-    template<typename x_t, typename u_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
-    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NG0>
+    template<typename x_t, typename u_t, typename p_t, typename t0_t>
+    EIGEN_STRONG_INLINE auto
     function_impl(InitialInequalityConstraints,
                   const Eigen::MatrixBase<x_t> &x0,
                   const Eigen::MatrixBase<u_t> &u0,
-                  const Eigen::MatrixBase<p_t> &p)
+                  const Eigen::MatrixBase<p_t> &p,
+                  const Eigen::MatrixBase<t0_t> &t0)
     {
-        return controlProblem.template inequality_constraints0_impl<scalar_t>(x0, u0, p);
+        return controlProblem->inequality_constraints0_impl(x0, u0, p, t0);
     }
 
     struct FinalInequalityConstraints {};
-    template<typename x_t, typename p_t, typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
-    EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NGF>
+    template<typename x_t, typename p_t, typename t0_t, typename tf_t>
+    EIGEN_STRONG_INLINE auto
     function_impl(FinalInequalityConstraints,
                   const Eigen::MatrixBase<x_t> &xf,
-                  const Eigen::MatrixBase<p_t> &p)
+                  const Eigen::MatrixBase<p_t> &p,
+                  const Eigen::MatrixBase<t0_t> &t0,
+                  const Eigen::MatrixBase<tf_t> &tf)
     {
-        return controlProblem.template inequality_constraintsf_impl<scalar_t>(xf, p);
+        return controlProblem->inequality_constraintsf_impl(xf, p, t0, tf);
     }
 
     /* Objective */
-    struct NodeCost {};
-    template<typename X_t, typename U_t, typename p_t,
-            typename scalar_t = typename Eigen::MatrixBase<X_t>::Scalar>
-    EIGEN_STRONG_INLINE scalar_t
-    function_impl(NodeCost,
-                  const Eigen::MatrixBase<X_t> &x,
-                  const Eigen::MatrixBase<U_t> &u,
+    struct LagrangeCost {};
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t>
+    EIGEN_STRONG_INLINE auto
+    function_impl(LagrangeCost,
+                  const Eigen::MatrixBase<x_t> &x,
+                  const Eigen::MatrixBase<u_t> &u,
                   const Eigen::MatrixBase<p_t> &p,
-                  const unsigned j_node)
+                  const Eigen::MatrixBase<t0_t> &t0,
+                  const Eigen::MatrixBase<tf_t> &tf,
+                  const tau_t& tau)
     {
-        /* Contribution of this node to integral approximation of the segment the node is in */
-        return h_seg / 2.0 * int_mat(int_mat.rows() - 1, j_node) *
-            controlProblem.template lagrange_term_impl<scalar_t>(x, u, p);
+        return controlProblem->lagrange_term_impl(x, u, p, t0, tf, tau);
     }
 
     struct MayerCost {};
-    template<typename x_t, typename p_t, typename tf_t,
-            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
-    EIGEN_STRONG_INLINE scalar_t
+    template<typename x_t, typename p_t, typename t0_t, typename tf_t>
+    EIGEN_STRONG_INLINE auto
     function_impl(MayerCost,
                   const Eigen::MatrixBase<x_t> &x,
                   const Eigen::MatrixBase<p_t> &p,
+                  const Eigen::MatrixBase<t0_t> &t0,
                   const Eigen::MatrixBase<tf_t> &tf)
     {
-        return controlProblem.template mayer_term_impl<scalar_t>(x, p, tf(0));
+        return controlProblem->mayer_term_impl(x, p, t0, tf);
+    }
+
+    Eigen::Vector<Scalar, 1> get_t0_var() const
+    {
+        Eigen::Vector<Scalar, 1> t0;
+        t0(0) = controlProblem->t0;
+        return t0;
     }
 
     template<int Option = ControlProblem::Options>
     inline typename std::enable_if<(Option & FreeEndTime) == 0, Eigen::Vector<Scalar, 1>>::type
     get_tf_var() const
     {
-        if (controlProblem.tf_lb != controlProblem.tf_ub)
+        if (controlProblem->tf_lb != controlProblem->tf_ub)
         {
             std::cerr << "RadauCollocation<FixedEndTime>: final time bounds need to be identical (tf_lb == tf_ub)\n";
             exit(EXIT_FAILURE);
         }
         Eigen::Vector<Scalar, 1> tf;
-        tf(0) = controlProblem.tf_lb;
+        tf(0) = controlProblem->tf_lb;
         return tf;
     }
 
@@ -445,40 +462,44 @@ protected:
                 const unsigned k = id_seg_start + j_node; // Index of this node in the trajectory
 
                 /* Add contribution of this node to integral approximation of this segment */
-                optProblem.add_obj(this->function(NodeCost{}, get_x(XU_var, k), get_u(XU_var, k), p_var, j_node));
+                optProblem.add_obj(h_seg / 2.0 * int_mat(int_mat.rows() - 1, j_node)
+                                   * this->expression(LagrangeCost{}, get_x(XU_var, k), get_u(XU_var, k), p_var,
+                                                                      get_t0_var(), get_tf_var(), T(k)));
 
                 /* Add differential constraint at each node */
-                optProblem.add_constr(this->function(DifferentialApproximation{}, X_seg_diff, j_node) ==
-                                      this->function(ContinuousDynamics{}, get_x(XU_var, k), get_u(XU_var, k), p_var, get_tf_var()));
+                optProblem.add_constr(this->expression(DifferentialApproximation{}, X_seg_diff, j_node) ==
+                                      this->expression(ContinuousDynamics{}, get_x(XU_var, k), get_u(XU_var, k), p_var,
+                                                                             get_t0_var(), get_tf_var(), T(k))
+                                     );
             }
         }
 
         /* Last grid point */
-        optProblem.add_obj(this->function(MayerCost{}, get_x(XU_var, N), p_var, get_tf_var()));
+        optProblem.add_obj(this->expression(MayerCost{}, get_x(XU_var, N), p_var, get_t0_var(), get_tf_var()));
 
         /* Box constraints */
         for (unsigned k = 0; k <= N; k++)
         {
-            optProblem.add_constr(controlProblem.x_lb <= get_x(XU_var, k) <= controlProblem.x_ub);
-            optProblem.add_constr(controlProblem.u_lb <= get_u(XU_var, k) <= controlProblem.u_ub);
+            optProblem.add_constr(controlProblem->x_lb <= get_x(XU_var, k) <= controlProblem->x_ub);
+            optProblem.add_constr(controlProblem->u_lb <= get_u(XU_var, k) <= controlProblem->u_ub);
         }
 
         /* Boundary constraints */
-        optProblem.add_constr(controlProblem.x0_lb <= get_x(XU_var, 0) <= controlProblem.x0_ub);
-        optProblem.add_constr(controlProblem.xf_lb <= get_x(XU_var, N) <= controlProblem.xf_ub);
+        optProblem.add_constr(controlProblem->x0_lb <= get_x(XU_var, 0) <= controlProblem->x0_ub);
+        optProblem.add_constr(controlProblem->xf_lb <= get_x(XU_var, N) <= controlProblem->xf_ub);
         if (ControlProblem::Options & FreeEndTime)
         {
-            optProblem.add_constr(controlProblem.tf_lb <= tf_var <= controlProblem.tf_ub);
+            optProblem.add_constr(controlProblem->tf_lb <= tf_var <= controlProblem->tf_ub);
         }
-        optProblem.add_constr(controlProblem.opt_params_lb.vector() <= p_var <= controlProblem.opt_params_ub.vector());
+        optProblem.add_constr(controlProblem->p_lb <= p_var <= controlProblem->p_ub);
 
         /* Inequality constraints */
-        optProblem.add_constr(controlProblem.g0_lb <= this->function(InitialInequalityConstraints{},  get_x(XU_var, 0), get_u(XU_var, 0), p_var) <= controlProblem.g0_ub);
+        optProblem.add_constr(controlProblem->g0_lb <= this->expression(InitialInequalityConstraints{},  get_x(XU_var, 0), get_u(XU_var, 0), p_var, get_t0_var()) <= controlProblem->g0_ub);
         for (unsigned k = 1; k < N; k++)
         {
-            optProblem.add_constr(controlProblem.g_lb <= this->function(InequalityConstraints{}, get_x(XU_var, k), get_u(XU_var, k), p_var) <= controlProblem.g_ub);
+            optProblem.add_constr(controlProblem->g_lb <= this->expression(InequalityConstraints{}, get_x(XU_var, k), get_u(XU_var, k), p_var, get_t0_var(), get_tf_var(), T(k)) <= controlProblem->g_ub);
         }
-        optProblem.add_constr(controlProblem.gf_lb <= this->function(FinalInequalityConstraints{}, get_x(XU_var, N), p_var) <= controlProblem.gf_ub);
+        optProblem.add_constr(controlProblem->gf_lb <= this->expression(FinalInequalityConstraints{}, get_x(XU_var, N), p_var, get_t0_var(), get_tf_var()) <= controlProblem->gf_ub);
         // TODO: FinalInequalityConstraints could also be on input for collocation scheme
 
         /* Set last control equal second last for easier data handling */
@@ -486,7 +507,7 @@ protected:
     }
 
 public:
-    explicit RadauCollocation(ControlProblem &ctrlProblem_) :
+    explicit RadauCollocation(const std::shared_ptr<ControlProblem>& ctrlProblem_) :
             controlProblem(ctrlProblem_)
     {
         /* Construct trajectory time grid on [0, 1] */
@@ -517,21 +538,34 @@ public:
     /* Set functions */
     void set_X_guess(const State &x_guess)
     {
+        if (XU_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
         for (unsigned k = 0; k <= N; k++) { get_x(XU_var, k) << x_guess; }
     }
     void set_X_guess(const StateTrajectory &X_guess)
     {
+        if (XU_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
         for (unsigned k = 0; k <= N; k++) { get_x(XU_var, k) << X_guess.col(k); }
     }
     void set_U_guess(const Input &u_guess)
     {
+        if (XU_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
         for (unsigned k = 0; k <= N; k++) { get_u(XU_var, k) << u_guess; }
     }
     void set_U_guess(const InputTrajectory &U_guess)
     {
+        if (XU_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
         for (unsigned k = 0; k <= N; k++) { get_u(XU_var, k) << U_guess.col(k); }
     }
-    void set_p_guess(const Param &p_guess) { p_var = p_guess; }
+    void set_tf_guess(const Scalar& tf_guess)
+    {
+        if (tf_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
+        tf_var[0] = tf_guess;
+    }
+    void set_p_guess(const Param &p_guess)
+    {
+        if (p_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
+        p_var = p_guess;
+    }
 
     /* Get functions */
     double get_tf_opt() const
@@ -540,7 +574,7 @@ public:
     }
     TimeTrajectory get_T_opt() const
     {
-        return TimeTrajectory::Constant(controlProblem.t0) + (get_tf_opt() - controlProblem.t0) * T;
+        return TimeTrajectory::Constant(controlProblem->t0) + (get_tf_opt() - controlProblem->t0) * T;
     }
     StateTrajectory get_X_opt() const
     {
@@ -557,16 +591,10 @@ public:
         return U_opt;
     }
     Param get_p_opt() const { return Param(p_var); }
-    typename ControlProblem::OptParam get_opt_params() const
-    {
-        typename ControlProblem::OptParam opt_param;
-        opt_param.set_vector(get_p_opt());
-        return opt_param;
-    }
 
     Eigen::Vector<Scalar, NX> get_x_at(const Scalar &t) const
     {
-        const Scalar T_eval = (t - controlProblem.t0) / (get_tf_opt() - controlProblem.t0); // on [0 ... 1]|traj;
+        const Scalar T_eval = (t - controlProblem->t0) / (get_tf_opt() - controlProblem->t0); // on [0 ... 1]|traj;
 
         /* Find segment to sample from */
         const unsigned i_seg = std::floor(T_eval / h_seg);
@@ -583,7 +611,7 @@ public:
     }
     Eigen::Vector<Scalar, NU> get_u_at(const Scalar &t) const
     {
-        const Scalar T_eval = t / (get_tf_opt() - controlProblem.t0) - controlProblem.t0; // on [0 ... 1];
+        const Scalar T_eval = (t - controlProblem->t0) / (get_tf_opt() - controlProblem->t0); // on [0 ... 1];
 
         /* Find segment to sample from */
         const unsigned i_seg = std::floor(T_eval / h_seg);
@@ -610,7 +638,7 @@ public:
     {
         std::cout << std::setprecision(4) << std::defaultfloat;
         std::cout << "Diagnostics: Radau Collocation with N_segs = " << N_segs << ", D_poly = " << D_poly << "\n";
-        controlProblem.print_diagnostics();
+        controlProblem->print_diagnostics();
         const Eigen::VectorXd T_opt = get_T_opt();
         const Eigen::MatrixXd X_opt = get_X_opt();
         const Eigen::MatrixXd U_opt = get_U_opt();
@@ -638,7 +666,6 @@ protected: /* Helpers for resampling */
         Eigen::Matrix<Scalar, DerivedNX + 1, -1> TXn(DerivedNX + 1, n + 1);
         TXn.setZero();
 
-        using namespace Eigen;
         for (unsigned i_seg = 0; i_seg < N_segs; i_seg++)
         {
             const unsigned i_seg_start = i_seg * D_poly;
@@ -646,7 +673,7 @@ protected: /* Helpers for resampling */
             PRINT("-------------------------- \n"
                   "i_seg: " << i_seg << ", i_seg_start: " << i_seg_start << ", k_seg_start: " << k_seg_start);
 
-            const auto X_seg = X_opt(all, seqN(i_seg_start, D_poly + 1));
+            const auto X_seg = X_opt(Eigen::indexing::all, Eigen::seqN(i_seg_start, D_poly + 1));
             PRINT("X_seg:\n" << X_seg);
 
             for (unsigned j = 0; j < n_per_seg; j++)
@@ -657,7 +684,7 @@ protected: /* Helpers for resampling */
                 PRINT("j: " << j << ", k: " << k << ", tau: " << tau_eval);
 
                 TXn(0, k) = (i_seg * h_seg + h_seg * T_eval);
-                TXn(seqN(1, DerivedNX), k) << interpolate<DerivedNX>(X_seg.template reshaped<ColMajor>(), tau_eval);
+                TXn(Eigen::seqN(1, DerivedNX), k) << interpolate<DerivedNX>(X_seg.template reshaped<Eigen::ColMajor>(), tau_eval);
             }
 
             /* In last segment, write last point */
@@ -665,14 +692,14 @@ protected: /* Helpers for resampling */
             {
                 TXn(0, n) = get_tf_opt();
                 /* Copy or extrapolate */
-                TXn(seqN(1, DerivedNX), n) << X_opt(all, last);
+                TXn(Eigen::seqN(1, DerivedNX), n) << X_opt(Eigen::indexing::all, Eigen::indexing::last);
 //                TXn(seqN(1, DerivedNX), n) << interpolate<DerivedNX>(X_seg.template reshaped<ColMajor>(), 1);
             }
 
             /* Transform time by absolute horizon range (except  */
-            TXn(0, seqN(k_seg_start, n_per_seg)) =
-                    Eigen::MatrixX<Scalar>::Constant(1, n_per_seg, controlProblem.t0) +
-                    (get_tf_opt() - controlProblem.t0) * TXn(0, seqN(k_seg_start, n_per_seg));
+            TXn(0, Eigen::seqN(k_seg_start, n_per_seg)) =
+                    Eigen::MatrixX<Scalar>::Constant(1, n_per_seg, controlProblem->t0) +
+                    (get_tf_opt() - controlProblem->t0) * TXn(0, Eigen::seqN(k_seg_start, n_per_seg));
             PRINT("\n" << TXn << "\n");
         }
         return TXn;

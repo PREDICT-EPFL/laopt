@@ -79,20 +79,26 @@ public:
         return control_cost;
     }
 
-    template<typename T> // T is scalar type
-    T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
-                         const Eigen::Ref<const input_t<T>> &u,
-                         const Eigen::Ref<const param_t<T>> &p)
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    T lagrange_term_impl(const Eigen::MatrixBase<x_t>& x,
+                         const Eigen::MatrixBase<u_t>& u,
+                         const Eigen::MatrixBase<p_t>& p,
+                         const Eigen::MatrixBase<t0_t>& t0,
+                         const Eigen::MatrixBase<tf_t>& tf,
+                         const tau_t& tau)
     {
-        return get_non_control_cost(x) + get_control_cost(u);
+        return get_non_control_cost<T>(x) + get_control_cost<T>(u);
     }
 
-    template<typename T, typename Ttf> // T is scalar type
-    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &xf,
-                      const Eigen::Ref<const param_t<T>> &p,
-                      const Ttf &tf)
+    template<typename xf_t, typename p_t, typename t0_t, typename tf_t,
+            typename T = typename xf_t::Scalar> // T is scalar type
+    T mayer_term_impl(const Eigen::MatrixBase<xf_t>& xf,
+                      const Eigen::MatrixBase<p_t>& p,
+                      const Eigen::MatrixBase<t0_t>& t0,
+                      const Eigen::MatrixBase<tf_t>& tf)
     {
-        T mayer = mayer_multiplier * get_non_control_cost(xf);
+        T mayer = mayer_multiplier * get_non_control_cost<T>(xf);
 //        mayer = mayer_multiplier * non_control_cost + p(0); // Time-optimal ocp
 
         // LQR terminal weight
@@ -105,10 +111,14 @@ public:
         return mayer;
     }
 
-    template<typename T> // T is scalar type
-    state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
-                             const Eigen::Ref<const input_t<T>> &u,
-                             const Eigen::Ref<const param_t<T>> &p)
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x,
+                             const Eigen::MatrixBase<u_t>& u,
+                             const Eigen::MatrixBase<p_t>& p,
+                             const Eigen::MatrixBase<t0_t>& t0,
+                             const Eigen::MatrixBase<tf_t>& tf,
+                             const tau_t& tau)
     {
 //         Linear(ized) dynamics
 //        xdot = A.template cast<T>() * (x - x_trim.template cast<T>()) +

@@ -1,0 +1,284 @@
+#ifndef LAOPT_BS_MATRIX_HPP
+#define LAOPT_BS_MATRIX_HPP
+
+#include <iostream>
+#include <vector>
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
+
+namespace laopt
+{
+
+enum struct SegmentType {
+    COPY,
+    SKIP
+};
+
+/**
+ * Copy information for a sparse block matrix
+ */
+struct Segment
+{
+    SegmentType type;   // whether this segment should be copied or skipped
+    size_t      index;  // Index into the target.valuePtr() if copy otherwise 0
+    size_t      length; // Number of element to copy or skip
+
+    bool operator==(const Segment other) const {
+        return other.type == type && other.index == index && other.length == length;
+    }
+
+    /**
+     * Return an Eigen ArithmeticSequence representing this Segment
+     */
+    inline auto seq() const {
+        return Eigen::seqN(index, length);
+    };
+};
+
+inline std::ostream &operator<<(std::ostream &os, std::vector<Segment> const &sequence)
+{
+    for (auto &seg: sequence)
+    {
+        if (seg.type == SegmentType::COPY) {
+            os << "(C," << seg.index << "," << seg.length << ")";
+        } else {
+            os << "(S," << seg.index << "," << seg.length << ")";
+        }
+    }
+    return os;
+}
+
+struct CopyInfo
+{
+    size_t segment_index;  // Index into segments
+    size_t num_segments_to_copy;  // Number of segments to copy to execute this task
+};
+
+inline std::ostream &operator<<(std::ostream &os, std::vector<CopyInfo> const &sequence) 
+{
+    for (auto&seg: sequence)
+    {
+        os << "(" << seg.segment_index << "," << seg.num_segments_to_copy << ")";
+    }
+    return os;
+}
+
+/**
+ * Information required to construct a BSMatrix
+ */
+template<typename SparsityType>
+struct BSMatrixInfo
+{
+    Eigen::Index rows = 0;
+    Eigen::Index cols = 0;
+    SparsityType sparsity_structure;
+    std::vector<Segment> copy_segments;
+    std::vector<CopyInfo> copy_info;
+};
+
+template<typename SparsityType_>
+class BSMatrix
+{
+public:
+    using SparsityType = SparsityType_;
+    using Scalar = typename SparsityType::Scalar;
+
+private:
+    SparsityType sparsity_structure;
+    const std::vector<Segment> segments;
+    const std::vector<CopyInfo> copies;
+    size_t copy_index; // Current index into copies
+
+    Scalar *target = nullptr; // Where we're going to write the data
+
+    inline void reset_copy_index() { copy_index = 0; }
+
+    // Execute the next copy in the sequence
+    template<typename Op>
+    inline void execute_operation(Op op, const Scalar *source)
+    {
+        int segment_index = copies[copy_index].segment_index;
+        for (size_t i = 0; i < copies[copy_index].num_segments_to_copy; i++)
+        {
+            SegmentType type = segments[segment_index + i].type;
+            size_t length = segments[segment_index + i].length;
+            if (type == SegmentType::COPY)
+            {
+                size_t index = segments[segment_index + i].index;
+                Eigen::Map<Eigen::VectorX<Scalar>> tgt(target + index, length);
+                const Eigen::Map<const Eigen::VectorX<Scalar>> src(source, length);
+                op(tgt, src);
+            }
+            source += length;
+        }
+        copy_index++;
+        if (copy_index == copies.size()) reset_copy_index();
+    }
+
+public:
+    /**
+     * Note: The BSMatrix owns no memory, and so set_target must be called
+     * before any operations are done!
+     */
+    BSMatrix(const SparsityType& sparsity_structure,
+             std::vector<Segment> copy_segments,
+             std::vector<CopyInfo> copy_info)
+            : sparsity_structure(sparsity_structure),
+              segments(std::move(copy_segments)),
+              copies(std::move(copy_info)),
+              copy_index(0) {}
+
+    explicit BSMatrix(const BSMatrixInfo<SparsityType>& info)
+            : sparsity_structure(info.sparsity_structure),
+              segments(info.copy_segments),
+              copies(info.copy_info),
+              copy_index(0) {}
+
+    /**
+     * Initialize S to the right sparsity structure and set it
+     * as the target
+     */
+    void allocate_memory(SparsityType& S)
+    {
+        S = sparsity_structure;
+        set_target(S);
+    }
+
+    /**
+     * Use the given matrix as the target.
+     * Must already have been initialized to the correct sparsity structure!
+     */
+    void set_target(SparsityType& S)
+    {
+        target = S.valuePtr();
+    }
+
+    void set_target(Eigen::Ref<Eigen::MatrixX<Scalar>> S)
+    {
+        assert(S.rows() * S.cols() == sparsity_structure.nonZeros() && "Buffer size too small");
+        target = S.data();
+    }
+
+    /**
+     * Clear the matrix to all-zeros
+     */
+    void set_zero()
+    {
+        if (target != nullptr)
+        {
+            Eigen::Map<Eigen::VectorX<Scalar>>(target, sparsity_structure.nonZeros()).array() = 0;
+        }
+    }
+
+    SparsityType get_sparsity_structure()
+    {
+        return sparsity_structure;
+    }
+
+    // Assumption: The input matrix is contiguous.
+    template<typename Derived>
+    inline BSMatrix& operator=(const Eigen::DenseBase<Derived>& block)
+    {
+        // MatrixBase may or may not be an expression. As a result, we call
+        // eval, which evaluates into a contiguous temporary if required,
+        // or is just a noop if not.
+        // Note: Avoid temporaries here - they require malloc and are slow.
+        execute_operation([](auto& a, auto& b) { a = b; }, block.eval().data());
+        return *this;
+    }
+
+    template<typename Derived>
+    inline BSMatrix& operator=(const Eigen::DiagonalBase<Derived>& block)
+    {
+        execute_operation([](auto& a, auto& b) { a = b; }, block.diagonal().eval().data());
+        return *this;
+    }
+
+    inline BSMatrix& operator=(const Scalar& scalar)
+    {
+        execute_operation([](auto& a, auto& b) { a = b; }, &scalar);
+        return *this;
+    }
+
+    // Assumption: The input matrix is contiguous. Don't change this to a Ref.
+    template<typename Derived>
+    inline BSMatrix& operator+=(const Eigen::DenseBase<Derived>& block)
+    {
+        execute_operation([](auto& a, auto& b) { a += b; }, block.eval().data());
+        return *this;
+    }
+
+    template<typename Derived>
+    inline BSMatrix& operator+=(const Eigen::DiagonalBase<Derived>& block)
+    {
+        execute_operation([](auto& a, auto& b) { a += b; }, block.diagonal().eval().data());
+        return *this;
+    }
+
+    inline BSMatrix& operator+=(const Scalar& scalar)
+    {
+        execute_operation([](auto& a, auto& b) { a += b; }, &scalar);
+        return *this;
+    }
+
+    // Assumption: The input matrix is contiguous. Don't change this to a Ref.
+    template<typename Derived>
+    inline BSMatrix& operator-=(const Eigen::DenseBase<Derived>& block)
+    {
+        execute_operation([](auto& a, auto& b) { a -= b; }, block.eval().data());
+        return *this;
+    }
+
+    template<typename Derived>
+    inline BSMatrix& operator-=(const Eigen::DiagonalBase<Derived>& block)
+    {
+        execute_operation([](auto& a, auto& b) { a -= b; }, block.diagonal().eval().data());
+        return *this;
+    }
+
+    inline BSMatrix& operator-=(const Scalar& scalar)
+    {
+        execute_operation([](auto& a, auto& b) { a -= b; }, &scalar);
+        return *this;
+    }
+
+    // These all compile out. Not used in deployment.
+    template<typename RowSlice, typename ColSlice>
+    BSMatrix<SparsityType>& operator()(const RowSlice& row_slice, const ColSlice& col_slice) { return *this; }
+
+    // The following three overloads are needed to handle raw Index[N] arrays.
+    template<typename RowIndicesT, std::size_t RowIndicesN, typename ColIndices>
+    BSMatrix<SparsityType>& operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndices& col_indices) { return *this; }
+    template<typename RowIndices, typename ColIndicesT, std::size_t ColIndicesN>
+    BSMatrix<SparsityType>& operator()(const RowIndices& row_indices, const ColIndicesT (&col_indices)[ColIndicesN]) { return *this; }
+    template<typename RowIndicesT, std::size_t RowIndicesN, typename ColIndicesT, std::size_t ColIndicesN>
+    BSMatrix<SparsityType>& operator()(const RowIndicesT (&row_indices)[RowIndicesN], const ColIndicesT (&col_indices)[ColIndicesN]) { return *this; }
+
+    // Vector format
+    template<typename RowSlice>
+    BSMatrix<SparsityType>& operator()(const RowSlice& row_slice) { return *this; }
+
+    template<typename RowIndicesT, std::size_t RowIndicesN>
+    BSMatrix<SparsityType>& operator()(const RowIndicesT (&row_indices)[RowIndicesN]) { return *this; }
+
+    BSMatrix<SparsityType>& diagonal() { return *this; }
+
+    BSMatrix<SparsityType>& row(size_t i) { return *this; }
+
+    BSMatrix<SparsityType>& col(size_t i) { return *this; }
+
+    void resize(int rows, int cols) {}
+
+    /**
+     * Resize the matrix by adding rows rows and cols columns
+     */
+    void extend(int rows, int cols) {}
+
+    inline auto rows() { return sparsity_structure.rows(); }
+
+    inline auto cols() { return sparsity_structure.cols(); }
+};
+
+} // namespace laopt
+
+#endif // LAOPT_BS_MATRIX_HPP

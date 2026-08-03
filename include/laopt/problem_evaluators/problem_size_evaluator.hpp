@@ -1,27 +1,27 @@
 #ifndef LAOPT_PROBLEM_SIZE_EVALUATOR_HPP
 #define LAOPT_PROBLEM_SIZE_EVALUATOR_HPP
 
-#include "../problem_vector_function.hpp"
-#include "../problem_weighted_sum_function.hpp"
+#include "laopt/problem_vector_function.hpp"
+#include "laopt/problem_weighted_sum_function.hpp"
 
 namespace laopt
 {
 
-template<typename Matrix, typename Vector>
-class ProblemSizeEvaluator : public OptProblem<ProblemSizeEvaluator<Matrix, Vector>>
+template<typename MatrixType, typename VectorType>
+class ProblemSizeEvaluator : public OptProblem<ProblemSizeEvaluator<MatrixType, VectorType>>
 {
-    friend OptProblem<ProblemSizeEvaluator<Matrix, Vector>>;
+    friend OptProblem<ProblemSizeEvaluator<MatrixType, VectorType>>;
 
-    VectorFunction<Matrix, Vector>& variable_bounds;
-    WeightedSumFunction<Matrix, Vector>& objective;
-    VectorFunction<Matrix, Vector>& constraints;
-    WeightedSumFunction<Matrix, Vector>& lagrangian;
+    VectorFunction<MatrixType, VectorType>& variable_bounds;
+    WeightedSumFunction<MatrixType, VectorType>& objective;
+    VectorFunction<MatrixType, VectorType>& constraints;
+    WeightedSumFunction<MatrixType, VectorType>& lagrangian;
 
 public:
-    explicit ProblemSizeEvaluator(VectorFunction<Matrix, Vector>& variable_bounds,
-                                  WeightedSumFunction<Matrix, Vector>& objective,
-                                  VectorFunction<Matrix, Vector>& constraints,
-                                  WeightedSumFunction<Matrix, Vector>& lagrangian) :
+    explicit ProblemSizeEvaluator(VectorFunction<MatrixType, VectorType>& variable_bounds,
+                                  WeightedSumFunction<MatrixType, VectorType>& objective,
+                                  VectorFunction<MatrixType, VectorType>& constraints,
+                                  WeightedSumFunction<MatrixType, VectorType>& lagrangian) :
           variable_bounds(variable_bounds),
           objective(objective),
           constraints(constraints),
@@ -43,8 +43,8 @@ protected:
     EIGEN_STRONG_INLINE typename std::enable_if<!is_variable_constraint_expr<Derived>::value>::type
     add_constr_impl(const ConstraintExpr<Derived>&)
     {
-        constraints.extend_rows(Derived::n_outputs);
-        lagrangian.extend_rows(Derived::n_outputs);
+        constraints.extend_rows(Derived::RowsAtCompileTime);
+        lagrangian.extend_rows(Derived::RowsAtCompileTime);
     }
 
     template<typename Derived>

@@ -17,6 +17,7 @@ public:
 
 private:
     using constraint_t = typename Base::constraint_t;
+    using constraint_changed_t = typename Base::constraint_changed_t;
 
     proxsuite::proxqp::sparse::QP<scalar_t, int> m_proxqp_solver;
     bool m_proxqp_initialized;
@@ -54,7 +55,7 @@ public:
     {
         construct_proxqp_data(H, f, xlb, xub, A, Alb, Aub);
 
-        if (!this->m_settings.reuse_pattern)
+        if (!this->m_settings.reuse_pattern || !m_proxqp_initialized)
         {
             using SolverType = proxsuite::proxqp::sparse::QP<scalar_t, int>;
             m_proxqp_solver.~SolverType();
@@ -92,6 +93,10 @@ public:
             {
                 this->m_lam(i) = m_proxqp_solver.results.z(ineq_bound_i++);
             }
+            else
+            {
+                this->m_lam(i) = 0;
+            }
         }
         // copy box constraints dual variables
         for (int i = 0; i < this->m_n; i++)
@@ -103,6 +108,10 @@ public:
             else if (this->m_box_constraint_type[i] != constraint_t::UNBOUNDED_CONSTR)
             {
                 this->m_lam_bounds(i) = m_proxqp_solver.results.z(ineq_bound_i++);
+            }
+            else
+            {
+                this->m_lam_bounds(i) = 0;
             }
         }
 
@@ -131,7 +140,6 @@ public:
     }
 
 private:
-    /** construct the data matrices accepted by OSQP */
     EIGEN_STRONG_INLINE void
     construct_proxqp_data(const Eigen::SparseMatrix<scalar_t>& H,
                           const Eigen::Ref<const Eigen::VectorX<scalar_t>>& f,
@@ -141,11 +149,12 @@ private:
                           const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
                           const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
     {
-        bool constraints_type_changed = this->parse_constraints_bounds(xlb, xub, Alb, Aub);
-        if (constraints_type_changed)
+        constraint_changed_t constraints_type_change = this->parse_constraints_bounds(xlb, xub, Alb, Aub);
+        if (constraints_type_change != constraint_changed_t::NO_CHANGE)
         {
-            // if the types of constraints have changed we can't reuse pattern
-            this->settings().reuse_pattern = false;
+            // if the types of the constraints changed
+            // we have to reinitialize solver because of sparsity pattern change
+            m_proxqp_initialized = false;
         }
 
         construct_proxqp_cost(H, f);
@@ -158,7 +167,7 @@ private:
     {
         eigen_assert(H.isCompressed());
 
-        if (!this->settings().reuse_pattern)
+        if (!this->settings().reuse_pattern || !m_proxqp_initialized)
         {
             int n_vars = this->m_n;
             if (this->m_settings.elastic_mode)
@@ -240,7 +249,7 @@ private:
     {
         eigen_assert(A.isCompressed());
 
-        if (!this->settings().reuse_pattern)
+        if (!this->settings().reuse_pattern || !m_proxqp_initialized)
         {
             int n_vars = this->m_n;
             if (this->m_settings.elastic_mode)

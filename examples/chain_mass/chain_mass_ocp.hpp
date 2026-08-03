@@ -8,6 +8,7 @@
 
 #include "laopt/laopt.hpp"
 #include "laopt/tools/control_problem_base.hpp"
+#include "laopt/differentiable_functions/quadratic_cost.hpp"
 
 template<int cM = 5, int cNX = 3 * (2 * (cM - 2) + 1), int cNU = 3>
 class ChainMassOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, cNX, cNU>
@@ -27,49 +28,60 @@ public:
     const double L = 0.033; // rest length of spring
 
     const Eigen::Vector<double, 3> x0{0, 0, 0}; // fix mass (at wall)
-    State x_ref;
 
-    Eigen::DiagonalMatrix<Scalar, Base::NX> Q;
-    Eigen::DiagonalMatrix<Scalar, Base::NX> P;
-    Eigen::DiagonalMatrix<Scalar, Base::NU> R;
+    laopt::QuadraticCost<Eigen::DiagonalMatrix<Scalar, Base::NX>> state_cost;
+    laopt::QuadraticCost<Eigen::DiagonalMatrix<Scalar, Base::NU>> input_cost;
+    laopt::QuadraticCost<Eigen::DiagonalMatrix<Scalar, Base::NX>> final_state_cost;
 
     ChainMassOcp()
     {
-        x_ref.setZero();
-        x_ref(3 * (M - 2)) = 7.5;
+        state_cost.q.setZero();
+        state_cost.q(3 * (M - 2)) = -7.5;
+        final_state_cost.q.setZero();
+        final_state_cost.q(3 * (M - 2)) = -7.5;
 
-        Q.setZero();
-        Q.diagonal()(Eigen::seqN(3 * (M - 2), Eigen::fix<3>)).array() = 2.5;
-        Q.diagonal()(Eigen::lastN(Eigen::fix<3 * (M - 2)>)).array() = 25;
+        state_cost.P.setZero();
+        state_cost.P.diagonal()(Eigen::seqN(3 * (M - 2), Eigen::fix<3>)).array() = 2.5;
+        state_cost.P.diagonal()(Eigen::lastN(Eigen::fix<3 * (M - 2)>)).array() = 25;
 
-        P.setZero();
-        P.diagonal()(Eigen::seqN(3 * (M - 2), Eigen::fix<3>)).array() = 10;
+        input_cost.P.setZero();
+        input_cost.P.diagonal().array() = 0.1;
 
-        R.setZero();
-        R.diagonal().array() = 0.1;
+        final_state_cost.P.setZero();
+        final_state_cost.P.diagonal()(Eigen::seqN(3 * (M - 2), Eigen::fix<3>)).array() = 10;
     }
 
     /* Override function implementations from base class ------------------------------ */
-    template<typename T> // T is scalar type
-    T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
-                         const Eigen::Ref<const input_t<T>> &u,
-                         const Eigen::Ref<const param_t<T>> &p)
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    auto lagrange_term_impl(const Eigen::MatrixBase<x_t>& x,
+                            const Eigen::MatrixBase<u_t>& u,
+                            const Eigen::MatrixBase<p_t>& p,
+                            const Eigen::MatrixBase<t0_t>& t0,
+                            const Eigen::MatrixBase<tf_t>& tf,
+                            const tau_t& tau)
     {
-        return (x_ref - x).dot(Q * (x_ref - x)) + u.dot(R * u);
+        return state_cost(x) + input_cost(u);
     }
 
-    template<typename T, typename Ttf> // T is scalar type
-    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &xf,
-                      const Eigen::Ref<const param_t<T>> &p,
-                      const Ttf &tf)
+    template<typename x_tf, typename p_t, typename t0_t, typename tf_t,
+            typename T = typename x_tf::Scalar> // T is scalar type
+    auto mayer_term_impl(const Eigen::MatrixBase<x_tf>& xf,
+                         const Eigen::MatrixBase<p_t>& p,
+                         const Eigen::MatrixBase<t0_t>& t0,
+                         const Eigen::MatrixBase<tf_t>& tf)
     {
-        return (x_ref - xf).dot(P * (x_ref - xf));
+        return final_state_cost(xf);
     }
 
-    template<typename T> // T is scalar type
-    state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
-                             const Eigen::Ref<const input_t<T>> &u,
-                             const Eigen::Ref<const param_t<T>> &p)
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x,
+                             const Eigen::MatrixBase<u_t>& u,
+                             const Eigen::MatrixBase<p_t>& p,
+                             const Eigen::MatrixBase<t0_t>& t0,
+                             const Eigen::MatrixBase<tf_t>& tf,
+                             const tau_t& tau)
     {
         // x = (x_pos((M-1)*3), x_vel((M-2)*3))
 

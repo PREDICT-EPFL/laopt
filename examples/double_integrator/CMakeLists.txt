@@ -1,8 +1,7 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.21)
 
-add_executable(test_double_integrator
-        double_integrator_test.cpp
-        )
-target_link_libraries(test_double_integrator
-        PRIVATE laopt
-        )
+add_executable(double_integrator_example double_integrator_example.cpp)
+target_link_libraries(double_integrator_example PRIVATE laopt-examples)
+laopt_target_enable_casadi(double_integrator_example)
+laopt_target_enable_ipopt(double_integrator_example)
+laopt_target_enable_piqp(double_integrator_example)

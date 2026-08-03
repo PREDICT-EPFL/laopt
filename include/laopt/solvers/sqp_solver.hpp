@@ -16,12 +16,12 @@ enum struct globalization_t {
 
 enum struct hessian_approximation_t {
     EXACT,
-    EXACT_NO_CONSTRAINTS,
+    GAUSS_NEWTON,
 };
 
 template <typename Scalar>
 struct sqp_settings_t {
-    globalization_t globalization_strategy        = globalization_t::LINE_SEARCH_L1;
+    globalization_t globalization_strategy        = globalization_t::LINE_SEARCH_FILTER;
     Scalar tau                                    = 0.7;   // line search iteration decrease, 0 < tau < 1
     Scalar eta                                    = 0.25;  // line search parameter, 0 < eta < 1
     Scalar rho                                    = 0.5;   // line search parameter, 0 < rho < 1
@@ -31,7 +31,7 @@ struct sqp_settings_t {
     Scalar min_alpha                              = 1e-4;  // minimum step size
     int max_watchdog_steps                        = 0;     // minimum full size steps for non-monotone watchdog strategy (0 for normal line search)
     Scalar filter_beta                             = 1e-5;  // sufficient decrease value for filter
-    hessian_approximation_t hessian_approximation = hessian_approximation_t::EXACT_NO_CONSTRAINTS; // hessian approximation
+    hessian_approximation_t hessian_approximation = hessian_approximation_t::GAUSS_NEWTON; // hessian approximation
     bool regularize_hessian                       = false; // regularize hessian using the gershgorin circle theorem (can lead to bad convergence)
     Scalar elastic_max_delta                      = 0.9;   // maximum acceptable value of constant relaxation variable, if below penalty gets increased by a factor elastic_increase and resolved
     Scalar elastic_min_delta                      = 1e-6;  // if constant relaxation variable falls below this value the penalty gets decreased by a factor elastic_decrease
@@ -85,28 +85,31 @@ class SQPBase
 {
 public:
     using scalar_t = typename Problem::scalar_t;
+    using matrix_t = typename Problem::matrix_t::SparsityType;
 
-private:
-    Problem& prob;
+protected:
+    std::shared_ptr<Problem> prob;
 
-    Eigen::VectorX<scalar_t>      m_x;            // variable primal
-    Eigen::VectorX<scalar_t>      m_lam;          // dual variable
-    Eigen::VectorX<scalar_t>      m_lam_bounds;   // dual variable for bounds
-    Eigen::VectorX<scalar_t>      m_lbx, m_ubx;   // variable bounds
-    Eigen::VectorX<scalar_t>      m_cost_grad;    // Gradient of the cost function
-    Eigen::SparseMatrix<scalar_t> m_lag_hess;     // Hessian of Lagrangian
-    Eigen::VectorX<scalar_t>      m_g;            // constraints evaluation
-    Eigen::SparseMatrix<scalar_t> m_g_jac;        // constraints Jacobian
-    Eigen::VectorX<scalar_t>      m_lbg, m_ubg;   // equality/inequality constraints evaluated
+    Eigen::VectorX<scalar_t> m_x;            // variable primal
+    Eigen::VectorX<scalar_t> m_lam;          // dual variable
+    Eigen::VectorX<scalar_t> m_lam_bounds;   // dual variable for bounds
+    Eigen::VectorX<scalar_t> m_lbx, m_ubx;   // variable bounds
+    Eigen::VectorX<scalar_t> m_cost_grad;    // Gradient of the cost function
+    matrix_t                 m_lag_hess;     // Hessian of Lagrangian
+    Eigen::VectorX<scalar_t> m_g;            // constraints evaluation
+    matrix_t                 m_g_jac;        // constraints Jacobian
+    Eigen::VectorX<scalar_t> m_lbg, m_ubg;   // equality/inequality constraints evaluated
 
     QPSolver m_qp_solver;
     sqp_settings_t<scalar_t> m_settings;
     sqp_info_t m_info;
     bool m_first_solve;
 
-    Eigen::VectorX<scalar_t> m_p;             // primal search direction
-    Eigen::VectorX<scalar_t> m_lam_qp;        // dual variable solution of qp
-    Eigen::VectorX<scalar_t> m_lam_bounds_qp; // dual variable solution of qp for bounds
+    Eigen::VectorX<scalar_t> m_p;                // primal search direction
+    Eigen::VectorX<scalar_t> m_lam_qp;           // dual variable solution of qp
+    Eigen::VectorX<scalar_t> m_lam_bounds_qp;    // dual variable solution of qp for bounds
+    Eigen::VectorX<scalar_t> m_lbx_qp, m_ubx_qp; // qp variable bounds
+    Eigen::VectorX<scalar_t> m_lbg_qp, m_ubg_qp; // qp equality/inequality bounds
 
     scalar_t m_primal_feasibility_inf = 0;
     scalar_t m_complementarity_inf = 0;
@@ -129,44 +132,47 @@ private:
     int m_current_filter_elements = 0;
     Eigen::Matrix<scalar_t, 2, max_filter_elements> m_filter_list; // list of elements
 
-    Eigen::VectorX<scalar_t> m_gershgorin_bound; // variable used to calculate hessian regularization (gershgorin circle theorem)
+    Eigen::VectorX<scalar_t> m_tmp_variables; // temporary work vector of size variables
 
 public:
-
-    explicit SQPBase(Problem& prob) :
+    explicit SQPBase(const std::shared_ptr<Problem>& prob) :
         prob(prob),
-        m_x(prob.variables()),
-        m_lam(prob.constraints.rows()),
-        m_lam_bounds(prob.variables()),
-        m_lbx(prob.variables()), m_ubx(prob.variables()),
-        m_cost_grad(prob.variables()),
-        m_g(prob.constraints.rows()),
-        m_lbg(prob.constraints.rows()), m_ubg(prob.constraints.rows()),
-        m_qp_solver(prob.variables(), prob.constraints.rows()),
+        m_x(prob->variables()),
+        m_lam(prob->constraints.rows()),
+        m_lam_bounds(prob->variables()),
+        m_lbx(prob->variables()), m_ubx(prob->variables()),
+        m_cost_grad(prob->variables()),
+        m_g(prob->constraints.rows()),
+        m_lbg(prob->constraints.rows()), m_ubg(prob->constraints.rows()),
+        m_qp_solver(prob->variables(), prob->constraints.rows()),
         m_first_solve(true),
-        m_p(prob.variables()),
-        m_lam_qp(prob.constraints.rows()),
-        m_lam_bounds_qp(prob.variables()),
-        m_x_step_line_search(prob.variables()),
+        m_p(prob->variables()),
+        m_lam_qp(prob->constraints.rows()),
+        m_lam_bounds_qp(prob->variables()),
+        m_lbx_qp(prob->variables()), m_ubx_qp(prob->variables()),
+        m_lbg_qp(prob->constraints.rows()), m_ubg_qp(prob->constraints.rows()),
+        m_x_step_line_search(prob->variables()),
         m_watchdog_step(0),
-        m_x_merit_decrease(prob.variables()),
-        m_lam_merit_decrease(prob.constraints.rows()),
-        m_lam_bounds_merit_decrease(prob.variables()),
-        m_p_merit_decrease(prob.variables()),
-        m_lam_qp_merit_decrease(prob.constraints.rows()),
-        m_lam_bounds_qp_merit_decrease(prob.variables()),
-        m_gershgorin_bound(prob.variables())
+        m_x_merit_decrease(prob->variables()),
+        m_lam_merit_decrease(prob->constraints.rows()),
+        m_lam_bounds_merit_decrease(prob->variables()),
+        m_p_merit_decrease(prob->variables()),
+        m_lam_qp_merit_decrease(prob->constraints.rows()),
+        m_lam_bounds_qp_merit_decrease(prob->variables()),
+        m_tmp_variables(prob->variables())
     {
         m_x.setZero();
         m_lam.setZero();
         m_lam_bounds.setZero();
 
+        // reuse sparsity pattern for further solves
+        m_qp_solver.settings().reuse_pattern = true;
         // turn on elastic mode by default to make qp problem always feasible
         m_qp_solver.settings().elastic_mode = true;
 
-        prob.constraints.jacobian.allocate_memory(m_g_jac);
+        prob->constraints.jacobian.allocate_memory(m_g_jac);
 
-        prob.set_decision_variable(m_x);
+        prob->set_decision_variable(m_x);
     }
 
     EIGEN_STRONG_INLINE const sqp_settings_t<scalar_t>& settings() const noexcept { return m_settings; }
@@ -198,13 +204,13 @@ public:
         if (m_first_solve) {
             m_first_solve = false;
 
-            if (m_settings.hessian_approximation == hessian_approximation_t::EXACT_NO_CONSTRAINTS)
+            if (m_settings.hessian_approximation == hessian_approximation_t::GAUSS_NEWTON)
             {
-                prob.objective.hessian.allocate_memory(m_lag_hess);
+                prob->objective.hessian.allocate_memory(m_lag_hess);
             }
             else
             {
-                prob.lagrangian.hessian.allocate_memory(m_lag_hess);
+                prob->lagrangian.hessian.allocate_memory(m_lag_hess);
             }
 
             if (m_settings.verbose)
@@ -212,14 +218,30 @@ public:
                 printf("----------------------------------------------------------\n");
                 printf("                        laOPT SQP                         \n");
                 printf("    (c) Roland Schwan, Johannes Waibel, Colin N. Jones    \n");
-                printf("   Ecole Polytechnique Federale de Lausanne (EPFL) 2024   \n");
+                printf("   Ecole Polytechnique Federale de Lausanne (EPFL) 2025   \n");
                 printf("----------------------------------------------------------\n");
-                printf("variables n = %d\n", prob.variables());
-                printf("constraints m = %d\n", prob.constraints.rows());
+                printf("variables n = %d\n", prob->variables());
+                printf("constraints m = %d\n", prob->constraints.rows());
                 printf("lagrangian hessian nnz = %ld\n", m_lag_hess.nonZeros());
                 printf("constraints jacobian nnz = %ld\n", m_g_jac.nonZeros());
+                switch (m_settings.globalization_strategy) {
+                    case globalization_t::FULL_STEP:
+                        printf("globalization strategy: FULL_STEP\n");
+                        break;
+                    case globalization_t::LINE_SEARCH_L1:
+                        printf("globalization strategy: LINE_SEARCH_L1\n");
+                        break;
+                    case globalization_t::LINE_SEARCH_FILTER:
+                        printf("globalization strategy: LINE_SEARCH_FILTER\n");
+                        break;
+                    default:
+                        printf("globalization strategy: unknown\n");
+                }
             }
         }
+
+        // ensure variables are in bounds
+        // project_bounds(m_x);
 
         // reset filter
         m_current_filter_elements = 0;
@@ -242,21 +264,40 @@ public:
         // update convergence criteria
         m_primal_feasibility_inf = max_constraints_violation(m_x);
         m_complementarity_inf = max_complementarity_violation(m_x, m_lam, m_lam_bounds);
-        m_stationarity_inf = max_stationarity_violation(m_x, m_lam, m_lam_bounds);
+        m_stationarity_inf = max_stationarity_violation(m_lam, m_lam_bounds);
 
         if (m_settings.verbose)
         {
-            printf("iter    objective     primal_inf    comp_inf      stat_inf      alpha       watchdog   qp_iter\n");
-            prob.set_decision_variable(m_x);
-            printf("%4d   % .5e   %.5e   %.5e   %.5e   %.3e       %4d   %7d\n",
+            printf("iter    objective     primal_inf    comp_inf      stat_inf      alpha       qp_iter");
+            if (m_settings.max_watchdog_steps > 0)
+            {
+                printf("   watchdog");
+            }
+            if (m_qp_solver.settings().elastic_mode) {
+                printf("   elastic");
+            }
+            printf("\n");
+
+            prob->set_decision_variable(m_x);
+
+            printf("%4d   % .5e   %.5e   %.5e   %.5e   %.3e   %7d",
                    m_info.iter,
-                   prob.eval_objective(),
+                   prob->eval_objective(),
                    m_primal_feasibility_inf,
                    m_complementarity_inf,
                    m_stationarity_inf,
                    alpha,
-                   m_watchdog_step,
                    0);
+            if (m_settings.max_watchdog_steps > 0)
+            {
+                printf("   %4d", m_watchdog_step);
+            }
+            if (m_qp_solver.settings().elastic_mode) {
+                printf("   %.5f", m_qp_solver.elastic_var_solution());
+            }
+            printf("\n");
+
+
         }
 
         if (termination_criteria()) {
@@ -290,9 +331,6 @@ public:
                 }
             }
 
-            // reuse sparsity pattern for further solves
-            m_qp_solver.settings().reuse_pattern = true;
-
             if (m_settings.verbose && m_qp_solver.info().status == qp_status_t::MAX_ITER_REACHED)
             {
                 std::cerr << "[SQPSolver::solve] QP problem has reached maximum iterations. Continue using suboptimal solution." << std::endl;
@@ -301,16 +339,18 @@ public:
             {
                 std::cerr << "[SQPSolver::solve] QP problem was infeasible. Continue using suboptimal solution." << std::endl;
             }
+            if (m_settings.verbose && m_qp_solver.info().status == qp_status_t::MIN_STEP)
+            {
+                std::cerr << "[SQPSolver::solve] QP problem has reached minimum step length. Continue using suboptimal solution." << std::endl;
+            }
 
             if (!(m_qp_solver.info().status == qp_status_t::SOLVED ||
                   m_qp_solver.info().status == qp_status_t::MAX_ITER_REACHED ||
-                  m_qp_solver.info().status == qp_status_t::INFEASIBLE))
+                  m_qp_solver.info().status == qp_status_t::INFEASIBLE ||
+                  m_qp_solver.info().status == qp_status_t::MIN_STEP))
             {
                 switch (m_qp_solver.info().status)
                 {
-                    case qp_status_t::INFEASIBLE:
-                        m_info.status = sqp_status_t::INFEASIBLE;
-                        break;
                     case qp_status_t::NON_CONVEX:
                         m_info.status = sqp_status_t::NON_CONVEX_QP;
                         break;
@@ -339,20 +379,27 @@ public:
             // update convergence criteria
             m_primal_feasibility_inf = max_constraints_violation(m_x);
             m_complementarity_inf = max_complementarity_violation(m_x, m_lam, m_lam_bounds);
-            m_stationarity_inf = max_stationarity_violation(m_x, m_lam, m_lam_bounds);
+            m_stationarity_inf = max_stationarity_violation(m_lam, m_lam_bounds);
 
             if (m_settings.verbose)
             {
-                prob.set_decision_variable(m_x);
-                printf("%4d   % .5e   %.5e   %.5e   %.5e   %.3e       %4d   %7d\n",
+                prob->set_decision_variable(m_x);
+                printf("%4d   % .5e   %.5e   %.5e   %.5e   %.3e   %7d",
                        m_info.iter,
-                       prob.eval_objective(),
+                       prob->eval_objective(),
                        m_primal_feasibility_inf,
                        m_complementarity_inf,
                        m_stationarity_inf,
                        alpha,
-                       m_watchdog_step,
                        m_qp_solver.info().iter);
+                if (m_settings.max_watchdog_steps > 0)
+                {
+                    printf("   %4d", m_watchdog_step);
+                }
+                if (m_qp_solver.settings().elastic_mode) {
+                    printf("   %.5f", m_qp_solver.elastic_var_solution());
+                }
+                printf("\n");
             }
 
             if (termination_criteria()) {
@@ -404,22 +451,28 @@ protected:
 
     EIGEN_STRONG_INLINE void eval_objective_gradient(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
     {
-        prob.set_decision_variable(x);
-        prob.eval_objective_gradient(m_cost_grad);
+        prob->set_decision_variable(x);
+        prob->eval_objective_gradient(m_cost_grad);
     }
 
     EIGEN_STRONG_INLINE void eval_constraints(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
     {
-        prob.set_decision_variable(x);
-        prob.eval_constraints(m_g, m_lbg, m_ubg);
-        prob.eval_variable_bounds(m_lbx, m_ubx);
+        prob->set_decision_variable(x);
+        prob->eval_constraints(m_g, m_lbg, m_ubg);
+        prob->eval_variable_bounds(m_lbx, m_ubx);
     }
 
     EIGEN_STRONG_INLINE void eval_constraints_jacobian(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
     {
-        prob.set_decision_variable(x);
+        prob->set_decision_variable(x);
         Eigen::Map<Eigen::VectorX<scalar_t>> jacobian_buffer(m_g_jac.valuePtr(), m_g_jac.nonZeros());
-        prob.eval_constraints_jacobian(jacobian_buffer);
+        prob->eval_constraints_jacobian(jacobian_buffer);
+    }
+
+    EIGEN_STRONG_INLINE void project_bounds(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
+    {
+        prob->eval_variable_bounds(m_lbx, m_ubx);
+        x = x.cwiseMax(m_lbx).cwiseMin(m_ubx);
     }
 
     EIGEN_STRONG_INLINE void linearize_problem(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
@@ -427,20 +480,33 @@ protected:
         eval_objective_gradient(x);
         eval_constraints(x);
         eval_constraints_jacobian(x);
+
+        // subtract constant part from linearization to get qp bounds
+        m_lbx_qp = m_lbx - m_x;
+        m_ubx_qp = m_ubx - m_x;
+        m_lbg_qp = m_lbg - m_g;
+        m_ubg_qp = m_ubg - m_g;
+
+        // replace inf values with finite values since some solver don't like them (e.g. HPIPM)
+        scalar_t max_val = std::numeric_limits<scalar_t>::max();
+        m_lbx_qp = m_lbx_qp.cwiseMin(max_val).cwiseMax(-max_val);
+        m_ubx_qp = m_ubx_qp.cwiseMin(max_val).cwiseMax(-max_val);
+        m_lbg_qp = m_lbg_qp.cwiseMin(max_val).cwiseMax(-max_val);
+        m_ubg_qp = m_ubg_qp.cwiseMin(max_val).cwiseMax(-max_val);
     }
 
     EIGEN_STRONG_INLINE void calculate_regularized_problem_hessian(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
     {
-        prob.set_decision_variable(x);
+        prob->set_decision_variable(x);
 
         Eigen::Map<Eigen::VectorX<scalar_t>> hessian_buffer(m_lag_hess.valuePtr(), m_lag_hess.nonZeros());
-        if (m_settings.hessian_approximation == hessian_approximation_t::EXACT_NO_CONSTRAINTS)
+        if (m_settings.hessian_approximation == hessian_approximation_t::GAUSS_NEWTON)
         {
-            prob.eval_objective_hessian(hessian_buffer);
+            prob->eval_objective_hessian(hessian_buffer);
         }
         else
         {
-            prob.eval_lagrangian_hessian(1.0, m_lam, hessian_buffer);
+            prob->eval_lagrangian_hessian(1.0, m_lam, hessian_buffer);
         }
 
         // regularize hessian
@@ -450,23 +516,29 @@ protected:
     /** prepare and solve the qp */
     EIGEN_STRONG_INLINE void solve_qp() noexcept
     {
-        // add constant part from linearization to bounds
-        m_lbx -= m_x;
-        m_ubx -= m_x;
-        m_lbg -= m_g;
-        m_ubg -= m_g;
+        // std::cout << "m_lag_hess: " << m_lag_hess << std::endl;
+        // std::cout << "m_cost_grad: " << m_cost_grad.transpose() << std::endl;
+        // std::cout << "m_lbx: " << m_lbx.transpose() << std::endl;
+        // std::cout << "m_ubx: " << m_ubx.transpose() << std::endl;
+        // std::cout << "m_g_jac: " << m_g_jac << std::endl;
+        // std::cout << "m_lbg: " << m_lbg.transpose() << std::endl;
+        // std::cout << "m_ubg: " << m_ubg.transpose() << std::endl;
 
-        m_qp_solver.solve(m_lag_hess, m_cost_grad, m_lbx, m_ubx, m_g_jac, m_lbg, m_ubg);
+        m_qp_solver.solve(m_lag_hess, m_cost_grad, m_lbx_qp, m_ubx_qp, m_g_jac, m_lbg_qp, m_ubg_qp);
         m_info.qp_iter += m_qp_solver.info().iter;
 
         // extract primal and dual solutions
         m_p = m_qp_solver.primal_solution();
         m_lam_qp = m_qp_solver.dual_solution();
         m_lam_bounds_qp = m_qp_solver.dual_bounds_solution();
+
+        // std::cout << "m_p: " << m_p.transpose() << std::endl;
+        // std::cout << "m_lam_qp: " << m_lam_qp.transpose() << std::endl;
+        // std::cout << "m_lam_bounds_qp: " << m_lam_bounds_qp.transpose() << std::endl;
     }
 
     EIGEN_STRONG_INLINE scalar_t
-    l1_constraints_violation(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
+    l1_constraints_violation(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& x) noexcept
     {
         scalar_t c = scalar_t(0);
 
@@ -482,13 +554,15 @@ protected:
     }
 
     EIGEN_STRONG_INLINE scalar_t
-    max_constraints_violation(Eigen::Ref<Eigen::VectorX<scalar_t>> x) noexcept
+    max_constraints_violation(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& x) noexcept
     {
         scalar_t c = scalar_t(0);
 
         // lbg <= g <= ubg
-        c = fmax(c, (m_lbg - m_g).maxCoeff());
-        c = fmax(c, (m_g - m_ubg).maxCoeff());
+        if (m_g.size() > 0) {
+            c = fmax(c, (m_lbg - m_g).maxCoeff());
+            c = fmax(c, (m_g - m_ubg).maxCoeff());
+        }
 
         // l <= x <= u
         c = fmax(c, (m_lbx - x).maxCoeff());
@@ -498,15 +572,17 @@ protected:
     }
 
     EIGEN_STRONG_INLINE scalar_t
-    max_complementarity_violation(Eigen::Ref<Eigen::VectorX<scalar_t>> x,
-                                  const Eigen::Ref<const Eigen::VectorX<scalar_t>> &dual,
-                                  const Eigen::Ref<const Eigen::VectorX<scalar_t>> &dual_bounds) noexcept
+    max_complementarity_violation(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& x,
+                                  const Eigen::Ref<const Eigen::VectorX<scalar_t>>& dual,
+                                  const Eigen::Ref<const Eigen::VectorX<scalar_t>>& dual_bounds) noexcept
     {
         scalar_t c = scalar_t(0);
 
         // lbg <= g <= ubg
-        c = fmax(c, (m_lbg - m_g).cwiseMax(0.0).cwiseProduct(dual).maxCoeff());
-        c = fmax(c, (m_g - m_ubg).cwiseMax(0.0).cwiseProduct(dual).maxCoeff());
+        if (m_g.size() > 0) {
+            c = fmax(c, (m_lbg - m_g).cwiseMax(0.0).cwiseProduct(dual).maxCoeff());
+            c = fmax(c, (m_g - m_ubg).cwiseMax(0.0).cwiseProduct(dual).maxCoeff());
+        }
 
         // l <= x <= u
         c = fmax(c, (m_lbx - x).cwiseMax(0.0).cwiseProduct(dual_bounds).maxCoeff());
@@ -516,11 +592,11 @@ protected:
     }
 
     EIGEN_STRONG_INLINE scalar_t
-    max_stationarity_violation(Eigen::Ref<Eigen::VectorX<scalar_t>> x,
-                               const Eigen::Ref<const Eigen::VectorX<scalar_t>> &dual,
-                               const Eigen::Ref<const Eigen::VectorX<scalar_t>> &dual_bounds) noexcept
+    max_stationarity_violation(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& dual,
+                               const Eigen::Ref<const Eigen::VectorX<scalar_t>>& dual_bounds) noexcept
     {
-        return (m_cost_grad + m_g_jac.transpose() * dual + dual_bounds).cwiseAbs().maxCoeff();
+        m_tmp_variables.noalias() = m_g_jac.transpose() * dual;
+        return (m_cost_grad + m_tmp_variables + dual_bounds).cwiseAbs().maxCoeff();
     }
 
     /** step size selection: line search / filter / trust region */
@@ -537,7 +613,7 @@ protected:
     }
 
     EIGEN_STRONG_INLINE void
-    hessian_regularisation(Eigen::SparseMatrix<scalar_t>& lag_hessian)
+    hessian_regularisation(matrix_t& lag_hessian)
     {
         static_cast<Derived*>(this)->hessian_regularisation_impl(lag_hessian);
     }
@@ -574,16 +650,16 @@ protected:
                 // for a full step m_lam_qp is lam_{k+1} and a good estimate for mu
                 m_mu_search_begin = m_lam_qp.template lpNorm<Eigen::Infinity>() + m_settings.K;
 
-                prob.set_decision_variable(m_x);
-                scalar_t cost = prob.eval_objective();
+                prob->set_decision_variable(m_x);
+                scalar_t cost = prob->eval_objective();
                 m_phi_begin = cost + m_mu_search_begin * constr_l1;
                 m_Dp_phi_begin = m_cost_grad.dot(p) - m_mu_search_begin * constr_l1;
 
                 // take full step
                 m_x_step_line_search = m_x + p;
 
-                prob.set_decision_variable(m_x_step_line_search);
-                scalar_t cost_step = prob.eval_objective();
+                prob->set_decision_variable(m_x_step_line_search);
+                scalar_t cost_step = prob->eval_objective();
                 eval_constraints(m_x_step_line_search);
                 scalar_t phi_step = cost_step + m_mu_search_begin * l1_constraints_violation(m_x_step_line_search);
 
@@ -617,8 +693,8 @@ protected:
                 // take full step
                 m_x_step_line_search = m_x + p;
 
-                prob.set_decision_variable(m_x_step_line_search);
-                scalar_t cost_step = prob.eval_objective();
+                prob->set_decision_variable(m_x_step_line_search);
+                scalar_t cost_step = prob->eval_objective();
                 eval_constraints(m_x_step_line_search);
                 scalar_t phi_step = cost_step + m_mu_search_begin * l1_constraints_violation(m_x_step_line_search);
 
@@ -663,19 +739,19 @@ protected:
         scalar_t constr_l1 = l1_constraints_violation(m_x);
         scalar_t mu = std::abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1) + m_settings.K;
 
-        prob.set_decision_variable(m_x);
-        scalar_t cost_current = prob.eval_objective();
+        prob->set_decision_variable(m_x);
+        scalar_t cost_current = prob->eval_objective();
         scalar_t phi_current = cost_current + mu * constr_l1;
         scalar_t Dp_phi_current = m_cost_grad.dot(p) - mu * constr_l1;
 
         scalar_t alpha = scalar_t(1.0);
         scalar_t phi_step = scalar_t(0);
-        for (int i = 1; i < m_settings.line_search_max_iter; i++)
+        for (int i = 1; i < m_settings.line_search_max_iter && alpha > m_settings.min_alpha; i++)
         {
             m_x_step_line_search = m_x + alpha * p;
 
-            prob.set_decision_variable(m_x_step_line_search);
-            scalar_t cost_step = prob.eval_objective();
+            prob->set_decision_variable(m_x_step_line_search);
+            scalar_t cost_step = prob->eval_objective();
             eval_constraints(m_x_step_line_search);
             phi_step = cost_step + mu * l1_constraints_violation(m_x_step_line_search);
 
@@ -704,18 +780,18 @@ protected:
             constr_l1 = l1_constraints_violation(m_x_merit_decrease);
             mu = std::abs(m_cost_grad.dot(p)) / ((1 - m_settings.rho) * constr_l1) + m_settings.K;
 
-            prob.set_decision_variable(m_x_merit_decrease);
-            cost_current = prob.eval_objective();
+            prob->set_decision_variable(m_x_merit_decrease);
+            cost_current = prob->eval_objective();
             phi_current = cost_current + mu * constr_l1;
             Dp_phi_current = m_cost_grad.dot(p) - mu * constr_l1;
 
             alpha = scalar_t(1.0);
-            for (int i = 1; i < m_settings.line_search_max_iter; i++)
+            for (int i = 1; i < m_settings.line_search_max_iter && alpha > m_settings.min_alpha; i++)
             {
                 m_x_step_line_search = m_x_merit_decrease + alpha * p;
 
-                prob.set_decision_variable(m_x_step_line_search);
-                scalar_t cost_step = prob.eval_objective();
+                prob->set_decision_variable(m_x_step_line_search);
+                scalar_t cost_step = prob->eval_objective();
                 eval_constraints(m_x_step_line_search);
                 phi_step = cost_step + mu * l1_constraints_violation(m_x_step_line_search);
 
@@ -746,7 +822,7 @@ protected:
     EIGEN_STRONG_INLINE scalar_t
     filter_line_search(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& p) noexcept
     {
-        scalar_t cost_current = prob.eval_objective();
+        scalar_t cost_current = prob->eval_objective();
 
         if (m_current_filter_elements == 0)
         {
@@ -758,12 +834,12 @@ protected:
         }
 
         scalar_t alpha = scalar_t(1.0);
-        for (int i = 1; i < m_settings.line_search_max_iter; i++)
+        for (int i = 1; i < m_settings.line_search_max_iter && alpha > m_settings.min_alpha; i++)
         {
             m_x_step_line_search = m_x + alpha * p;
 
-            prob.set_decision_variable(m_x_step_line_search);
-            scalar_t cost = prob.eval_objective();
+            prob->set_decision_variable(m_x_step_line_search);
+            scalar_t cost = prob->eval_objective();
             eval_constraints(m_x_step_line_search);
             scalar_t constraint_violation = l1_constraints_violation(m_x_step_line_search);
 
@@ -873,33 +949,42 @@ protected:
     }
 
     /** default regularisation: do nothing */
-    EIGEN_STRONG_INLINE void hessian_regularisation_impl(Eigen::SparseMatrix<scalar_t>& lag_hessian) noexcept
+    EIGEN_STRONG_INLINE void hessian_regularisation_impl(matrix_t& lag_hessian) noexcept
     {
+        // gershgorin_bound is a reference to the temporary work variable
+        Eigen::VectorX<scalar_t>& gershgorin_bound = m_tmp_variables;
+
         if (m_settings.regularize_hessian)
         {
-            m_gershgorin_bound.setZero();
+            gershgorin_bound.setZero();
 
             for (int i = 0; i < lag_hessian.outerSize(); ++i)
             {
-                for (typename Eigen::SparseMatrix<scalar_t>::InnerIterator it(lag_hessian, i); it; ++it)
+                for (typename matrix_t::InnerIterator it(lag_hessian, i); it; ++it)
                 {
                     if (it.row() == it.col())
                     {
-                        m_gershgorin_bound(it.row()) += it.value();
+                        gershgorin_bound(it.row()) += it.value();
                     }
                     else
                     {
-                        m_gershgorin_bound(it.row()) -= fabs(it.value());
+                        gershgorin_bound(it.row()) -= fabs(it.value());
                     }
                 }
             }
 
-            scalar_t eig_lower_bound = m_gershgorin_bound.minCoeff();
+            scalar_t eig_lower_bound = gershgorin_bound.minCoeff();
             scalar_t eig_offset = fmax(scalar_t(0), -eig_lower_bound);
 
-            for (int i = 0; i < lag_hessian.rows(); i++)
+            for (int i = 0; i < lag_hessian.outerSize(); ++i)
             {
-                lag_hessian.coeffRef(i, i) += eig_offset;
+                for (typename matrix_t::InnerIterator it(lag_hessian, i); it; ++it)
+                {
+                    if (it.row() == it.col())
+                    {
+                        it.valueRef() += eig_offset;
+                    }
+                }
             }
         }
     }

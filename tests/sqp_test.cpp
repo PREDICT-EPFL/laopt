@@ -1,15 +1,21 @@
 #include <iostream>
 #include "laopt/laopt.hpp"
 #include "laopt/solvers/sqp_solver.hpp"
-#ifdef LAOPT_WITH_OSQP
-#include "laopt/solvers/osqp_interface.hpp"
+//#ifdef LAOPT_WITH_OSQP
+//#include "laopt/solvers/osqp_interface.hpp"
+//#endif
+#ifdef LAOPT_WITH_QPALM
+#include "laopt/solvers/qpalm_interface.hpp"
 #endif
-#ifdef LAOPT_WITH_PROXQP
-#include "laopt/solvers/proxqp_interface.hpp"
+#ifdef LAOPT_WITH_PIQP
+#include "laopt/solvers/piqp_interface.hpp"
 #endif
-#ifdef LAOPT_WITH_QPSWIFT
-#include "laopt/solvers/qpswift_interface.hpp"
-#endif
+//#ifdef LAOPT_WITH_PROXQP
+//#include "laopt/solvers/proxqp_interface.hpp"
+//#endif
+//#ifdef LAOPT_WITH_QPSWIFT
+//#include "laopt/solvers/qpswift_interface.hpp"
+//#endif
 
 #include "test_utils.hpp"
 #include "gtest/gtest.h"
@@ -23,7 +29,7 @@
  *       -1 <= x4 <= 1
  */
 template<typename scalar_t_>
-struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>>
+struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>, laopt::TAGGED>
 {
     using scalar_t = scalar_t_;
 
@@ -60,21 +66,21 @@ struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>>
     {
         problem.add_variable(x_var);
 
-        problem.add_obj(this->function(Cost{}, x_var));
+        problem.add_obj(1.0 * this->expression(Cost{}, x_var));
 
         problem.add_constr(-1 <= x_var({0, 2, 3}) <= 1);
 
-        problem.add_constr(this->function(Equality{}, x_var) == 0);
+        problem.add_constr(1.0f * this->expression(Equality{}, x_var) == 0);
     }
 };
 
-#ifdef LAOPT_WITH_OSQP
-TEST(SQPTest, SimpleExampleOSQP)
+template<template<typename, int...> class Solver>
+static void generic_sqp_test()
 {
     using scalar_t = double;
 
     using UserCode = SimpleExample<scalar_t>;
-    UserCode my_problem;
+    std::shared_ptr<UserCode> my_problem = std::make_shared<UserCode>();
     auto sparsity = laopt::generate_sparsity(my_problem);
     auto tape = laopt::generate_tape(my_problem, sparsity);
 
@@ -82,114 +88,67 @@ TEST(SQPTest, SimpleExampleOSQP)
     std::cout << tape << std::endl;
 
     using Problem = laopt::Problem<UserCode>;
-    Problem prob(my_problem, tape);
+    std::shared_ptr<Problem> prob = std::make_shared<Problem>(my_problem, tape);
 
-    laopt::SQPSolver<Problem, laopt::OSQPSolver<Problem::scalar_t>> solver(prob);
+    laopt::SQPSolver<Problem, Solver<Problem::scalar_t>> solver(prob);
     solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT;
     solver.settings().verbose = true;
 
-    // Set the initial primal variable
-    my_problem.x_var << 0.5, 1.5, 0.0, 0.0;
+    // initial and re-solve
+    for (int i = 0; i < 2; i++) {
+        // Set the initial primal variable
+        my_problem->x_var << 0.5, 1.5, 0.0, 0.0;
 
-    solver.solve();
+        solver.solve();
 
-    EXPECT_NEAR(my_problem.x_var(0), 0, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(1), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(2), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(3), -1, 1e-4);
+        EXPECT_NEAR(my_problem->x_var(0), 0, 1e-4);
+        EXPECT_NEAR(my_problem->x_var(1), 1, 1e-4);
+        EXPECT_NEAR(my_problem->x_var(2), 1, 1e-4);
+        EXPECT_NEAR(my_problem->x_var(3), -1, 1e-4);
 
-    EXPECT_NEAR(solver.primal()(0), 0, 1e-4);
-    EXPECT_NEAR(solver.primal()(1), 1, 1e-4);
-    EXPECT_NEAR(solver.primal()(2), 1, 1e-4);
-    EXPECT_NEAR(solver.primal()(3), -1, 1e-4);
-    EXPECT_NEAR(solver.dual()(0), 2, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(0), 0, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(1), 0, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(2), 1, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(3), -1, 1e-4);
+        EXPECT_NEAR(solver.primal()(0), 0, 1e-4);
+        EXPECT_NEAR(solver.primal()(1), 1, 1e-4);
+        EXPECT_NEAR(solver.primal()(2), 1, 1e-4);
+        EXPECT_NEAR(solver.primal()(3), -1, 1e-4);
+        EXPECT_NEAR(solver.dual()(0), 2, 1e-4);
+        EXPECT_NEAR(solver.dual_bounds()(0), 0, 1e-4);
+        EXPECT_NEAR(solver.dual_bounds()(1), 0, 1e-4);
+        EXPECT_NEAR(solver.dual_bounds()(2), 1, 1e-4);
+        EXPECT_NEAR(solver.dual_bounds()(3), -1, 1e-4);
+    }
 }
-#endif
 
-#ifdef LAOPT_WITH_PROXQP
-TEST(SQPTest, SimpleExampleProxQP)
+//#ifdef LAOPT_WITH_OSQP
+//TEST(SQPTest, SimpleExampleOSQP)
+//{
+//    generic_sqp_test<laopt::OSQPSolver>();
+//}
+//#endif
+
+#ifdef LAOPT_WITH_QPALM
+TEST(SQPTest, SimpleExampleQPALM)
 {
-    using scalar_t = double;
-
-    using UserCode = SimpleExample<scalar_t>;
-    UserCode my_problem;
-    auto sparsity = laopt::generate_sparsity(my_problem);
-    auto tape = laopt::generate_tape(my_problem, sparsity);
-
-    std::cout << sparsity << std::endl;
-    std::cout << tape << std::endl;
-
-    using Problem = laopt::Problem<UserCode>;
-    Problem prob(my_problem, tape);
-
-    laopt::SQPSolver<Problem, laopt::ProxQPSolver<Problem::scalar_t>> solver(prob);
-    solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT;
-    solver.settings().verbose = true;
-
-    // Set the initial primal variable
-    my_problem.x_var << 0.5, 1.5, 0.0, 0.0;
-
-    solver.solve();
-
-    EXPECT_NEAR(my_problem.x_var(0), 0, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(1), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(2), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(3), -1, 1e-4);
-
-    EXPECT_NEAR(solver.primal()(0), 0, 1e-4);
-    EXPECT_NEAR(solver.primal()(1), 1, 1e-4);
-    EXPECT_NEAR(solver.primal()(2), 1, 1e-4);
-    EXPECT_NEAR(solver.primal()(3), -1, 1e-4);
-    EXPECT_NEAR(solver.dual()(0), 2, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(0), 0, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(1), 0, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(2), 1, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(3), -1, 1e-4);
+    generic_sqp_test<laopt::QPALMSolver>();
 }
 #endif
 
-#ifdef LAOPT_WITH_QPSWIFT
-TEST(SQPTest, SimpleExampleQPSwift)
+#ifdef LAOPT_WITH_PIQP
+TEST(SQPTest, SimpleExamplePIQP)
 {
-    using scalar_t = double;
-
-    using UserCode = SimpleExample<scalar_t>;
-    UserCode my_problem;
-    auto sparsity = laopt::generate_sparsity(my_problem);
-    auto tape = laopt::generate_tape(my_problem, sparsity);
-
-    std::cout << sparsity << std::endl;
-    std::cout << tape << std::endl;
-
-    using Problem = laopt::Problem<UserCode>;
-    Problem prob(my_problem, tape);
-
-    laopt::SQPSolver<Problem, laopt::QPSwiftSolver<Problem::scalar_t>> solver(prob);
-    solver.settings().hessian_approximation = laopt::hessian_approximation_t::EXACT;
-    solver.settings().verbose = true;
-
-    // Set the initial primal variable
-    my_problem.x_var << 0.5, 1.5, 0.0, 0.0;
-
-    solver.solve();
-
-    EXPECT_NEAR(my_problem.x_var(0), 0, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(1), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(2), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(3), -1, 1e-4);
-
-    EXPECT_NEAR(solver.primal()(0), 0, 1e-4);
-    EXPECT_NEAR(solver.primal()(1), 1, 1e-4);
-    EXPECT_NEAR(solver.primal()(2), 1, 1e-4);
-    EXPECT_NEAR(solver.primal()(3), -1, 1e-4);
-    EXPECT_NEAR(solver.dual()(0), 2, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(0), 0, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(1), 0, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(2), 1, 1e-4);
-    EXPECT_NEAR(solver.dual_bounds()(3), -1, 1e-4);
+    generic_sqp_test<laopt::PIQPSolver>();
 }
 #endif
+
+//#ifdef LAOPT_WITH_PROXQP
+//TEST(SQPTest, SimpleExampleProxQP)
+//{
+//    generic_sqp_test<laopt::ProxQPSolver>();
+//}
+//#endif
+//
+//#ifdef LAOPT_WITH_QPSWIFT
+//TEST(SQPTest, SimpleExampleQPSwift)
+//{
+//    generic_sqp_test<laopt::QPSwiftSolver>();
+//}
+//#endif

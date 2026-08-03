@@ -1,34 +1,33 @@
 #ifndef LAOPT_PROBLEM_HPP
 #define LAOPT_PROBLEM_HPP
 
+#include <memory>
 #include <numeric>
 #include <iterator>
-#include "problem_dispatch_types.hpp"
-#include "problem_vector_function.hpp"
-#include "problem_weighted_sum_function.hpp"
-#include "opt_problem.hpp"
-#include "problem_evaluators/problem_size_evaluator.hpp"
-#include "problem_evaluators/objective_evaluator.hpp"
-#include "problem_evaluators/decision_variable_setter.hpp"
-#include "problem_evaluators/variable_bounds_evaluator.hpp"
-#include "problem_evaluators/vector_constraints_evaluator.hpp"
-#include "problem_evaluators/weighted_sum_constraints_evaluator.hpp"
-#include "indexed_vector.hpp"
-#include "expressions.hpp"
+#include "laopt/problem_dispatch_types.hpp"
+#include "laopt/problem_vector_function.hpp"
+#include "laopt/problem_weighted_sum_function.hpp"
+#include "laopt/opt_problem.hpp"
+#include "laopt/problem_evaluators/problem_size_evaluator.hpp"
+#include "laopt/problem_evaluators/objective_evaluator.hpp"
+#include "laopt/problem_evaluators/decision_variable_setter.hpp"
+#include "laopt/problem_evaluators/variable_bounds_evaluator.hpp"
+#include "laopt/problem_evaluators/vector_constraints_evaluator.hpp"
+#include "laopt/problem_evaluators/weighted_sum_constraints_evaluator.hpp"
 
 namespace laopt
 {
 
-template<typename Matrix, typename Vector>
+template<typename MatrixType, typename VectorType>
 struct ProblemInfo
 {
-    WeightedSumFunctionInfo<Matrix,Vector> objective;
-    VectorFunctionInfo<Matrix,Vector>      variable_bounds;
-    VectorFunctionInfo<Matrix,Vector>      constraints;
-	WeightedSumFunctionInfo<Matrix,Vector> lagrangian;
+    WeightedSumFunctionInfo<MatrixType, VectorType> objective;
+    VectorFunctionInfo<MatrixType, VectorType>      variable_bounds;
+    VectorFunctionInfo<MatrixType, VectorType>      constraints;
+	WeightedSumFunctionInfo<MatrixType, VectorType> lagrangian;
 };
 
-template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
+template<typename UserCode, typename Scalar, typename MatrixType, typename VectorType>
 class ProblemBase;
 
 /**
@@ -43,49 +42,58 @@ class ProblemBase;
  * just plays back the tape for speed. Only this version needs to be optimized.
  */
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
-using Sparsity = ProblemBase<UserCode, scalar_t, BSMatrixSparsity, BSMatrixDenseConstruction<scalar_t>>;
+class Sparsity;
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
 using SparsityInfo = typename Sparsity<UserCode, scalar_t>::Info;
 
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
-using Tape = ProblemBase<UserCode, scalar_t, BSMatrixTape, BSMatrixDenseConstruction<scalar_t>>;
+class Tape;
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
 using TapeInfo = typename Tape<UserCode, scalar_t>::Info;
 
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
-using Problem = ProblemBase<UserCode, scalar_t, BSMatrix<scalar_t>, BSMatrixDenseDeployment<scalar_t>>;
+class BSTape;
+template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
+using BSTapeInfo = typename BSTape<UserCode, scalar_t>::Info;
 
+template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
+class Problem;
+template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
+class BSProblem;
 
-template<typename UserCode, typename Scalar, typename Matrix, typename Vector>
+template<typename UserCode_, typename Scalar, typename MatrixType, typename VectorType>
 class ProblemBase
 {
-private:
-    UserCode& user_code;
+public:
+    using UserCode = UserCode_;
+    using scalar_t = Scalar;
+    using matrix_t = MatrixType;
+    using vector_t = VectorType;
+
+protected:
+    std::shared_ptr<UserCode> user_code;
+
+    /**
+     * Constructor for sparsity
+     */
+    explicit ProblemBase(const std::shared_ptr<UserCode>& user_code) : user_code(user_code)
+    {
+        this->eval_problem_size();
+    }
+
+    /**
+     * Constructor for tape recording and deployment
+     */
+    template<typename OtherMatrixType, typename OtherVectorType>
+    explicit ProblemBase(const std::shared_ptr<UserCode>& user_code, const ProblemInfo<OtherMatrixType, OtherVectorType>& info) :
+        user_code(user_code), objective(info.objective), variable_bounds(info.variable_bounds),
+        constraints(info.constraints), lagrangian(info.lagrangian) {}
 
 public:
-    using scalar_t = Scalar;
-
-    WeightedSumFunction<Matrix, Vector> objective;
-    VectorFunction<Matrix, Vector>      variable_bounds;
-    VectorFunction<Matrix, Vector>      constraints;
-    WeightedSumFunction<Matrix, Vector> lagrangian;
-
-	/**
-	 * Default constructor for sparsity discovery
-	 */
-	explicit ProblemBase(UserCode& user_code) : user_code(user_code)
-	{
-        ProblemSizeEvaluator<Matrix, Vector> problem_size_evaluator(variable_bounds, objective, constraints, lagrangian);
-		user_code.define_problem(problem_size_evaluator);
-	}
-
-	/**
-	 * Constructor for tape recording and deployment
-	 */
-	template<typename TMatrix, typename TVector>
-	explicit ProblemBase(UserCode& user_code, const ProblemInfo<TMatrix, TVector>& info) :
-		user_code(user_code), objective(info.objective), variable_bounds(info.variable_bounds),
-        constraints(info.constraints), lagrangian(info.lagrangian) {}
+    WeightedSumFunction<MatrixType, VectorType> objective;
+    VectorFunction<MatrixType, VectorType>      variable_bounds;
+    VectorFunction<MatrixType, VectorType>      constraints;
+    WeightedSumFunction<MatrixType, VectorType> lagrangian;
 
     int variables()
     {
@@ -99,8 +107,17 @@ public:
     {
         assert(var.rows() == variables() && "Decision variable is the wrong size");
 
-        DecisionVariableSetter<Scalar> decision_variable_setter(var);
-        user_code.define_problem(decision_variable_setter);
+        DecisionVariableSetter<Scalar> decision_variable_setter(var.data());
+        user_code->define_problem(decision_variable_setter);
+    }
+
+    /**
+     * Resets the memory of all decision variables to null
+     */
+    void unset_decision_variable()
+    {
+        DecisionVariableSetter<Scalar> decision_variable_setter(nullptr);
+        user_code->define_problem(decision_variable_setter);
     }
 
     scalar_t eval_objective()
@@ -189,7 +206,7 @@ public:
 	 *
 	 * Calls generate on every matrix / vector of the problem.
 	 */
-    using Info = ProblemInfo<Matrix,Vector>;
+    using Info = ProblemInfo<MatrixType, VectorType>;
     Info generate()
     {
         Info info;
@@ -202,48 +219,55 @@ public:
         return info;
     }
 
-    template<typename UserCode_, typename scalar_t_>
-    friend SparsityInfo<UserCode_> generate_sparsity(UserCode_& user_code);
+    template<typename UserCodeTemp, typename ScalarTemp>
+    friend SparsityInfo<UserCodeTemp> generate_sparsity(const std::shared_ptr<UserCodeTemp>& user_code);
+    template<typename UserCodeTemp, typename ScalarTemp>
+    friend TapeInfo<UserCodeTemp> generate_tape(const std::shared_ptr<UserCodeTemp>& user_code, const SparsityInfo<UserCodeTemp>& sparsity);
+    template<typename UserCodeTemp, typename ScalarTemp>
+    friend BSTapeInfo<UserCodeTemp> generate_bs_tape(const std::shared_ptr<UserCodeTemp>& user_code, const SparsityInfo<UserCodeTemp>& sparsity);
 
-    template<typename UserCode_, typename scalar_t_>
-    friend TapeInfo<UserCode_> generate_tape(UserCode_& user_code, SparsityInfo<UserCode_> sparsity);
-
-private:
+protected:
     /**
 	 * Compute the various elements of the problem by calling the
 	 * user-code. Stores the result in constraints/objective and lagrangian respectively
 	 *
 	 * These calls are only made internally when the Matrix and Vector types manage
 	 * their own memory (i.e., during construction). They should not be called
-	 * by the user or during deployment.
+	 * during deployment.
 	 */
+	void eval_problem_size()
+    {
+        ProblemSizeEvaluator<MatrixType, VectorType> problem_size_evaluator(variable_bounds, objective, constraints, lagrangian);
+        user_code->define_problem(problem_size_evaluator);
+    }
+
     template<typename DType>
     void eval_objective_no_memory(DType)
     {
-        ObjectiveEvaluator<DType, Matrix, Vector> objective_evaluator(objective);
-        user_code.define_problem(objective_evaluator);
+        ObjectiveEvaluator<DType, MatrixType, VectorType> objective_evaluator(objective);
+        user_code->define_problem(objective_evaluator);
     }
 
     void eval_variable_bounds_no_memory()
     {
-        VariableBoundsEvaluator<Matrix, Vector> variable_bounds_evaluator(variable_bounds);
-        user_code.define_problem(variable_bounds_evaluator);
+        VariableBoundsEvaluator<MatrixType, VectorType> variable_bounds_evaluator(variable_bounds);
+        user_code->define_problem(variable_bounds_evaluator);
     }
 
     template<typename DType>
     void eval_constraints_no_memory(DType)
     {
-        VectorConstraintsEvaluator<DType, Matrix, Vector> constraints_evaluator(constraints);
-        user_code.define_problem(constraints_evaluator);
+        VectorConstraintsEvaluator<DType, MatrixType, VectorType> constraints_evaluator(constraints);
+        user_code->define_problem(constraints_evaluator);
     }
 
     template<typename DType>
     void eval_lagrangian_no_memory(DType, const scalar_t obj_factor = static_cast<scalar_t>(1))
     {
-        ObjectiveEvaluator<DType, Matrix, Vector> lagrangian_objective_evaluator(lagrangian, obj_factor);
-        user_code.define_problem(lagrangian_objective_evaluator);
-        WeightedSumConstraintsEvaluator<DType, Matrix, Vector> lagrangian_constraints_evaluator(lagrangian);
-        user_code.define_problem(lagrangian_constraints_evaluator);
+        ObjectiveEvaluator<DType, MatrixType, VectorType> lagrangian_objective_evaluator(lagrangian, obj_factor);
+        user_code->define_problem(lagrangian_objective_evaluator);
+        WeightedSumConstraintsEvaluator<DType, MatrixType, VectorType> lagrangian_constraints_evaluator(lagrangian);
+        user_code->define_problem(lagrangian_constraints_evaluator);
     }
 };
 
@@ -251,7 +275,7 @@ private:
  * Generates sparsity information for the given user code.
  */
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
-SparsityInfo<UserCode> generate_sparsity(UserCode& user_code)
+SparsityInfo<UserCode> generate_sparsity(const std::shared_ptr<UserCode>& user_code)
 {
 	Sparsity<UserCode, scalar_t> prob(user_code);
 
@@ -261,17 +285,23 @@ SparsityInfo<UserCode> generate_sparsity(UserCode& user_code)
 
     prob.eval_constraints_no_memory(Jacobian{});
     prob.eval_variable_bounds_no_memory();
+    prob.eval_objective_no_memory(Gradient{});
     prob.eval_objective_no_memory(Hessian{});
     prob.eval_lagrangian_no_memory(Hessian{});
 
-    return prob.generate();
+    SparsityInfo<UserCode> info = prob.generate();
+
+    // var is only temporary -> unset decision variable
+    prob.unset_decision_variable();
+
+    return info;
 }
 
 /**
  * Generates tape information for the given user code.
  */
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
-TapeInfo<UserCode> generate_tape(UserCode& user_code, SparsityInfo<UserCode> sparsity)
+TapeInfo<UserCode> generate_tape(const std::shared_ptr<UserCode>& user_code, const SparsityInfo<UserCode>& sparsity)
 {
 	Tape<UserCode, scalar_t> prob(user_code, sparsity);
 
@@ -281,21 +311,96 @@ TapeInfo<UserCode> generate_tape(UserCode& user_code, SparsityInfo<UserCode> spa
 
     prob.eval_constraints_no_memory(Jacobian{});
     prob.eval_variable_bounds_no_memory();
+    prob.eval_objective_no_memory(Gradient{});
     prob.eval_objective_no_memory(Hessian{});
     prob.eval_lagrangian_no_memory(Hessian{});
 
-    return prob.generate();
+    TapeInfo<UserCode> info = prob.generate();
+
+    // var is only temporary -> unset decision variable
+    prob.unset_decision_variable();
+
+    return info;
 }
 
-/**
- * Generates tape and sparsity information for the given user code, and then creates a problem.
- */
 template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
-Problem<UserCode> generate(UserCode& user_code)
+TapeInfo<UserCode> generate_tape(const std::shared_ptr<UserCode>& user_code)
 {
-    TapeInfo<UserCode> tape = generate_tape(user_code, generate_sparsity(user_code));
-    return Problem<UserCode>(user_code, tape);
+    return generate_tape(user_code, generate_sparsity(user_code));
 }
+
+template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
+BSTapeInfo<UserCode> generate_bs_tape(const std::shared_ptr<UserCode>& user_code, const SparsityInfo<UserCode>& sparsity)
+{
+    BSTape<UserCode, scalar_t> prob(user_code, sparsity);
+
+    Eigen::VectorX<scalar_t> var(prob.variables());
+    var.setZero();
+    prob.set_decision_variable(var);
+
+    prob.eval_constraints_no_memory(Jacobian{});
+    prob.eval_variable_bounds_no_memory();
+    prob.eval_objective_no_memory(Gradient{});
+    prob.eval_objective_no_memory(Hessian{});
+    prob.eval_lagrangian_no_memory(Hessian{});
+
+    BSTapeInfo<UserCode> info = prob.generate();
+
+    // var is only temporary -> unset decision variable
+    prob.unset_decision_variable();
+
+    return info;
+}
+
+template<typename UserCode, typename scalar_t = typename UserCode::scalar_t>
+BSTapeInfo<UserCode> generate_bs_tape(const std::shared_ptr<UserCode>& user_code)
+{
+    return generate_bs_tape(user_code, generate_sparsity(user_code));
+}
+
+template<typename UserCode, typename scalar_t>
+class Sparsity : public ProblemBase<UserCode, scalar_t, BSMatrixSparsity, BSMatrixDenseConstruction<scalar_t>>
+{
+public:
+    using Base = ProblemBase<UserCode, scalar_t, BSMatrixSparsity, BSMatrixDenseConstruction<scalar_t>>;
+    explicit Sparsity(const std::shared_ptr<UserCode>& user_code) : Base(user_code) {}
+};
+
+template<typename UserCode, typename scalar_t>
+class Tape : public ProblemBase<UserCode, scalar_t, BSMatrixTape<scalar_t>, BSMatrixDenseConstruction<scalar_t>>
+{
+public:
+    using Base = ProblemBase<UserCode, scalar_t, BSMatrixTape<scalar_t>, BSMatrixDenseConstruction<scalar_t>>;
+    explicit Tape(const std::shared_ptr<UserCode>& user_code) : Base(user_code, generate_sparsity(user_code)) {}
+    Tape(const std::shared_ptr<UserCode>& user_code, const SparsityInfo<UserCode, scalar_t>& info) : Base(user_code, info) {}
+};
+
+template<typename UserCode, typename scalar_t>
+class BSTape : public ProblemBase<UserCode, scalar_t, BSBSMatrixTape<scalar_t>, BSMatrixDenseConstruction<scalar_t>>
+{
+public:
+    using Base = ProblemBase<UserCode, scalar_t, BSBSMatrixTape<scalar_t>, BSMatrixDenseConstruction<scalar_t>>;
+    explicit BSTape(const std::shared_ptr<UserCode>& user_code) : Base(user_code, generate_sparsity(user_code)) {}
+    BSTape(const std::shared_ptr<UserCode>& user_code, const SparsityInfo<UserCode, scalar_t>& info) : Base(user_code, info) {}
+};
+
+template<typename UserCode, typename scalar_t>
+class Problem : public ProblemBase<UserCode, scalar_t, BSMatrix<Eigen::SparseMatrix<scalar_t>>, BSMatrixDenseDeployment<scalar_t>>
+{
+public:
+    using Base = ProblemBase<UserCode, scalar_t, BSMatrix<Eigen::SparseMatrix<scalar_t>>, BSMatrixDenseDeployment<scalar_t>>;
+    explicit Problem(const std::shared_ptr<UserCode>& user_code) : Base(user_code, generate_tape(user_code)) {}
+    Problem(const std::shared_ptr<UserCode>& user_code, const TapeInfo<UserCode, scalar_t>& info) : Base(user_code, info) {}
+};
+
+template<typename UserCode, typename scalar_t>
+class BSProblem : public ProblemBase<UserCode, scalar_t, BSMatrix<Eigen::BlockSparseMatrix<scalar_t>>, BSMatrixDenseDeployment<scalar_t>>
+{
+public:
+    using Base = ProblemBase<UserCode, scalar_t, BSMatrix<Eigen::BlockSparseMatrix<scalar_t>>, BSMatrixDenseDeployment<scalar_t>>;
+    explicit BSProblem(const std::shared_ptr<UserCode>& user_code) : Base(user_code, generate_bs_tape(user_code)) {}
+    BSProblem(const std::shared_ptr<UserCode>& user_code, const BSTapeInfo<UserCode, scalar_t>& info) : Base(user_code, info) {}
+};
 
 /**
  * A helper class that can be used to create all the required memory for 
@@ -311,14 +416,14 @@ struct ProblemMemory {
     Eigen::VectorX<scalar_t> var;
 
     template<typename Problem>
-    explicit ProblemMemory(Problem &prob) :
-        objective(prob.objective),
-        variable_bounds(prob.variable_bounds),
-        constraints(prob.constraints),
-        lagrangian(prob.lagrangian),
-        var(prob.variables())
+    explicit ProblemMemory(const std::shared_ptr<Problem>& prob) :
+        objective(prob->objective),
+        variable_bounds(prob->variable_bounds),
+        constraints(prob->constraints),
+        lagrangian(prob->lagrangian),
+        var(prob->variables())
     {
-        prob.set_decision_variable(var);
+        prob->set_decision_variable(var);
     }
 };
 
@@ -327,22 +432,18 @@ std::ostream& operator<<(std::ostream &o, const ProblemInfo<BSMatrixSparsity, BS
 {
     o << "==== Problem Sparsity Information ====\n";
     o << "Variables    : " << info.objective.variables << std::endl;
-
     o << "Constraints  : " << info.constraints.rows << std::endl;
-    o << "  Non-zeros  : " << info.constraints.jacobian.nonZeros() << std::endl;
-
+    o << "  Non-zeros  : " << info.constraints.jacobian.sparsity_pattern.nonZeros() << std::endl;
     o << "Variable bnds: " << info.variable_bounds.rows << std::endl;
-
-    o << "Objective    : " << info.objective.hessian.rows() << std::endl;
-    o << "  Non-zeros  : " << info.objective.hessian.nonZeros() << std::endl;
-
-    o << "Lagrangian   : " << info.lagrangian.hessian.rows() << std::endl;
-    o << "  Non-zeros  : " << info.lagrangian.hessian.nonZeros() << std::endl;
+    o << "Objective    : " << info.objective.hessian.sparsity_pattern.rows() << std::endl;
+    o << "  Non-zeros  : " << info.objective.hessian.sparsity_pattern.nonZeros() << std::endl;
+    o << "Lagrangian   : " << info.lagrangian.hessian.sparsity_pattern.rows() << std::endl;
+    o << "  Non-zeros  : " << info.lagrangian.hessian.sparsity_pattern.nonZeros() << std::endl;
     return o;
 }
 
 template <typename scalar_t>
-std::ostream& operator<<(std::ostream& o, const ProblemInfo<BSMatrixTape, BSMatrixDenseConstruction<scalar_t>>& info)
+std::ostream& operator<<(std::ostream& o, const ProblemInfo<BSMatrixTape<scalar_t>, BSMatrixDenseConstruction<scalar_t>>& info)
 {
 	o << "==== Problem Tape Information ====\n";
     o << "Variables    : " << info.objective.variables << std::endl;
@@ -356,7 +457,24 @@ std::ostream& operator<<(std::ostream& o, const ProblemInfo<BSMatrixTape, BSMatr
     o << "Lagrangian   : " << info.lagrangian.rows << std::endl;
     o << "  Non-zeros  : " << info.lagrangian.hessian.sparsity_structure.nonZeros() << std::endl;
     o << "  Tape length: " << info.lagrangian.hessian.copy_segments.size() << std::endl;
+    return o;
+}
 
+template <typename scalar_t>
+std::ostream& operator<<(std::ostream& o, const ProblemInfo<BSBSMatrixTape<scalar_t>, BSMatrixDenseConstruction<scalar_t>>& info)
+{
+    o << "==== Problem Tape Information ====\n";
+    o << "Variables    : " << info.objective.variables << std::endl;
+    o << "Variable bnds: " << info.variable_bounds.rows << std::endl;
+    o << "Constraints  : " << info.constraints.rows << std::endl;
+    o << "  Non-zeros  : " << info.constraints.jacobian.sparsity_structure.nonZeros() << std::endl;
+    o << "  Tape length: " << info.constraints.jacobian.copy_segments.size() << std::endl;
+    o << "Objective    : " << info.objective.rows << std::endl;
+    o << "  Non-zeros  : " << info.objective.hessian.sparsity_structure.nonZeros() << std::endl;
+    o << "  Tape length: " << info.objective.hessian.copy_segments.size() << std::endl;
+    o << "Lagrangian   : " << info.lagrangian.rows << std::endl;
+    o << "  Non-zeros  : " << info.lagrangian.hessian.sparsity_structure.nonZeros() << std::endl;
+    o << "  Tape length: " << info.lagrangian.hessian.copy_segments.size() << std::endl;
     return o;
 }
 

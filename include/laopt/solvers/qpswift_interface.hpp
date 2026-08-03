@@ -3,7 +3,7 @@
 
 #include "laopt/utility.hpp"
 #include "laopt/solvers/qp_base.hpp"
-#include "qpSWIFT/qpSWIFT.h"
+#include "qpSWIFT.h"
 
 // TODO: Handle conflicting macros better
 #undef Int
@@ -20,8 +20,10 @@ public:
 
 private:
     using constraint_t = typename Base::constraint_t;
+    using constraint_changed_t = typename Base::constraint_changed_t;
 
     QP* m_qpswift_solver;
+    bool m_qpswift_initialized;
 
     Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, qp_int> m_P_qpswift;
     Eigen::VectorX<scalar_t> m_c_qpswift;
@@ -36,6 +38,7 @@ public:
     QPSwiftSolver(int n, int m) :
         Base(n, m),
         m_qpswift_solver(nullptr),
+        m_qpswift_initialized(false),
         m_A_to_qpswift_map(m)
     {
         this->m_settings.max_iter = 50;
@@ -58,7 +61,7 @@ public:
     {
         construct_qpswift_data(H, f, xlb, xub, A, Alb, Aub);
 
-        if (!this->m_settings.reuse_pattern)
+        if (!this->m_settings.reuse_pattern || !m_qpswift_initialized)
         {
             if (m_qpswift_solver != nullptr)
             {
@@ -70,14 +73,15 @@ public:
                                         m_A_qpswift.outerIndexPtr(), m_A_qpswift.innerIndexPtr(), m_A_qpswift.valuePtr(),
                                         m_G_qpswift.outerIndexPtr(), m_G_qpswift.innerIndexPtr(), m_G_qpswift.valuePtr(),
                                         m_c_qpswift.data(), m_h_qpswift.data(), m_b_qpswift.data(), 0.0, nullptr);
+            m_qpswift_initialized = true;
         }
         else
         {
             eigen_assert(m_qpswift_solver != nullptr);
+
             // there is no update function provided in QPSwift, but we can imitate what is done in QP_SETUP
             // this is very hacky code and could break with future versions of QPSwift
             // this actually should be integrated into QPSwift directly
-
             qp_timer tsetup;
             tic(&tsetup);
 
@@ -240,6 +244,10 @@ public:
                 this->m_lam(i) = -dual_ineq_solution(ineq_bound_i++);
                 this->m_lam(i) += dual_ineq_solution(ineq_bound_i++);
             }
+            else
+            {
+                this->m_lam(i) = 0;
+            }
         }
         // copy box constraints dual variables
         for (int i = 0; i < this->m_n; i++)
@@ -260,6 +268,10 @@ public:
             {
                 this->m_lam_bounds(i) = -dual_ineq_solution(ineq_bound_i++);
                 this->m_lam_bounds(i) += dual_ineq_solution(ineq_bound_i++);
+            }
+            else
+            {
+                this->m_lam_bounds(i) = 0;
             }
         }
 
@@ -315,11 +327,12 @@ private:
                           const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
                           const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
     {
-        bool constraints_type_changed = this->parse_constraints_bounds(xlb, xub, Alb, Aub);
-        if (constraints_type_changed)
+        constraint_changed_t constraints_type_change = this->parse_constraints_bounds(xlb, xub, Alb, Aub);
+        if (constraints_type_change != constraint_changed_t::NO_CHANGE)
         {
-            // if the types of constraints have changed we can't reuse pattern
-            this->settings().reuse_pattern = false;
+            // if the types of the constraints changed
+            // we have to reinitialize solver because of sparsity pattern change
+            m_qpswift_initialized = false;
         }
 
         construct_qpswift_cost(H, f);
@@ -332,7 +345,7 @@ private:
     {
         eigen_assert(H.isCompressed());
 
-        if (!this->settings().reuse_pattern)
+        if (!this->settings().reuse_pattern || !m_qpswift_initialized)
         {
             int n_vars = this->m_n;
             if (this->m_settings.elastic_mode)
@@ -408,7 +421,7 @@ private:
     {
         eigen_assert(A.isCompressed());
 
-        if (!this->settings().reuse_pattern)
+        if (!this->settings().reuse_pattern || !m_qpswift_initialized)
         {
             int n_vars = this->m_n;
             if (this->m_settings.elastic_mode)

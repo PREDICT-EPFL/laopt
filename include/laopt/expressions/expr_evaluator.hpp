@@ -1,134 +1,59 @@
 #ifndef LAOPT_EXPR_EVALUATOR_HPP
 #define LAOPT_EXPR_EVALUATOR_HPP
 
-#include "../indexed_vector.hpp"
-#include "../common_functions.hpp"
+#include "laopt/expressions/fwd.hpp"
+#include "laopt/variable_map.hpp"
+#include "laopt/differentiable_functions/identity.hpp"
 
 namespace laopt {
 
-// ExprEvaluator forward declaration
-template<typename Derived, typename EnableIf = void>
-struct ExprEvaluator;
-
-template<typename Derived>
-struct ExprEvaluator<IndexedVector<Derived>>
+template<typename T>
+struct ExprEvaluator<T, typename std::enable_if<is_variable<T>::value>::type>
 {
     static EIGEN_STRONG_INLINE auto
-    function(const IndexedVector<Derived>& indexed_vector)
+    function(const T& variable)
     {
-        common_functions::IDENTITY id;
-        return id.function(indexed_vector.cast_base());
+        Identity id;
+        return id.function(variable);
     }
 
-    template<typename OutJacobian>
+    template<typename OutJacobian, typename AScalar>
     static EIGEN_STRONG_INLINE void
-    jacobian(const IndexedVector<Derived>& indexed_vector, OutJacobian&& out_jacobian)
+    jacobian(const T& variable, OutJacobian&& out_jacobian, const AScalar& alpha)
     {
-        common_functions::IDENTITY id;
+        Identity id;
         id.jacobian(out_jacobian,
-                    indexed_vector);
+                    alpha,
+                    variable);
     }
 
     template<typename Weight>
     static EIGEN_STRONG_INLINE auto
-    wsum(const IndexedVector<Derived>& indexed_vector, const Weight& weight)
+    wsum(const T& variable, const Weight& weight)
     {
-        common_functions::IDENTITY id;
+        Identity id;
         return id.wsum(weight,
-                       indexed_vector);
+                       variable);
     }
 
     template<typename OutGradient, typename Weight>
     static EIGEN_STRONG_INLINE void
-    gradient(const IndexedVector<Derived>& indexed_vector, OutGradient&& out_gradient, const Weight& weight)
+    gradient(const T& variable, OutGradient&& out_gradient, const Weight& weight)
     {
-        common_functions::IDENTITY id;
+        Identity id;
         id.gradient(out_gradient,
                     weight,
-                    indexed_vector);
+                    variable);
     }
 
     template<typename OutHessian, typename Weight>
     static EIGEN_STRONG_INLINE void
-    hessian(const IndexedVector<Derived>& indexed_vector, OutHessian&& out_hessian, const Weight& weight)
+    hessian(const T& variable, OutHessian&& out_hessian, const Weight& weight)
     {
-        common_functions::IDENTITY id;
+        Identity id;
         id.hessian(out_hessian,
                    weight,
-                   indexed_vector);
-    }
-};
-
-template<typename Function, typename Tag, typename Info, typename Capture>
-struct ExprEvaluator<FunctionCapture<Function, Tag, Info, Capture>>
-{
-private:
-    template<typename Base>
-    static EIGEN_STRONG_INLINE const Base& cast_variable_to_base(const IndexedVector<Base>& arg)
-    {
-        return arg.cast_base();
-    }
-
-    template<typename T>
-    static EIGEN_STRONG_INLINE const T& cast_variable_to_base(const T& arg)
-    {
-        return arg;
-    }
-
-public:
-    static EIGEN_STRONG_INLINE auto
-    function(const FunctionCapture<Function, Tag, Info, Capture>& function_capture)
-    {
-        return function_capture.capture([&](auto&&... vars) {
-            return function_capture.func.function(Tag{},
-                                                  cast_variable_to_base(vars)...);
-        });
-    }
-
-    template<typename OutJacobian>
-    static EIGEN_STRONG_INLINE void
-    jacobian(const FunctionCapture<Function, Tag, Info, Capture>& function_capture, OutJacobian&& out_jacobian)
-    {
-        function_capture.capture([&](auto&&... vars) {
-            function_capture.func.jacobian(Tag{},
-                                           out_jacobian,
-                                           vars...);
-        });
-    }
-
-    template<typename Weight>
-    static EIGEN_STRONG_INLINE auto
-    wsum(const FunctionCapture<Function, Tag, Info, Capture>& function_capture, const Weight& weight)
-    {
-        return function_capture.capture([&](auto&&... vars) {
-            return function_capture.func.wsum(Tag{},
-                                              weight,
-                                              vars...);
-        });
-    }
-
-    template<typename OutGradient, typename Weight>
-    static EIGEN_STRONG_INLINE void
-    gradient(const FunctionCapture<Function, Tag, Info, Capture>& function_capture, OutGradient&& out_gradient, const Weight& weight)
-    {
-        return function_capture.capture([&](auto&&... vars) {
-            function_capture.func.gradient(Tag{},
-                                           out_gradient,
-                                           weight,
-                                           vars...);
-        });
-    }
-
-    template<typename OutHessian, typename Weight>
-    static EIGEN_STRONG_INLINE void
-    hessian(const FunctionCapture<Function, Tag, Info, Capture> function_capture, OutHessian&& out_hessian, const Weight& weight)
-    {
-        return function_capture.capture([&](auto&&... vars) {
-            function_capture.func.hessian(Tag{},
-                                          out_hessian,
-                                          weight,
-                                          vars...);
-        });
+                   variable);
     }
 };
 

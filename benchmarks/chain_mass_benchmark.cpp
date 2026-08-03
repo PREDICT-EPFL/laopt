@@ -1,17 +1,20 @@
 #include <benchmark/benchmark.h>
 
 #include "laopt/laopt.hpp"
-#include "casadi/casadi.hpp"
+#include "laopt/differentiable_functions/integrators.hpp"
 
+#ifdef LAOPT_WITH_CASADI
+#include "casadi/casadi.hpp"
 #include "chain_mass_benchmark_casadi_codegen.h"
 
 using namespace casadi;
+#endif
 
 // example taken from
 // https://github.com/acados/acados/blob/master/examples/acados_python/chain_mass/export_chain_mass_model.py
 
 template<int n_mass = 10>
-struct LAOptChainMass : public laopt::Differentiable<LAOptChainMass<n_mass>, true>
+struct LAOptChainMass : public laopt::Differentiable<LAOptChainMass<n_mass>>
 {
     const Eigen::Vector<double, 3> x0{0, 0, 0}; // fix mass (at wall)
     const double m = 0.033; // mass of the balls
@@ -64,10 +67,10 @@ struct LAOptChainMass : public laopt::Differentiable<LAOptChainMass<n_mass>, tru
 };
 
 template<int n_mass>
-static void BM_LAOPT_FUNCTION(benchmark::State& state)
+static void BM_LAOPT_FUNCTION_EIGEN(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
+    laopt::ERK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
 
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
     Eigen::Vector<double, LAOptChainMass<n_mass>::NU> u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
@@ -75,90 +78,156 @@ static void BM_LAOPT_FUNCTION(benchmark::State& state)
 
     for (auto _: state)
     {
-        value = chain_mass_d.function(x, u);
+        value = chain_mass_d.integrator.function(x, u);
         benchmark::DoNotOptimize(value);
     }
 }
 
-template<int n_mass>
-static void BM_LAOPT_JACOBIAN(benchmark::State& state)
+template<int n_mass, int Options>
+static void laopt_jacobian(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
+    laopt::ERK4<LAOptChainMass<n_mass>, double, laopt::DefaultTag, Options> chain_mass_d(chain_mass, 0.2);
 
-    laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NX>> x;
-    x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
-    laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NU>> u;
-    u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
+    Eigen::Vector<double, LAOptChainMass<n_mass>::NX> x_data;
+    x_data = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
+    Eigen::Vector<double, LAOptChainMass<n_mass>::NU> u_data;
+    u_data = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
+    laopt::Variable<double, LAOptChainMass<n_mass>::NX> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<double, LAOptChainMass<n_mass>::NU> u(u_data.data()); u.index_offset() = LAOptChainMass<n_mass>::NX;
     Eigen::Matrix<double, LAOptChainMass<n_mass>::NX, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> jacobian;
 
+    chain_mass_d.integrator.jacobian(jacobian, 1, x, u);
     for (auto _: state)
     {
-        chain_mass_d.jacobian(jacobian, x, u);
+        chain_mass_d.integrator.jacobian(jacobian, 1, x, u);
         benchmark::DoNotOptimize(jacobian);
     }
 }
 
 template<int n_mass>
-static void BM_LAOPT_WSUM(benchmark::State& state)
+static void BM_LAOPT_JACOBIAN_EIGEN(benchmark::State& state)
+{
+    laopt_jacobian<n_mass, laopt::EIGEN_ALL>(state);
+}
+#ifdef LAOPT_WITH_CASADI
+template<int n_mass>
+static void BM_LAOPT_JACOBIAN_CASADI(benchmark::State& state)
+{
+    laopt_jacobian<n_mass, laopt::CASADI_ALL>(state);
+}
+template<int n_mass>
+static void BM_LAOPT_JACOBIAN_CASADI_NO_JIT(benchmark::State& state)
+{
+    laopt_jacobian<n_mass, laopt::CASADI_ALL | laopt::CASADI_NO_JIT>(state);
+}
+#endif
+
+template<int n_mass>
+static void BM_LAOPT_WSUM_EIGEN(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
+    laopt::ERK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
 
-    laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NX>> x;
-    x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
-    laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NU>> u;
-    u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
+    Eigen::Vector<double, LAOptChainMass<n_mass>::NX> x_data;
+    x_data = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
+    Eigen::Vector<double, LAOptChainMass<n_mass>::NU> u_data;
+    u_data = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
+    laopt::Variable<double, LAOptChainMass<n_mass>::NX> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<double, LAOptChainMass<n_mass>::NU> u(u_data.data()); u.index_offset() = LAOptChainMass<n_mass>::NX;
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> weight = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
     double value;
 
     for (auto _: state)
     {
-        value = chain_mass_d.wsum(weight, x, u);
+        value = chain_mass_d.integrator.wsum(weight, x, u);
         benchmark::DoNotOptimize(value);
     }
 }
 
-template<int n_mass>
-static void BM_LAOPT_GRADIENT(benchmark::State& state)
+template<int n_mass, int Options>
+static void laopt_gradient(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
+    laopt::ERK4<LAOptChainMass<n_mass>, double, laopt::DefaultTag, Options> chain_mass_d(chain_mass, 0.2);
 
-    laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NX>> x;
-    x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
-    laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NU>> u;
-    u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
+    Eigen::Vector<double, LAOptChainMass<n_mass>::NX> x_data;
+    x_data = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
+    Eigen::Vector<double, LAOptChainMass<n_mass>::NU> u_data;
+    u_data = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
+    laopt::Variable<double, LAOptChainMass<n_mass>::NX> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<double, LAOptChainMass<n_mass>::NU> u(u_data.data()); u.index_offset() = LAOptChainMass<n_mass>::NX;
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> weight = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> gradient;
 
+    chain_mass_d.integrator.gradient(gradient, weight, x, u);
     for (auto _: state)
     {
-        chain_mass_d.gradient(gradient, weight, x, u);
+        chain_mass_d.integrator.gradient(gradient, weight, x, u);
         benchmark::DoNotOptimize(gradient);
     }
 }
 
 template<int n_mass>
-static void BM_LAOPT_HESSIAN(benchmark::State& state)
+static void BM_LAOPT_GRADIENT_EIGEN(benchmark::State& state)
+{
+    laopt_gradient<n_mass, laopt::EIGEN_ALL>(state);
+}
+#ifdef LAOPT_WITH_CASADI
+template<int n_mass>
+static void BM_LAOPT_GRADIENT_CASADI(benchmark::State& state)
+{
+    laopt_gradient<n_mass, laopt::CASADI_ALL>(state);
+}
+template<int n_mass>
+static void BM_LAOPT_GRADIENT_CASADI_NO_JIT(benchmark::State& state)
+{
+    laopt_gradient<n_mass, laopt::CASADI_ALL | laopt::CASADI_NO_JIT>(state);
+}
+#endif
+
+template<int n_mass, int Options>
+static void laopt_hessian(benchmark::State& state)
 {
     LAOptChainMass<n_mass> chain_mass;
-    laopt::common_functions::RK4<LAOptChainMass<n_mass>, double> chain_mass_d(chain_mass, 0.2);
+    laopt::ERK4<LAOptChainMass<n_mass>, double, laopt::DefaultTag, Options> chain_mass_d(chain_mass, 0.2);
 
-    laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NX>> x;
-    x = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
-    laopt::IndexedVector<Eigen::Vector<double, LAOptChainMass<n_mass>::NU>> u;
-    u = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
+    Eigen::Vector<double, LAOptChainMass<n_mass>::NX> x_data;
+    x_data = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
+    Eigen::Vector<double, LAOptChainMass<n_mass>::NU> u_data;
+    u_data = Eigen::Vector<double, LAOptChainMass<n_mass>::NU>::Random();
+    laopt::Variable<double, LAOptChainMass<n_mass>::NX> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<double, LAOptChainMass<n_mass>::NU> u(u_data.data()); u.index_offset() = LAOptChainMass<n_mass>::NX;
     Eigen::Vector<double, LAOptChainMass<n_mass>::NX> weight = Eigen::Vector<double, LAOptChainMass<n_mass>::NX>::Random();
     Eigen::Matrix<double, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU, LAOptChainMass<n_mass>::NX + LAOptChainMass<n_mass>::NU> hessian;
 
+    chain_mass_d.integrator.hessian(hessian, weight, x, u);
     for (auto _: state)
     {
-        chain_mass_d.hessian(hessian, weight, x, u);
+        chain_mass_d.integrator.hessian(hessian, weight, x, u);
         benchmark::DoNotOptimize(hessian);
     }
 }
 
+template<int n_mass>
+static void BM_LAOPT_HESSIAN_EIGEN(benchmark::State& state)
+{
+    laopt_hessian<n_mass, laopt::EIGEN_ALL>(state);
+}
+#ifdef LAOPT_WITH_CASADI
+template<int n_mass>
+static void BM_LAOPT_HESSIAN_CASADI(benchmark::State& state)
+{
+    laopt_hessian<n_mass, laopt::CASADI_ALL>(state);
+}
+template<int n_mass>
+static void BM_LAOPT_HESSIAN_CASADI_NO_JIT(benchmark::State& state)
+{
+    laopt_hessian<n_mass, laopt::CASADI_ALL | laopt::CASADI_NO_JIT>(state);
+}
+#endif
+
+#ifdef LAOPT_WITH_CASADI
 template<int n_mass = 10>
 struct CasadiSXChainMass
 {
@@ -266,7 +335,6 @@ static void BM_CASADI_SX_FUNCTION(benchmark::State& state)
         benchmark::DoNotOptimize(value);
     }
 }
-
 template<int n_mass>
 static void BM_CASADI_SX_JACOBIAN(benchmark::State& state)
 {
@@ -281,7 +349,6 @@ static void BM_CASADI_SX_JACOBIAN(benchmark::State& state)
         benchmark::DoNotOptimize(jacobian);
     }
 }
-
 template<int n_mass>
 static void BM_CASADI_SX_WSUM(benchmark::State& state)
 {
@@ -297,7 +364,6 @@ static void BM_CASADI_SX_WSUM(benchmark::State& state)
         benchmark::DoNotOptimize(wsum);
     }
 }
-
 template<int n_mass>
 static void BM_CASADI_SX_GRADIENT(benchmark::State& state)
 {
@@ -313,7 +379,6 @@ static void BM_CASADI_SX_GRADIENT(benchmark::State& state)
         benchmark::DoNotOptimize(gradient);
     }
 }
-
 template<int n_mass>
 static void BM_CASADI_SX_HESSIAN(benchmark::State& state)
 {
@@ -368,7 +433,6 @@ static void BM_CASADI_CODEGEN_FUNCTION(benchmark::State& state)
         benchmark::DoNotOptimize(res);
     }
 }
-
 static void BM_CASADI_CODEGEN_JACOBIAN(benchmark::State& state)
 {
     casadi_int sz_arg, sz_res, sz_iw, sz_w;
@@ -383,7 +447,6 @@ static void BM_CASADI_CODEGEN_JACOBIAN(benchmark::State& state)
         benchmark::DoNotOptimize(res);
     }
 }
-
 static void BM_CASADI_CODEGEN_WSUM(benchmark::State& state)
 {
     casadi_int sz_arg, sz_res, sz_iw, sz_w;
@@ -398,7 +461,6 @@ static void BM_CASADI_CODEGEN_WSUM(benchmark::State& state)
         benchmark::DoNotOptimize(res);
     }
 }
-
 static void BM_CASADI_CODEGEN_GRADIENT(benchmark::State& state)
 {
     casadi_int sz_arg, sz_res, sz_iw, sz_w;
@@ -413,7 +475,6 @@ static void BM_CASADI_CODEGEN_GRADIENT(benchmark::State& state)
         benchmark::DoNotOptimize(res);
     }
 }
-
 static void BM_CASADI_CODEGEN_HESSIAN(benchmark::State& state)
 {
     casadi_int sz_arg, sz_res, sz_iw, sz_w;
@@ -428,25 +489,43 @@ static void BM_CASADI_CODEGEN_HESSIAN(benchmark::State& state)
         benchmark::DoNotOptimize(res);
     }
 }
+#endif
 
-
-BENCHMARK_TEMPLATE(BM_LAOPT_FUNCTION, 5);
-BENCHMARK_TEMPLATE(BM_LAOPT_JACOBIAN, 5);
-BENCHMARK_TEMPLATE(BM_LAOPT_WSUM, 5);
-BENCHMARK_TEMPLATE(BM_LAOPT_GRADIENT, 5);
-BENCHMARK_TEMPLATE(BM_LAOPT_HESSIAN, 5);
-
+BENCHMARK_TEMPLATE(BM_LAOPT_FUNCTION_EIGEN, 5);
+#ifdef LAOPT_WITH_CASADI
 BENCHMARK_TEMPLATE(BM_CASADI_SX_FUNCTION, 5);
-BENCHMARK_TEMPLATE(BM_CASADI_SX_JACOBIAN, 5);
-BENCHMARK_TEMPLATE(BM_CASADI_SX_WSUM, 5);
-BENCHMARK_TEMPLATE(BM_CASADI_SX_GRADIENT, 5);
-BENCHMARK_TEMPLATE(BM_CASADI_SX_HESSIAN, 5);
-
 BENCHMARK(BM_CASADI_CODEGEN_FUNCTION);
+#endif
+
+BENCHMARK_TEMPLATE(BM_LAOPT_JACOBIAN_EIGEN, 5);
+#ifdef LAOPT_WITH_CASADI
+BENCHMARK_TEMPLATE(BM_LAOPT_JACOBIAN_CASADI, 5);
+BENCHMARK_TEMPLATE(BM_LAOPT_JACOBIAN_CASADI_NO_JIT, 5);
+BENCHMARK_TEMPLATE(BM_CASADI_SX_JACOBIAN, 5);
 BENCHMARK(BM_CASADI_CODEGEN_JACOBIAN);
+#endif
+
+BENCHMARK_TEMPLATE(BM_LAOPT_WSUM_EIGEN, 5);
+#ifdef LAOPT_WITH_CASADI
+BENCHMARK_TEMPLATE(BM_CASADI_SX_WSUM, 5);
 BENCHMARK(BM_CASADI_CODEGEN_WSUM);
+#endif
+
+BENCHMARK_TEMPLATE(BM_LAOPT_GRADIENT_EIGEN, 5);
+#ifdef LAOPT_WITH_CASADI
+BENCHMARK_TEMPLATE(BM_LAOPT_GRADIENT_CASADI, 5);
+BENCHMARK_TEMPLATE(BM_LAOPT_GRADIENT_CASADI_NO_JIT, 5);
+BENCHMARK_TEMPLATE(BM_CASADI_SX_GRADIENT, 5);
 BENCHMARK(BM_CASADI_CODEGEN_GRADIENT);
+#endif
+
+BENCHMARK_TEMPLATE(BM_LAOPT_HESSIAN_EIGEN, 5);
+#ifdef LAOPT_WITH_CASADI
+BENCHMARK_TEMPLATE(BM_LAOPT_HESSIAN_CASADI, 5);
+BENCHMARK_TEMPLATE(BM_LAOPT_HESSIAN_CASADI_NO_JIT, 5);
+BENCHMARK_TEMPLATE(BM_CASADI_SX_HESSIAN, 5);
 BENCHMARK(BM_CASADI_CODEGEN_HESSIAN);
+#endif
 
 BENCHMARK_MAIN();
 

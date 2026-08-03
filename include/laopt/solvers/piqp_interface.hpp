@@ -8,17 +8,18 @@
 namespace laopt
 {
 
-template<typename Scalar = double, int Mode = piqp::KKTMode::KKT_FULL>
-class PIQPSolver : public QPBase<PIQPSolver<Scalar, Mode>, Scalar>
+template<typename Scalar = double>
+class PIQPSolver : public QPBase<PIQPSolver<Scalar>, Scalar>
 {
 public:
-    using Base = QPBase<PIQPSolver<Scalar, Mode>, Scalar>;
+    using Base = QPBase<PIQPSolver<Scalar>, Scalar>;
     using scalar_t = typename Base::scalar_t;
 
 private:
     using constraint_t = typename Base::constraint_t;
+    using constraint_changed_t = typename Base::constraint_changed_t;
 
-    piqp::SparseSolver<Scalar, int, Mode> m_piqp_solver;
+    piqp::SparseSolver<Scalar, int> m_piqp_solver;
     bool m_piqp_initialized;
 
     Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, int> m_P_piqp;
@@ -26,9 +27,10 @@ private:
     Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, int> m_A_piqp;
     Eigen::VectorX<scalar_t> m_b_piqp;
     Eigen::SparseMatrix<scalar_t, Eigen::ColMajor, int> m_G_piqp;
-    Eigen::VectorX<scalar_t> m_h_piqp;
-    Eigen::VectorX<scalar_t> m_x_lb_piqp;
-    Eigen::VectorX<scalar_t> m_x_ub_piqp;
+    Eigen::VectorX<scalar_t> m_h_l_piqp;
+    Eigen::VectorX<scalar_t> m_h_u_piqp;
+    Eigen::VectorX<scalar_t> m_x_l_piqp;
+    Eigen::VectorX<scalar_t> m_x_u_piqp;
 
     Eigen::VectorX<int> m_A_to_piqp_map; // maps row in A to row in A_piqp or C_piqp
 
@@ -53,16 +55,14 @@ public:
 
         set_piqp_settings();
 
-        if (!this->m_settings.reuse_pattern)
+        if (!this->m_settings.reuse_pattern || !m_piqp_initialized)
         {
-            m_piqp_solver.setup(m_P_piqp, m_c_piqp, m_A_piqp, m_b_piqp, m_G_piqp, m_h_piqp, m_x_lb_piqp, m_x_ub_piqp);
+            m_piqp_solver.setup(m_P_piqp, m_c_piqp, m_A_piqp, m_b_piqp, m_G_piqp, m_h_l_piqp, m_h_u_piqp, m_x_l_piqp, m_x_u_piqp);
             m_piqp_initialized = true;
         }
         else
         {
-            eigen_assert(m_piqp_initialized);
-
-            m_piqp_solver.update(m_P_piqp, m_c_piqp, m_A_piqp, m_b_piqp, m_G_piqp, m_h_piqp, m_x_lb_piqp, m_x_ub_piqp);
+            m_piqp_solver.update(m_P_piqp, m_c_piqp, m_A_piqp, m_b_piqp, m_G_piqp, m_h_l_piqp, m_h_u_piqp, m_x_l_piqp, m_x_u_piqp);
         }
 
         m_piqp_solver.solve();
@@ -82,22 +82,18 @@ public:
             {
                 this->m_lam(i) = m_piqp_solver.result().y(eq_bound_i++);
             }
-            else if (this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
+            else if (this->m_constraint_type[i] != constraint_t::UNBOUNDED_CONSTR)
             {
-                this->m_lam(i) = -m_piqp_solver.result().z(ineq_bound_i++);
+                this->m_lam(i) = m_piqp_solver.result().z_u(ineq_bound_i) - m_piqp_solver.result().z_l(ineq_bound_i);
+                ineq_bound_i++;
             }
-            else if (this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
+            else
             {
-                this->m_lam(i) = m_piqp_solver.result().z(ineq_bound_i++);
-            }
-            else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
-            {
-                this->m_lam(i) = -m_piqp_solver.result().z(ineq_bound_i++);
-                this->m_lam(i) += m_piqp_solver.result().z(ineq_bound_i++);
+                this->m_lam(i) = 0;
             }
         }
         // copy box constraints dual variables
-        this->m_lam_bounds = m_piqp_solver.result().z_ub.head(this->m_n) - m_piqp_solver.result().z_lb.head(this->m_n);
+        this->m_lam_bounds = m_piqp_solver.result().z_bu.head(this->m_n) - m_piqp_solver.result().z_bl.head(this->m_n);
 
         this->m_info.iter = m_piqp_solver.result().info.iter;
 
@@ -125,22 +121,28 @@ public:
         return this->m_info;
     }
 
+    piqp::SparseSolver<Scalar, int>& internal_solver()
+    {
+        return m_piqp_solver;
+    }
+
 private:
-    /** construct the data matrices accepted by OSQP */
     EIGEN_STRONG_INLINE void
     construct_piqp_data(const Eigen::SparseMatrix<scalar_t>& H,
-                          const Eigen::Ref<const Eigen::VectorX<scalar_t>>& f,
-                          const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xlb,
-                          const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xub,
-                          const Eigen::SparseMatrix<scalar_t>& A,
-                          const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
-                          const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& f,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xlb,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xub,
+                        const Eigen::SparseMatrix<scalar_t>& A,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
+                        const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
     {
-        bool constraints_type_changed = this->parse_constraints_bounds(xlb, xub, Alb, Aub);
-        if (constraints_type_changed)
+        constraint_changed_t constraints_type_change = this->parse_constraints_bounds(xlb, xub, Alb, Aub);
+        if (constraints_type_change == constraint_changed_t::GEN_ONLY_CHANGE ||
+            constraints_type_change == constraint_changed_t::CHANGE)
         {
-            // if the types of constraints have changed we can't reuse pattern
-            this->settings().reuse_pattern = false;
+            // if the types of the general constraints changed
+            // we have to reinitialize solver because of sparsity pattern change
+            m_piqp_initialized = false;
         }
 
         construct_piqp_cost(H, f);
@@ -153,7 +155,7 @@ private:
     {
         eigen_assert(H.isCompressed());
 
-        if (!this->settings().reuse_pattern)
+        if (!this->settings().reuse_pattern || !m_piqp_initialized)
         {
             int n_vars = this->m_n;
             if (this->m_settings.elastic_mode)
@@ -229,7 +231,7 @@ private:
     {
         eigen_assert(A.isCompressed());
 
-        if (!this->settings().reuse_pattern)
+        if (!this->settings().reuse_pattern | !m_piqp_initialized)
         {
             int n_vars = this->m_n;
             if (this->m_settings.elastic_mode)
@@ -257,21 +259,12 @@ private:
                             A_piqp_nnz(this->m_n) += 1;
                         }
                     }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_LB_ONLY_CONSTR ||
-                             this->m_constraint_type[it.row()] == constraint_t::INEQ_UB_ONLY_CONSTR)
+                    else if (this->m_constraint_type[it.row()] != constraint_t::UNBOUNDED_CONSTR)
                     {
                         G_piqp_nnz(it.col()) += 1;
                         if (this->m_settings.elastic_mode)
                         {
                             G_piqp_nnz(this->m_n) += 1;
-                        }
-                    }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_CONSTR)
-                    {
-                        G_piqp_nnz(it.col()) += 2;
-                        if (this->m_settings.elastic_mode)
-                        {
-                            G_piqp_nnz(this->m_n) += 2;
                         }
                     }
                 }
@@ -286,21 +279,17 @@ private:
                 {
                     num_eq_constraints++;
                 }
-                else if (this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR ||
-                         this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
+                else if (this->m_constraint_type[i] != constraint_t::UNBOUNDED_CONSTR)
                 {
                     num_ineq_constraints++;
-                }
-                else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
-                {
-                    num_ineq_constraints += 2;
                 }
             }
 
             m_b_piqp.resize(num_eq_constraints);
-            m_h_piqp.resize(num_ineq_constraints);
-            m_x_lb_piqp.resize(n_vars);
-            m_x_ub_piqp.resize(n_vars);
+            m_h_l_piqp.resize(num_ineq_constraints);
+            m_h_u_piqp.resize(num_ineq_constraints);
+            m_x_l_piqp.resize(n_vars);
+            m_x_u_piqp.resize(n_vars);
 
             // copy bounds
             int eq_bound_i = 0;
@@ -313,37 +302,24 @@ private:
                     m_b_piqp(eq_bound_i) = Alb(i);
                     eq_bound_i++;
                 }
-                else if (this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
+                else if (this->m_constraint_type[i] != constraint_t::UNBOUNDED_CONSTR)
                 {
                     m_A_to_piqp_map(i) = ineq_bound_i;
-                    m_h_piqp(ineq_bound_i) = -Alb(i);
-                    ineq_bound_i++;
-                }
-                else if (this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
-                {
-                    m_A_to_piqp_map(i) = ineq_bound_i;
-                    m_h_piqp(ineq_bound_i) = Aub(i);
-                    ineq_bound_i++;
-                }
-                else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
-                {
-                    m_A_to_piqp_map(i) = ineq_bound_i;
-                    m_h_piqp(ineq_bound_i) = -Alb(i);
-                    ineq_bound_i++;
-                    m_h_piqp(ineq_bound_i) = Aub(i);
+                    m_h_l_piqp(ineq_bound_i) = Alb(i);
+                    m_h_u_piqp(ineq_bound_i) = Aub(i);
                     ineq_bound_i++;
                 }
             }
 
             // copy box bounds
-            m_x_lb_piqp.head(this->m_n) = xlb;
-            m_x_ub_piqp.head(this->m_n) = xub;
+            m_x_l_piqp.head(this->m_n) = xlb;
+            m_x_u_piqp.head(this->m_n) = xub;
 
             // set slack constraints
             if (this->m_settings.elastic_mode)
             {
-                m_x_lb_piqp(this->m_n) = scalar_t(0);
-                m_x_ub_piqp(this->m_n) = scalar_t(1);
+                m_x_l_piqp(this->m_n) = scalar_t(0);
+                m_x_u_piqp(this->m_n) = scalar_t(1);
             }
 
             m_A_piqp.resize(num_eq_constraints, n_vars);
@@ -360,18 +336,9 @@ private:
                     {
                         m_A_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = it.value();
                     }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_LB_ONLY_CONSTR)
-                    {
-                        m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = -it.value();
-                    }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_UB_ONLY_CONSTR)
+                    else if (this->m_constraint_type[it.row()] != constraint_t::UNBOUNDED_CONSTR)
                     {
                         m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = it.value();
-                    }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_CONSTR)
-                    {
-                        m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = -it.value();
-                        m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()) + 1, it.col()) = it.value();
                     }
                 }
             }
@@ -391,32 +358,11 @@ private:
                         m_A_piqp.coeffRef(eq_bound_i, this->m_n) = slack_coeff;
                         eq_bound_i++;
                     }
-                    else if (this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
+                    else if (this->m_constraint_type[i] != constraint_t::UNBOUNDED_CONSTR)
                     {
                         if (Alb(i) > scalar_t(0)) {
-                            slack_coeff = -Alb(i);
-                        }
-                        m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
-                        ineq_bound_i++;
-                    }
-                    else if (this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
-                    {
-                        if (Aub(i) < scalar_t(0)) {
-                            slack_coeff = Aub(i);
-                        }
-                        m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
-                        ineq_bound_i++;
-                    }
-                    else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
-                    {
-                        if (Alb(i) > scalar_t(0)) {
-                            slack_coeff = -Alb(i);
-                        }
-                        m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
-                        ineq_bound_i++;
-
-                        slack_coeff = 0;
-                        if (Aub(i) < scalar_t(0)) {
+                            slack_coeff = Alb(i);
+                        } else if (Aub(i) < scalar_t(0)) {
                             slack_coeff = Aub(i);
                         }
                         m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
@@ -441,31 +387,18 @@ private:
                     m_b_piqp(eq_bound_i) = Alb(i);
                     eq_bound_i++;
                 }
-                else if (this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
+                else if (this->m_constraint_type[i] != constraint_t::UNBOUNDED_CONSTR)
                 {
                     m_A_to_piqp_map(i) = ineq_bound_i;
-                    m_h_piqp(ineq_bound_i) = -Alb(i);
-                    ineq_bound_i++;
-                }
-                else if (this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
-                {
-                    m_A_to_piqp_map(i) = ineq_bound_i;
-                    m_h_piqp(ineq_bound_i) = Aub(i);
-                    ineq_bound_i++;
-                }
-                else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
-                {
-                    m_A_to_piqp_map(i) = ineq_bound_i;
-                    m_h_piqp(ineq_bound_i) = -Alb(i);
-                    ineq_bound_i++;
-                    m_h_piqp(ineq_bound_i) = Aub(i);
+                    m_h_l_piqp(ineq_bound_i) = Alb(i);
+                    m_h_u_piqp(ineq_bound_i) = Aub(i);
                     ineq_bound_i++;
                 }
             }
 
             // copy box bounds
-            m_x_lb_piqp.head(this->m_n) = xlb;
-            m_x_ub_piqp.head(this->m_n) = xub;
+            m_x_l_piqp.head(this->m_n) = xlb;
+            m_x_u_piqp.head(this->m_n) = xub;
 
             // copy eq and ineq matrix values
             for (int i = 0; i < A.outerSize(); i++)
@@ -476,18 +409,9 @@ private:
                     {
                         m_A_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = it.value();
                     }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_LB_ONLY_CONSTR)
-                    {
-                        m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = -it.value();
-                    }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_UB_ONLY_CONSTR)
+                    else if (this->m_constraint_type[it.row()] != constraint_t::UNBOUNDED_CONSTR)
                     {
                         m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = it.value();
-                    }
-                    else if (this->m_constraint_type[it.row()] == constraint_t::INEQ_CONSTR)
-                    {
-                        m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()), it.col()) = -it.value();
-                        m_G_piqp.coeffRef(m_A_to_piqp_map(it.row()) + 1, it.col()) = it.value();
                     }
                 }
             }
@@ -507,32 +431,11 @@ private:
                         m_A_piqp.coeffRef(eq_bound_i, this->m_n) = slack_coeff;
                         eq_bound_i++;
                     }
-                    else if (this->m_constraint_type[i] == constraint_t::INEQ_LB_ONLY_CONSTR)
+                    else if (this->m_constraint_type[i] != constraint_t::UNBOUNDED_CONSTR)
                     {
                         if (Alb(i) > scalar_t(0)) {
-                            slack_coeff = -Alb(i);
-                        }
-                        m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
-                        ineq_bound_i++;
-                    }
-                    else if (this->m_constraint_type[i] == constraint_t::INEQ_UB_ONLY_CONSTR)
-                    {
-                        if (Aub(i) < scalar_t(0)) {
-                            slack_coeff = Aub(i);
-                        }
-                        m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
-                        ineq_bound_i++;
-                    }
-                    else if (this->m_constraint_type[i] == constraint_t::INEQ_CONSTR)
-                    {
-                        if (Alb(i) > scalar_t(0)) {
-                            slack_coeff = -Alb(i);
-                        }
-                        m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;
-                        ineq_bound_i++;
-
-                        slack_coeff = 0;
-                        if (Aub(i) < scalar_t(0)) {
+                            slack_coeff = Alb(i);
+                        } else if (Aub(i) < scalar_t(0)) {
                             slack_coeff = Aub(i);
                         }
                         m_G_piqp.coeffRef(ineq_bound_i, this->m_n) = slack_coeff;

@@ -6,7 +6,7 @@
 
 #include <Eigen/Dense>
 #include "laopt/laopt.hpp"
-#include "constants.hpp"
+#include "laopt/tools/constants.hpp"
 
 namespace laopt_tools {
 
@@ -77,28 +77,9 @@ public:
     /* Final time bounds */
     Scalar tf_lb{1}, tf_ub{1};
 
-    /* Additional decision variables (optimized parameters) */
-    class OptParamBase
-    {
-    public:
-        /* Method allows to extract a reference to a (writeable) length LEN segment of the parameter vector.
-         * This way, the user can create a struct for convenient handling of parameter bounds and evaluation */
-        template<unsigned LEN>
-        Eigen::Ref<Eigen::Vector<Scalar, LEN>>
-        get_parameter(unsigned index) { return m_param_vector.template segment<LEN>(index); }
-
-        /* Methods to write and read parameter vector */
-        void set_vector(const Param &param) { m_param_vector = param; }
-        const Param &vector() const { return m_param_vector; }
-
-        /* Eigen Reference type to (sub) vector that the user can use in the child class */
-        template<unsigned LEN>
-        using VecRef = Eigen::Ref<Eigen::Vector<Scalar, LEN>>;
-    private:
-        Param m_param_vector = Param::Zero();
-    };
-    struct OptParam : OptParamBase {};     // Placeholder in case child class
-    OptParam opt_params_lb, opt_params_ub; // does not define them
+    /* Additional decision variables (optimized parameters) bound */
+    Param p_lb = Param::Constant(std::numeric_limits<Scalar>::infinity());
+    Param p_ub = -p_lb;
 
     /* Convenience setters for zero-range bounds */
     void set_x0(const State &x0) { x0_lb = x0_ub = x0; }
@@ -143,32 +124,60 @@ public:
     /*
      * Templates for problem formulation
      */
-    template<typename T> // T is scalar type
-    T lagrange_term_impl(const Eigen::Ref<const state_t<T>> &x,
-                         const Eigen::Ref<const input_t<T>> &u,
-                         const Eigen::Ref<const param_t<T>> &p) { return static_cast<T>(0); }
+    /* Convenience function to silence unused parameter compiler warnings */
+    template <typename... Ts>
+    constexpr void unused(Ts&&...) noexcept {}
 
-    template<typename T, typename Ttf> // T is scalar type
-    T mayer_term_impl(const Eigen::Ref<const state_t<T>> &x,
-                      const Eigen::Ref<const param_t<T>> &p,
-                      const Ttf &tf) { return static_cast<T>(0); }
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    T lagrange_term_impl(const Eigen::MatrixBase<x_t>& x,
+                         const Eigen::MatrixBase<u_t>& u,
+                         const Eigen::MatrixBase<p_t>& p,
+                         const Eigen::MatrixBase<t0_t>& t0,
+                         const Eigen::MatrixBase<tf_t>& tf,
+                         const tau_t& tau)
+    {
+        unused(x, u, p, t0, tf, tau);
+        return static_cast<T>(0);
+    }
 
-    template<typename T> // T is scalar type
-    state_t<T> dynamics_impl(const Eigen::Ref<const state_t<T>> &x,
-                             const Eigen::Ref<const input_t<T>> &u,
-                             const Eigen::Ref<const param_t<T>> &p)
+    template<typename x_tf, typename p_t, typename t0_t, typename tf_t,
+            typename T = typename x_tf::Scalar> // T is scalar type
+    T mayer_term_impl(const Eigen::MatrixBase<x_tf>& xf,
+                      const Eigen::MatrixBase<p_t>& p,
+                      const Eigen::MatrixBase<t0_t>& t0,
+                      const Eigen::MatrixBase<tf_t>& tf)
+    {
+        unused(xf, p, t0, tf);
+        return static_cast<T>(0);
+    }
+
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x,
+                             const Eigen::MatrixBase<u_t>& u,
+                             const Eigen::MatrixBase<p_t>& p,
+                             const Eigen::MatrixBase<t0_t>& t0,
+                             const Eigen::MatrixBase<tf_t>& tf,
+                             const tau_t& tau)
     {
         std::cerr << "dynamics_impl() not implemented.\n";
+        unused(x, u, p, t0, tf, tau);
         exit(EXIT_FAILURE);
         return state_t<T>();
     }
 
     /* Inequality constraints */
-    template<typename T> // T is scalar type
-    ineq_constr_t<T> inequality_constraints_impl(const Eigen::Ref<const state_t<T>> &x,
-                                                 const Eigen::Ref<const input_t<T>> &u,
-                                                 const Eigen::Ref<const param_t<T>> &p)
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    ineq_constr_t<T> inequality_constraints_impl(const Eigen::MatrixBase<x_t>& x,
+                                                 const Eigen::MatrixBase<u_t>& u,
+                                                 const Eigen::MatrixBase<p_t>& p,
+                                                 const Eigen::MatrixBase<t0_t>& t0,
+                                                 const Eigen::MatrixBase<tf_t>& tf,
+                                                 const tau_t& tau)
     {
+        unused(x, u, p, t0, tf, tau);
         if (NG > 0)
         {
             std::cerr << "control_problem_base: NG = " << NG << " but inequality_constraints_impl() not implemented.\n";
@@ -177,11 +186,14 @@ public:
         return {};
     }
 
-    template<typename T> // T is scalar type
-    ineq_constr0_t<T> inequality_constraints0_impl(const Eigen::Ref<const state_t<T>> &x0,
-                                                   const Eigen::Ref<const input_t<T>> &u0,
-                                                   const Eigen::Ref<const param_t<T>> &p)
+    template<typename x_t, typename u_t, typename p_t, typename t0_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    ineq_constr0_t<T> inequality_constraints0_impl(const Eigen::MatrixBase<x_t>& x0,
+                                                   const Eigen::MatrixBase<u_t>& u0,
+                                                   const Eigen::MatrixBase<p_t>& p,
+                                                   const Eigen::MatrixBase<t0_t>& t0)
     {
+        unused(x0, u0, p, t0);
         if (NG0 > 0)
         {
             std::cerr << "control_problem_base: NG0 = " << NG0 << " but inequality_constraints0_impl() not implemented.\n";
@@ -190,11 +202,14 @@ public:
         return {};
     }
 
-    template<typename T> // T is scalar type
-    ineq_constrf_t<T> inequality_constraintsf_impl(const Eigen::Ref<const state_t<T>> &xf,
-                                                   // TODO: Add final input for more generality?
-                                                   const Eigen::Ref<const param_t<T>> &p)
+    template<typename x_tf, typename p_t, typename t0_t, typename tf_t,
+            typename T = typename x_tf::Scalar> // T is scalar type
+    ineq_constrf_t<T> inequality_constraintsf_impl(const Eigen::MatrixBase<x_tf>& xf,
+                                                   const Eigen::MatrixBase<p_t>& p,
+                                                   const Eigen::MatrixBase<t0_t>& t0,
+                                                   const Eigen::MatrixBase<tf_t>& tf)
     {
+        unused(xf, p, t0, tf);
         if (NGF > 0)
         {
             std::cerr << "control_problem_base: NGF = " << NGF << " but inequality_constraintsf_impl() not implemented.\n";
@@ -202,8 +217,6 @@ public:
         }
         return {};
     }
-
-    // TODO: Add template for box constraints on particular times (first and last of the trajectory)
 };
 
 } // namespace laopt_tools

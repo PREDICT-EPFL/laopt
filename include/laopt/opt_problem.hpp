@@ -1,4 +1,5 @@
-#pragma once
+#ifndef LAOPT_OPT_PROBLEM_HPP
+#define LAOPT_OPT_PROBLEM_HPP
 
 namespace laopt
 {
@@ -37,3 +38,5 @@ protected:
 };
 
 } // namespace laopt
+
+#endif // LAOPT_OPT_PROBLEM_HPP

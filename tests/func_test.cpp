@@ -1,18 +1,34 @@
-/**
- * Unit test for the construction and computation of LAMPC common_functions.
- */
-
 #include <iostream>
 
 #include "laopt/laopt.hpp"
+#include "laopt/differentiable_functions/integrators.hpp"
 
 #include "test_utils.hpp"
 #include "gtest/gtest.h"
 
 namespace {
 
-template<typename scalar_t>
-struct VectorFunction : public laopt::Differentiable<VectorFunction<scalar_t>, true>
+template<int Options_>
+struct OptionsWrapper
+{
+    enum {
+        Options = Options_
+    };
+};
+
+#ifdef LAOPT_WITH_CASADI
+using tagless_options = testing::Types<OptionsWrapper<laopt::TAGLESS>,
+                                       OptionsWrapper<laopt::TAGLESS | laopt::CASADI_ALL>>;
+#else
+using tagless_options = testing::Types<OptionsWrapper<laopt::TAGLESS>>;
+#endif
+
+template <typename T>
+class FunctionTest : public ::testing::Test {};
+TYPED_TEST_SUITE(FunctionTest, tagless_options);
+
+template<typename scalar_t, int Options>
+struct VectorFunction : public laopt::Differentiable<VectorFunction<scalar_t, Options>, Options>
 {
     const Eigen::Matrix<scalar_t, 2, 2> A{{1,2},{3,4}};
     const Eigen::Matrix<scalar_t, 2, 1> B{{5},{6}};
@@ -25,22 +41,22 @@ struct VectorFunction : public laopt::Differentiable<VectorFunction<scalar_t>, t
     }
 };
 
-template<typename scalar_t>
-struct VectorFunctionParameter : public laopt::Differentiable<VectorFunctionParameter<scalar_t>, true>
+template<typename scalar_t, int Options>
+struct VectorFunctionParameter : public laopt::Differentiable<VectorFunctionParameter<scalar_t, Options>, Options>
 {
     const Eigen::Matrix<scalar_t, 2, 2> A{{1,2},{3,4}};
     const Eigen::Matrix<scalar_t, 2, 1> B{{5},{6}};
 
-    template<typename X, typename U, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
+    template<typename P, typename X, typename U, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<Scalar, 2>
-    function_impl(const double p, const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u) noexcept
+    function_impl(const P& p, const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u) noexcept
     {
         return p * (A * x + B * u);
     }
 };
 
-template<typename scalar_t>
-struct ScalarFunction : public laopt::Differentiable<ScalarFunction<scalar_t>, true>
+template<typename scalar_t, int Options>
+struct ScalarFunction : public laopt::Differentiable<ScalarFunction<scalar_t, Options>, Options>
 {
     const Eigen::Matrix<scalar_t, 2, 2> Q{{1,0},{0,1}};
     const Eigen::Matrix<scalar_t, 1, 1> R{2};
@@ -53,8 +69,20 @@ struct ScalarFunction : public laopt::Differentiable<ScalarFunction<scalar_t>, t
     }
 };
 
+template<typename scalar_t, int Options>
+struct ScalarFunctionWrapperSwap : public laopt::Differentiable<ScalarFunctionWrapperSwap<scalar_t, Options>>
+{
+    ScalarFunction<scalar_t, Options> scalar_function;
 
-TEST(FunctionTest, FuncInfo)
+    template<typename U, typename X>
+    EIGEN_STRONG_INLINE auto
+    function_impl(const Eigen::MatrixBase<U>& u, const Eigen::MatrixBase<X>& x) noexcept
+    {
+        return scalar_function(x, u);
+    }
+};
+
+TYPED_TEST(FunctionTest, FuncInfo)
 {
     using scalar_t = double;
 
@@ -62,7 +90,7 @@ TEST(FunctionTest, FuncInfo)
     using Arg2 = laopt::Variable<scalar_t, 1>;
 
     {
-        using Info = VectorFunction<scalar_t>::FuncInfo<laopt::DefaultTag, Arg1, Arg2>;
+        using Info = typename VectorFunction<scalar_t, TypeParam::Options>::template FuncInfo<laopt::DefaultTag, Arg1, Arg2>;
         int n_inputs = Info::n_inputs;
         int n_outputs = Info::n_outputs;
         EXPECT_EQ(n_inputs, 3);
@@ -70,7 +98,7 @@ TEST(FunctionTest, FuncInfo)
     }
 
     {
-        using Info = VectorFunctionParameter<scalar_t>::FuncInfo<laopt::DefaultTag, scalar_t, Arg1, Arg2>;
+        using Info = typename VectorFunctionParameter<scalar_t, TypeParam::Options>::template FuncInfo<laopt::DefaultTag, scalar_t, Arg1, Arg2>;
         int n_inputs = Info::n_inputs;
         int n_outputs = Info::n_outputs;
         EXPECT_EQ(n_inputs, 3);
@@ -78,7 +106,7 @@ TEST(FunctionTest, FuncInfo)
     }
 
     {
-        using Info = ScalarFunction<scalar_t>::FuncInfo<laopt::DefaultTag, Arg1, Arg2>;
+        using Info = typename ScalarFunction<scalar_t, TypeParam::Options>::template FuncInfo<laopt::DefaultTag, Arg1, Arg2>;
         int n_inputs = Info::n_inputs;
         int n_outputs = Info::n_outputs;
         EXPECT_EQ(n_inputs, 3);
@@ -86,82 +114,80 @@ TEST(FunctionTest, FuncInfo)
     }
 }
 
-TEST(FunctionTest, VectorFunction)
+TYPED_TEST(FunctionTest, VectorFunction)
 {
     using scalar_t = double;
-    VectorFunction<scalar_t> test;
+    VectorFunction<scalar_t, TypeParam::Options> test;
 
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 2>> x;
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 1>> u;
-    x << 2, 1;
-    u << 3;
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 2, 1;
+    Eigen::Vector<scalar_t, 1> u_data; u_data << 3;
+    laopt::Variable<scalar_t, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<scalar_t, 1> u(u_data.data()); u.index_offset() = 2;
 
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 3> jacobian;
-    std::array<Eigen::Matrix<scalar_t, 3, 3>, 2> hessian;
 
-    value = test(x.cast_base(), u.cast_base());
+    value = test.function(x, u);
 
     Eigen::Vector<scalar_t, 2> val;
     val << 38, 56;
     EXPECT_EQ(value, val);
 
     jacobian.setZero();
-    test.jacobian(jacobian, x, u);
+    test.jacobian(jacobian, 1, x, u);
 
     Eigen::Matrix<scalar_t, 2, 3> jac;
     jac << 21, 4, 10, 34, 8, 12;
     EXPECT_EQ(jacobian, jac);
 }
 
-TEST(FunctionTest, VectorFunctionParameter)
+TYPED_TEST(FunctionTest, VectorFunctionParameter)
 {
     using scalar_t = double;
-    VectorFunctionParameter<scalar_t> test;
+    VectorFunctionParameter<scalar_t, TypeParam::Options> test;
 
     scalar_t p = 5;
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 2>> x;
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 1>> u;
-    x << 2, 1;
-    u << 3;
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 2, 1;
+    Eigen::Vector<scalar_t, 1> u_data; u_data << 3;
+    laopt::Variable<scalar_t, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<scalar_t, 1> u(u_data.data()); u.index_offset() = 2;
 
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 3> jacobian;
-    std::array<Eigen::Matrix<scalar_t, 3, 3>, 2> hessian;
 
-    value = test(p, x.cast_base(), u.cast_base());
+    value = test.function(p, x, u);
 
     Eigen::Vector<scalar_t, 2> val;
     val << 95, 140;
     EXPECT_EQ(value, val);
 
     jacobian.setZero();
-    test.jacobian(jacobian, p, x, u);
+    test.jacobian(jacobian, 1, p, x, u);
 
     Eigen::Matrix<scalar_t, 2, 3> jac;
     jac << 5, 10, 25, 15, 20, 30;
     EXPECT_EQ(jacobian, jac);
 }
 
-TEST(FunctionTest, ScalarFunction)
+TYPED_TEST(FunctionTest, ScalarFunction)
 {
     using scalar_t = double;
 
-    using Arg1 = laopt::IndexedVector<Eigen::Vector<scalar_t, 2>>;
-    using Arg2 = laopt::IndexedVector<Eigen::Vector<scalar_t, 1>>;
+    using Arg1 = laopt::Variable<scalar_t, 2>;
+    using Arg2 = laopt::Variable<scalar_t, 1>;
 
-    ScalarFunction<scalar_t> f;
-    Arg1 x;
-    Arg2 u;
-    x << 1, 2;
-    u << 3;
+    ScalarFunction<scalar_t, TypeParam::Options> f;
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 1, 2;
+    Eigen::Vector<scalar_t, 1> u_data; u_data << 3;
+    Arg1 x(x_data.data()); x.index_offset() = 0;
+    Arg2 u(u_data.data()); u.index_offset() = 2;
     Eigen::Vector<scalar_t, 1> weight;
     weight << 1;
 
-    using info = ScalarFunction<scalar_t>::FuncInfo<laopt::DefaultTag, Arg1, Arg2>;
-    info::scalar_t value;
-    info::gradient_t gradient;
-    info::hessian_t hessian;
+    using info = typename ScalarFunction<scalar_t, TypeParam::Options>::template FuncInfo<laopt::DefaultTag, Arg1, Arg2>;
+    typename info::scalar_t value;
+    typename info::gradient_t gradient;
+    typename info::hessian_t hessian;
 
     value = f.wsum(weight, x, u);
     EXPECT_EQ(value, 23);
@@ -179,6 +205,45 @@ TEST(FunctionTest, ScalarFunction)
     EXPECT_EQ(hessian, hessian_g);
 }
 
+TYPED_TEST(FunctionTest, ScalarFunctionWrapperSwap)
+{
+    using scalar_t = double;
+
+    Eigen::Vector<scalar_t, 2> arg1_data;
+    Eigen::Vector<scalar_t, 1> arg2_data;
+
+    using Arg1 = laopt::Variable<scalar_t, 2>;
+    using Arg2 = laopt::Variable<scalar_t, 1>;
+
+    ScalarFunctionWrapperSwap<scalar_t, TypeParam::Options> f;
+    Arg1 x(arg1_data.data()); x.index_offset() = 0;
+    Arg2 u(arg2_data.data()); u.index_offset() = 2;
+    x << 1, 2;
+    u << 3;
+    Eigen::Vector<scalar_t, 1> weight;
+    weight << 1;
+
+    using info = typename ScalarFunctionWrapperSwap<scalar_t, TypeParam::Options>::template FuncInfo<laopt::DefaultTag, Arg2, Arg1>;
+    typename info::scalar_t value;
+    typename info::gradient_t gradient;
+    typename info::hessian_t hessian;
+
+    value = f.wsum(weight, u, x);
+    EXPECT_EQ(value, 23);
+
+    gradient.setZero();
+    f.gradient(gradient, weight, u, x);
+    Eigen::Vector<scalar_t, 3> gradient_g;
+    gradient_g << 2, 4, 12;
+    EXPECT_EQ(gradient, gradient_g);
+
+    hessian.setZero();
+    f.hessian(hessian, weight, u, x);
+    Eigen::Matrix<scalar_t, 3, 3> hessian_g;
+    hessian_g << 2, 0, 0, 0, 2, 0, 0, 0, 4;
+    EXPECT_EQ(hessian, hessian_g);
+}
+
 /**************************
  * Test the RK4 integrator
  **************************/
@@ -186,37 +251,36 @@ TEST(FunctionTest, ScalarFunction)
 /**
  * Continuous-time dynamics - double integrator
  */
-template<typename scalar_t>
-struct sys_t : public laopt::Differentiable<sys_t<scalar_t>, true>
+template<typename scalar_t, int Options>
+struct sys_t : public laopt::Differentiable<sys_t<scalar_t, Options>, Options>
 {
     Eigen::Matrix<scalar_t, 2, 2> A{{0,1},{0,0}};
     Eigen::Matrix<scalar_t, 2, 1> B{{0},{1}};
 
     template<typename X, typename U, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<Scalar, 2>
-    function_impl( const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u) noexcept
+    function_impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u) noexcept
     {
         return A * x + B * u;
     }
 };
 
-TEST(FunctionTest, RK4) {
+TYPED_TEST(FunctionTest, RK4) {
     using scalar_t = double;
-    sys_t<scalar_t> sys;
-    using dsys_t = laopt::common_functions::RK4<sys_t<scalar_t>, scalar_t>;
+    sys_t<scalar_t, TypeParam::Options> sys;
+    using dsys_t = laopt::ERK4<sys_t<scalar_t, TypeParam::Options>, scalar_t, laopt::DefaultTag, TypeParam::Options>;
     dsys_t dsys(sys, 0.1);
 
-    // Compute the discrete-time system and its jacobian
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 2>> x;
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 1>> u;
-    x << 1,2;
-    u << 3;
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 1, 2;
+    Eigen::Vector<scalar_t, 1> u_data; u_data << 3;
+    laopt::Variable<scalar_t, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<scalar_t, 1> u(u_data.data()); u.index_offset() = 2;
 
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 3> jacobian;
 
     // Eval only - doesn't compute jacobian
-    value = dsys(x.cast_base(), u.cast_base());
+    value = dsys.integrator.function(x, u);
 
     Eigen::Vector<scalar_t, 2> val;
     val << 1.215, 2.3;
@@ -224,7 +288,7 @@ TEST(FunctionTest, RK4) {
 
     // Compute jacobian and evaluation
     jacobian.setZero();
-    dsys.jacobian(jacobian, x, u);
+    dsys.integrator.jacobian(jacobian, 1, x, u);
 
     Eigen::Matrix<scalar_t, 2, 3> jac;
     jac << 1, 0.1, 0.005, 0, 1, 0.1;
@@ -236,14 +300,14 @@ TEST(FunctionTest, RK4) {
  * Test the BSMatrix interface to the functions
  ***********************************************/
 
-TEST(FunctionTest, BSMatrixJacobain) {
+TYPED_TEST(FunctionTest, BSMatrixJacobain) {
     using scalar_t = double;
-    VectorFunction<scalar_t> test;
+    VectorFunction<scalar_t, TypeParam::Options> test;
 
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 2>> x;
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 1>> u;
-    x << 1,2;
-    u << 3;
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 1, 2;
+    Eigen::Vector<scalar_t, 1> u_data; u_data << 3;
+    laopt::Variable<scalar_t, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<scalar_t, 1> u(u_data.data()); u.index_offset() = 2;
 
     // Function to run
     auto f = [&](auto& value, auto& jacobian)
@@ -252,8 +316,8 @@ TEST(FunctionTest, BSMatrixJacobain) {
         {
             x << i, 2 * i;
             u << 3 * i;
-            value(Eigen::seqN(i*2, Eigen::fix<2>)) = test(x.cast_base(), u.cast_base());
-            test.jacobian(jacobian(Eigen::seqN(i*2, Eigen::fix<2>), laopt::multiSeq_to_index(Eigen::seqN(i*2, Eigen::fix<2>), Eigen::seqN(10+i, Eigen::fix<1>))), x, u);
+            value(Eigen::seqN(i*2, Eigen::fix<2>)) = test.function(x, u);
+            test.jacobian(jacobian(Eigen::seqN(i*2, Eigen::fix<2>), laopt::multiSeq_to_index(Eigen::seqN(i*2, Eigen::fix<2>), Eigen::seqN(10+i, Eigen::fix<1>))), 1, x, u);
         }
     };
 
@@ -265,11 +329,11 @@ TEST(FunctionTest, BSMatrixJacobain) {
     Eigen::VectorX<scalar_t> value_buffer(construct_value.rows());
     laopt::BSMatrixDenseDeployment<scalar_t> value(value_buffer);
 
-    auto jacobian_tape = sparsity_jacobian.makeBSTape();
+    laopt::BSMatrixTape<scalar_t> jacobian_tape(sparsity_jacobian.generate());
     value.resize(10,1);
     f(value, jacobian_tape); // Extract operation sequence
 
-    auto BS_jacobian = jacobian_tape.template makeBSMatrix<scalar_t>();
+    auto BS_jacobian = jacobian_tape.makeBSMatrix();
 
     Eigen::SparseMatrix<scalar_t> S_jacobian;
     BS_jacobian.allocate_memory(S_jacobian);
@@ -290,18 +354,18 @@ TEST(FunctionTest, Identity) {
 
     // Discrete dynamics
     using scalar_t = double;
-    laopt::common_functions::IDENTITY id;
+    laopt::Identity id;
 
     Eigen::Vector<scalar_t, 2> value;
     Eigen::Matrix<scalar_t, 2, 2> jacobian;
 
-    laopt::IndexedVector<Eigen::Vector<scalar_t, 2>> x;
-    x << 1, 2;
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 1, 2;
+    laopt::Variable<scalar_t, 2> x(x_data.data()); x.index_offset() = 0;
 
-    value = id.function(x.cast_base());
+    value = id.function(x);
 
     jacobian.setZero();
-    id.jacobian(jacobian, x);
+    id.jacobian(jacobian, 1, x);
 
     Eigen::MatrixX<scalar_t> value_g(2,1);
     value_g << 1, 2;
@@ -318,7 +382,8 @@ TEST(FunctionTest, Identity) {
  * Test weighted sum
  **************************/
 
-struct wsum_func_t : public laopt::Differentiable<wsum_func_t, true>
+template<typename scalar_t, int Options>
+struct wsum_func_t : public laopt::Differentiable<wsum_func_t<scalar_t, Options>, Options>
 {
     Eigen::Matrix2d Q{{2,1},{1,4}};
 
@@ -333,18 +398,17 @@ struct wsum_func_t : public laopt::Differentiable<wsum_func_t, true>
     }
 };
 
-TEST(FunctionTest, WeightedSum)
+TYPED_TEST(FunctionTest, WeightedSum)
 {
-    wsum_func_t func;
-
     using scalar_t = double;
-    laopt::IndexedVector<Eigen::Vector<scalar_t,2>> x;
-    laopt::IndexedVector<Eigen::Vector<scalar_t,2>> z;
-    Eigen::Vector<scalar_t,2> weight;
 
-    x << 1,2;
-    z << 3,4;
-    weight << 1,1;
+    wsum_func_t<scalar_t, TypeParam::Options> func;
+
+    Eigen::Vector<scalar_t, 2> x_data; x_data << 1, 2;
+    Eigen::Vector<scalar_t, 2> z_data; z_data << 3, 4;
+    laopt::Variable<scalar_t, 2> x(x_data.data()); x.index_offset() = 0;
+    laopt::Variable<scalar_t, 2> z(z_data.data()); z.index_offset() = 2;
+    Eigen::Vector<scalar_t, 2> weight; weight << 1,1;
 
     scalar_t value;
     Eigen::Vector<scalar_t,4> gradient;

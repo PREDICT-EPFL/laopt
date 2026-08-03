@@ -4,9 +4,10 @@
 #include <iostream>
 #include <limits>
 #include <type_traits>
-#include "Eigen/Dense"
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
 
-#include "indexed_vector.hpp"
+#include "laopt/expressions/expr_base.hpp"
 
 namespace laopt
 {
@@ -41,32 +42,36 @@ namespace laopt
          */
 
         // Tags telling us if a return value is a scalar or an Eigen Matrix
-        struct IsScalar {};
-        struct IsMatrix {};
+        struct is_eigen_base {};
+        struct is_expr_base {};
 
-        template<class Type, bool is_eigen = std::is_base_of<Eigen::MatrixBase<Type>, Type>::value>
+        template<typename Type, typename TypeBase = typename std::conditional<std::is_base_of<Eigen::MatrixBase<Type>, Type>::value, is_eigen_base,
+                                                    typename std::conditional<std::is_base_of<ExprBase<Type>, Type>::value, is_expr_base, std::false_type>::type>::type>
         struct matrix_info;
 
-        template <class Type>
-        struct matrix_info<Type, false>
+        template <typename Type>
+        struct matrix_info<Type, std::false_type>
         {
             using Scalar = Type;
             static constexpr int RowsAtCompileTime = 1;
             static constexpr int ColsAtCompileTime = 1;
-
-            using is_matrix_t = IsScalar;
         };
 
-        template<class Type>
-        struct matrix_info<Type, true>
+        template<typename Type>
+        struct matrix_info<Type, is_eigen_base>
         {
             using Scalar = typename Type::Scalar;
             static constexpr int RowsAtCompileTime = Type::RowsAtCompileTime;
             static constexpr int ColsAtCompileTime = Type::ColsAtCompileTime;
-
-            using is_matrix_t = IsMatrix;
         };
 
+        template<class Type>
+        struct matrix_info<Type, is_expr_base>
+        {
+            using Scalar = typename Type::Scalar;
+            static constexpr int RowsAtCompileTime = Type::n_outputs;
+            static constexpr int ColsAtCompileTime = 1;
+        };
 
         /**
          * Compute the scalar type of the arguments
@@ -83,39 +88,34 @@ namespace laopt
         template<typename... Args>
         using get_scalar_t = typename get_scalar<Args...>::type;
 
-
-        /**
-         * Checks if arguments contain a variable.
-         */
-        template <typename...>
-        struct contains_variable : std::true_type {};
-
-        template <typename Arg, typename... Args>
-        struct contains_variable<Arg, Args...>
-                : std::conditional<std::is_base_of<VariableBase<Arg>, Arg>::value,
-                        std::true_type,
-                        contains_variable<Args...>
-                >::type {};
-
-        template<>
-        struct contains_variable<> : std::false_type {};
-
-        /**
-         * Used to get information about variables.
-         */
-        template<typename Derived>
-        struct variable_info
-        {
-            // If it's not a variable we ignore it
-            static constexpr int size = 0;
+        // Helper to extract compile-time size from ArithmeticSequence
+        template<typename T>
+        struct seq_size {
+            static constexpr int value = T::SizeAtCompileTime; // won't work for ArithmeticSequence
         };
-        template<typename Base>
-        struct variable_info<IndexedVector<Base>>
-        {
-            static constexpr int size = IndexedVector<Base>::RowsAtCompileTime;
+
+        // Specialization for ArithmeticSequence
+        template<typename First, typename Size, typename Incr>
+        struct seq_size<Eigen::ArithmeticSequence<First, Size, Incr>> {
+            static constexpr int value = Eigen::internal::get_fixed_value<Size>::value;
         };
 
     } // end namespace meta
+
+    template<typename T>
+    typename std::enable_if<!std::is_base_of<Eigen::MatrixBase<T>, T>::value, Eigen::Matrix<T, 1, 1>>::type
+    to_matrix_type(const T& value)
+    {
+        Eigen::Matrix<T, 1, 1> res;
+        res(0) = value;
+        return res;
+    }
+
+    template<typename Derived>
+    const Eigen::MatrixBase<Derived>& to_matrix_type(const Eigen::MatrixBase<Derived>& value)
+    {
+        return value;
+    }
 
     /**
      * Takes a parameter pack of Eigen::Vector's and concatenates
@@ -194,16 +194,16 @@ namespace laopt
                        std::plus<Scalar>());
     }
 
-    template<typename... T, int n = meta::sum_template<T::SizeAtCompileTime...>()>
+    template<typename... T, int n = meta::sum_template<meta::seq_size<T>::value...>()>
     inline Eigen::Vector<int, n> multiSeq_to_index(T... segments)
     {
-        static_assert(is_all_positive({T::SizeAtCompileTime...}), "SIZES OF ARITHMETIC SEQUENCES MUST BE FIXED");
+        static_assert(is_all_positive({meta::seq_size<T>::value...}), "SIZES OF ARITHMETIC SEQUENCES MUST BE FIXED");
 
         Eigen::Vector<int, n> ret;
         int i = 0;
 
         auto fill_me = [&i, &ret](auto seg) {
-            for (int j = 0; j < decltype(seg)::SizeAtCompileTime; j++) {
+            for (int j = 0; j < meta::seq_size<decltype(seg)>::value; j++) {
                 ret[i++] = seg[j];
             }
         };

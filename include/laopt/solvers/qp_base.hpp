@@ -34,6 +34,7 @@ enum struct qp_status_t {
     MAX_ITER_REACHED = -1,
     INFEASIBLE = -2,
     NON_CONVEX = -3,
+    MIN_STEP = -4,
     UNSOLVED = -9,
     INVALID_SETTINGS = -10
 };
@@ -62,34 +63,40 @@ protected:
     qp_solver_info_t m_info;
 
     enum struct constraint_t {
-        EQ_CONSTR,
-        INEQ_CONSTR,
-        INEQ_LB_ONLY_CONSTR,
-        INEQ_UB_ONLY_CONSTR,
-        UNBOUNDED_CONSTR
+        UNBOUNDED_CONSTR    = 0x00,
+        EQ_CONSTR           = 0x01,
+        INEQ_LB_ONLY_CONSTR = 0x02,
+        INEQ_UB_ONLY_CONSTR = 0x04,
+        INEQ_CONSTR         = INEQ_LB_ONLY_CONSTR | INEQ_UB_ONLY_CONSTR
     };
 
-    std::vector<constraint_t> m_box_constraint_type;           // box constraint classification
-    unsigned int              m_box_lower_bounded_constraints; // number of lower bounded box constraints
-    unsigned int              m_box_upper_bounded_constraints; // number of upper bounded box constraints
-    std::vector<constraint_t> m_constraint_type;               // general constraint classification
-    unsigned int              m_lower_bounded_constraints;     // number of lower bounded general constraints
-    unsigned int              m_upper_bounded_constraints;     // number of upper bounded general constraints
+    enum struct constraint_changed_t {
+        NO_CHANGE       = 0x00,
+        BOX_ONLY_CHANGE = 0x01,
+        GEN_ONLY_CHANGE = 0x02,
+        CHANGE          = BOX_ONLY_CHANGE | GEN_ONLY_CHANGE
+    };
+
+    Eigen::VectorX<constraint_t> m_box_constraint_type; // box constraint classification
+    Eigen::VectorX<constraint_t> m_constraint_type;     // general constraint classification
 
 public:
-    static constexpr scalar_t UNBOUNDED_THRESHOLD = 1e+10;
-    static constexpr scalar_t EQ_TOL = 1e-6;
+    static constexpr scalar_t UNBOUNDED_THRESHOLD = 1e+20;
+    static constexpr scalar_t EQ_TOL = 1e-10;
 
     QPBase(int n, int m) :
         m_n(n), m_m(m),
         m_x(n), m_lam(m), m_lam_bounds(n), m_elastic_var(0),
-        m_box_constraint_type(n), m_box_lower_bounded_constraints(0), m_box_upper_bounded_constraints(0),
-        m_constraint_type(m), m_lower_bounded_constraints(0), m_upper_bounded_constraints(0)
+        m_box_constraint_type(n), m_constraint_type(m)
     {
         m_x.setZero();
         m_lam.setZero();
         m_lam_bounds.setZero();
-    };
+        m_box_constraint_type.setConstant(constraint_t::UNBOUNDED_CONSTR);
+        m_constraint_type.setConstant(constraint_t::UNBOUNDED_CONSTR);
+    }
+
+    Derived& derived() { return static_cast<Derived&>(*this); };
 
     /** getters  / setters */
     EIGEN_STRONG_INLINE const Eigen::VectorX<scalar_t>& primal_solution() const noexcept { return m_x; }
@@ -111,11 +118,12 @@ public:
     EIGEN_STRONG_INLINE qp_solver_info_t& info() noexcept { return m_info; }
 
     /** solve with generic and box constraints*/
-    qp_solver_info_t solve(const Eigen::SparseMatrix<scalar_t>& H,
+    template<typename SparseMatrixType>
+    qp_solver_info_t solve(const SparseMatrixType& H,
                            const Eigen::Ref<const Eigen::VectorX<scalar_t>>& f,
                            const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xlb,
                            const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xub,
-                           const Eigen::SparseMatrix<scalar_t>& A,
+                           const SparseMatrixType& A,
                            const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
                            const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
     {
@@ -143,97 +151,84 @@ protected:
         return changed;
     }
 
-    EIGEN_STRONG_INLINE bool
+    EIGEN_STRONG_INLINE constraint_changed_t
     parse_constraints_bounds(const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xlb,
                              const Eigen::Ref<const Eigen::VectorX<scalar_t>>& xub,
                              const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
                              const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
     {
-        eigen_assert((xlb.array() <= xub.array()).any());
-        eigen_assert((Alb.array() <= Aub.array()).any());
+        eigen_assert((xlb.array() <= xub.array()).all());
+        eigen_assert((Alb.size() == 0) || (Alb.array() <= Aub.array()).all());
 
-        unsigned int prev_box_lower_bounded_constraints = m_box_lower_bounded_constraints;
-        unsigned int prev_box_upper_bounded_constraints = m_box_upper_bounded_constraints;
-        unsigned int prev_lower_bounded_constraints = m_lower_bounded_constraints;
-        unsigned int prev_upper_bounded_constraints = m_upper_bounded_constraints;
-
-        bool bounds_changed = false;
+        bool box_changed = false;
+        bool gen_changed = false;
 
         // parse box constraints
-        m_box_lower_bounded_constraints = 0;
-        m_box_upper_bounded_constraints = 0;
         for (int i = 0; i < m_n; i++)
         {
             if (xlb(i) < -UNBOUNDED_THRESHOLD && xub(i) > UNBOUNDED_THRESHOLD)
             {
-                bounds_changed |= compare_assign(m_box_constraint_type[i], constraint_t::UNBOUNDED_CONSTR);
+                box_changed |= compare_assign(m_box_constraint_type[i], constraint_t::UNBOUNDED_CONSTR);
             }
             else if (xub(i) - xlb(i) < EQ_TOL)
             {
-                bounds_changed |= compare_assign(m_box_constraint_type[i], constraint_t::EQ_CONSTR);
-                m_box_lower_bounded_constraints++;
-                m_box_upper_bounded_constraints++;
+                box_changed |= compare_assign(m_box_constraint_type[i], constraint_t::EQ_CONSTR);
             }
             else if (xub(i) > UNBOUNDED_THRESHOLD)
             {
-                bounds_changed |= compare_assign(m_box_constraint_type[i], constraint_t::INEQ_LB_ONLY_CONSTR);
-                m_box_lower_bounded_constraints++;
+                box_changed |= compare_assign(m_box_constraint_type[i], constraint_t::INEQ_LB_ONLY_CONSTR);
             }
             else if (xlb(i) < -UNBOUNDED_THRESHOLD)
             {
-                bounds_changed |= compare_assign(m_box_constraint_type[i], constraint_t::INEQ_UB_ONLY_CONSTR);
-                m_box_upper_bounded_constraints++;
+                box_changed |= compare_assign(m_box_constraint_type[i], constraint_t::INEQ_UB_ONLY_CONSTR);
             }
             else
             {
-                bounds_changed |= compare_assign(m_box_constraint_type[i], constraint_t::INEQ_CONSTR);
-                m_box_lower_bounded_constraints++;
-                m_box_upper_bounded_constraints++;
+                box_changed |= compare_assign(m_box_constraint_type[i], constraint_t::INEQ_CONSTR);
             }
         }
 
         // parse general constraints
-        m_lower_bounded_constraints = 0;
-        m_upper_bounded_constraints = 0;
         for (int i = 0; i < m_m; i++)
         {
             if (Alb(i) < -UNBOUNDED_THRESHOLD && Aub(i) > UNBOUNDED_THRESHOLD)
             {
-                bounds_changed |= compare_assign(m_constraint_type[i], constraint_t::UNBOUNDED_CONSTR);
+                gen_changed |= compare_assign(m_constraint_type[i], constraint_t::UNBOUNDED_CONSTR);
             }
             else if (Aub(i) - Alb(i) < EQ_TOL)
             {
-                bounds_changed |= compare_assign(m_constraint_type[i], constraint_t::EQ_CONSTR);
-                m_lower_bounded_constraints++;
-                m_upper_bounded_constraints++;
+                gen_changed |= compare_assign(m_constraint_type[i], constraint_t::EQ_CONSTR);
             }
             else if (Aub(i) > UNBOUNDED_THRESHOLD)
             {
-                bounds_changed |= compare_assign(m_constraint_type[i], constraint_t::INEQ_LB_ONLY_CONSTR);
-                m_lower_bounded_constraints++;
+                gen_changed |= compare_assign(m_constraint_type[i], constraint_t::INEQ_LB_ONLY_CONSTR);
             }
             else if (Alb(i) < -UNBOUNDED_THRESHOLD)
             {
-                bounds_changed |= compare_assign(m_constraint_type[i], constraint_t::INEQ_UB_ONLY_CONSTR);
-                m_upper_bounded_constraints++;
+                gen_changed |= compare_assign(m_constraint_type[i], constraint_t::INEQ_UB_ONLY_CONSTR);
             }
             else
             {
-                bounds_changed |= compare_assign(m_constraint_type[i], constraint_t::INEQ_CONSTR);
-                m_lower_bounded_constraints++;
-                m_upper_bounded_constraints++;
+                gen_changed |= compare_assign(m_constraint_type[i], constraint_t::INEQ_CONSTR);
             }
         }
 
-        if (prev_box_lower_bounded_constraints != m_box_lower_bounded_constraints ||
-            prev_box_upper_bounded_constraints != m_box_upper_bounded_constraints ||
-            prev_lower_bounded_constraints != m_lower_bounded_constraints ||
-            prev_upper_bounded_constraints != m_upper_bounded_constraints)
+        if (!box_changed && !gen_changed)
         {
-            bounds_changed = true;
+            return constraint_changed_t::NO_CHANGE;
         }
-
-        return bounds_changed;
+        else if (box_changed && !gen_changed)
+        {
+            return constraint_changed_t::BOX_ONLY_CHANGE;
+        }
+        else if (!box_changed && gen_changed)
+        {
+            return constraint_changed_t::GEN_ONLY_CHANGE;
+        }
+        else
+        {
+            return constraint_changed_t::CHANGE;
+        }
     }
 };
 

@@ -3,8 +3,9 @@
  */
 
 #include <iostream>
+#include <iomanip>
 #include "laopt/laopt.hpp"
-#include "laopt/ipopt_interface/ipopt_wrapper.hpp"
+#include "laopt/solvers/ipopt_interface.hpp"
 
 #include "test_utils.hpp"
 #include "gtest/gtest.h"
@@ -23,7 +24,7 @@ namespace
  *       -1 <= x4 <= 1
  */
 template<typename scalar_t_>
-struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>>
+struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>, laopt::TAGGED>
 {
     using scalar_t = scalar_t_;
 
@@ -60,11 +61,11 @@ struct SimpleExample : public laopt::Differentiable<SimpleExample<scalar_t_>>
     {
         problem.add_variable(x_var);
 
-        problem.add_obj(this->function(Cost{}, x_var));
+        problem.add_obj(this->expression(Cost{}, x_var));
 
         problem.add_constr(-1 <= x_var({0, 2, 3}) <= 1);
 
-        problem.add_constr(this->function(Equality{}, x_var) == 0);
+        problem.add_constr(this->expression(Equality{}, x_var) == 0);
     }
 };
 
@@ -73,7 +74,7 @@ TEST(IpoptTest, SimpleExample)
     using scalar_t = double;
 
     using UserCode = SimpleExample<scalar_t>;
-    UserCode my_problem;
+    auto my_problem = std::make_shared<UserCode>();
     auto sparsity = laopt::generate_sparsity(my_problem);
     auto tape = laopt::generate_tape(my_problem, sparsity);
 
@@ -81,19 +82,19 @@ TEST(IpoptTest, SimpleExample)
     std::cout << tape << std::endl;
 
     using Problem = laopt::Problem<UserCode>;
-    Problem prob(my_problem, tape);
+    auto prob = std::make_shared<Problem>(my_problem, tape);
 
-    laopt::IpoptWrapper<Problem> solver(prob);
+    laopt::IpoptSolver<Problem> solver(prob);
 
     // Set the initial primal variable
-    my_problem.x_var << 0.5, 1.5, 0.0, 0.0;
+    my_problem->x_var << 0.5, 1.5, 0.0, 0.0;
 
     solver.solve();
 
-    EXPECT_NEAR(my_problem.x_var(0), 0, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(1), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(2), 1, 1e-4);
-    EXPECT_NEAR(my_problem.x_var(3), -1, 1e-4);
+    EXPECT_NEAR(my_problem->x_var(0), 0, 1e-4);
+    EXPECT_NEAR(my_problem->x_var(1), 1, 1e-4);
+    EXPECT_NEAR(my_problem->x_var(2), 1, 1e-4);
+    EXPECT_NEAR(my_problem->x_var(3), -1, 1e-4);
 
     EXPECT_NEAR(solver.primal()(0), 0, 1e-4);
     EXPECT_NEAR(solver.primal()(1), 1, 1e-4);
@@ -115,7 +116,7 @@ TEST(IpoptTest, SimpleExample)
  *       -1 <= x1 <= 1
  */
 template<typename scalar_t_>
-struct Ipopt_example : public laopt::Differentiable<Ipopt_example<scalar_t_>>
+struct Ipopt_example : public laopt::Differentiable<Ipopt_example<scalar_t_>, laopt::TAGGED>
 {
     using scalar_t = scalar_t_;
 
@@ -154,11 +155,11 @@ struct Ipopt_example : public laopt::Differentiable<Ipopt_example<scalar_t_>>
         problem.add_variable(x1_var);
         problem.add_variable(x2_var);
 
-        problem.add_obj(this->function(Cost{}, x1_var, x2_var));
+        problem.add_obj(this->expression(Cost{}, x1_var, x2_var));
 
         problem.add_constr(-1 <= x1_var <= 1);
 
-        problem.add_constr(this->function(Equality{}, x1_var, x2_var) == 0);
+        problem.add_constr(this->expression(Equality{}, x1_var, x2_var) == 0);
     }
 };
 
@@ -168,7 +169,7 @@ TEST(IpoptTest, IpoptExample)
     using scalar_t = double;
 
     using UserCode = Ipopt_example<scalar_t>;
-    UserCode my_problem;
+    auto my_problem = std::make_shared<UserCode>();
     auto sparsity = laopt::generate_sparsity(my_problem);
     auto tape = laopt::generate_tape(my_problem, sparsity);
 
@@ -176,18 +177,18 @@ TEST(IpoptTest, IpoptExample)
     std::cout << tape << std::endl;
 
     using Problem = laopt::Problem<UserCode>;
-    Problem prob(my_problem, tape);
+    auto prob = std::make_shared<Problem>(my_problem, tape);
 
-    laopt::IpoptWrapper<Problem> solver(prob);
+    laopt::IpoptSolver<Problem> solver(prob);
 
     // Set the initial primal variable
-    my_problem.x1_var << 0.5;
-    my_problem.x2_var << 1.5;
+    my_problem->x1_var << 0.5;
+    my_problem->x2_var << 1.5;
 
     solver.solve();
 
-    EXPECT_NEAR(my_problem.x1_var, 1, 1e-4);
-    EXPECT_NEAR(my_problem.x2_var, 0, 1e-4);
+    EXPECT_NEAR(my_problem->x1_var(0), 1, 1e-4);
+    EXPECT_NEAR(my_problem->x2_var(0), 0, 1e-4);
 }
 
 /*
@@ -199,7 +200,7 @@ TEST(IpoptTest, IpoptExample)
  *      1 <= x1,x2,x3,x4 <= 5
  */
 template<typename _scalar_t>
-struct Prob71 : public laopt::Differentiable<Prob71<_scalar_t>>
+struct Prob71 : public laopt::Differentiable<Prob71<_scalar_t>, laopt::TAGGED>
 {
     using scalar_t = _scalar_t; // laopt::Problem assumes that the user code will contain a scalar_t
 
@@ -239,10 +240,10 @@ struct Prob71 : public laopt::Differentiable<Prob71<_scalar_t>>
     {
         problem.add_variable(x_var);
 
-        problem.add_obj(this->function(Obj{}, x_var));
+        problem.add_obj(this->expression(Obj{}, x_var));
 
         problem.add_constr(1 <= x_var <= 5);
-        problem.add_constr(Eigen::Vector<scalar_t, 2>{25, 40} <= this->function(Constraints{}, x_var) <= Eigen::Vector<scalar_t, 2>{2e9, 40});
+        problem.add_constr(Eigen::Vector<scalar_t, 2>{25, 40} <= this->expression(Constraints{}, x_var) <= Eigen::Vector<scalar_t, 2>{2e9, 40});
     }
 };
 
@@ -350,13 +351,13 @@ hessian_l(const Eigen::MatrixBase<Derived>& x, const Eigen::MatrixBase<L>& dual,
 TEST(IpoptTest, Prob71)
 {
     using scalar_t = double;
-    Prob71<scalar_t> prob71;
+    auto prob71 = std::make_shared<Prob71<scalar_t>>();
     using Problem = laopt::Problem<Prob71<scalar_t>>;
-    Problem prob = laopt::generate(prob71);
+    auto prob = std::make_shared<Problem>(prob71);
 
-    laopt::IpoptWrapper<Problem> solver(prob);
+    laopt::IpoptSolver<Problem> solver(prob);
 
-    prob71.x_var << 1, 5, 5, 1;
+    prob71->x_var << 1, 5, 5, 1;
 
     solver.solve();
 
@@ -374,30 +375,30 @@ TEST(IpoptTest, Prob71)
     laopt::ProblemMemory<scalar_t> mem(prob);
 
     // Check the computation of variable bounds
-    prob.eval_variable_bounds(mem.variable_bounds.lb, mem.variable_bounds.ub);
+    prob->eval_variable_bounds(mem.variable_bounds.lb, mem.variable_bounds.ub);
     EXPECT_TRUE(mem.variable_bounds.lb.isApprox(Eigen::Vector<scalar_t, 4>{1, 1, 1, 1}, 1e-4));
     EXPECT_TRUE(mem.variable_bounds.ub.isApprox(Eigen::Vector<scalar_t, 4>{5, 5, 5, 5}, 1e-4));
 
     // Check the computation of the constraints
     Eigen::VectorX<scalar_t> var = solver.primal();
     Eigen::VectorX<scalar_t> dual = solver.dual();
-    prob.set_decision_variable(var);
+    prob->set_decision_variable(var);
 
-    prob.eval_constraints(mem.constraints.value, mem.constraints.lb, mem.constraints.ub);
-    prob.eval_constraints_jacobian(mem.constraints.jacobian_buffer);
-    EXPECT_TRUE(mem.constraints.value.isApprox(g(prob71.x_var), 1e-4));
+    prob->eval_constraints(mem.constraints.value, mem.constraints.lb, mem.constraints.ub);
+    prob->eval_constraints_jacobian(mem.constraints.jacobian_buffer);
+    EXPECT_TRUE(mem.constraints.value.isApprox(g(prob71->x_var), 1e-4));
     EXPECT_TRUE(mem.constraints.lb.isApprox(Eigen::Vector<scalar_t, 2>{25, 40}, 1e-4));
     EXPECT_TRUE(mem.constraints.ub.isApprox(Eigen::Vector<scalar_t, 2>{2e9, 40}, 1e-4));
-    EXPECT_TRUE(Eigen::MatrixX<scalar_t>(mem.constraints.jacobian).isApprox(jac_g(prob71.x_var), 1e-4));
+    EXPECT_TRUE(Eigen::MatrixX<scalar_t>(mem.constraints.jacobian).isApprox(jac_g(prob71->x_var), 1e-4));
 
     // Check the computation of the objective
-    scalar_t obj = prob.eval_objective();
-    prob.eval_objective_gradient(mem.objective.gradient);
+    scalar_t obj = prob->eval_objective();
+    prob->eval_objective_gradient(mem.objective.gradient);
     EXPECT_NEAR(obj, f(var), 1e-4);
     EXPECT_TRUE(mem.objective.gradient.isApprox(grad_f(var), 1e-4));
 
     // Check the computation of the lagrangian
-    prob.eval_lagrangian_hessian(1.5, dual, mem.lagrangian.hessian_buffer);
+    prob->eval_lagrangian_hessian(1.5, dual, mem.lagrangian.hessian_buffer);
     EXPECT_TRUE(Eigen::MatrixX<scalar_t>(mem.lagrangian.hessian).isApprox(hessian_l(var, dual, 1.5), 1e-4));
 }
 
