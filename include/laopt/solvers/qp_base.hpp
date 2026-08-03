@@ -157,8 +157,8 @@ protected:
                              const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Alb,
                              const Eigen::Ref<const Eigen::VectorX<scalar_t>>& Aub) noexcept
     {
-        eigen_assert((xlb.array() <= xub.array()).any());
-        eigen_assert((Alb.size() == 0) || (Alb.array() <= Aub.array()).any());
+        eigen_assert((xlb.array() <= xub.array()).all());
+        eigen_assert((Alb.size() == 0) || (Alb.array() <= Aub.array()).all());
 
         bool box_changed = false;
         bool gen_changed = false;

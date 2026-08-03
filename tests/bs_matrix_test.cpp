@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <chrono>
+#include <iomanip>
 
 #include "laopt/laopt.hpp"
 
@@ -145,6 +146,10 @@ TEST(BSMatrix, Construction_Assign) {
 }
 
 TEST(BSMatrixDense, Construction_Assign) {
+#ifdef NDEBUG
+    GTEST_SKIP() << "This test depends on assertion/death behavior disabled in Release builds.";
+#endif
+
     AssignProblem problem;
     test_BSMatrixDense_problem(problem);
 }
@@ -307,6 +312,10 @@ TEST(BSMatrix, Construction_BlockAssign) {
 }
 
 TEST(BSMatrixDense, Construction_BlockAssign) {
+#ifdef NDEBUG
+    GTEST_SKIP() << "This test depends on assertion/death behavior disabled in Release builds.";
+#endif
+
     BlockAssignProblem problem;
     test_BSMatrixDense_problem(problem);
 }
@@ -483,6 +492,10 @@ TEST(BSMatrix, Construction_Indexing) {
 }
 
 TEST(BSMatrixDense, Construction_Indexing) {
+#ifdef NDEBUG
+    GTEST_SKIP() << "This test depends on assertion/death behavior disabled in Release builds.";
+#endif
+
     IndexingProblem problem;
     test_BSMatrixDense_problem(problem);
 }
@@ -641,6 +654,10 @@ TEST(BSMatrix, Construction_Arrays) {
 }
 
 TEST(BSMatrixDense, Construction_Arrays) {
+#ifdef NDEBUG
+    GTEST_SKIP() << "This test depends on assertion/death behavior disabled in Release builds.";
+#endif
+
     ArraysProblem problem;
     test_BSMatrixDense_problem(problem);
 }

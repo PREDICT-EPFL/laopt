@@ -5,168 +5,210 @@ project(laopt
     LANGUAGES C CXX
 )
 
-list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+list(PREPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
-#### Interface options ####
-option(WITH_CASADI "Build Casadi interface" OFF)
-option(WITH_IPOPT "Build IPOPT interface" ON)
-option(WITH_OSQP "Build OSQP interface" OFF)
-option(WITH_QPALM "Build QPALM interface" OFF)
-option(WITH_PROXQP "Build ProxQP interface" OFF)
-option(WITH_QPSWIFT "Build qpSWIFT interface" OFF)
-option(WITH_PIQP "Build PIQP interface" ON)
-option(WITH_HPIPM "Build HPIPM interface" OFF)
+# Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24.
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
+    cmake_policy(SET CMP0135 NEW)
+endif()
+# Keep the explicit FetchContent populate/add_subdirectory flow for CMake 3.21
+# support while still excluding third-party install rules.
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.30.0")
+    cmake_policy(SET CMP0169 OLD)
+endif()
+
+include(GNUInstallDirs)
+
+#### Local build options ####
+option(LAOPT_WITH_CASADI "Build local tests/examples with CasADi support" OFF)
+option(LAOPT_WITH_IPOPT "Build local tests/examples with IPOPT support" OFF)
+option(LAOPT_WITH_OSQP "Build local tests/examples with OSQP support" OFF)
+option(LAOPT_WITH_QPALM "Build local tests/examples with QPALM support" OFF)
+option(LAOPT_WITH_PROXQP "Build local tests/examples with ProxQP support" OFF)
+option(LAOPT_WITH_QPSWIFT "Build local tests/examples with qpSWIFT support" OFF)
+option(LAOPT_WITH_PIQP "Build local tests/examples with PIQP support" OFF)
+option(LAOPT_WITH_HPIPM "Build local tests/examples with HPIPM support" OFF)
 
 #### Tests/Benchmarks options ####
-# Don't build tests and examples if included as subdirectory
-if(NOT CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
-    option(BUILD_TESTS "Build tests" OFF)
-    option(BUILD_EXAMPLES "Build examples" OFF)
-else()
-    option(BUILD_TESTS "Build tests" ON)
-    option(BUILD_EXAMPLES "Build examples" ON)
-endif()
-option(BUILD_BENCHMARKS "Build benchmarks" OFF)
+option(LAOPT_BUILD_TESTS "Build tests" ${PROJECT_IS_TOP_LEVEL})
+option(LAOPT_BUILD_EXAMPLES "Build examples" ${PROJECT_IS_TOP_LEVEL})
+option(LAOPT_BUILD_BENCHMARKS "Build benchmarks" OFF)
 
 #### Developer options ####
-option(ENABLE_SANITIZERS "Build with sanitizers enabled" OFF)
+option(LAOPT_ENABLE_SANITIZERS "Build local targets with sanitizers enabled" OFF)
 
 #### Install options ####
-if(NOT CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
-    option(ENABLE_INSTALL "Enable install targets" OFF)
-else()
-    option(ENABLE_INSTALL "Enable install targets" ON)
-endif()
+option(LAOPT_ENABLE_INSTALL "Enable install targets" ${PROJECT_IS_TOP_LEVEL})
 
-# Set build type to RELEASE by default
-if (NOT EXISTS ${CMAKE_BINARY_DIR}/CMakeCache.txt)
-    if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
-        set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+set(LAOPT_BUILD_TESTS_ENABLED OFF)
+if (LAOPT_BUILD_TESTS)
+    include(CTest)
+    if (BUILD_TESTING)
+        set(LAOPT_BUILD_TESTS_ENABLED ON)
     endif()
 endif()
-message(STATUS "Building ${CMAKE_BUILD_TYPE}")
 
-# Set compiler flags according to compiler ID
+# Set build type to Release by default for single-config generators.
+if (NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+endif()
+if (CMAKE_CONFIGURATION_TYPES)
+    message(STATUS "Configuration types: ${CMAKE_CONFIGURATION_TYPES}")
+else()
+    message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+endif()
+
+# Compiler and linker flags for local tests/examples/benchmarks.
 set(gcc_like_cxx CXX ARMClang AppleClang Clang GNU LCC)
 set(msvc_like CXX MSVC)
-if (${CMAKE_CXX_COMPILER_ID} IN_LIST gcc_like_cxx)
-    list(APPEND compiler_flags -Wall -Wextra "-Wno-unused-parameter" -ftemplate-backtrace-limit=0)
-elseif ((${CMAKE_CXX_COMPILER_ID} IN_LIST msvc_like))
-    list(APPEND compiler_flags /W4)
-endif ()
+set(laopt_compile_options)
+set(laopt_link_options)
+if (CMAKE_CXX_COMPILER_ID IN_LIST gcc_like_cxx)
+    list(APPEND laopt_compile_options -Wall -Wextra -Wno-unused-parameter -ftemplate-backtrace-limit=0)
+elseif (CMAKE_CXX_COMPILER_ID IN_LIST msvc_like)
+    list(APPEND laopt_compile_options /W4)
+endif()
 message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID}")
 
-# Set sanitizer flags
-if (ENABLE_SANITIZERS)
-    if (${CMAKE_CXX_COMPILER_ID} IN_LIST gcc_like_cxx)
-        list(APPEND sanitizer_flags -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer)
-    elseif ((${CMAKE_CXX_COMPILER_ID} IN_LIST msvc_like))
-        list(APPEND sanitizer_flags /fsanitize=address)
-    endif ()
-    list(APPEND compiler_flags ${sanitizer_flags})
-    message(STATUS "Building with sanitizers: ${sanitizer_flags}")
-    unset(sanitizer_flags)
-endif ()
+if (LAOPT_ENABLE_SANITIZERS)
+    if (CMAKE_CXX_COMPILER_ID IN_LIST gcc_like_cxx)
+        list(APPEND laopt_compile_options -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer)
+        list(APPEND laopt_link_options -fsanitize=address -fsanitize=undefined)
+    elseif (CMAKE_CXX_COMPILER_ID IN_LIST msvc_like)
+        list(APPEND laopt_compile_options /fsanitize=address)
+    endif()
+    message(STATUS "Building local targets with sanitizer compile flags: ${laopt_compile_options}")
+    if (laopt_link_options)
+        message(STATUS "Building local targets with sanitizer link flags: ${laopt_link_options}")
+    endif()
+endif()
 
-# Find Eigen3.4+
+# Find Eigen3.4+.
 if (DEFINED EIGEN3_INCLUDE_DIRS AND NOT TARGET Eigen3::Eigen)
-    # Create target for user-defined Eigen 3.3+ path to be used for laOPT
     add_library(Eigen3::Eigen INTERFACE IMPORTED)
-    target_include_directories(Eigen3::Eigen INTERFACE ${EIGEN3_INCLUDE_DIRS})
-else ()
+    target_include_directories(Eigen3::Eigen INTERFACE "${EIGEN3_INCLUDE_DIRS}")
+else()
     find_package(Eigen3 REQUIRED NO_MODULE)
 
     if (Eigen3_VERSION VERSION_LESS "3.4")
         message(FATAL_ERROR "Eigen3 >= 3.4 required, found ${Eigen3_VERSION}")
-    endif ()
-endif ()
-message(STATUS "Using Eigen3 from: ${EIGEN3_INCLUDE_DIRS}")
+    endif()
+endif()
+get_target_property(LAOPT_EIGEN_INCLUDE_DIRS Eigen3::Eigen INTERFACE_INCLUDE_DIRECTORIES)
+message(STATUS "Using Eigen3 from: ${LAOPT_EIGEN_INCLUDE_DIRS}")
 
 add_library(laopt INTERFACE)
 target_include_directories(laopt INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/>
-    $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/${CMAKE_INSTALL_INCLUDEDIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_link_libraries(laopt INTERFACE Eigen3::Eigen)
-
-# Find Casadi
-if (WITH_CASADI)
-    find_package(Casadi REQUIRED)
-    target_compile_definitions(laopt INTERFACE LAOPT_WITH_CASADI)
-    target_link_libraries(laopt INTERFACE casadi)
-endif ()
-
-## Find solvers, append to laOPT interface library
-# Find IPOPT
-if (WITH_IPOPT)
-    find_package(Ipopt REQUIRED)
-    target_compile_definitions(laopt INTERFACE LAOPT_WITH_IPOPT)
-    target_include_directories(laopt INTERFACE ${Ipopt_INCLUDE_DIRS})
-    target_link_libraries(laopt INTERFACE ${Ipopt_LIBRARIES})
-endif ()
-
-# Find Osqp
-if (WITH_OSQP)
-    find_package(osqp REQUIRED)
-    target_compile_definitions(laopt INTERFACE LAOPT_WITH_OSQP)
-    target_link_libraries(laopt INTERFACE osqp::osqp)
-endif ()
-
-# Find QPALM
-if (WITH_QPALM)
-    find_package(QPALM REQUIRED)
-    target_compile_definitions(laopt INTERFACE LAOPT_WITH_QPALM)
-    target_link_libraries(laopt INTERFACE QPALM::qpalm)
-endif ()
-
-# Find ProxQP
-if (WITH_PROXQP)
-    find_package(proxsuite REQUIRED)
-    target_compile_definitions(laopt INTERFACE LAOPT_WITH_PROXQP)
-    target_link_libraries(laopt INTERFACE proxsuite::proxsuite)
-endif ()
-
-# Find qpSwift
-if (WITH_QPSWIFT)
-    find_package(qpSWIFT REQUIRED)
-    target_compile_definitions(laopt INTERFACE LAOPT_WITH_QPSWIFT)
-    target_link_libraries(laopt INTERFACE qpSWIFT::qpSWIFT-static)
-endif()
-
-# Find PIQP
-if (WITH_PIQP)
-    find_package(piqp REQUIRED)
-    target_compile_definitions(laopt INTERFACE LAOPT_WITH_PIQP)
-    target_link_libraries(laopt INTERFACE piqp::piqp)
-endif()
-
-# Find HPIPM
-if (WITH_HPIPM)
-    find_package(blasfeo REQUIRED)
-    find_package(hpipm REQUIRED)
-    target_compile_definitions(laopt INTERFACE LAOPT_WITH_HPIPM)
-    target_link_libraries(laopt INTERFACE blasfeo hpipm)
-endif()
-
-target_compile_definitions(laopt INTERFACE -DEIGEN_STACK_ALLOCATION_LIMIT=1000000) # 1 MB - For both Windows and UNIX)
+target_compile_definitions(laopt INTERFACE EIGEN_STACK_ALLOCATION_LIMIT=1000000)
 target_compile_features(laopt INTERFACE cxx_std_17)
 
 add_library(laopt::laopt ALIAS laopt)
 
-## Build optional components depending on laOPT library
-if (BUILD_TESTS)
+function(laopt_get_dependency_scope target_name out_var)
+    get_target_property(target_type ${target_name} TYPE)
+    if (target_type STREQUAL "INTERFACE_LIBRARY")
+        set(${out_var} INTERFACE PARENT_SCOPE)
+    else()
+        set(${out_var} PRIVATE PARENT_SCOPE)
+    endif()
+endfunction()
+
+function(laopt_target_enable_casadi target_name)
+    if (NOT LAOPT_WITH_CASADI)
+        return()
+    endif()
+    laopt_get_dependency_scope(${target_name} dependency_scope)
+    find_package(Casadi REQUIRED)
+    target_compile_definitions(${target_name} ${dependency_scope} LAOPT_WITH_CASADI)
+    target_link_libraries(${target_name} ${dependency_scope} casadi)
+endfunction()
+
+function(laopt_target_enable_ipopt target_name)
+    if (NOT LAOPT_WITH_IPOPT)
+        return()
+    endif()
+    laopt_get_dependency_scope(${target_name} dependency_scope)
+    find_package(Ipopt REQUIRED)
+    target_compile_definitions(${target_name} ${dependency_scope} LAOPT_WITH_IPOPT)
+    target_link_libraries(${target_name} ${dependency_scope} Ipopt::Ipopt)
+endfunction()
+
+function(laopt_target_enable_osqp target_name)
+    if (NOT LAOPT_WITH_OSQP)
+        return()
+    endif()
+    laopt_get_dependency_scope(${target_name} dependency_scope)
+    find_package(osqp REQUIRED)
+    target_compile_definitions(${target_name} ${dependency_scope} LAOPT_WITH_OSQP)
+    target_link_libraries(${target_name} ${dependency_scope} osqp::osqp)
+endfunction()
+
+function(laopt_target_enable_qpalm target_name)
+    if (NOT LAOPT_WITH_QPALM)
+        return()
+    endif()
+    laopt_get_dependency_scope(${target_name} dependency_scope)
+    find_package(QPALM REQUIRED)
+    target_compile_definitions(${target_name} ${dependency_scope} LAOPT_WITH_QPALM)
+    target_link_libraries(${target_name} ${dependency_scope} QPALM::qpalm)
+endfunction()
+
+function(laopt_target_enable_proxqp target_name)
+    if (NOT LAOPT_WITH_PROXQP)
+        return()
+    endif()
+    laopt_get_dependency_scope(${target_name} dependency_scope)
+    find_package(proxsuite REQUIRED)
+    target_compile_definitions(${target_name} ${dependency_scope} LAOPT_WITH_PROXQP)
+    target_link_libraries(${target_name} ${dependency_scope} proxsuite::proxsuite)
+endfunction()
+
+function(laopt_target_enable_qpswift target_name)
+    if (NOT LAOPT_WITH_QPSWIFT)
+        return()
+    endif()
+    laopt_get_dependency_scope(${target_name} dependency_scope)
+    find_package(qpSWIFT REQUIRED)
+    target_compile_definitions(${target_name} ${dependency_scope} LAOPT_WITH_QPSWIFT)
+    target_link_libraries(${target_name} ${dependency_scope} qpSWIFT::qpSWIFT-static)
+endfunction()
+
+function(laopt_target_enable_piqp target_name)
+    if (NOT LAOPT_WITH_PIQP)
+        return()
+    endif()
+    laopt_get_dependency_scope(${target_name} dependency_scope)
+    find_package(piqp REQUIRED)
+    target_compile_definitions(${target_name} ${dependency_scope} LAOPT_WITH_PIQP)
+    target_link_libraries(${target_name} ${dependency_scope} piqp::piqp_header_only)
+endfunction()
+
+function(laopt_target_enable_hpipm target_name)
+    if (NOT LAOPT_WITH_HPIPM)
+        return()
+    endif()
+    laopt_get_dependency_scope(${target_name} dependency_scope)
+    find_package(blasfeo REQUIRED)
+    find_package(hpipm REQUIRED)
+    target_compile_definitions(${target_name} ${dependency_scope} LAOPT_WITH_HPIPM)
+    target_link_libraries(${target_name} ${dependency_scope} blasfeo hpipm)
+endfunction()
+
+if (LAOPT_BUILD_TESTS_ENABLED)
     add_subdirectory(tests)
-endif ()
-if (BUILD_EXAMPLES)
+endif()
+if (LAOPT_BUILD_EXAMPLES)
     add_subdirectory(examples)
-endif ()
-if (BUILD_BENCHMARKS)
+endif()
+if (LAOPT_BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
-endif ()
+endif()
 
-if (ENABLE_INSTALL)
-    include(GNUInstallDirs)
-
+if (LAOPT_ENABLE_INSTALL)
     install(
         DIRECTORY include/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
@@ -175,11 +217,8 @@ if (ENABLE_INSTALL)
     install(
         TARGETS laopt
         EXPORT laoptTargets
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     )
 
-    # https://cmake.org/cmake/help/latest/guide/importing-exporting/index.html
     install(
         EXPORT laoptTargets
         FILE laoptTargets.cmake
@@ -208,5 +247,4 @@ if (ENABLE_INSTALL)
         FILE ${CMAKE_CURRENT_BINARY_DIR}/laoptTargets.cmake
         NAMESPACE laopt::
     )
-
-endif ()
+endif()

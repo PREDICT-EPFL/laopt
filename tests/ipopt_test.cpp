@@ -3,6 +3,7 @@
  */
 
 #include <iostream>
+#include <iomanip>
 #include "laopt/laopt.hpp"
 #include "laopt/solvers/ipopt_interface.hpp"
 
