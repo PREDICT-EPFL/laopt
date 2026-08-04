@@ -2,6 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-BSD--2--Clause-brightgreen.svg)](LICENSE)
 [![Funding](https://img.shields.io/badge/Grant-NCCR%20Automation%20(51NF40__225155)-90e3dc.svg)](https://nccr-automation.ch/)
+[![Documentation](https://img.shields.io/badge/Docs-available-brightgreen.svg)](https://predict-epfl.github.io/laopt/)
 
 laOPT is a native C++ toolbox for high-performance nonlinear optimization and optimal control. It provides a compact, vector-valued modeling interface and transcribes user-defined problems into sparse nonlinear programs of the form
 

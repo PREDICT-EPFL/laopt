@@ -1,0 +1,48 @@
+.laopt-footer {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: $sp-3;
+}
+
+.laopt-footer__logos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $sp-4;
+}
+
+.laopt-footer__logos a {
+  display: flex;
+  align-items: center;
+}
+
+.laopt-footer__logo {
+  display: block;
+  width: auto;
+  object-fit: contain;
+}
+
+.laopt-footer__logo--nccr {
+  height: 1.5rem;
+  max-width: 7rem;
+}
+
+.laopt-footer__logo--epfl {
+  height: 1.5rem;
+  max-width: 3.5rem;
+}
+
+.laopt-footer__credit {
+  margin: 0;
+  line-height: 1.45;
+}
+
+@include mq(md) {
+  .laopt-footer__logos {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $sp-2;
+  }
+}
