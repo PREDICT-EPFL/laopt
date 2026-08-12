@@ -1,5 +1,9 @@
 # laOPT
 
+<p align="center">
+  <img src="docs/assets/images/laOPT_logo.png" alt="laOPT logo" width="600">
+</p>
+
 [![License](https://img.shields.io/badge/License-BSD--2--Clause-brightgreen.svg)](LICENSE)
 [![Funding](https://img.shields.io/badge/Grant-NCCR%20Automation%20(51NF40__225155)-90e3dc.svg)](https://nccr-automation.ch/)
 [![Documentation](https://img.shields.io/badge/Docs-available-brightgreen.svg)](https://predict-epfl.github.io/laopt/)

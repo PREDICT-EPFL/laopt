@@ -1,4 +1,5 @@
 title: laOPT
+logo: "/assets/images/laOPT_logo.png"
 description: A native C++ toolbox for high-performance nonlinear optimization and optimal control
 theme: just-the-docs
 color_scheme: laopt
@@ -38,4 +39,3 @@ callouts:
 sass:
   quiet_deps: true
   silence_deprecations: [import]
-
