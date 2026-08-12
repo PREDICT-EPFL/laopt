@@ -192,7 +192,7 @@ protected:
         /* Register variables */
         for (unsigned i = 0; i < N; i++)
         {
-            optProblem.add_variable(X_var[i]); // TODO eno1: Loop through array in add_variable() -> Do not want that
+            optProblem.add_variable(X_var[i]);
             optProblem.add_variable(U_var[i]);
         }
         optProblem.add_variable(X_var[N]);
