@@ -11,7 +11,7 @@ laOPT currently provides two direct transcription methods.
 
 ## Multiple Shooting
 
-`MultipleShooting<ControlProblem, Segments>` introduces state variables at the shooting nodes and enforces continuity through integrated dynamics. The default integrator is explicit fourth-order Runge-Kutta.
+`MultipleShooting<ControlProblem, Segments>` introduces state variables at the shooting nodes and enforces continuity through integrated dynamics. The default integrator is explicit fourth-order Runge-Kutta (ERK4).
 
 ```cpp
 using Transcription = laopt_tools::MultipleShooting<MyOcp, 40>;
@@ -24,10 +24,10 @@ For `Segments = N`, the discrete solution contains `N + 1` states and `N` inputs
 `RadauCollocation<ControlProblem, Segments, Degree>` uses a multi-segment pseudospectral scheme with Legendre-Gauss-Radau points.
 
 ```cpp
-using Transcription = laopt_tools::RadauCollocation<MyOcp, 10, 3>;
+using Transcription = laopt_tools::RadauCollocation<MyOcp, /*S*/ 10, /*D*/ 3>;
 ```
 
-For `Segments = S` and `Degree = D`, the discrete solution contains `S * D + 1` state and input nodes. Adjacent segments share their boundary node. The nodes inside each segment are nonuniformly spaced, and the state and input are represented by degree-`D` Lagrange polynomials through the `D + 1` nodes of that segment.
+For `Segments = S` and `Degree = D`, the discrete solution contains `S * D + 1` state and input nodes. Adjacent segments share their boundary node. The nodes inside each segment are non-uniformly spaced, and the state and input are represented by degree-`D` Lagrange polynomials through the `D + 1` nodes of that segment.
 
 ## Constructing the Nonlinear Program
 
@@ -73,9 +73,9 @@ const auto p = transcription->get_p_opt();
 
 The trajectory layouts depend on the transcription:
 
-| Method | Number of Nodes | `T` | `X` | `U` |
-|:--|:--|:--|:--|:--|
-| Multiple shooting | `N + 1` state nodes | `(N + 1) × 1` | `NX × (N + 1)` | `NU × N` |
+| Method            | Number of Nodes                      | `T`               | `X`                | `U`                |
+|:------------------|:-------------------------------------|:------------------|:-------------------|:-------------------|
+| Multiple shooting | `N + 1` state nodes                  | `(N + 1) × 1`     | `NX × (N + 1)`     | `NU × N`           |
 | Radau collocation | `S * D + 1` shared collocation nodes | `(S * D + 1) × 1` | `NX × (S * D + 1)` | `NU × (S * D + 1)` |
 
 Each column of `X` corresponds to the same column of `T`. Radau input columns also correspond directly to `T`. For multiple shooting, `U.col(k)` is the input held over the interval from `T(k)` to `T(k + 1)`.
@@ -85,11 +85,8 @@ Each column of `X` corresponds to the same column of `T`. Radau input columns al
 Both methods expose point-sampling functions in physical time:
 
 ```cpp
-Eigen::Vector<Scalar, ControlProblem::NX>
-get_x_at(const Scalar& t) const;
-
-Eigen::Vector<Scalar, ControlProblem::NU>
-get_u_at(const Scalar& t) const;
+Eigen::Vector<Scalar, ControlProblem::NX> get_x_at(const Scalar& t) const;
+Eigen::Vector<Scalar, ControlProblem::NU> get_u_at(const Scalar& t) const;
 ```
 
 ```cpp
@@ -98,23 +95,20 @@ const auto x = transcription->get_x_at(t_query);
 const auto u = transcription->get_u_at(t_query);
 ```
 
-| Method | `get_x_at(t)` | `get_u_at(t)` |
-|:--|:--|:--|
-| Multiple shooting | Linear interpolation between adjacent state nodes. | Zero-order hold of the segment input. |
+| Method            | `get_x_at(t)`                                           | `get_u_at(t)`                                           |
+|:------------------|:--------------------------------------------------------|:--------------------------------------------------------|
+| Multiple shooting | Linear interpolation between adjacent state nodes.      | Zero-order hold of the segment input.                   |
 | Radau collocation | Evaluates the segment's degree-`D` Lagrange polynomial. | Evaluates the segment's degree-`D` Lagrange polynomial. |
 
-For Radau collocation, use point sampling for $$t_0 \leq t < t_f$$. Retrieve the terminal node with `X.col(X.cols() - 1)` or `U.col(U.cols() - 1)`. The trajectory resampling functions below include the terminal point automatically.
+For Radau collocation, use point sampling for $$t_0 \leq t < t_f$$. Retrieve the terminal node with `X.rightCols(1)` or `U.rightCols(1)`. The trajectory resampling functions below include the terminal point automatically.
 
 ## Resample the Complete Trajectory
 
 Use the batch resampling API when a uniformly ordered, denser trajectory is needed for plotting, simulation interfaces, or a controller:
 
 ```cpp
-Eigen::MatrixX<Scalar>
-get_TX_resampled(const Scalar& Ts_max) const;
-
-Eigen::MatrixX<Scalar>
-get_TU_resampled(const Scalar& Ts_max) const;
+Eigen::MatrixX<Scalar> get_TX_resampled(const Scalar& Ts_max) const;
+Eigen::MatrixX<Scalar> get_TU_resampled(const Scalar& Ts_max) const;
 ```
 
 `Ts_max` is the maximum spacing between returned samples in physical time. Each transcription segment is divided into an integer number of equal intervals, so the actual sample period may be smaller than `Ts_max`.

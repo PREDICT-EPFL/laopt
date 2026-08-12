@@ -6,7 +6,7 @@ nav_order: 1
 
 # laOPT
 
-laOPT is a native C++ toolbox for high-performance nonlinear optimization and optimal control. It combines an Eigen-based modeling interface, automatic differentiation, sparse derivative assembly, direct optimal-control transcription, and interfaces to established numerical solvers.
+laOPT is a native C++ toolbox for high-performance nonlinear optimization and optimal control. It combines an Eigen-based modeling interface, automatic differentiation (AD), sparse derivative assembly, direct optimal-control transcription, and interfaces to established numerical solvers.
 
 {% root_include _common/nlp_formulation.md %}
 

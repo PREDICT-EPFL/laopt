@@ -1,23 +1,26 @@
 ---
-title: First Optimal Control Problem
+title: First Optimal Control Problem (OCP)
 layout: default
 parent: Getting Started
 nav_order: 2
 ---
 
-# First Optimal Control Problem
+# First Optimal Control Problem (OCP)
 
 This example uses laOPT's high-level optimal-control interface to swing an inverted pendulum from the downward position to the upright equilibrium. The nonlinear OCP is
 
 $$
 \begin{aligned}
 \min_{\theta,\omega,u}\quad
-& \int_0^{1.5} \left(10\theta^2 + u^2\right)\,dt
-  + 100\theta(1.5)^2 \\
+& \int_0^{1.5} \left(10 \cdot \theta^2 + u^2\right)\,dt
+  + 100 \cdot \theta^2 \\
 \text{s.t.}\quad
-& \dot{\theta} = \omega, \\
-& \dot{\omega} = \frac{mgl\sin(\theta)-b\omega+u}{ml^2}, \\
-& (\theta(0),\omega(0)) = (\pi,0), \\
+& \begin{pmatrix} \dot{\theta} \\ \dot{\omega} \end{pmatrix}
+  = \begin{pmatrix} \omega \\ \frac{mgl\sin\theta-b\omega+u}{ml^2} \end{pmatrix}, \\
+& \begin{pmatrix}
+    \theta(0) \\
+    \omega(0) \end{pmatrix} = 
+   \begin{pmatrix} \pi \\ 0 \end{pmatrix}, \\
 & -3 \leq u \leq 3.
 \end{aligned}
 $$
@@ -37,47 +40,38 @@ class InvertedPendulum : public laopt_tools::ControlProblemBase<double, 2, 1>
 {
 public:
     // Running cost: keep the angle near zero while limiting torque.
-    template <typename X, typename U, typename P, typename T0,
-              typename TF, typename Tau,
+    template <typename X, typename U, typename P, 
+              typename T0, typename TF, typename Tau, 
               typename Scalar = typename X::Scalar>
-    Scalar lagrange_term_impl(
-        const Eigen::MatrixBase<X>& x,
-        const Eigen::MatrixBase<U>& u,
-        const Eigen::MatrixBase<P>& p,
-        const Eigen::MatrixBase<T0>& t0,
-        const Eigen::MatrixBase<TF>& tf,
-        const Tau& tau)
+    Scalar lagrange_term_impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u,
+                              const Eigen::MatrixBase<P>& p,
+                              const Eigen::MatrixBase<T0>& t0, const Eigen::MatrixBase<TF>& tf,
+                              const Tau& tau)
     {
-        unused(p, t0, tf, tau);
+        unused(p, t0, tf, tau); // Just to surpress annoying compiler warnings
         return 10.0 * x(0) * x(0) + u(0) * u(0);
     }
 
     // Terminal cost: strongly penalize the final angle error.
-    template <typename XF, typename P, typename T0, typename TF,
+    template <typename XF, typename P, typename T0, typename TF, 
               typename Scalar = typename XF::Scalar>
-    Scalar mayer_term_impl(
-        const Eigen::MatrixBase<XF>& xf,
-        const Eigen::MatrixBase<P>& p,
-        const Eigen::MatrixBase<T0>& t0,
-        const Eigen::MatrixBase<TF>& tf)
+    Scalar mayer_term_impl(const Eigen::MatrixBase<XF>& xf, const Eigen::MatrixBase<P>& p,
+                           const Eigen::MatrixBase<T0>& t0, const Eigen::MatrixBase<TF>& tf)
     {
-        unused(p, t0, tf);
+        unused(p, t0, tf); // Just to surpress annoying compiler warnings
         return 100.0 * xf(0) * xf(0);
     }
 
     // Nonlinear pendulum dynamics.
-    template <typename X, typename U, typename P, typename T0,
-              typename TF, typename Tau,
+    template <typename X, typename U, typename P, 
+              typename T0, typename TF, typename Tau, 
               typename Scalar = typename X::Scalar>
-    state_t<Scalar> dynamics_impl(
-        const Eigen::MatrixBase<X>& x,
-        const Eigen::MatrixBase<U>& u,
-        const Eigen::MatrixBase<P>& p,
-        const Eigen::MatrixBase<T0>& t0,
-        const Eigen::MatrixBase<TF>& tf,
-        const Tau& tau)
+    state_t<Scalar> dynamics_impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u, 
+                                  const Eigen::MatrixBase<P>& p,
+                                  const Eigen::MatrixBase<T0>& t0, const Eigen::MatrixBase<TF>& tf,
+                                  const Tau& tau)
     {
-        unused(p, t0, tf, tau);
+        unused(p, t0, tf, tau); // Just to surpress annoying compiler warnings
 
         const double g = 9.81;
         const double l = 0.5;
@@ -90,8 +84,7 @@ public:
 
         state_t<Scalar> x_dot;
         x_dot << omega,
-            (m * g * l * sin(theta) - b * omega + torque)
-                / (m * l * l);
+                 (m * g * l * sin(theta) - b * omega + torque) / (m * l * l);
         return x_dot;
     }
 };
@@ -124,7 +117,7 @@ int main()
     auto problem = std::make_shared<Problem>(transcription);
 
     // Start downward and optimize over a fixed 1.5-second horizon.
-    ocp->set_x0(Ocp::State{3.141592653589793, 0.0});
+    ocp->set_x0(Ocp::State{3.14159, 0.0});
     ocp->set_tf(1.5);
     ocp->u_lb << -3.0;
     ocp->u_ub << 3.0;
@@ -135,9 +128,8 @@ int main()
     solver.solve();
 
     // Recover the optimized state trajectory.
-    const auto X = transcription->get_X_opt();
-    std::cout << "terminal state: "
-              << X.col(X.cols() - 1).transpose() << '\n';
+    const Eigen::MatrixXd X = transcription->get_X_opt();
+    std::cout << "terminal state: " << X.rightCols(1).transpose() << '\n';
 }
 ```
 

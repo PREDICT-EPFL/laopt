@@ -45,5 +45,6 @@ int main()
               << "U_opt:\n" << U_opt << "\n";
 
     std::cout << "TX_resampled:\n" << TX_resampled << "\n";
+
     return 0;
 }

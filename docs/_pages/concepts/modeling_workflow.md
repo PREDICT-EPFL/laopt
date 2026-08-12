@@ -20,7 +20,7 @@ The stages are deliberately independent. A model can be paired with different tr
 
 The user defines the dynamics, running and terminal costs, bounds, and optional path constraints through `laopt_tools::ControlProblemBase`. These functions remain close to their mathematical form and operate on fixed-size Eigen vectors.
 
-The modeling layer also determines how derivatives are obtained. Eigen-based automatic differentiation is the default, while CasADi can be selected for supported derivative configurations.
+The modeling layer also determines how derivatives are obtained. Eigen-based automatic differentiation (AD) is the default, while CasADi can be selected for supported derivative configurations.
 
 ```cpp
 using Ocp = InvertedPendulum;
@@ -83,23 +83,31 @@ The transcription owns the OCP-specific trajectory representation. After the sol
 ```cpp
 solver.solve();
 
-const auto T_opt = transcription->get_T_opt();  // 41 time nodes
-const auto X_opt = transcription->get_X_opt();  // NX × 41 states
-const auto U_opt = transcription->get_U_opt();  // NU × 40 inputs
+Transcription::TimeTrajectory  T_opt = transcription->get_T_opt();  // 41 time nodes
+Transcription::StateTrajectory X_opt = transcription->get_X_opt();  // NX × 41 states
+Transcription::InputTrajectory U_opt = transcription->get_U_opt();  // NU × 40 inputs
 
 std::cout << "final time: " << T_opt(T_opt.size() - 1) << '\n';
-std::cout << "final state: " << X_opt.col(X_opt.cols() - 1).transpose() << '\n';
+std::cout << "final state: " << X_opt.rightCols(1).transpose() << '\n';
 ```
 
-For `MultipleShooting<Ocp, 40>`, the state trajectory has 41 nodes and the input trajectory has one value per shooting interval. The accessors return trajectory objects that the application can store or process independently.
+For 40-segment `MultipleShooting<Ocp, 40>`, the state trajectory has 41 nodes and the input trajectory has one value per segment. 
+
+The getters return fixed-size vector/matrix types that the application can store or process independently. Instead of using the fixed types (e.g., `Transcription::StateTrajectory`), one can also use dynamic-size types (e.g., `Eigen::MatrixXd`) for storing and manipulating the results. The type can also be inferred using `auto`:
+
+```cpp
+Transcription::StateTrajectory X_opt_1 = transcription->get_X_opt();
+               Eigen::MatrixXd X_opt_2 = transcription->get_X_opt();
+                          auto X_opt_3 = transcription->get_X_opt();
+```
 
 ## Design Choices at a Glance
 
-| Workflow Stage | Primary Choice | laOPT Components |
-|:--|:--|:--|
-| OCP formulation | Model and derivative backend | `ControlProblemBase`, Eigen AD, CasADi |
-| Transcription | Discretization method and resolution | `MultipleShooting`, `RadauCollocation` |
-| Mathematical program | General NLP representation | `Problem<Transcription>` |
-| Numerical solution | NLP method and QP backend | `IpoptSolver`, `SQPSolver`, `PIQPSolver`, and other QP interfaces |
+| Workflow Stage       | Primary Choice                       | laOPT Components                                                    |
+|:---------------------|:-------------------------------------|:--------------------------------------------------------------------|
+| OCP formulation      | Model and derivative backend         | `ControlProblemBase`, Eigen AD, CasADi                              |
+| Transcription        | Discretization method and resolution | `MultipleShooting`, `RadauCollocation`                              |
+| Mathematical program | General NLP representation           | `Problem<Transcription>`                                            |
+| Numerical solution   | NLP method (and QP backend)          | `IpoptSolver`, `SQPSolver`, (`PIQPSolver`, and other QP interfaces) |
 
 This separation is the central modeling principle in laOPT: formulate the control problem once, then choose the transcription and solver combination appropriate for the application.
