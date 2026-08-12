@@ -25,7 +25,7 @@ For optimal control applications, laOPT also provides a high-level continuous-ti
 
 - Header-only C++17 library built on [Eigen](https://eigen.tuxfamily.org/).
 - Vector-valued modeling of objectives, dynamics, bounds, and constraints.
-- Automatic gradients, Jacobians, and Hessians using Eigen, with optional [CasADi](https://web.casadi.org/) support.
+- Automatic differentiation (AD; gradients, Jacobians, and Hessians) using Eigen, with optional [CasADi](https://web.casadi.org/) support.
 - Sparse derivative assembly using precomputed sparsity patterns and evaluation tapes.
 - Multiple shooting and Legendre-Gauss-Radau collocation for optimal control problems.
 - A native sequential quadratic programming (SQP) solver and an interface to [IPOPT](https://github.com/coin-or/Ipopt).
@@ -33,36 +33,28 @@ For optimal control applications, laOPT also provides a high-level continuous-ti
 - Open source under the BSD 2-Clause License.
 
 ## Installation
+(See more details in the [documentation](https://predict-epfl.github.io/laopt/getting_started/installation).)
 
-laOPT requires a C++17 compiler, CMake 3.21 or later, and Eigen 3.4 or later. Clone and install the header-only package with
+laOPT requires a C++17 compiler, CMake 3.21 or later, and [Eigen 3.4 or later](https://predict-epfl.github.io/laopt/getting_started/installation_eigen). Clone and install the header-only package with
 
 ```shell
 git clone https://github.com/PREDICT-EPFL/laopt.git
 cd laopt
-cmake -S . -B build \
-      -DLAOPT_BUILD_TESTS=OFF \
-      -DLAOPT_BUILD_EXAMPLES=OFF
+cmake -S . -B build -DLAOPT_BUILD_TESTS=OFF -DLAOPT_BUILD_EXAMPLES=OFF
 cmake --build build
 cmake --install build
 ```
 
-To use an installed copy from CMake:
+To use an laOPT in a CMake project:
 
 ```cmake
 find_package(laopt REQUIRED)
 target_link_libraries(my_target PRIVATE laopt::laopt)
 ```
 
-Alternatively, add laOPT directly to a project:
-
-```cmake
-add_subdirectory(path/to/laopt)
-target_link_libraries(my_target PRIVATE laopt::laopt)
-```
-
 The `laopt::laopt` target provides the core library and Eigen dependency. Solver interfaces are selected by including the corresponding laOPT header and linking the solver package explicitly in the consuming project.
 
-For example, an application using the laOPT SQP solver with PIQP should link both targets:
+For example, an application using the laOPT SQP solver with PIQP must link both targets:
 
 ```cmake
 find_package(laopt REQUIRED)
