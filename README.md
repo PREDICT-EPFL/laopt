@@ -1,7 +1,7 @@
 # laOPT
 
 <p align="center">
-  <img src="docs/assets/images/laOPT_logo.png" alt="laOPT logo" width="600">
+  <img src="docs/assets/images/laOPT_logo_v2.png" alt="laOPT logo" width="450">
 </p>
 
 [![License](https://img.shields.io/badge/License-BSD--2--Clause-brightgreen.svg)](LICENSE)
