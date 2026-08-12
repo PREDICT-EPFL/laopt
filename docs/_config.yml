@@ -1,0 +1,41 @@
+title: laOPT
+logo: "/assets/images/laOPT_logo.png"
+description: A native C++ toolbox for high-performance nonlinear optimization and optimal control
+theme: just-the-docs
+color_scheme: laopt
+
+collections:
+  pages:
+    output: true
+    permalink: /:path
+
+just_the_docs:
+  collections:
+    pages:
+
+permalink: /:categories/:title
+url: https://predict-epfl.github.io
+baseurl: /laopt
+
+aux_links:
+  GitHub: https://github.com/PREDICT-EPFL/laopt
+aux_links_new_tab: true
+
+gh_edit_link: true
+gh_edit_link_text: Edit this page on GitHub
+gh_edit_repository: https://github.com/PREDICT-EPFL/laopt
+gh_edit_branch: main
+gh_edit_source: docs
+gh_edit_view_mode: tree
+
+callouts:
+  note:
+    title: Note
+    color: blue
+  warning:
+    title: Warning
+    color: yellow
+
+sass:
+  quiet_deps: true
+  silence_deprecations: [import]

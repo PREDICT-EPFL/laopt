@@ -218,7 +218,7 @@ public:
                 printf("----------------------------------------------------------\n");
                 printf("                        laOPT SQP                         \n");
                 printf("    (c) Roland Schwan, Johannes Waibel, Colin N. Jones    \n");
-                printf("   Ecole Polytechnique Federale de Lausanne (EPFL) 2025   \n");
+                printf("   Ecole Polytechnique Federale de Lausanne (EPFL) 2026   \n");
                 printf("----------------------------------------------------------\n");
                 printf("variables n = %d\n", prob->variables());
                 printf("constraints m = %d\n", prob->constraints.rows());
