@@ -31,7 +31,7 @@ make
 make install
 ```
 
-To install to a non-system location, set `CMAKE_INSTALL_PREFIX` during configuration or pass `--prefix` to `cmake --install`.
+The headers will be installed to your system-wide include/ folders. To install to a non-system location, set `CMAKE_INSTALL_PREFIX` during configuration or pass `--prefix` to `cmake --install`.
 
 ## How to use laOPT in CMake
 If laOPT has been installed:
