@@ -13,7 +13,8 @@ class RootInclude < Liquid::Tag
 
   def read_file(path, context)
     file_read_opts = context.registers[:site].file_read_opts
-    File.read(path, **file_read_opts)
+    content = File.read(path, **file_read_opts)
+    Liquid::Template.parse(content).render(context)
   end
 end
 
