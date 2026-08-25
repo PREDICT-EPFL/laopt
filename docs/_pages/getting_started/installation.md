@@ -33,6 +33,9 @@ make install
 
 The headers will be installed to your system-wide include/ folders. To install to a non-system location, set `CMAKE_INSTALL_PREFIX` during configuration or pass `--prefix` to `cmake --install`.
 
+{: .note }
+See [Compatibility between PIQP and laOPT]({{ site.baseurl }}/getting_started/installation_piqp) when using PIQP.
+
 ## How to use laOPT in CMake
 If laOPT has been installed:
 ```cmake
@@ -64,6 +67,7 @@ target_link_libraries(my_target_using_PIQP PRIVATE
 
 {: .note }
 The `LAOPT_WITH_IPOPT`, `LAOPT_WITH_PIQP`, and other `LAOPT_WITH_*` options only enable dependencies for laOPT's own tests, examples, and benchmarks. They do not configure downstream solver dependencies.
+
 
 ## Build the examples
 
