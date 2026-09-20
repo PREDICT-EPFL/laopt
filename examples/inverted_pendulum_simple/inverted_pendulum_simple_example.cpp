@@ -32,6 +32,7 @@ int main()
     Ocp::State x0 = {M_PI, 0};
     ocp->set_x0(x0);
     Ipopt::ApplicationReturnStatus solve_status = solver.solve();
+    // laopt::sqp_info_t solve_status = solver.solve();
 
     // Obtain solution
     const Eigen::VectorXd T_opt = transcription->get_T_opt();
