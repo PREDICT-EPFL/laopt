@@ -57,10 +57,13 @@ protected:
     variable_t<1> tf_var;
     variable_t<ControlProblem::NP> p_var;
 
-    /* Continuous dynamics */
+    /* Determine user's dynamics implementation (continuous/discrete) */
+    static constexpr bool useDiscreteDynamics = (ControlProblem::Options & laopt_tools::DiscreteDynamics) != 0;
+
+    /* Continuous dynamics + integrator: In case of discrete dynamics, integrator is assigned "NoIntegrator" type.  */
     struct ContinuousDynamics {};
     template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+             typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, ControlProblem::NX>
     function_impl(ContinuousDynamics,
                   const Eigen::MatrixBase<x_t>& x,
@@ -72,14 +75,15 @@ protected:
     {
         return (tf(0) - t0(0)) * controlProblem->dynamics_impl(x, u, p, t0, tf, tau);
     }
+    struct NoIntegrator { template<typename... Args> explicit NoIntegrator(Args&&...) {} };
+    using IntegratorType = std::conditional_t<useDiscreteDynamics, NoIntegrator, Integrator<ContinuousDynamics>>;
+    IntegratorType integrator{*this, h};
 
-    Integrator<ContinuousDynamics> integrator{*this, h};
-
-    /* Discrete dynamics */
-    struct IntegratedDynamics {};
+    /* Discretized dynamics: Either evaluate integrated continuous dynamics, or discrete_dynamics_impl directly */
+    struct DiscretizedDynamics {};
     template<typename xp_t, typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t>
     EIGEN_STRONG_INLINE auto
-    function_impl(IntegratedDynamics,
+    function_impl(DiscretizedDynamics,
                   const Eigen::MatrixBase<xp_t>& xp,
                   const Eigen::MatrixBase<x_t>& x,
                   const Eigen::MatrixBase<u_t>& u,
@@ -88,8 +92,15 @@ protected:
                   const Eigen::MatrixBase<tf_t>& tf,
                   const tau_t& tau)
     {
-        Eigen::Vector<tau_t, 1> tau_; tau_(0) = tau; // Necessary to feed through integrator as MatrixBase pack
-        return integrator(xp, x, u, p, t0, tf, tau_);
+        if constexpr (useDiscreteDynamics)
+        {
+            return (controlProblem->discrete_dynamics_impl(x, u, p, t0, tf, tau) - xp).eval();
+        }
+        else
+        {
+            Eigen::Vector<tau_t, 1> tau_; tau_(0) = tau; // Necessary to feed through integrator as MatrixBase pack
+            return integrator(xp, x, u, p, t0, tf, tau_);
+        }
     }
 
     /* Inequality constraints */
@@ -206,10 +217,19 @@ protected:
         for (unsigned i = 0; i < N; i++)
         {
             Scalar tau = Scalar(i) / N_segs;
-            optProblem.add_obj(h * this->expression(LagrangeCost{}, X_var[i], U_var[i], p_var, get_t0_var(), get_tf_var(), tau));
+            if constexpr (useDiscreteDynamics)
+            {
+                /* Plain sum. discrete_dynamics_impl() carries its own, independent step size. */
+                optProblem.add_obj(this->expression(LagrangeCost{}, X_var[i], U_var[i], p_var, get_t0_var(), get_tf_var(), tau));
+            }
+            else
+            {
+                /* Approximate cost integration through left rectangle rule (left Riemann sum) */
+                optProblem.add_obj(h * this->expression(LagrangeCost{}, X_var[i], U_var[i], p_var, get_t0_var(), get_tf_var(), tau));
+            }
             // We assume 0 = f(x,u) - x+ which ensures that the linearization has positive A and B matrices.
             // This is an assumption for the HPIPM solver.
-            optProblem.add_constr(this->expression(IntegratedDynamics{}, X_var[i + 1], X_var[i], U_var[i], p_var, get_t0_var(), get_tf_var(), tau) == 0);
+            optProblem.add_constr(this->expression(DiscretizedDynamics{}, X_var[i + 1], X_var[i], U_var[i], p_var, get_t0_var(), get_tf_var(), tau) == 0);
         }
 
         /* Last grid point */

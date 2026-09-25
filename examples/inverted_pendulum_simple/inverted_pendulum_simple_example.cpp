@@ -13,8 +13,8 @@ int main()
 
     // Construction
     using Ocp = InvertedPendulumSimpleOcp;
-    // using Transcription = laopt_tools::MultipleShooting<Ocp, 20>;
-    using Transcription = laopt_tools::RadauCollocation<Ocp, 10, 3>;
+    using Transcription = laopt_tools::MultipleShooting<Ocp, 20>;
+    // using Transcription = laopt_tools::RadauCollocation<Ocp, 10, 3>;
     using OptProblem = laopt::Problem<Transcription>;
     using Solver = laopt::IpoptSolver<OptProblem>;
     // using Solver = laopt::SQPSolver<OptProblem, laopt::PIQPSolver<>>;
@@ -33,6 +33,7 @@ int main()
     ocp->set_x0(x0);
     Ipopt::ApplicationReturnStatus solve_status = solver.solve();
     // laopt::sqp_info_t solve_status = solver.solve();
+    (void) solve_status; // Surpress compiler warning
 
     // Obtain solution
     const Eigen::VectorXd T_opt = transcription->get_T_opt();

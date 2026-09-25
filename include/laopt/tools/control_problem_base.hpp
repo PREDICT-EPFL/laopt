@@ -14,7 +14,7 @@ namespace laopt_tools {
  * cScalar:           Numeric scalar type
  * cNX, cNU, cNP:     Length of state, input, optimization parameter
  * cNG cNG0, cNGF:    Number of inequality constraints (elsewhere, initial, final)
- * cOptions:          Problem options (free/fixed end time)
+ * cOptions:          Problem options (free/fixed end time, discrete dynamics)
  * */
 template<typename cScalar,
         int cNX, int cNU, int cNP = 0,
@@ -34,6 +34,9 @@ public:
     static const int NGF = cNGF;
 
     static const int Options = cOptions;
+
+    static_assert((cOptions & (DiscreteDynamics | FreeEndTime)) != (DiscreteDynamics | FreeEndTime),
+                  "ControlProblemBase: DiscreteDynamics is not compatible with FreeEndTime.");
 
     /* Define state and input types */
     template<typename T> using state_t = Eigen::Vector<T, NX>;
@@ -161,9 +164,24 @@ public:
                              const Eigen::MatrixBase<tf_t>& tf,
                              const tau_t& tau)
     {
-        std::cerr << "dynamics_impl() not implemented.\n";
+        // Only ever instantiated if this is actually called and not overridden by user ControlProblem.
+        static_assert(sizeof(x_t) == 0, "dynamics_impl() not implemented.");
         unused(x, u, p, t0, tf, tau);
-        exit(EXIT_FAILURE);
+        return state_t<T>();
+    }
+
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+            typename T = typename x_t::Scalar> // T is scalar type
+    state_t<T> discrete_dynamics_impl(const Eigen::MatrixBase<x_t>& x,
+                                      const Eigen::MatrixBase<u_t>& u,
+                                      const Eigen::MatrixBase<p_t>& p,
+                                      const Eigen::MatrixBase<t0_t>& t0,
+                                      const Eigen::MatrixBase<tf_t>& tf,
+                                      const tau_t& tau)
+    {
+        // Only ever instantiated if this is actually called and not overridden by user ControlProblem.
+        static_assert(sizeof(x_t) == 0, "discrete_dynamics_impl() not implemented, but selected via DiscreteDynamics option.");
+        unused(x, u, p, t0, tf, tau);
         return state_t<T>();
     }
 
@@ -177,12 +195,9 @@ public:
                                                  const Eigen::MatrixBase<tf_t>& tf,
                                                  const tau_t& tau)
     {
+        // Only ever instantiated if this is actually called and not overridden by user ControlProblem.
+        static_assert(NG == 0, "NG > 0 but inequality_constraints_impl() not implemented.");
         unused(x, u, p, t0, tf, tau);
-        if (NG > 0)
-        {
-            std::cerr << "control_problem_base: NG = " << NG << " but inequality_constraints_impl() not implemented.\n";
-            exit(EXIT_FAILURE);
-        }
         return {};
     }
 
@@ -193,12 +208,9 @@ public:
                                                    const Eigen::MatrixBase<p_t>& p,
                                                    const Eigen::MatrixBase<t0_t>& t0)
     {
+        // Only ever instantiated if this is actually called and not overridden by user ControlProblem.
+        static_assert(NG0 == 0, "NG0 > 0 but inequality_constraints0_impl() not implemented.");
         unused(x0, u0, p, t0);
-        if (NG0 > 0)
-        {
-            std::cerr << "control_problem_base: NG0 = " << NG0 << " but inequality_constraints0_impl() not implemented.\n";
-            exit(EXIT_FAILURE);
-        }
         return {};
     }
 
@@ -209,12 +221,9 @@ public:
                                                    const Eigen::MatrixBase<t0_t>& t0,
                                                    const Eigen::MatrixBase<tf_t>& tf)
     {
+        // Only ever instantiated if this is actually called and not overridden by user ControlProblem.
+        static_assert(NGF == 0, "NGF > 0 but inequality_constraintsf_impl() not implemented.");
         unused(xf, p, t0, tf);
-        if (NGF > 0)
-        {
-            std::cerr << "control_problem_base: NGF = " << NGF << " but inequality_constraintsf_impl() not implemented.\n";
-            exit(EXIT_FAILURE);
-        }
         return {};
     }
 };

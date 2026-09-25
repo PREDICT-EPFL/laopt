@@ -33,6 +33,10 @@ class RadauCollocation : public laopt::Differentiable<RadauCollocation<ControlPr
     template<typename, typename, typename, typename>
     friend class laopt::ProblemBase;
 
+    static_assert((ControlProblem::Options & DiscreteDynamics) == 0,
+                  "RadauCollocation requires (continuous) dynamics_impl(). "
+                  "To use discrete_dynamics_impl(), employ a Multiple Shooting method.");
+
 private: // Static functions
     template<unsigned mat_rows, unsigned row_start, unsigned N_rows, unsigned N_cols, typename Vec_t>
     static auto get_slice(Vec_t &vec, unsigned col_index)
