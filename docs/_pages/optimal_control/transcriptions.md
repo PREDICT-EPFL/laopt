@@ -7,7 +7,7 @@ nav_order: 2
 
 # Transcription Methods
 
-laOPT currently provides two direct transcription methods.
+laOPT currently provides two direct transcription methods. Models with discrete-time dynamics (`DiscreteDynamics` option) are supported by multiple shooting only.
 
 ## Multiple Shooting
 
@@ -19,6 +19,12 @@ using Transcription = laopt_tools::MultipleShooting<MyOcp, 40>;
 
 For `Segments = N`, the discrete solution contains `N + 1` states and `N` inputs. States are reconstructed between shooting nodes with linear interpolation. Inputs use a zero-order hold and are constant over each shooting segment.
 
+### Discrete-Time Dynamics
+
+Multiple shooting is the only transcription that supports models with the `DiscreteDynamics` option (see [Defining an Optimal Control Problem]({{ site.baseurl }}/optimal_control/formulating_ocp#discrete-time-dynamics)). In that case, no integrator is used. The continuity constraint of each segment is $$x_{k+1} = f_d(x_k, u_k, p, t_0, t_f, \tau_k)$$ with $$f_d$$ given by the user's `discrete_dynamics_impl`, so the number of `Segments` equals the number of discrete steps.
+
+The Lagrange cost is also treated differently. For continuous dynamics, it is approximated by the left Riemann sum $$\sum_k h\,L_k$$ with segment length $$h$$. For discrete dynamics, it is the plain sum $$\sum_k L_k$$ over the samples, because the step size belongs to the user's discrete model. `DiscreteDynamics` is not compatible with `FreeEndTime`.
+
 ## Radau Collocation
 
 `RadauCollocation<ControlProblem, Segments, Degree>` uses a multi-segment pseudospectral scheme with Legendre-Gauss-Radau points.
@@ -27,7 +33,7 @@ For `Segments = N`, the discrete solution contains `N + 1` states and `N` inputs
 using Transcription = laopt_tools::RadauCollocation<MyOcp, /*S*/ 10, /*D*/ 3>;
 ```
 
-For `Segments = S` and `Degree = D`, the discrete solution contains `S * D + 1` state and input nodes. Adjacent segments share their boundary node. The nodes inside each segment are non-uniformly spaced, and the state and input are represented by degree-`D` Lagrange polynomials through the `D + 1` nodes of that segment.
+For `Segments = S` and `Degree = D`, the discrete solution contains `S * D + 1` state and input nodes. Adjacent segments share their boundary node. Radau collocation requires continuous-time `dynamics_impl` and does not support the `DiscreteDynamics` option. The nodes inside each segment are non-uniformly spaced, and the state and input are represented by degree-`D` Lagrange polynomials through the `D + 1` nodes of that segment.
 
 ## Constructing the Nonlinear Program
 

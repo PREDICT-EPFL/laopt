@@ -37,6 +37,24 @@ $$
 
 Here, $$x(t) \in \mathbb{R}^{N_X}$$ is the state, $$u(t) \in \mathbb{R}^{N_U}$$ is the input, and $$p \in \mathbb{R}^{N_P}$$ contains global optimized parameters. The functions $$f$$, $$L$$, and $$M$$ map to `dynamics_impl`, `lagrange_term_impl`, and `mayer_term_impl`. The constraints $$g$$, $$g_0$$, and $$g_f$$ map to `inequality_constraints_impl`, `inequality_constraints0_impl`, and `inequality_constraintsf_impl`. Setting equal lower and upper bounds fixes an initial state, terminal state, or final time. For a fixed-time problem, $$t_f$$ is a parameter rather than a decision variable.
 
+### Discrete-Time Dynamics
+
+Alternatively, the model can be specified directly in discrete time by adding the `DiscreteDynamics` option. The dynamics are then given as a one-step map $$x_{k+1} = f_d(x_k, u_k, p, t_0, t_f, \tau_k)$$ that the user implements in `discrete_dynamics_impl`, and (continuous) `dynamics_impl` is not used. Over the $$N$$ samples of the horizon, the problem becomes
+
+$$
+\min_{x_k,\,u_k,\,p}\;
+\sum_{k=0}^{N-1} L\bigl(x_k,u_k,p,t_0,t_f,\tau_k\bigr)
+  + M\bigl(x_N,p,t_0,t_f\bigr)
+\quad\text{s.t.}\quad
+x_{k+1} = f_d\bigl(x_k,u_k,p,t_0,t_f,\tau_k\bigr),
+$$
+
+with the remaining bounds and constraints unchanged. Three things differ from the continuous-time formulation:
+
+- **Multiple shooting only.** `DiscreteDynamics` is supported by `MultipleShooting`. (`RadauCollocation` requires a continuous `dynamics_impl`).
+- **Sample-wise Lagrange cost.** The Lagrange term is *not* integrated. `lagrange_term_impl` is evaluated at each sample $$k = 0,\dots,N-1$$ and the values are summed without any step-size weighting. In the continuous case, the same sum is weighted by the segment length $$h$$ (left Riemann sum). If the cost should reflect a physical time step, include it in `lagrange_term_impl`.
+- **No free end time.** The step size of the discrete model is chosen by the user inside `discrete_dynamics_impl`, so $$t_f$$ cannot be a decision variable. `DiscreteDynamics` cannot be combined with `FreeEndTime`.
+
 ## `ControlProblemBase` API
 
 ### Template Parameters
@@ -62,7 +80,7 @@ class ControlProblemBase;
 | `NG`      | Number of path constraints.                                                |
 | `NG0`     | Number of initial constraints.                                             |
 | `NGF`     | Number of terminal constraints.                                            |
-| `Options` | `FixedEndTime` or `FreeEndTime`.                                           |
+| `Options` | `FixedEndTime` or `FreeEndTime`; optionally combined with `DiscreteDynamics` (e.g., `FixedEndTime \| DiscreteDynamics`). `DiscreteDynamics` cannot be combined with `FreeEndTime`. |
 
 The base class provides fixed-size aliases including `State`, `Input`, `Param`, `IneqBound`, `Ineq0Bound`, and `IneqfBound`. Their scalar-generic counterparts are `state_t<T>`, `input_t<T>`, `param_t<T>`, `ineq_constr_t<T>`, `ineq_constr0_t<T>`, and `ineq_constrf_t<T>`.
 
@@ -71,7 +89,7 @@ The base class provides fixed-size aliases including `State`, `Input`, `Param`, 
 Implement callbacks as public member functions of the derived model. The signatures below are the complete interface expected by the transcription methods:
 
 ```cpp
-// Continuous-time dynamics f(x, u, p, t0, tf, tau).
+// Continuous-time dynamics x_dot = f(x, u, p, t0, tf, tau).
 template <typename X, typename U, typename P, typename T0, typename TF, typename Tau,
           typename Scalar = typename X::Scalar>
 state_t<Scalar> dynamics_impl(const Eigen::MatrixBase<X>& x, 
@@ -80,6 +98,16 @@ state_t<Scalar> dynamics_impl(const Eigen::MatrixBase<X>& x,
                               const Eigen::MatrixBase<T0>& t0, 
                               const Eigen::MatrixBase<TF>& tf, 
                               const Tau& tau);
+
+// Discrete-time dynamics x+ = fd(x, u, p, t0, tf, tau). Required instead of dynamics_impl when the DiscreteDynamics option is set.
+template <typename X, typename U, typename P, typename T0, typename TF, typename Tau,
+          typename Scalar = typename X::Scalar>
+state_t<Scalar> discrete_dynamics_impl(const Eigen::MatrixBase<X>& x, 
+                                       const Eigen::MatrixBase<U>& u,
+                                       const Eigen::MatrixBase<P>& p,
+                                       const Eigen::MatrixBase<T0>& t0, 
+                                       const Eigen::MatrixBase<TF>& tf, 
+                                       const Tau& tau);
 
 // Running cost L(x, u, p, t0, tf, tau).
 template <typename X, typename U, typename P, typename T0, typename TF, typename Tau,
@@ -99,7 +127,7 @@ Scalar mayer_term_impl(const Eigen::MatrixBase<XF>& xf,
                        const Eigen::MatrixBase<T0>& t0, 
                        const Eigen::MatrixBase<TF>& tf);
 
-// Path constraints g(x, u, p, t0, tf, tau).
+// Path constraints g(x, u, p, t0, tf, tau) <= 0.
 template <typename X, typename U, typename P, typename T0, typename TF, typename Tau,
           typename Scalar = typename X::Scalar>
 ineq_constr_t<Scalar> inequality_constraints_impl(const Eigen::MatrixBase<X>& x, 
@@ -109,7 +137,7 @@ ineq_constr_t<Scalar> inequality_constraints_impl(const Eigen::MatrixBase<X>& x,
                                                   const Eigen::MatrixBase<TF>& tf,
                                                   const Tau& tau);
 
-// Initial constraints g0(x0, u0, p, t0).
+// Initial constraints g0(x0, u0, p, t0) <= 0.
 template <typename X, typename U, typename P, typename T0,    
           typename Scalar = typename X::Scalar>
 ineq_constr0_t<Scalar> inequality_constraints0_impl(const Eigen::MatrixBase<X>& x0,
@@ -117,7 +145,7 @@ ineq_constr0_t<Scalar> inequality_constraints0_impl(const Eigen::MatrixBase<X>& 
                                                     const Eigen::MatrixBase<P>& p,
                                                     const Eigen::MatrixBase<T0>& t0);
 
-// Terminal constraints gf(xf, p, t0, tf).
+// Terminal constraints gf(xf, p, t0, tf) <= 0.
 template <typename XF, typename P, typename T0, typename TF,
           typename Scalar = typename XF::Scalar>
 ineq_constrf_t<Scalar> inequality_constraintsf_impl(const Eigen::MatrixBase<XF>& xf,
@@ -126,7 +154,7 @@ ineq_constrf_t<Scalar> inequality_constraintsf_impl(const Eigen::MatrixBase<XF>&
                                                     const Eigen::MatrixBase<TF>& tf);
 ```
 
-`dynamics_impl` is required. The running and terminal costs default to zero. A constraint callback is required when its corresponding dimension `NG`, `NG0`, or `NGF` is nonzero. Use the inherited `unused(...)` helper for callback arguments that a model does not need.
+`dynamics_impl` is required for continuous-time problems; `discrete_dynamics_impl` is required instead when the `DiscreteDynamics` option is set. The unused one never has to be implemented. In discrete-time problems, `lagrange_term_impl` is interpreted as a per-sample cost (see [above](#discrete-time-dynamics)). The running and terminal costs default to zero. A constraint callback is required when its corresponding dimension `NG`, `NG0`, or `NGF` is nonzero. Use the inherited `unused(...)` helper to mute compiler warning on unused function arguments.
 
 ### Bounds and Configuration
 
@@ -182,6 +210,35 @@ public:
         x_dot << x(1), u(0);
         
         return x_dot;
+    }
+};
+```
+
+A discrete-time model selects the `DiscreteDynamics` option and implements `discrete_dynamics_impl` instead of `dynamics_impl`. Here, an explicit Euler step with a user-chosen step size is used:
+
+```cpp
+class DiscreteDoubleIntegrator : public laopt_tools::ControlProblemBase<
+                                  /*scalar*/double, /*NX*/2, /*NU*/1, /*NP*/0, /*NG*/0, /*NG0*/0, /*NGF*/0,
+                                  /*Options*/ laopt_tools::FixedEndTime | laopt_tools::DiscreteDynamics>
+{
+public:
+    const double h = 0.1; // Step size of the discrete model, chosen by the user
+
+    template <typename X, typename U, typename P, typename T0, typename TF, typename Tau,
+              typename Scalar = typename X::Scalar>
+    state_t<Scalar> discrete_dynamics_impl(const Eigen::MatrixBase<X>& x,
+                                           const Eigen::MatrixBase<U>& u,
+                                           const Eigen::MatrixBase<P>& p,
+                                           const Eigen::MatrixBase<T0>& t0,
+                                           const Eigen::MatrixBase<TF>& tf,
+                                           const Tau& tau)
+    {
+        unused(p, t0, tf, tau);
+
+        state_t<Scalar> x_next;
+        x_next << x(0) + h * x(1), x(1) + h * u(0);
+
+        return x_next;
     }
 };
 ```
