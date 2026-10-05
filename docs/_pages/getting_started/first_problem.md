@@ -40,36 +40,36 @@ class InvertedPendulum : public laopt_tools::ControlProblemBase<double, 2, 1>
 {
 public:
     // Running cost: keep the angle near zero while limiting torque.
-    template <typename X, typename U, typename P, 
-              typename T0, typename TF, typename Tau, 
-              typename Scalar = typename X::Scalar>
-    Scalar lagrange_term_impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u,
-                              const Eigen::MatrixBase<P>& p,
-                              const Eigen::MatrixBase<T0>& t0, const Eigen::MatrixBase<TF>& tf,
-                              const Tau& tau)
+    template <typename x_t, typename u_t, typename p_t, 
+              typename t0_t, typename tf_t, typename tau_t, 
+              typename T = typename x_t::Scalar>
+    T lagrange_term_impl(const Eigen::MatrixBase<x_t>& x, const Eigen::MatrixBase<u_t>& u,
+                         const Eigen::MatrixBase<p_t>& p,
+                         const Eigen::MatrixBase<t0_t>& t0, const Eigen::MatrixBase<tf_t>& tf,
+                         const tau_t& tau)
     {
         unused(p, t0, tf, tau); // Just to surpress annoying compiler warnings
         return 10.0 * x(0) * x(0) + u(0) * u(0);
     }
 
     // Terminal cost: strongly penalize the final angle error.
-    template <typename XF, typename P, typename T0, typename TF, 
-              typename Scalar = typename XF::Scalar>
-    Scalar mayer_term_impl(const Eigen::MatrixBase<XF>& xf, const Eigen::MatrixBase<P>& p,
-                           const Eigen::MatrixBase<T0>& t0, const Eigen::MatrixBase<TF>& tf)
+    template <typename x_tf, typename p_t, typename t0_t, typename tf_t, 
+              typename T = typename x_tf::Scalar>
+    T mayer_term_impl(const Eigen::MatrixBase<x_tf>& xf, const Eigen::MatrixBase<p_t>& p,
+                      const Eigen::MatrixBase<t0_t>& t0, const Eigen::MatrixBase<tf_t>& tf)
     {
         unused(p, t0, tf); // Just to surpress annoying compiler warnings
         return 100.0 * xf(0) * xf(0);
     }
 
     // Nonlinear pendulum dynamics.
-    template <typename X, typename U, typename P, 
-              typename T0, typename TF, typename Tau, 
-              typename Scalar = typename X::Scalar>
-    state_t<Scalar> dynamics_impl(const Eigen::MatrixBase<X>& x, const Eigen::MatrixBase<U>& u, 
-                                  const Eigen::MatrixBase<P>& p,
-                                  const Eigen::MatrixBase<T0>& t0, const Eigen::MatrixBase<TF>& tf,
-                                  const Tau& tau)
+    template <typename x_t, typename u_t, typename p_t, 
+              typename t0_t, typename tf_t, typename tau_t, 
+              typename T = typename x_t::Scalar>
+    state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x, const Eigen::MatrixBase<u_t>& u, 
+                             const Eigen::MatrixBase<p_t>& p,
+                             const Eigen::MatrixBase<t0_t>& t0, const Eigen::MatrixBase<tf_t>& tf,
+                             const tau_t& tau)
     {
         unused(p, t0, tf, tau); // Just to surpress annoying compiler warnings
 
@@ -78,11 +78,11 @@ public:
         const double m = 0.15;
         const double b = 0.1;
 
-        const Scalar theta = x(0);
-        const Scalar omega = x(1);
-        const Scalar torque = u(0);
+        const T theta = x(0);
+        const T omega = x(1);
+        const T torque = u(0);
 
-        state_t<Scalar> x_dot;
+        state_t<T> x_dot;
         x_dot << omega,
                  (m * g * l * sin(theta) - b * omega + torque) / (m * l * l);
         return x_dot;

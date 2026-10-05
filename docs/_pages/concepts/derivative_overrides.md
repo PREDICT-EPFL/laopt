@@ -111,8 +111,8 @@ struct DynamicsModel : public laopt::Differentiable<DynamicsModel, laopt::TAGGED
 
     struct Dynamics {};
 
-    template <typename X, typename U, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
-    Eigen::Vector<Scalar, NX> function_impl(
+    template <typename X, typename U, typename T = typename Eigen::MatrixBase<X>::Scalar>
+    Eigen::Vector<T, NX> function_impl(
         Dynamics,
         const Eigen::MatrixBase<X>& x,
         const Eigen::MatrixBase<U>& u) noexcept
@@ -150,8 +150,8 @@ struct CostModel : public laopt::Differentiable<CostModel, laopt::TAGGED>
 
     struct Cost {};
 
-    template <typename X, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
-    Scalar function_impl(Cost, const Eigen::MatrixBase<X>& x) noexcept
+    template <typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
+    T function_impl(Cost, const Eigen::MatrixBase<X>& x) noexcept
     {
         return 0.5 * x.dot(Q * x) + q.dot(x);
     }
@@ -211,14 +211,14 @@ struct MixedBackendModel
         using UseCasadi = std::true_type;
     };
 
-    template <typename X, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
-    Scalar function_impl(Cost, const Eigen::MatrixBase<X>& value) noexcept
+    template <typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
+    T function_impl(Cost, const Eigen::MatrixBase<X>& value) noexcept
     {
         return value.squaredNorm();
     }
 
-    template <typename X, typename Scalar = typename Eigen::MatrixBase<X>::Scalar>
-    Scalar function_impl(
+    template <typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
+    T function_impl(
         Constraint,
         const Eigen::MatrixBase<X>& value) noexcept
     {
