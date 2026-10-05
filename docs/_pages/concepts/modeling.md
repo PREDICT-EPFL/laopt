@@ -30,7 +30,7 @@ struct Model : public laopt::Differentiable<Model, laopt::TAGGED>
 {
     struct Cost {};
 
-    template <typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
+    template<typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
     T function_impl(Cost, const Eigen::MatrixBase<X>& x) noexcept
     {
         return x.squaredNorm();
@@ -98,20 +98,20 @@ struct DirectNlp : laopt::Differentiable<DirectNlp, laopt::TAGGED>
 
     laopt::Variable<double, 2> x;
 
-    template <typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
+    template<typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
     T function_impl(Cost, const Eigen::MatrixBase<X>& value) noexcept
     {
         return (value(0) - 1.0) * (value(0) - 1.0)
              + (value(1) - 2.0) * (value(1) - 2.0);
     }
 
-    template <typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
+    template<typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
     T function_impl(Equality, const Eigen::MatrixBase<X>& value) noexcept
     {
         return value(0) + value(1) - 1.0;
     }
 
-    template <typename Problem>
+    template<typename Problem>
     void define_problem(laopt::OptProblem<Problem>& problem)
     {
         problem.add_variable(x);

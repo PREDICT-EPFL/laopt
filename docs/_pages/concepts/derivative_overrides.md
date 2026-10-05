@@ -45,10 +45,10 @@ struct Model : public laopt::Differentiable<Model, laopt::TAGGED>
     struct Dynamics {};
 
     // The first argument selects the corresponding member callback.
-    template <typename X>
+    template<typename X>
     auto function_impl(Cost, const Eigen::MatrixBase<X>& x) noexcept;
 
-    template <typename X, typename U>
+    template<typename X, typename U>
     auto function_impl(Dynamics,
                        const Eigen::MatrixBase<X>& x,
                        const Eigen::MatrixBase<U>& u) noexcept;
@@ -111,7 +111,7 @@ struct DynamicsModel : public laopt::Differentiable<DynamicsModel, laopt::TAGGED
 
     struct Dynamics {};
 
-    template <typename X, typename U, typename T = typename Eigen::MatrixBase<X>::Scalar>
+    template<typename X, typename U, typename T = typename Eigen::MatrixBase<X>::Scalar>
     Eigen::Vector<T, NX> function_impl(
         Dynamics,
         const Eigen::MatrixBase<X>& x,
@@ -120,7 +120,7 @@ struct DynamicsModel : public laopt::Differentiable<DynamicsModel, laopt::TAGGED
         return A * x + B * u;
     }
 
-    template <typename OutJacobian, typename Alpha, typename X, typename U>
+    template<typename OutJacobian, typename Alpha, typename X, typename U>
     void jacobian_impl(
         Dynamics,
         OutJacobian& jacobian,
@@ -150,13 +150,13 @@ struct CostModel : public laopt::Differentiable<CostModel, laopt::TAGGED>
 
     struct Cost {};
 
-    template <typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
+    template<typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
     T function_impl(Cost, const Eigen::MatrixBase<X>& x) noexcept
     {
         return 0.5 * x.dot(Q * x) + q.dot(x);
     }
 
-    template <typename Weight, typename OutGradient, typename X>
+    template<typename Weight, typename OutGradient, typename X>
     void gradient_impl(
         Cost,
         OutGradient& gradient,
@@ -166,7 +166,7 @@ struct CostModel : public laopt::Differentiable<CostModel, laopt::TAGGED>
         gradient += weight(0) * (Q * x + q);
     }
 
-    template <typename Weight, typename OutHessian, typename X>
+    template<typename Weight, typename OutHessian, typename X>
     void hessian_impl(
         Cost,
         OutHessian& hessian,
@@ -211,13 +211,13 @@ struct MixedBackendModel
         using UseCasadi = std::true_type;
     };
 
-    template <typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
+    template<typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
     T function_impl(Cost, const Eigen::MatrixBase<X>& value) noexcept
     {
         return value.squaredNorm();
     }
 
-    template <typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
+    template<typename X, typename T = typename Eigen::MatrixBase<X>::Scalar>
     T function_impl(
         Constraint,
         const Eigen::MatrixBase<X>& value) noexcept
@@ -225,7 +225,7 @@ struct MixedBackendModel
         return value(0) * value(1) - 1.0;
     }
 
-    template <typename Problem>
+    template<typename Problem>
     void define_problem(laopt::OptProblem<Problem>& problem)
     {
         problem.add_variable(x);

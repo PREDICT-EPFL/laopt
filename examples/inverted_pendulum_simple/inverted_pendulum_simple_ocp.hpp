@@ -14,8 +14,8 @@ public:
 	Numeric angle_ref_{0};
 	Eigen::Matrix<Numeric, NU, NU> R_{{1}};
 
-	template <typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t,
-	          typename tau_t, typename T = typename x_t::Scalar> // T is scalar type
+	template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t,
+	         typename tau_t, typename T = typename x_t::Scalar> // T is scalar type
 	T lagrange_term_impl(const Eigen::MatrixBase<x_t>& x,
 	                     const Eigen::MatrixBase<u_t>& u,
 	                     const Eigen::MatrixBase<p_t>& p,
@@ -26,8 +26,8 @@ public:
 		return get_L_x<T>(x) + get_L_u<T>(u);
 	}
 
-	template <typename xf_t, typename p_t, typename t0_t, typename tf_t,
-	          typename T = typename xf_t::Scalar> // T is scalar type
+	template<typename xf_t, typename p_t, typename t0_t, typename tf_t,
+	         typename T = typename xf_t::Scalar> // T is scalar type
 	T mayer_term_impl(const Eigen::MatrixBase<xf_t>& xf,
 	                  const Eigen::MatrixBase<p_t>& p,
 	                  const Eigen::MatrixBase<t0_t>& t0,
@@ -36,8 +36,8 @@ public:
 		return 10 * get_L_x<T>(xf);
 	}
 
-	template <typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-	          typename T = typename x_t::Scalar> // T is scalar type
+	template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+	         typename T = typename x_t::Scalar> // T is scalar type
 	state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x,
 							 const Eigen::MatrixBase<u_t>& u,
 							 const Eigen::MatrixBase<p_t>& p,
@@ -60,8 +60,8 @@ public:
 	}
 
 	// const double h_discr = 0.1;
-	// template <typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-	// 	      typename T = typename x_t::Scalar> // T is scalar type
+	// template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+	//          typename T = typename x_t::Scalar> // T is scalar type
 	// state_t<T> discrete_dynamics_impl(const Eigen::MatrixBase<x_t>& x,
 	// 								  const Eigen::MatrixBase<u_t>& u,
 	// 								  const Eigen::MatrixBase<p_t>& p,
@@ -88,14 +88,14 @@ public:
 	// }
 
 	// ---- Helpers ----
-	template <typename T>
+	template<typename T>
 	T get_L_x(const Eigen::Ref<const state_t<T>>& x)
 	{
 		T angle_err = angle_ref_ - x(0);
 		return 10 * angle_err * angle_err;
 	}
 
-	template <typename T>
+	template<typename T>
 	T get_L_u(const Eigen::Ref<const input_t<T>>& u)
 	{
 		return u.dot(R_ * u);

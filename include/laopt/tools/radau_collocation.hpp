@@ -330,7 +330,7 @@ protected:
         }
     }
 
-    template <typename Weight, typename OutGradient, typename X_t>
+    template<typename Weight, typename OutGradient, typename X_t>
     EIGEN_STRONG_INLINE void
     gradient_impl(DifferentialApproximation, OutGradient& out_gradient, const Eigen::MatrixBase<Weight>& weight,
                   const Eigen::MatrixBase<X_t> &X_vec, unsigned j_node)

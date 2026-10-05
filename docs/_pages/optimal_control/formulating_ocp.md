@@ -62,10 +62,10 @@ with the remaining bounds and constraints unchanged. Three things differ from th
 ```cpp
 namespace laopt_tools {
 
-template <typename Numeric, 
-          int NX, int NU, int NP = 0,
-          int NG = 0, int NG0 = 0, int NGF = 0, 
-          int Options = laopt_tools::FixedEndTime>
+template<typename Numeric, 
+         int NX, int NU, int NP = 0,
+         int NG = 0, int NG0 = 0, int NGF = 0, 
+         int Options = laopt_tools::FixedEndTime>
 class ControlProblemBase;
 
 } // namespace laopt_tools
@@ -93,8 +93,8 @@ Implement callbacks as public member functions of the derived model. The signatu
 
 ```cpp
 // Continuous-time dynamics x_dot = f(x, u, p, t0, tf, tau).
-template <typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-          typename T = typename x_t::Scalar>
+template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+         typename T = typename x_t::Scalar>
 state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x, 
                          const Eigen::MatrixBase<u_t>& u,
                          const Eigen::MatrixBase<p_t>& p,
@@ -103,8 +103,8 @@ state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x,
                          const tau_t& tau);
 
 // Discrete-time dynamics x+ = fd(x, u, p, t0, tf, tau). Required instead of dynamics_impl when the DiscreteDynamics option is set.
-template <typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-          typename T = typename x_t::Scalar>
+template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+         typename T = typename x_t::Scalar>
 state_t<T> discrete_dynamics_impl(const Eigen::MatrixBase<x_t>& x, 
                                   const Eigen::MatrixBase<u_t>& u,
                                   const Eigen::MatrixBase<p_t>& p,
@@ -113,8 +113,8 @@ state_t<T> discrete_dynamics_impl(const Eigen::MatrixBase<x_t>& x,
                                   const tau_t& tau);
 
 // Running cost L(x, u, p, t0, tf, tau).
-template <typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-          typename T = typename x_t::Scalar>
+template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+         typename T = typename x_t::Scalar>
 T lagrange_term_impl(const Eigen::MatrixBase<x_t>& x, 
                      const Eigen::MatrixBase<u_t>& u, 
                      const Eigen::MatrixBase<p_t>& p,
@@ -123,16 +123,16 @@ T lagrange_term_impl(const Eigen::MatrixBase<x_t>& x,
                      const tau_t& tau);
 
 // Terminal cost M(xf, p, t0, tf).
-template <typename x_tf, typename p_t, typename t0_t, typename tf_t,
-          typename T = typename x_tf::Scalar>
+template<typename x_tf, typename p_t, typename t0_t, typename tf_t,
+         typename T = typename x_tf::Scalar>
 T mayer_term_impl(const Eigen::MatrixBase<x_tf>& xf, 
                   const Eigen::MatrixBase<p_t>& p,
                   const Eigen::MatrixBase<t0_t>& t0, 
                   const Eigen::MatrixBase<tf_t>& tf);
 
 // Path constraints g(x, u, p, t0, tf, tau) <= 0.
-template <typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-          typename T = typename x_t::Scalar>
+template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+         typename T = typename x_t::Scalar>
 ineq_constr_t<T> inequality_constraints_impl(const Eigen::MatrixBase<x_t>& x, 
                                              const Eigen::MatrixBase<u_t>& u,
                                              const Eigen::MatrixBase<p_t>& p,
@@ -141,16 +141,16 @@ ineq_constr_t<T> inequality_constraints_impl(const Eigen::MatrixBase<x_t>& x,
                                              const tau_t& tau);
 
 // Initial constraints g0(x0, u0, p, t0) <= 0.
-template <typename x_t, typename u_t, typename p_t, typename t0_t,    
-          typename T = typename x_t::Scalar>
+template<typename x_t, typename u_t, typename p_t, typename t0_t,    
+         typename T = typename x_t::Scalar>
 ineq_constr0_t<T> inequality_constraints0_impl(const Eigen::MatrixBase<x_t>& x0,
                                                const Eigen::MatrixBase<u_t>& u0,
                                                const Eigen::MatrixBase<p_t>& p,
                                                const Eigen::MatrixBase<t0_t>& t0);
 
 // Terminal constraints gf(xf, p, t0, tf) <= 0.
-template <typename x_tf, typename p_t, typename t0_t, typename tf_t,
-          typename T = typename x_tf::Scalar>
+template<typename x_tf, typename p_t, typename t0_t, typename tf_t,
+         typename T = typename x_tf::Scalar>
 ineq_constrf_t<T> inequality_constraintsf_impl(const Eigen::MatrixBase<x_tf>& xf,
                                                const Eigen::MatrixBase<p_t>& p,
                                                const Eigen::MatrixBase<t0_t>& t0,
@@ -182,7 +182,7 @@ void set_x0(const State& x0);
 void set_xf(const State& xf);
 void set_tf(const Numeric& tf);
 
-template <typename... Ts>
+template<typename... Ts>
 constexpr void unused(Ts&&...) noexcept;
 
 void print_problem_dimension() const;
@@ -198,8 +198,8 @@ class DoubleIntegrator : public laopt_tools::ControlProblemBase<
                                   /*scalar*/double, /*NX*/2, /*NU*/1, /*NP*/0, /*NG*/0>
 {
 public:
-    template <typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-              typename T = typename x_t::Scalar>
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+             typename T = typename x_t::Scalar>
     state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x,
                              const Eigen::MatrixBase<u_t>& u,
                              const Eigen::MatrixBase<p_t>& p,
@@ -227,8 +227,8 @@ class DiscreteDoubleIntegrator : public laopt_tools::ControlProblemBase<
 public:
     const double h = 0.1; // Step size of the discrete model, chosen by the user
 
-    template <typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-              typename T = typename x_t::Scalar>
+    template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
+             typename T = typename x_t::Scalar>
     state_t<T> discrete_dynamics_impl(const Eigen::MatrixBase<x_t>& x,
                                       const Eigen::MatrixBase<u_t>& u,
                                       const Eigen::MatrixBase<p_t>& p,

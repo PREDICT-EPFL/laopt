@@ -40,9 +40,9 @@ class InvertedPendulum : public laopt_tools::ControlProblemBase<double, 2, 1>
 {
 public:
     // Running cost: keep the angle near zero while limiting torque.
-    template <typename x_t, typename u_t, typename p_t, 
-              typename t0_t, typename tf_t, typename tau_t, 
-              typename T = typename x_t::Scalar>
+    template<typename x_t, typename u_t, typename p_t, 
+             typename t0_t, typename tf_t, typename tau_t, 
+             typename T = typename x_t::Scalar>
     T lagrange_term_impl(const Eigen::MatrixBase<x_t>& x, const Eigen::MatrixBase<u_t>& u,
                          const Eigen::MatrixBase<p_t>& p,
                          const Eigen::MatrixBase<t0_t>& t0, const Eigen::MatrixBase<tf_t>& tf,
@@ -53,8 +53,8 @@ public:
     }
 
     // Terminal cost: strongly penalize the final angle error.
-    template <typename x_tf, typename p_t, typename t0_t, typename tf_t, 
-              typename T = typename x_tf::Scalar>
+    template<typename x_tf, typename p_t, typename t0_t, typename tf_t, 
+             typename T = typename x_tf::Scalar>
     T mayer_term_impl(const Eigen::MatrixBase<x_tf>& xf, const Eigen::MatrixBase<p_t>& p,
                       const Eigen::MatrixBase<t0_t>& t0, const Eigen::MatrixBase<tf_t>& tf)
     {
@@ -63,9 +63,9 @@ public:
     }
 
     // Nonlinear pendulum dynamics.
-    template <typename x_t, typename u_t, typename p_t, 
-              typename t0_t, typename tf_t, typename tau_t, 
-              typename T = typename x_t::Scalar>
+    template<typename x_t, typename u_t, typename p_t, 
+             typename t0_t, typename tf_t, typename tau_t, 
+             typename T = typename x_t::Scalar>
     state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x, const Eigen::MatrixBase<u_t>& u, 
                              const Eigen::MatrixBase<p_t>& p,
                              const Eigen::MatrixBase<t0_t>& t0, const Eigen::MatrixBase<tf_t>& tf,

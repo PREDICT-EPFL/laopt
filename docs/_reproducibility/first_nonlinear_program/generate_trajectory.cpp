@@ -10,13 +10,12 @@
 #include <laopt/tools/control_problem_base.hpp>
 #include <laopt/tools/multiple_shooting.hpp>
 
-class InvertedPendulum
-    : public laopt_tools::ControlProblemBase<double, 2, 1>
+class InvertedPendulum : public laopt_tools::ControlProblemBase<double, 2, 1>
 {
 public:
-    template <typename X, typename U, typename P, typename T0,
-              typename TF, typename Tau,
-              typename Scalar = typename X::Scalar>
+    template<typename X, typename U, typename P, typename T0,
+             typename TF, typename Tau,
+             typename Scalar = typename X::Scalar>
     Scalar lagrange_term_impl(
         const Eigen::MatrixBase<X>& x,
         const Eigen::MatrixBase<U>& u,
@@ -29,8 +28,8 @@ public:
         return 10.0 * x(0) * x(0) + u(0) * u(0);
     }
 
-    template <typename XF, typename P, typename T0, typename TF,
-              typename Scalar = typename XF::Scalar>
+    template<typename XF, typename P, typename T0, typename TF,
+             typename Scalar = typename XF::Scalar>
     Scalar mayer_term_impl(
         const Eigen::MatrixBase<XF>& xf,
         const Eigen::MatrixBase<P>& p,
@@ -41,9 +40,9 @@ public:
         return 100.0 * xf(0) * xf(0);
     }
 
-    template <typename X, typename U, typename P, typename T0,
-              typename TF, typename Tau,
-              typename Scalar = typename X::Scalar>
+    template<typename X, typename U, typename P, typename T0,
+             typename TF, typename Tau,
+             typename Scalar = typename X::Scalar>
     state_t<Scalar> dynamics_impl(
         const Eigen::MatrixBase<X>& x,
         const Eigen::MatrixBase<U>& u,

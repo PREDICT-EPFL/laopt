@@ -130,7 +130,7 @@ public:
      * Templates for problem formulation
      */
     /* Convenience function to silence unused parameter compiler warnings */
-    template <typename... Ts>
+    template<typename... Ts>
     constexpr void unused(Ts&&...) noexcept {}
 
     template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
