@@ -284,7 +284,7 @@ protected:
     /* Dynamic constraints */
     struct ContinuousDynamics {};
     template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-            typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
+             typename scalar_t = typename Eigen::MatrixBase<x_t>::Scalar>
     EIGEN_STRONG_INLINE Eigen::Vector<scalar_t, NX>
     function_impl(ContinuousDynamics,
                   const Eigen::MatrixBase<x_t> &x,

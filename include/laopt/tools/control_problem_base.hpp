@@ -17,9 +17,9 @@ namespace laopt_tools {
  * cOptions:          Problem options (free/fixed end time, discrete dynamics)
  * */
 template<typename cNumeric,
-        int cNX, int cNU, int cNP = 0,
-        int cNG = 0, int cNG0 = 0, int cNGF = 0,
-        int cOptions = FixedEndTime>
+         int cNX, int cNU, int cNP = 0,
+         int cNG = 0, int cNG0 = 0, int cNGF = 0,
+         int cOptions = FixedEndTime>
 class ControlProblemBase
 {
 public:
@@ -134,7 +134,7 @@ public:
     constexpr void unused(Ts&&...) noexcept {}
 
     template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-            typename T = typename x_t::Scalar> // T is scalar type
+             typename T = typename x_t::Scalar> // T is scalar type
     T lagrange_term_impl(const Eigen::MatrixBase<x_t>& x,
                          const Eigen::MatrixBase<u_t>& u,
                          const Eigen::MatrixBase<p_t>& p,
@@ -147,7 +147,7 @@ public:
     }
 
     template<typename x_tf, typename p_t, typename t0_t, typename tf_t,
-            typename T = typename x_tf::Scalar> // T is scalar type
+             typename T = typename x_tf::Scalar> // T is scalar type
     T mayer_term_impl(const Eigen::MatrixBase<x_tf>& xf,
                       const Eigen::MatrixBase<p_t>& p,
                       const Eigen::MatrixBase<t0_t>& t0,
@@ -158,7 +158,7 @@ public:
     }
 
     template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-            typename T = typename x_t::Scalar> // T is scalar type
+             typename T = typename x_t::Scalar> // T is scalar type
     state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x,
                              const Eigen::MatrixBase<u_t>& u,
                              const Eigen::MatrixBase<p_t>& p,
@@ -173,7 +173,7 @@ public:
     }
 
     template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-            typename T = typename x_t::Scalar> // T is scalar type
+             typename T = typename x_t::Scalar> // T is scalar type
     state_t<T> discrete_dynamics_impl(const Eigen::MatrixBase<x_t>& x,
                                       const Eigen::MatrixBase<u_t>& u,
                                       const Eigen::MatrixBase<p_t>& p,
@@ -189,7 +189,7 @@ public:
 
     /* Inequality constraints */
     template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-            typename T = typename x_t::Scalar> // T is scalar type
+             typename T = typename x_t::Scalar> // T is scalar type
     ineq_constr_t<T> inequality_constraints_impl(const Eigen::MatrixBase<x_t>& x,
                                                  const Eigen::MatrixBase<u_t>& u,
                                                  const Eigen::MatrixBase<p_t>& p,
@@ -204,7 +204,7 @@ public:
     }
 
     template<typename x_t, typename u_t, typename p_t, typename t0_t,
-            typename T = typename x_t::Scalar> // T is scalar type
+             typename T = typename x_t::Scalar> // T is scalar type
     ineq_constr0_t<T> inequality_constraints0_impl(const Eigen::MatrixBase<x_t>& x0,
                                                    const Eigen::MatrixBase<u_t>& u0,
                                                    const Eigen::MatrixBase<p_t>& p,
@@ -217,7 +217,7 @@ public:
     }
 
     template<typename x_tf, typename p_t, typename t0_t, typename tf_t,
-            typename T = typename x_tf::Scalar> // T is scalar type
+             typename T = typename x_tf::Scalar> // T is scalar type
     ineq_constrf_t<T> inequality_constraintsf_impl(const Eigen::MatrixBase<x_tf>& xf,
                                                    const Eigen::MatrixBase<p_t>& p,
                                                    const Eigen::MatrixBase<t0_t>& t0,

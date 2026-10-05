@@ -24,7 +24,7 @@ public:
 
     /* Override function implementations from base class ------------------------------ */
     template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-            typename T = typename x_t::Scalar> // T is scalar type
+             typename T = typename x_t::Scalar> // T is scalar type
     T lagrange_term_impl(const Eigen::MatrixBase<x_t>& x,
                          const Eigen::MatrixBase<u_t>& u,
                          const Eigen::MatrixBase<p_t>& p,
@@ -36,7 +36,7 @@ public:
     }
 
     template<typename xf_t, typename p_t, typename t0_t, typename tf_t,
-            typename T = typename xf_t::Scalar> // T is scalar type
+             typename T = typename xf_t::Scalar> // T is scalar type
     T mayer_term_impl(const Eigen::MatrixBase<xf_t>& xf,
                       const Eigen::MatrixBase<p_t>& p,
                       const Eigen::MatrixBase<t0_t>& t0,
@@ -46,7 +46,7 @@ public:
     }
 
     template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,
-            typename T = typename x_t::Scalar> // T is scalar type
+             typename T = typename x_t::Scalar> // T is scalar type
     state_t<T> dynamics_impl(const Eigen::MatrixBase<x_t>& x,
                              const Eigen::MatrixBase<u_t>& u,
                              const Eigen::MatrixBase<p_t>& p,
