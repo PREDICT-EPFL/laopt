@@ -91,8 +91,8 @@ Each column of `X` corresponds to the same column of `T`. Radau input columns al
 Both methods expose point-sampling functions in physical time:
 
 ```cpp
-Eigen::Vector<Scalar, ControlProblem::NX> get_x_at(const Scalar& t) const;
-Eigen::Vector<Scalar, ControlProblem::NU> get_u_at(const Scalar& t) const;
+Eigen::Vector<Numeric, ControlProblem::NX> get_x_at(const Numeric& t) const;
+Eigen::Vector<Numeric, ControlProblem::NU> get_u_at(const Numeric& t) const;
 ```
 
 ```cpp
@@ -113,8 +113,8 @@ For Radau collocation, use point sampling for $$t_0 \leq t < t_f$$. Retrieve the
 Use the batch resampling API when a uniformly ordered, denser trajectory is needed for plotting, simulation interfaces, or a controller:
 
 ```cpp
-Eigen::MatrixX<Scalar> get_TX_resampled(const Scalar& Ts_max) const;
-Eigen::MatrixX<Scalar> get_TU_resampled(const Scalar& Ts_max) const;
+Eigen::MatrixX<Numeric> get_TX_resampled(const Numeric& Ts_max) const;
+Eigen::MatrixX<Numeric> get_TU_resampled(const Numeric& Ts_max) const;
 ```
 
 `Ts_max` is the maximum spacing between returned samples in physical time. Each transcription segment is divided into an integer number of equal intervals, so the actual sample period may be smaller than `Ts_max`.

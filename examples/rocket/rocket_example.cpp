@@ -130,11 +130,11 @@ int main()
         x0 = integrate(Ts, x0, transcription->get_u_at(0));
         std::cout << "x: " << x0.transpose() << std::endl;
 
-        Eigen::VectorX<Ocp::Scalar> primal = sqp_solver.primal();
+        Eigen::VectorX<Ocp::Numeric> primal = sqp_solver.primal();
         primal(Eigen::seq(0, Eigen::indexing::last - Ocp::NX - Ocp::NU)) = primal(Eigen::seq(Ocp::NX + Ocp::NU, Eigen::indexing::last));
-        Eigen::VectorX<Ocp::Scalar> dual = sqp_solver.dual();
+        Eigen::VectorX<Ocp::Numeric> dual = sqp_solver.dual();
         dual(Eigen::seq(0, Eigen::indexing::last - 1)) = dual(Eigen::seq(1, Eigen::indexing::last));
-        Eigen::VectorX<Ocp::Scalar> dual_bounds = sqp_solver.dual_bounds();
+        Eigen::VectorX<Ocp::Numeric> dual_bounds = sqp_solver.dual_bounds();
         dual_bounds(Eigen::seq(0, Eigen::indexing::last - 2)) = dual_bounds(Eigen::seq(2, Eigen::indexing::last));
 
         sqp_solver.set_initial_primal(primal);

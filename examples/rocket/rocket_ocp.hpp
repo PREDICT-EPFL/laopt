@@ -10,11 +10,11 @@
 #include "laopt/laopt.hpp"
 #include "laopt/tools/control_problem_base.hpp"
 
-class RocketOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ 12, /*NU*/ 4>
+class RocketOcp : public laopt_tools::ControlProblemBase</*Numeric*/ double, /*NX*/ 12, /*NU*/ 4>
 {
 public:
     using Base = laopt_tools::ControlProblemBase<double, 12, 4>;
-    using Scalar = typename Base::Scalar;
+    using Numeric = typename Base::Numeric;
     using State = typename Base::State;
     using Input = typename Base::Input;
 
@@ -24,20 +24,20 @@ public:
 
     const double mass = 1.7;                                                   // mass
     const double g = 9.81;                                                     // gravitational acceleration
-    const Eigen::DiagonalMatrix<Scalar, 3> J{0.0644, 0.0644, 0.0128};          // inertia tensor
-    const Eigen::DiagonalMatrix<Scalar, 3> J_inv{J.diagonal().cwiseInverse()}; // inverse of inertia tensor
+    const Eigen::DiagonalMatrix<Numeric, 3> J{0.0644, 0.0644, 0.0128};          // inertia tensor
+    const Eigen::DiagonalMatrix<Numeric, 3> J_inv{J.diagonal().cwiseInverse()}; // inverse of inertia tensor
 
-    const Eigen::Vector<Scalar, 3> thrust_coeff{0, 0.03, 0}; // experimentally identified
-    const Scalar torque_coeff = -0.1040;                     // experimentally identified
-    const Eigen::Vector<Scalar, 3> r_F{0, 0, -0.215};        // thruster position in body frame
+    const Eigen::Vector<Numeric, 3> thrust_coeff{0, 0.03, 0}; // experimentally identified
+    const Numeric torque_coeff = -0.1040;                     // experimentally identified
+    const Eigen::Vector<Numeric, 3> r_F{0, 0, -0.215};        // thruster position in body frame
 
-    Eigen::DiagonalMatrix<Scalar, Base::NX> Q;
-    Eigen::Matrix<Scalar, Base::NX, Base::NX> P;
-    Eigen::DiagonalMatrix<Scalar, Base::NU> R;
+    Eigen::DiagonalMatrix<Numeric, Base::NX> Q;
+    Eigen::Matrix<Numeric, Base::NX, Base::NX> P;
+    Eigen::DiagonalMatrix<Numeric, Base::NU> R;
 
-    Eigen::Vector<Scalar, 4> ref = Eigen::Vector<Scalar, 4>::Zero();
+    Eigen::Vector<Numeric, 4> ref = Eigen::Vector<Numeric, 4>::Zero();
 
-    static inline Scalar deg2rad(Scalar deg) {
+    static inline Numeric deg2rad(Numeric deg) {
         return deg * M_PI / 180.0;
     }
 
@@ -49,13 +49,13 @@ public:
         x_ub(4) = deg2rad(7);
         x_lb = -x_ub;
 
-        Eigen::Vector<Scalar, Base::NX> Sx_diag; // x scaling
+        Eigen::Vector<Numeric, Base::NX> Sx_diag; // x scaling
         Sx_diag(Eigen::seqN(0, Eigen::fix<3>)).array() = deg2rad(60);
         Sx_diag(Eigen::seqN(3, Eigen::fix<3>)).array() = deg2rad(30);
         Sx_diag(Eigen::seqN(6, Eigen::fix<3>)).array() = 4;
         Sx_diag(Eigen::seqN(9, Eigen::fix<3>)).array() = 2;
 
-        Eigen::Vector<Scalar, Base::NU> Su_diag; // u scaling
+        Eigen::Vector<Numeric, Base::NU> Su_diag; // u scaling
         Su_diag << u_ub(Eigen::seqN(0, Eigen::fix<2>)), u_ub(2) - u_lb(2), u_ub(3);
 
         Q.diagonal().array() = 1;

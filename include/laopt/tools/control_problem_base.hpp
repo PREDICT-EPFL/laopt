@@ -11,12 +11,12 @@
 namespace laopt_tools {
 
 /* ControlProblemBase template parameters:
- * cScalar:           Numeric scalar type
+ * cNumeric:           Numeric scalar type
  * cNX, cNU, cNP:     Length of state, input, optimization parameter
  * cNG cNG0, cNGF:    Number of inequality constraints (elsewhere, initial, final)
  * cOptions:          Problem options (free/fixed end time, discrete dynamics)
  * */
-template<typename cScalar,
+template<typename cNumeric,
         int cNX, int cNU, int cNP = 0,
         int cNG = 0, int cNG0 = 0, int cNGF = 0,
         int cOptions = FixedEndTime>
@@ -24,7 +24,9 @@ class ControlProblemBase
 {
 public:
     /* Wrap template parameters */
-    using Scalar = cScalar;
+    using Numeric = cNumeric;
+    /* Deprecated alias of Numeric, kept for backwards compatibility. */
+    using Scalar [[deprecated("Use Numeric instead.")]] = Numeric;
     static const int NX = cNX;
     static const int NU = cNU;
     static const int NP = cNP;
@@ -47,47 +49,47 @@ public:
     template<typename T> using ineq_constr0_t = Eigen::Vector<T, NG0>;
     template<typename T> using ineq_constrf_t = Eigen::Vector<T, NGF>;
 
-    /* Scalar state and input types */
-    using State = state_t<Scalar>;
-    using Input = input_t<Scalar>;
-    using Param = param_t<Scalar>;
-    using IneqBound = ineq_constr_t<Scalar>;
-    using Ineq0Bound = ineq_constr0_t<Scalar>;
-    using IneqfBound = ineq_constrf_t<Scalar>;
+    /* Numeric state and input types */
+    using State = state_t<Numeric>;
+    using Input = input_t<Numeric>;
+    using Param = param_t<Numeric>;
+    using IneqBound = ineq_constr_t<Numeric>;
+    using Ineq0Bound = ineq_constr0_t<Numeric>;
+    using IneqfBound = ineq_constrf_t<Numeric>;
 
     /* Static parameters */
-    Scalar t0 = 0;
+    Numeric t0 = 0;
 
     /* Bounds on state and input */
-    Input u_ub = Input::Constant(std::numeric_limits<Scalar>::infinity());
+    Input u_ub = Input::Constant(std::numeric_limits<Numeric>::infinity());
     Input u_lb = -u_ub;
-    State x_ub = State::Constant(std::numeric_limits<Scalar>::infinity());
+    State x_ub = State::Constant(std::numeric_limits<Numeric>::infinity());
     State x_lb = -x_ub;
 
-    State x0_ub = State::Constant(std::numeric_limits<Scalar>::infinity());
+    State x0_ub = State::Constant(std::numeric_limits<Numeric>::infinity());
     State x0_lb = -x0_ub;
-    State xf_ub = State::Constant(std::numeric_limits<Scalar>::infinity());
+    State xf_ub = State::Constant(std::numeric_limits<Numeric>::infinity());
     State xf_lb = -xf_ub;
 
     /* Bounds on inequality constraints */
     IneqBound g_ub = IneqBound::Zero();
-    IneqBound g_lb = IneqBound::Constant(-std::numeric_limits<Scalar>::infinity());
+    IneqBound g_lb = IneqBound::Constant(-std::numeric_limits<Numeric>::infinity());
     Ineq0Bound g0_ub = Ineq0Bound::Zero();
-    Ineq0Bound g0_lb = Ineq0Bound::Constant(-std::numeric_limits<Scalar>::infinity());
+    Ineq0Bound g0_lb = Ineq0Bound::Constant(-std::numeric_limits<Numeric>::infinity());
     IneqfBound gf_ub = IneqfBound::Zero();
-    IneqfBound gf_lb = IneqfBound::Constant(-std::numeric_limits<Scalar>::infinity());
+    IneqfBound gf_lb = IneqfBound::Constant(-std::numeric_limits<Numeric>::infinity());
 
     /* Final time bounds */
-    Scalar tf_lb{1}, tf_ub{1};
+    Numeric tf_lb{1}, tf_ub{1};
 
     /* Additional decision variables (optimized parameters) bound */
-    Param p_lb = Param::Constant(std::numeric_limits<Scalar>::infinity());
+    Param p_lb = Param::Constant(std::numeric_limits<Numeric>::infinity());
     Param p_ub = -p_lb;
 
     /* Convenience setters for zero-range bounds */
     void set_x0(const State &x0) { x0_lb = x0_ub = x0; }
     void set_xf(const State &xf) { xf_lb = xf_ub = xf; }
-    void set_tf(const Scalar &tf) { tf_lb = tf_ub = tf; }
+    void set_tf(const Numeric &tf) { tf_lb = tf_ub = tf; }
 
     /* Diagnosis */
     void print_problem_dimension() const

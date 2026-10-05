@@ -8,19 +8,19 @@
 #include "laopt/laopt.hpp"
 #include "laopt/tools/control_problem_base.hpp"
 
-class DoubleIntegratorOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ 2, /*NU*/ 1>
+class DoubleIntegratorOcp : public laopt_tools::ControlProblemBase</*Numeric*/ double, /*NX*/ 2, /*NU*/ 1>
 {
 public:
     /* Static parameters */
-    Eigen::Matrix<Scalar, NX, NX> A{{0, 1},
+    Eigen::Matrix<Numeric, NX, NX> A{{0, 1},
                                     {0, 0}};
-    Eigen::Matrix<Scalar, NX, NU> B{{0},
+    Eigen::Matrix<Numeric, NX, NU> B{{0},
                                     {1}};
 
     State x_ref{3, 0};
-    Eigen::Matrix<Scalar, NX, NX> Q{{10, 0},
+    Eigen::Matrix<Numeric, NX, NX> Q{{10, 0},
                                     {0,  1}};
-    Eigen::Matrix<Scalar, NU, NU> R{{0.01}};
+    Eigen::Matrix<Numeric, NU, NU> R{{0.01}};
 
     /* Override function implementations from base class ------------------------------ */
     template<typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t, typename tau_t,

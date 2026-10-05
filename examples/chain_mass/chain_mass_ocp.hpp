@@ -11,11 +11,11 @@
 #include "laopt/differentiable_functions/quadratic_cost.hpp"
 
 template<int cM = 5, int cNX = 3 * (2 * (cM - 2) + 1), int cNU = 3>
-class ChainMassOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double, cNX, cNU>
+class ChainMassOcp : public laopt_tools::ControlProblemBase</*Numeric*/ double, cNX, cNU>
 {
 public:
     using Base = laopt_tools::ControlProblemBase<double, cNX, cNU>;
-    using Scalar = typename Base::Scalar;
+    using Numeric = typename Base::Numeric;
     using State = typename Base::State;
 
     template<typename T> using state_t = typename Base::template state_t<T>;
@@ -29,9 +29,9 @@ public:
 
     const Eigen::Vector<double, 3> x0{0, 0, 0}; // fix mass (at wall)
 
-    laopt::QuadraticCost<Eigen::DiagonalMatrix<Scalar, Base::NX>> state_cost;
-    laopt::QuadraticCost<Eigen::DiagonalMatrix<Scalar, Base::NU>> input_cost;
-    laopt::QuadraticCost<Eigen::DiagonalMatrix<Scalar, Base::NX>> final_state_cost;
+    laopt::QuadraticCost<Eigen::DiagonalMatrix<Numeric, Base::NX>> state_cost;
+    laopt::QuadraticCost<Eigen::DiagonalMatrix<Numeric, Base::NU>> input_cost;
+    laopt::QuadraticCost<Eigen::DiagonalMatrix<Numeric, Base::NX>> final_state_cost;
 
     ChainMassOcp()
     {

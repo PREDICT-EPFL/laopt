@@ -62,7 +62,7 @@ with the remaining bounds and constraints unchanged. Three things differ from th
 ```cpp
 namespace laopt_tools {
 
-template <typename Scalar, 
+template <typename Numeric, 
           int NX, int NU, int NP = 0,
           int NG = 0, int NG0 = 0, int NGF = 0, 
           int Options = laopt_tools::FixedEndTime>
@@ -73,7 +73,7 @@ class ControlProblemBase;
 
 | Parameter | Meaning                                                                    |
 |:----------|:---------------------------------------------------------------------------|
-| `Scalar`  | Numerical scalar type used to store bounds and solutions (e.g., `double`). |
+| `Numeric` | Numeric type used to store bounds and solutions (e.g., `double`).         |
 | `NX`      | Number of states.                                                          |
 | `NU`      | Number of inputs.                                                          |
 | `NP`      | Number of global optimized parameters.                                     |
@@ -81,6 +81,9 @@ class ControlProblemBase;
 | `NG0`     | Number of initial constraints.                                             |
 | `NGF`     | Number of terminal constraints.                                            |
 | `Options` | `FixedEndTime` or `FreeEndTime`; optionally combined with `DiscreteDynamics` (e.g., `FixedEndTime \| DiscreteDynamics`). `DiscreteDynamics` cannot be combined with `FreeEndTime`. |
+
+{: .note }
+> `Numeric` and `T` are two different things. `Numeric` is the problem's storage type, fixed once by the class template (typically `double`). `T` is the scalar type of the arguments in a particular callback invocation. It defaults to `typename x_t::Scalar` and may be an automatic-differentiation type rather than `double`. Write callback bodies in terms of `T`.
 
 The base class provides fixed-size aliases including `State`, `Input`, `Param`, `IneqBound`, `Ineq0Bound`, and `IneqfBound`. Their scalar-generic counterparts are `state_t<T>`, `input_t<T>`, `param_t<T>`, `ineq_constr_t<T>`, `ineq_constr0_t<T>`, and `ineq_constrf_t<T>`.
 
@@ -161,7 +164,7 @@ ineq_constrf_t<T> inequality_constraintsf_impl(const Eigen::MatrixBase<x_tf>& xf
 The model exposes its bounds as fixed-size Eigen vectors:
 
 ```cpp
-Scalar t0;
+Numeric t0;
 
 State x_lb, x_ub;
 Input u_lb, u_ub;
@@ -169,7 +172,7 @@ Param p_lb, p_ub;
 
 State x0_lb, x0_ub;
 State xf_lb, xf_ub;
-Scalar tf_lb, tf_ub;
+Numeric tf_lb, tf_ub;
 
 IneqBound  g_lb,  g_ub;
 Ineq0Bound g0_lb, g0_ub;
@@ -177,7 +180,7 @@ IneqfBound gf_lb, gf_ub;
 
 void set_x0(const State& x0);
 void set_xf(const State& xf);
-void set_tf(const Scalar& tf);
+void set_tf(const Numeric& tf);
 
 template <typename... Ts>
 constexpr void unused(Ts&&...) noexcept;

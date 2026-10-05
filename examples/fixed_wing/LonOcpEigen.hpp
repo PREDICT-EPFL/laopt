@@ -14,7 +14,7 @@ namespace lon_ocp {
 using LonKite = flight_model::eigen_model::fixed_wing::LonFixedWingDynamics;
 
 class LonFlightOCP :
-        public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ LonKite::nx + 0, /*NU*/LonKite::nu + 0>
+        public laopt_tools::ControlProblemBase</*Numeric*/ double, /*NX*/ LonKite::nx + 0, /*NU*/LonKite::nu + 0>
 {
 public:
     ~LonFlightOCP() = default;

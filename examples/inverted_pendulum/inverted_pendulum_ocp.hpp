@@ -8,21 +8,21 @@
 #include "laopt/laopt.hpp"
 #include "laopt/tools/control_problem_base.hpp"
 
-class InvertedPendulumOcp : public laopt_tools::ControlProblemBase</*Scalar*/ double,
+class InvertedPendulumOcp : public laopt_tools::ControlProblemBase</*Numeric*/ double,
         /*NX*/ 2, /*NU*/ 1, /*NP*/ 2,
         /*NG*/ 2, /*NG0*/ 2, /*NGF*/ 1,
         laopt_tools::FreeEndTime>
 {
 public:
-    Scalar angle_ref{0};
+    Numeric angle_ref{0};
 
-    Scalar mayer_multiplier{10};
+    Numeric mayer_multiplier{10};
 
-    Scalar W_angle_err{10};
+    Numeric W_angle_err{10};
 
-    Eigen::Matrix<Scalar, NU, NU> R{{1}};
+    Eigen::Matrix<Numeric, NU, NU> R{{1}};
 
-    Scalar w_tf{0};
+    Numeric w_tf{0};
 
     InvertedPendulumOcp()
     {

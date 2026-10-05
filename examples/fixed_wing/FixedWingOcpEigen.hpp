@@ -14,7 +14,7 @@ namespace fixed_wing_ocp {
 using FixedWing = flight_model::eigen_model::fixed_wing::FixedWingDynamics;
 
 class FixedWingFlightOCP :
-        public laopt_tools::ControlProblemBase</*Scalar*/ double, /*NX*/ FixedWing::nx + 0, /*NU*/FixedWing::nu + 0>
+        public laopt_tools::ControlProblemBase</*Numeric*/ double, /*NX*/ FixedWing::nx + 0, /*NU*/FixedWing::nu + 0>
 {
 public:
     ~FixedWingFlightOCP() = default;

@@ -5,14 +5,14 @@
 #include "laopt/tools/control_problem_base.hpp"
 
 class InvertedPendulumSimpleOcp : public laopt_tools::ControlProblemBase<
-									 /*Scalar*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 0,
+									 /*Numeric*/ double, /*NX*/ 2, /*NU*/ 1, /*NP*/ 0,
 									 /*NG*/ 0, /*NG0*/ 0, /*NGF*/ 0,
 									 /*Options*/ laopt_tools::FixedEndTime>
 									 // /*Options*/ laopt_tools::FixedEndTime | laopt_tools::DiscreteDynamics>
 {
 public:
-	Scalar angle_ref_{0};
-	Eigen::Matrix<Scalar, NU, NU> R_{{1}};
+	Numeric angle_ref_{0};
+	Eigen::Matrix<Numeric, NU, NU> R_{{1}};
 
 	template <typename x_t, typename u_t, typename p_t, typename t0_t, typename tf_t,
 	          typename tau_t, typename T = typename x_t::Scalar> // T is scalar type

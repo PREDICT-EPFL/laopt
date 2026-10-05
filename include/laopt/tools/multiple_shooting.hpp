@@ -37,21 +37,27 @@ class MultipleShooting : public laopt::Differentiable<MultipleShooting<ControlPr
 
 public:
     using ControlProblem = ControlProblem_;
-    using Scalar = typename ControlProblem::Scalar;
+
+protected:
+    using Numeric = typename ControlProblem::Numeric;
+
+public:
+    /* Deprecated alias of Numeric, kept for backwards compatibility. */
+    using Scalar [[deprecated("Use Numeric instead.")]] = Numeric;
     template<typename Tag>
-    using Integrator = Integrator_<MultipleShooting<ControlProblem, N_segs, Integrator_, DiffOptions>, Scalar, Tag, DiffOptions & ~laopt::TAGGED>;
+    using Integrator = Integrator_<MultipleShooting<ControlProblem, N_segs, Integrator_, DiffOptions>, Numeric, Tag, DiffOptions & ~laopt::TAGGED>;
     static const unsigned N = N_segs;
 
 protected:
     template<int n>
-    using variable_t = laopt::Variable<Scalar, n>;
+    using variable_t = laopt::Variable<Numeric, n>;
 
     /* Instance of end user's ControlProblem */
     std::shared_ptr<ControlProblem> controlProblem;
 
     /* Create discrete problem variables */
     const double h{1.0 / N};
-    Eigen::Vector<Scalar, N + 1> T; // Normalized time grid (0 ... 1)
+    Eigen::Vector<Numeric, N + 1> T; // Normalized time grid (0 ... 1)
     std::array<variable_t<ControlProblem::NX>, N + 1> X_var;
     std::array<variable_t<ControlProblem::NU>, N> U_var;
     variable_t<1> tf_var;
@@ -169,15 +175,15 @@ protected:
         return controlProblem->mayer_term_impl(xf, p, t0, tf);
     }
 
-    Eigen::Vector<Scalar, 1> get_t0_var() const
+    Eigen::Vector<Numeric, 1> get_t0_var() const
     {
-        Eigen::Vector<Scalar, 1> t0;
+        Eigen::Vector<Numeric, 1> t0;
         t0(0) = controlProblem->t0;
         return t0;
     }
 
     template<int Option = ControlProblem::Options>
-    typename std::enable_if<(Option & FreeEndTime) == 0, Eigen::Vector<Scalar, 1>>::type
+    typename std::enable_if<(Option & FreeEndTime) == 0, Eigen::Vector<Numeric, 1>>::type
     get_tf_var() const
     {
         if (controlProblem->tf_lb != controlProblem->tf_ub)
@@ -185,7 +191,7 @@ protected:
             std::cerr << "MultipleShooting<FixedEndTime>: final time bounds need to be identical (tf_lb == tf_ub)\n";
             exit(EXIT_FAILURE);
         }
-        Eigen::Vector<Scalar, 1> tf;
+        Eigen::Vector<Numeric, 1> tf;
         tf(0) = controlProblem->tf_lb;
         return tf;
     }
@@ -216,7 +222,7 @@ protected:
         /* Loop through grid points */
         for (unsigned i = 0; i < N; i++)
         {
-            Scalar tau = Scalar(i) / N_segs;
+            Numeric tau = Numeric(i) / N_segs;
             if constexpr (useDiscreteDynamics)
             {
                 /* Plain sum. discrete_dynamics_impl() carries its own, independent step size. */
@@ -256,7 +262,7 @@ protected:
         optProblem.add_constr(controlProblem->g0_lb <= this->expression(InitialInequalityConstraints{}, X_var[0], U_var[0], p_var, get_t0_var()) <= controlProblem->g0_ub);
         for (unsigned i = 1; i < N; i++)
         {
-            Scalar tau = Scalar(i) / N_segs;
+            Numeric tau = Numeric(i) / N_segs;
             optProblem.add_constr(controlProblem->g_lb <= this->expression(InequalityConstraints{}, X_var[i], U_var[i], p_var, get_t0_var(), get_tf_var(), tau) <= controlProblem->g_ub);
         }
         optProblem.add_constr(controlProblem->gf_lb <= this->expression(FinalInequalityConstraints{}, X_var[N], p_var, get_t0_var(), get_tf_var()) <= controlProblem->gf_ub);
@@ -269,15 +275,15 @@ public:
         /* Construct trajectory time grid on [0, 1] */
         for (unsigned i = 0; i <= N; i++) { T(i) = i * h; }
     }
-    Eigen::Vector<Scalar, N + 1>& time_grid() { return T; }
+    Eigen::Vector<Numeric, N + 1>& time_grid() { return T; }
 
-    using scalar_t = typename ControlProblem::Scalar; // TODO: Change in laOPT to accept Scalar
+    using scalar_t = typename ControlProblem::Numeric; // TODO: Change in laOPT to accept Numeric
     using State = typename ControlProblem::State;
     using Input = typename ControlProblem::Input;
     using Param = typename ControlProblem::Param;
-    using TimeTrajectory = Eigen::Vector<Scalar, N + 1>;
-    using StateTrajectory = Eigen::Matrix<Scalar, ControlProblem::NX, N + 1>;
-    using InputTrajectory = Eigen::Matrix<Scalar, ControlProblem::NU, N>;
+    using TimeTrajectory = Eigen::Vector<Numeric, N + 1>;
+    using StateTrajectory = Eigen::Matrix<Numeric, ControlProblem::NX, N + 1>;
+    using InputTrajectory = Eigen::Matrix<Numeric, ControlProblem::NU, N>;
 
     /* Set functions */
     void set_X_guess(const State& x_guess)
@@ -300,7 +306,7 @@ public:
         if (U_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
         for (unsigned i = 0; i < U_var.size(); i++) { U_var.at(i) << U_guess.col(i); }
     }
-    void set_tf_guess(const Scalar& tf_guess)
+    void set_tf_guess(const Numeric& tf_guess)
     {
         if (tf_var.data() == nullptr) { ASSERT_EARLY_GUESS(); }
         tf_var[0] = tf_guess;
@@ -336,46 +342,46 @@ public:
     }
     Param get_p_opt() const { return Param(p_var); }
 
-    Eigen::Vector<Scalar, ControlProblem::NX> get_x_at(const Scalar& t) const
+    Eigen::Vector<Numeric, ControlProblem::NX> get_x_at(const Numeric& t) const
     {
         const double tf = get_tf_opt();
         if (t == tf) { return X_var[N]; }
         else
         {
             /* Interpolate between discrete states */
-            const Scalar T_eval = (t - controlProblem->t0) / (tf - controlProblem->t0);
+            const Numeric T_eval = (t - controlProblem->t0) / (tf - controlProblem->t0);
             // on [0 ... 1]|traj;
 
             /* Find segment to sample from */
             const unsigned iL = std::floor(T_eval / h);
-            const Scalar tau_eval = (T_eval - iL * h) / h;
+            const Numeric tau_eval = (T_eval - iL * h) / h;
             PRINT("i_lower: " << iL << ", tau_eval: " << tau_eval);
-            const Eigen::Vector<Scalar, ControlProblem::NX> xL = X_var[iL];
-            const Eigen::Vector<Scalar, ControlProblem::NX> xU = X_var[iL + 1];
+            const Eigen::Vector<Numeric, ControlProblem::NX> xL = X_var[iL];
+            const Eigen::Vector<Numeric, ControlProblem::NX> xU = X_var[iL + 1];
 
             return xL + tau_eval * (xU - xL);
         }
     }
-    Eigen::Vector<Scalar, ControlProblem::NU> get_u_at(const Scalar& t) const
+    Eigen::Vector<Numeric, ControlProblem::NU> get_u_at(const Numeric& t) const
     {
         const double tf = get_tf_opt();
         if (t >= tf) { return U_var[N - 1]; }
         else if (t <= controlProblem->t0) { return U_var[0]; }
         else
         {
-            const Scalar T_eval = (t - controlProblem->t0) / (tf - controlProblem->t0);
+            const Numeric T_eval = (t - controlProblem->t0) / (tf - controlProblem->t0);
             return U_var[std::floor(T_eval / h)];
         }
     }
 
-    Eigen::MatrixX<Scalar> get_TX_resampled(const Scalar& Ts_max) const
+    Eigen::MatrixX<Numeric> get_TX_resampled(const Numeric& Ts_max) const
     {
         return resample_trajectory_linear(get_T_opt(), get_X_opt(), Ts_max);
     }
-    Eigen::MatrixX<Scalar> get_TU_resampled(const Scalar& Ts_max) const
+    Eigen::MatrixX<Numeric> get_TU_resampled(const Numeric& Ts_max) const
     {
         /* Duplicate last input to match time grid, then resample */
-        Eigen::Matrix<Scalar, ControlProblem::NU, N + 1> U_opt;
+        Eigen::Matrix<Numeric, ControlProblem::NU, N + 1> U_opt;
         U_opt.template block<ControlProblem::NU, N>(0, 0) = get_U_opt();
         U_opt.col(N) = U_opt.col(N-1);
         return resample_trajectory_hold(get_T_opt(), U_opt, Ts_max);
@@ -399,19 +405,19 @@ public:
 
 protected: /* Helpers for resampling */
     template<int DerivedNT1, int DerivedNT2, int DerivedNX>
-    Eigen::Matrix<Scalar, DerivedNX + 1, -1> resample_trajectory_linear(const Eigen::Vector<Scalar, DerivedNT1>& T_opt,
-                                                                        const Eigen::Matrix<Scalar, DerivedNX, DerivedNT2>& X_opt,
-                                                                        Scalar Ts_max) const
+    Eigen::Matrix<Numeric, DerivedNX + 1, -1> resample_trajectory_linear(const Eigen::Vector<Numeric, DerivedNT1>& T_opt,
+                                                                        const Eigen::Matrix<Numeric, DerivedNX, DerivedNT2>& X_opt,
+                                                                        Numeric Ts_max) const
     {
         static_assert(DerivedNT1 == DerivedNT2, "T and X must be of same length.");
 
-        const Scalar dT = (T_opt(1) - T_opt(0));
+        const Numeric dT = (T_opt(1) - T_opt(0));
         unsigned n_per_seg = std::floor(dT / Ts_max);
         if (n_per_seg * Ts_max < dT) { ++n_per_seg; };
         const unsigned n = N_segs * n_per_seg;
         PRINT("T_opt(1): " << T_opt(1) << ", n_per_seg: " << n_per_seg << ", n (total): " << n);
 
-        Eigen::Matrix<Scalar, DerivedNX + 1, -1> TXn(DerivedNX + 1, n + 1);
+        Eigen::Matrix<Numeric, DerivedNX + 1, -1> TXn(DerivedNX + 1, n + 1);
         TXn.setZero();
 
         using namespace Eigen;
@@ -420,13 +426,13 @@ protected: /* Helpers for resampling */
             const unsigned k_seg_start = iL * n_per_seg;
             PRINT("iL: " << iL << ", k_seg_start: " << k_seg_start);
 
-            const Eigen::Vector<Scalar, DerivedNX> xL = X_opt.col(iL);
-            const Eigen::Vector<Scalar, DerivedNX> xU = X_opt.col(iL + 1);
+            const Eigen::Vector<Numeric, DerivedNX> xL = X_opt.col(iL);
+            const Eigen::Vector<Numeric, DerivedNX> xU = X_opt.col(iL + 1);
 
             for (unsigned j = 0; j < n_per_seg; j++)
             {
                 const unsigned k = k_seg_start + j;
-                const Scalar tau_eval = j * 1.0 / n_per_seg; // Time on [0 ... 1]
+                const Numeric tau_eval = j * 1.0 / n_per_seg; // Time on [0 ... 1]
                 PRINT("j: " << j << ", k: " << k << ", tau: " << tau_eval);
 
                 TXn(0, k) = (iL * h + h * tau_eval);
@@ -442,25 +448,25 @@ protected: /* Helpers for resampling */
 
             /* Transform time by absolute horizon range (except  */
             TXn(0, seqN(k_seg_start, n_per_seg)) =
-                    Eigen::MatrixX<Scalar>::Constant(1, n_per_seg, controlProblem->t0) +
+                    Eigen::MatrixX<Numeric>::Constant(1, n_per_seg, controlProblem->t0) +
                     (get_tf_opt() - controlProblem->t0) * TXn(0, seqN(k_seg_start, n_per_seg));
         }
         return TXn;
     }
     template<int DerivedNT1, int DerivedNT2, int DerivedNX>
-    Eigen::Matrix<Scalar, DerivedNX + 1, -1> resample_trajectory_hold(const Eigen::Vector<Scalar, DerivedNT1>& T_opt,
-                                                                      const Eigen::Matrix<Scalar, DerivedNX, DerivedNT2>& X_opt,
-                                                                      Scalar Ts_max) const
+    Eigen::Matrix<Numeric, DerivedNX + 1, -1> resample_trajectory_hold(const Eigen::Vector<Numeric, DerivedNT1>& T_opt,
+                                                                      const Eigen::Matrix<Numeric, DerivedNX, DerivedNT2>& X_opt,
+                                                                      Numeric Ts_max) const
     {
         static_assert(DerivedNT1 == DerivedNT2, "T and X must be of same length.");
 
-        const Scalar dT = (T_opt(1) - T_opt(0));
+        const Numeric dT = (T_opt(1) - T_opt(0));
         unsigned n_per_seg = std::floor(dT / Ts_max);
         if (n_per_seg * Ts_max < dT) { ++n_per_seg; };
         const unsigned n = N_segs * n_per_seg;
         PRINT("T_opt(1): " << T_opt(1) << ", n_per_seg: " << n_per_seg << ", n (total): " << n);
 
-        Eigen::Matrix<Scalar, DerivedNX + 1, -1> TXn(DerivedNX + 1, n + 1);
+        Eigen::Matrix<Numeric, DerivedNX + 1, -1> TXn(DerivedNX + 1, n + 1);
         TXn.setZero();
 
         using namespace Eigen;
@@ -472,7 +478,7 @@ protected: /* Helpers for resampling */
             for (unsigned j = 0; j < n_per_seg; j++)
             {
                 const unsigned k = k_seg_start + j;
-                const Scalar tau_eval = j * 1.0 / n_per_seg; // Time on [0 ... 1]
+                const Numeric tau_eval = j * 1.0 / n_per_seg; // Time on [0 ... 1]
                 PRINT("j: " << j << ", k: " << k << ", tau: " << tau_eval);
 
                 TXn(0, k) = (i * h + h * tau_eval);
@@ -488,7 +494,7 @@ protected: /* Helpers for resampling */
 
             /* Transform time by absolute horizon range (except  */
             TXn(0, seqN(k_seg_start, n_per_seg)) =
-                    Eigen::MatrixX<Scalar>::Constant(1, n_per_seg, controlProblem->t0) +
+                    Eigen::MatrixX<Numeric>::Constant(1, n_per_seg, controlProblem->t0) +
                     (get_tf_opt() - controlProblem->t0) * TXn(0, seqN(k_seg_start, n_per_seg));
         }
         return TXn;
